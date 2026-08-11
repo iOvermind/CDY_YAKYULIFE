@@ -1,0 +1,55 @@
+{
+  "abilities": {
+    "sta": "體力",
+    "vel": "球速",
+    "ctl": "控球",
+    "brk": "變化球",
+    "con": "Contact",
+    "pow": "力量",
+    "spd": "速度",
+    "eye": "選球",
+    "rng": "守備範圍",
+    "fld": "接球",
+    "arm": "臂力",
+    "cat": "配球"
+  },
+  "position_abilities": {
+    "P": ["sta", "vel", "ctl", "brk"],
+    "C": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm", "cat"],
+    "IF": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm"],
+    "OF": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm"]
+  },
+  "defense_thresholds": {
+    "C":  {"CPBL1": 46, "NPB1": 54, "MLB": 60},
+    "SS": {"CPBL1": 50, "NPB1": 58, "MLB": 64},
+    "CF": {"CPBL1": 49, "NPB1": 57, "MLB": 63},
+    "2B": {"CPBL1": 46, "NPB1": 53, "MLB": 59},
+    "3B": {"CPBL1": 44, "NPB1": 51, "MLB": 57},
+    "RF": {"CPBL1": 43, "NPB1": 50, "MLB": 56},
+    "LF": {"CPBL1": 41, "NPB1": 47, "MLB": 53},
+    "1B": {"CPBL1": 36, "NPB1": 42, "MLB": 48}
+  },
+  "league_levels": {
+    "CPBL2": { "n": "中職二軍", "par": 34, "min": 30, "g": 80, "org": "CPBL" },
+    "CPBL1": { "n": "中職一軍", "par": 44, "min": 41, "g": 120, "org": "CPBL", "top": "CPBL" },
+    "NPB2": { "n": "日職二軍", "par": 47, "min": 44, "g": 100, "org": "NPB" },
+    "NPB1": { "n": "日職一軍", "par": 53, "min": 50, "g": 143, "org": "NPB", "top": "NPB" },
+    "KBO2": { "n": "韓職二軍", "par": 40, "min": 36, "g": 100, "org": "KBO" },
+    "KBO1": { "n": "韓職一軍", "par": 50, "min": 47, "g": 144, "org": "KBO", "top": "KBO" },
+    "LMB": { "n": "墨西哥聯盟", "par": 48, "min": 45, "g": 90, "org": "LMB", "top": "LMB" },
+    "ABL": { "n": "澳洲棒球聯盟", "par": 42, "min": 38, "g": 40, "org": "ABL", "top": "ABL" },
+    "R": { "n": "新人聯盟", "par": 41, "min": 39, "g": 55, "org": "MiLB" },
+    "A1": { "n": "1A", "par": 45, "min": 43, "g": 110, "org": "MiLB" },
+    "A2": { "n": "2A", "par": 49, "min": 47, "g": 120, "org": "MiLB" },
+    "A3": { "n": "3A", "par": 54, "min": 52, "g": 130, "org": "MiLB" },
+    "MLB": { "n": "大聯盟", "par": 59, "min": 56, "g": 162, "org": "MiLB", "top": "MLB" }
+  },
+  "hall_of_fame": {
+    "CPBL": { "n": "中華職棒名人堂", "wait": 5, "total": 132, "lg": "中職" },
+    "NPB": { "n": "日本野球殿堂", "wait": 5, "total": 326, "lg": "日職" },
+    "KBO": { "n": "韓國棒球名人堂", "wait": 5, "total": 150, "lg": "韓職" },
+    "LMB": { "n": "墨西哥棒球殿堂", "wait": 5, "total": 200, "lg": "墨聯" },
+    "ABL": { "n": "澳洲棒球名人堂", "wait": 5, "total": 50, "lg": "澳職" },
+    "MLB": { "n": "美國棒球名人堂", "wait": 5, "total": 389, "lg": "大聯盟" }
+  }
+}

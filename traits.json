@@ -1,0 +1,125 @@
+[
+  {
+    "id": "disc",
+    "name": "自律狂",
+    "desc": "你見過凌晨四點的洛杉磯嗎？——年紀輕輕就把身體當成聖殿經營，沒有派對、沒有酒精，只有重訓室的鐵片聲：<b class=\"hl\">整條衰退曲線延後兩年</b>，你的巔峰比同梯更長。",
+    "tone": "good",
+    "conditions": {
+      "operator": "AND",
+      "rules": [
+        { "path": "age", "op": "<", "val": 25 },
+        { "path": "cntSaveWin", "op": ">=", "val": 15 },
+        { "path": "love.caught", "op": "==", "val": 0 },
+        { "path": "cntSnack", "op": "<", "val": 5 }
+      ]
+    },
+    "effects": [
+      { "type": "decline_delay", "val": 2 }
+    ]
+  },
+  {
+    "id": "clutch",
+    "name": "大心臟",
+    "desc": "經歷了無數次的豪賭，你的心態堅毅無比，無論甚麼事情都不可能讓你心驚膽跳，從此以後，賭得更多，得到更多，輸得更少。——<b class=\"hl\">「全力一搏」成功率提升至天才級、成功加成 +4、失敗只 −2、受傷風險降到普通級</b>，總冠軍與國際賽 MVP 機率提升。",
+    "tone": "good",
+    "conditions": {
+      "operator": "AND",
+      "rules": [
+        { "path": "age", "op": "<", "val": 25 },
+        { "path": "cntBoldWin", "op": ">=", "val": 7 }
+      ]
+    },
+    "effects": [
+      { "type": "modify_bold_success_rate", "val": "genius" },
+      { "type": "modify_bold_reward", "val": 4 },
+      { "type": "modify_bold_penalty", "val": -2 },
+      { "type": "modify_bold_inj_risk", "val": "normal" },
+      { "type": "increase_champ_mvp_chance", "val": true }
+    ]
+  },
+  {
+    "id": "distract",
+    "name": "外務纏身",
+    "desc": "通告、代言、社群媒體佔據了你太多心神，休賽季很久沒有完整專注在棒球上——<b class=\"dn\">季初擲骰永久 −1 顆</b>（最低 2 顆）。",
+    "tone": "bad",
+    "conditions": {
+      "operator": "AND",
+      "rules": [
+        { "path": "traits.disc", "op": "==", "val": false },
+        { "path": "love.affairs_and_caught_and_snack", "op": ">=", "val": 4 },
+        { "path": "love.affairs_and_caught", "op": ">=", "val": 1 }
+      ]
+    },
+    "effects": [
+      { "type": "modify_season_dice", "val": -1, "min": 2 }
+    ]
+  },
+  {
+    "id": "cancer",
+    "name": "更衣室毒瘤",
+    "desc": "教練受夠了你的不可控，隊友對你的新聞指指點點。比起成績，球團現在更想清理休息室的氣氛——<b class=\"dn\">季中被交易機率大增、續約條件惡化</b>。",
+    "tone": "bad",
+    "conditions": {
+      "operator": "OR",
+      "rules": [
+        { "path": "cntBoldFail", "op": ">=", "val": 10 },
+        { "path": "traits.scum", "op": "==", "val": true }
+      ]
+    },
+    "effects": [
+      { "type": "increase_trade_chance", "val": true },
+      { "type": "worsen_contract_terms", "val": true }
+    ]
+  },
+  {
+    "id": "thief",
+    "name": "薪水小倫",
+    "desc": "拒絕下放後，你的成績依然沒有起色。球迷開始在社群叫你「薪水小倫」——<b class=\"dn\">事件卡失敗率永久 +10%</b>，這個名聲跟著你到退休。",
+    "tone": "bad",
+    "conditions": {
+      "operator": "AND",
+      "rules": [
+        { "path": "demotionRefused", "op": "==", "val": true },
+        { "path": "lastD_vs_expected", "op": "<", "val": 0 }
+      ]
+    },
+    "effects": [
+      { "type": "modify_event_fail_rate", "val": 10 }
+    ]
+  },
+  {
+    "id": "combo",
+    "name": "無巧不工",
+    "desc": "連續三年，你把所有汗水都澆在同一個工具上——<b class=\"hl\">季初擲骰永久多 1 顆</b>。專精者的複利。",
+    "tone": "good",
+    "conditions": {
+      "operator": "AND",
+      "rules": [
+        { "path": "samePick", "op": ">=", "val": 3 }
+      ]
+    },
+    "effects": [
+      { "type": "modify_season_dice", "val": 1 }
+    ]
+  },
+  {
+    "id": "late",
+    "name": "大器晚成",
+    "desc": "長年的沉潛與摸索終於開花結果，你的棒球人生下半場才正要開始——<b class=\"hl\">季初擲骰進階至「3~6」</b>，基礎受傷率下降。",
+    "tone": "good",
+    "conditions": {
+      "operator": "AND",
+      "rules": [
+        { "path": "traits.genius", "op": "==", "val": false },
+        { "path": "ovr", "op": "<", "val": 47 },
+        { "path": "age", "op": ">=", "val": 25 },
+        { "path": "age", "op": "<", "val": 32 },
+        { "path": "last_gain", "op": ">=", "val": 16 }
+      ]
+    },
+    "effects": [
+      { "type": "modify_dice_range", "min": 3, "max": 6 },
+      { "type": "modify_base_injury_rate", "val": -10 }
+    ]
+  }
+]
