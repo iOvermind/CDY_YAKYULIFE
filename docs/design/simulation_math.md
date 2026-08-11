@@ -40,7 +40,7 @@
     *   *邏輯*：對手只會敬遠重砲手，不會敬遠快腿（因為敬遠快腿等於免費送他上二壘）。
     *   *公式*：`Dom = (pow + con + eye - spd/4) / 180`
     *   如果 `Dom > 1.0`（代表該球員是極端神獸），則：
-        `IBB = Math.round( PA * Math.pow(Dom, 2) / 16 * random(0.97, 1.03) )`
+        `IBB = Math.round( PA * Math.pow(Dom, 2) / 16 * random(0.85, 1.15) )`
     *   否則 `IBB = 0`。
 *   `AB (打數)` = `PA - BB - IBB - 其他`
 *   `H (安打)` = `AB * AVG` (打擊率由 `con` 接觸率計算)
