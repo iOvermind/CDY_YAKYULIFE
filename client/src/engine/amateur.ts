@@ -36,7 +36,9 @@ export interface CupSeason {
   readonly results: readonly CupResult[];
   /** 這一季大賽的能力點總和。 */
   readonly points: number;
-  /** 拿下冠軍的大賽，用於榮譽紀錄。 */
+  /** 名次夠好、值得計入成就的大賽。四強以下只給點數，不留紀錄。 */
+  readonly honors: readonly { readonly cup: string; readonly rank: string }[];
+  /** 拿下冠軍的大賽，用於判定國際賽資格。 */
   readonly championships: readonly string[];
   /** 這一季大賽的總出賽場次。 */
   readonly games: number;
@@ -64,18 +66,21 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
   const stage = cfg[ctx.stage];
   const overall = rate(ctx.ability, { position: ctx.position, traits: ctx.traits }).overall;
   const teamBonus = stageTeamBonus(ctx);
-  const pointsBonus = Math.floor(overall / cfg.points_bonus.overall_divisor);
+  // 綜合能力的額外點數整季只加一次——每場都加會隨賽事數量膨脹。
+  const seasonBonus = Math.floor(overall / cfg.points_bonus.overall_divisor);
   const lastRank = cfg.ranks.length - 1;
 
   const results: CupResult[] = [];
   const championships: string[] = [];
+  const honors: { cup: string; rank: string }[] = [];
+  const honorRanks = new Set(cfg.honor_ranks.values);
   let total = 0;
   let totalGames = 0;
 
   for (const cup of stage.names) {
     const power = overall + teamBonus + rng.int(stage.power_noise.min, stage.power_noise.max);
     const rankIndex = rankFor(power, stage.thresholds, lastRank);
-    const points = (cfg.points[rankIndex] ?? 0) + pointsBonus;
+    const points = cfg.points[rankIndex] ?? 0;
     const games = cfg.games_by_rank.values[rankIndex] ?? 1;
 
     results.push({
@@ -89,9 +94,11 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
     total += points;
     totalGames += games;
     if (rankIndex === 0) championships.push(cup);
+    const rankName = cfg.ranks[rankIndex] ?? '';
+    if (honorRanks.has(rankName)) honors.push({ cup, rank: rankName });
   }
 
-  return { results, points: total, championships, games: totalGames };
+  return { results, points: total + seasonBonus, honors, championships, games: totalGames };
 }
 
 /** 依實力值取名次索引。門檻由高到低，取第一個達標者；都不到則為最後一名次。 */

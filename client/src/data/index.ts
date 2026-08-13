@@ -177,6 +177,7 @@ export interface AmateurData {
   readonly amateur_international: {
     readonly tournaments: Readonly<Record<string, YouthTournament>>;
     readonly ranks: readonly string[];
+    readonly honor_ranks: { readonly values: readonly string[] };
     readonly points: readonly number[];
     readonly power_bonus: {
       readonly base_overall: number;
@@ -240,7 +241,8 @@ export interface AmateurData {
     readonly ranks: readonly string[];
     readonly points: readonly number[];
     readonly games_by_rank: { readonly values: readonly number[] };
-    readonly points_bonus: { readonly overall_divisor: number };
+    readonly honor_ranks: { readonly values: readonly string[] };
+    readonly points_bonus: { readonly overall_divisor: number; readonly per_season: boolean };
     readonly academy_trigger: {
       readonly stage: string;
       readonly rank: string;

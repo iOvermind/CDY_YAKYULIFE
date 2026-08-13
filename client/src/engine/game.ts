@@ -103,9 +103,10 @@ export interface PlayerState {
   /** 當年成績。尚未打完大賽時為 null。 */
   readonly seasonBatting: BattingLine | null;
   readonly seasonPitching: PitchingLine | null;
-  /** 生涯累計成績。 */
-  readonly careerBatting: BattingLine | null;
-  readonly careerPitching: PitchingLine | null;
+  /** 各階段的累計成績。鍵為階段代碼（JHS / HS / …）。 */
+  readonly statsByStage: Readonly<
+    Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }>
+  >;
 }
 
 export class Game {
@@ -132,8 +133,8 @@ export class Game {
   #lastCupSeason: CupSeason | null = null;
   #seasonBatting: BattingLine | null = null;
   #seasonPitching: PitchingLine | null = null;
-  #careerBatting: BattingLine | null = null;
-  #careerPitching: PitchingLine | null = null;
+  #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
+    {};
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -165,8 +166,7 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       seasonBatting: this.#seasonBatting,
       seasonPitching: this.#seasonPitching,
-      careerBatting: this.#careerBatting,
-      careerPitching: this.#careerPitching,
+      statsByStage: this.#statsByStage,
     };
   }
 
@@ -304,13 +304,16 @@ export class Game {
     if (season === null) return;
     const overall = this.rating?.overall ?? 0;
 
+    const honorRanks = new Set(amateur.amateur_international.honor_ranks.values);
     for (const code of qualifiedTournaments(this.#stage, season)) {
       const result = playYouthTournament(this.world, code, overall);
       const prefix = amateur.amateur_international.honor_prefix;
 
       // 國際賽與國內大賽的榮譽各自獨立——贏下謝國城盃是一項成就，代表台灣
       // 打 LLB 拿冠軍是另一項。
-      this.#honors.push(`${this.#year} ${prefix}${result.tournament}${result.rank}`);
+      if (honorRanks.has(result.rank)) {
+        this.#honors.push(`${prefix}${result.tournament}${result.rank}`);
+      }
       this.#pool += result.points;
 
       this.flow.card(
@@ -329,8 +332,7 @@ export class Game {
       });
       this.#seasonBatting = addBatting(this.#seasonBatting, line.batting);
       this.#seasonPitching = addPitching(this.#seasonPitching, line.pitching);
-      this.#careerBatting = addBatting(this.#careerBatting, line.batting);
-      this.#careerPitching = addPitching(this.#careerPitching, line.pitching);
+      this.#accumulate(line.batting, line.pitching);
     }
   }
 
@@ -480,8 +482,7 @@ export class Game {
     });
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
-    this.#careerBatting = addBatting(this.#careerBatting, line.batting);
-    this.#careerPitching = addPitching(this.#careerPitching, line.pitching);
+    this.#accumulate(line.batting, line.pitching);
 
     const statLines: string[] = [];
     if (line.pitching !== null) {
@@ -499,9 +500,9 @@ export class Game {
     }
     if (statLines.length > 0) this.flow.card('good', '個人成績', statLines.join('<br>'));
 
-    for (const cup of season.championships) {
-      this.#honors.push(`${this.#year} ${cup}冠軍`);
-    }
+    // 只有名次夠好才計入成就，且不帶年份——六年下來會累積出一長串「八強」，
+    // 把真正的榮譽淹掉。其餘名次照樣給能力點。
+    for (const h of season.honors) this.#honors.push(`${h.cup}${h.rank}`);
     if (season.championships.length > 0) {
       this.flow.card(
         'gold',
@@ -627,7 +628,6 @@ export class Game {
     }
 
     const accept = () => {
-      this.#honors.push(`${this.#year} 中職選秀第 ${result.round} 輪`);
       this.flow.card(
         'gold',
         '中華職棒選秀會',
@@ -717,6 +717,15 @@ export class Game {
         }
       },
     );
+  }
+
+  /** 把一段成績累加到目前階段。各階段分開累計，介面才能分開呈現。 */
+  #accumulate(batting: BattingLine | null, pitching: PitchingLine | null): void {
+    const current = this.#statsByStage[this.#stage] ?? { batting: null, pitching: null };
+    this.#statsByStage[this.#stage] = {
+      batting: addBatting(current.batting, batting),
+      pitching: addPitching(current.pitching, pitching),
+    };
   }
 
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */

@@ -5,6 +5,7 @@ import { stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
 import { fmtAvg, Game, type PlayerState } from './engine/game.ts';
+import { abilityCost, growthCurve } from './engine/growth.ts';
 import type { Rating } from './engine/rating.ts';
 import { newSeed } from './engine/rng.ts';
 
@@ -16,6 +17,13 @@ import { newSeed } from './engine/rng.ts';
  *
  * 樣式在 app.css，版型比照原版。介面規格見 INTERFACE.md。
  */
+
+/** 生涯數據的分段顯示順序。職業生涯尚未實作，先留位置。 */
+const STAGE_ORDER: readonly (readonly [string, string])[] = [
+  ['JHS', '國中生涯'],
+  ['HS', '高中生涯'],
+  ['PRO', '職業生涯'],
+];
 
 const THEMES = [
   { code: 'a', name: '科技藍' },
@@ -369,11 +377,23 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
       />
 
       <h4 style={{ marginTop: 12 }}>生涯數據</h4>
-      <StatLines
-        label={null}
-        batting={state.careerBatting}
-        pitching={state.careerPitching}
-      />
+      {STAGE_ORDER.map(([code, name]) => {
+        const line = state.statsByStage[code];
+        if (line === undefined) return null;
+        return (
+          <div key={code}>
+            <p className="divider" style={{ margin: '8px 0 2px' }}>
+              {name}
+            </p>
+            <StatLines label={null} batting={line.batting} pitching={line.pitching} />
+          </div>
+        );
+      })}
+      {Object.keys(state.statsByStage).length === 0 && (
+        <p className="stat-pending" style={{ marginTop: 8 }}>
+          還沒有成績。
+        </p>
+      )}
 
       {state.honors.length > 0 ? (
         <p style={{ fontSize: 12, lineHeight: 1.9, margin: '8px 0 0' }}>
@@ -477,6 +497,7 @@ function Board({
   const player = state.origin;
   return (
     <div id="board">
+      <h4 className="board-title">球員</h4>
       <div id="bd-top">
         <span id="bd-name">
           {player.name}
@@ -620,6 +641,8 @@ function AbilityRow({
   const potential = state.origin.potential[abilityKey] ?? 0;
   const carry = state.carry[abilityKey] ?? 0;
   const bonus = state.ceilingBonus[abilityKey] ?? 0;
+  // 與舊版一致的表達方式：蓄力／這一級所需點數，例如 0/2。成本 1 點時不顯示。
+  const cost = abilityCost(current, potential + bonus, growthCurve(state.traits.has('two_way')));
 
   // 量表刻度：頭 20 尾 80。只有被事件提升過上限的能力，尾端才會延伸到 80 以上。
   const head = abilities.scale.min;
@@ -639,11 +662,11 @@ function AbilityRow({
       <span className="val" style={{ lineHeight: 1.1 }}>
         {current}
         <small style={{ opacity: 0.5 }}>/{ceiling}</small>
-        {carry > 0 && (
+        {cost > 1 && (
           <span
             style={{ display: 'block', opacity: 0.5, fontSize: 10.5, letterSpacing: 1, marginTop: -2 }}
           >
-            蓄力 {carry}
+            {carry}/{cost}
           </span>
         )}
       </span>

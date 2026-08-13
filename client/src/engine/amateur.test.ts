@@ -35,10 +35,26 @@ describe('playCups', () => {
     expect(play('a', { stage: 'U' }).results.map((r) => r.cup)).toEqual(amateur.cups.U.names);
   });
 
-  it('點數總和等於各場之和', () => {
+  it('點數總和是各場之和，加上整季一次的綜合能力加成', () => {
+    // 加成整季只加一次。原本是每場都加，賽事從 3 場擴到 4 場、再加上最多 3 項
+    // 國際賽之後，一年就能拿到 50 點以上——能力點多到花不完，配點失去取捨。
     const season = play('a');
     const sum = season.results.reduce((n, r) => n + r.points, 0);
-    expect(season.points).toBe(sum);
+    expect(season.points).toBeGreaterThanOrEqual(sum);
+    expect(season.points - sum).toBeLessThanOrEqual(
+      Math.floor(80 / amateur.cups.points_bonus.overall_divisor),
+    );
+  });
+
+  it('只有名次夠好才計入成就', () => {
+    const allowed = new Set(amateur.cups.honor_ranks.values);
+    for (let i = 0; i < 200; i++) {
+      const season = play(`s${i}`);
+      for (const h of season.honors) expect(allowed).toContain(h.rank);
+      // 沒有達標的名次一律不留紀錄
+      const worthy = season.results.filter((r) => allowed.has(r.rank)).length;
+      expect(season.honors).toHaveLength(worthy);
+    }
   });
 
   it('名次索引都在有效範圍內', () => {
