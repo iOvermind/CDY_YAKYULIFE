@@ -12,7 +12,9 @@
 
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
+import leaguesJson from './leagues.json';
 import positionsJson from './positions.json';
+import seasonJson from './season.json';
 import teamsJson from './teams.json';
 
 /** 能力代碼，例如 'pow'、'ctl'。 */
@@ -312,10 +314,147 @@ export interface YouthTournament {
   readonly games_by_rank: readonly number[];
 }
 
+/** 一條率的設定：與聯盟 par 同水準時是 base，每高一點加 per_point。 */
+export interface RateSpec {
+  readonly base: number;
+  readonly per_point: number;
+  readonly min: number;
+  readonly max: number;
+  readonly ability?: string;
+  readonly abilities?: Readonly<Record<string, number>>;
+}
+
+/** 上下限或噪音區間。 */
+export interface Range {
+  readonly min: number;
+  readonly max: number;
+}
+
+export interface LeagueLevel {
+  readonly name: string;
+  /** 該層級的平均水準。所有 d 值都是相對這個數字算的。 */
+  readonly par: number;
+  /** 最低限度，低於則降級或戰力外。 */
+  readonly min: number;
+  readonly games: number;
+  readonly org: string;
+  /** 有這個欄位者為頂級聯盟——進入後才登錄守位並累積 FA 年資。 */
+  readonly top?: string;
+}
+
+export interface LeaguesData {
+  readonly levels: Readonly<Record<string, LeagueLevel>>;
+  /** 各體系由低到高的升遷路徑。 */
+  readonly paths: Readonly<Record<string, readonly string[]>>;
+  readonly top_league_names: Readonly<Record<string, string>>;
+  readonly org_names: Readonly<Record<string, string>>;
+  readonly minor_label: string;
+}
+
+export interface SeasonData {
+  readonly playing_time: {
+    readonly stamina_factor: {
+      readonly ability: string;
+      readonly at: number;
+      readonly value_at: number;
+      readonly per_point: number;
+      readonly min: number;
+      readonly max: number;
+    };
+    readonly trust_factor: { readonly base: number; readonly per_point: number } & Range;
+    readonly position_factor: Readonly<Record<string, number>>;
+    readonly position_factor_clamp: Range;
+    readonly games_noise: Range;
+    readonly pa_per_game: Range;
+    readonly pa_noise: Range;
+    readonly pa_absolute_noise_divisor: { readonly value: number };
+  };
+  readonly batting: {
+    readonly walk_rate: RateSpec;
+    readonly intentional_walk: {
+      readonly abilities: Readonly<Record<string, number>>;
+      readonly divisor: number;
+      readonly threshold: number;
+      readonly exponent: number;
+      readonly rate_divisor: number;
+      readonly noise: Range;
+    };
+    readonly hit_rate: RateSpec;
+    readonly hr_rate: RateSpec;
+    readonly extra_base: { readonly double_rate: RateSpec; readonly triple_rate: RateSpec };
+    readonly rbi_per_hit: number;
+    readonly rbi_per_hr_extra: number;
+    readonly steal: { readonly attempt_rate: RateSpec; readonly success_rate: RateSpec };
+    readonly noise: Range;
+  };
+  readonly pitching: {
+    readonly role: { readonly starter: { readonly sta_min_d: number; readonly ctl_min_d: number } };
+    readonly starter: {
+      readonly rotation_divisor: { readonly value: number };
+      readonly gs_factor: { readonly base: number; readonly per_point: number } & Range;
+      readonly innings_per_start: RateSpec;
+      readonly noise: Range;
+    };
+    readonly reliever: {
+      readonly games: { readonly base: number; readonly per_point: number } & Range;
+      readonly innings_per_game: Range;
+      readonly noise: Range;
+    };
+    readonly strikeout_rate: RateSpec;
+    readonly walk_rate: RateSpec;
+    readonly era: RateSpec;
+    readonly decision: {
+      readonly starter_decision_rate: number;
+      readonly win_rate: { readonly base: number; readonly per_point: number } & Range;
+      readonly closer_save_rate: number;
+    };
+    readonly noise: Range;
+  };
+  readonly movement: {
+    readonly promote: {
+      readonly margin: number;
+      readonly chance: { readonly base: number; readonly per_point: number } & Range;
+    };
+    readonly demote: {
+      readonly margin: number;
+      readonly chance: { readonly base: number; readonly per_point: number } & Range;
+    };
+    readonly release: { readonly grace_years: number; readonly margin: number };
+  };
+  readonly aging: {
+    readonly peak_start: number;
+    readonly peak_end: number;
+    readonly growth: { readonly points: Range };
+    readonly decline: {
+      readonly base: number;
+      readonly per_year_after_peak: number;
+      readonly max: number;
+      readonly speed_first: {
+        readonly fast: readonly string[];
+        readonly slow: readonly string[];
+        readonly fast_multiplier: number;
+        readonly slow_multiplier: number;
+      };
+    };
+  };
+  readonly retirement: {
+    readonly min_age: number;
+    readonly age_chance: { readonly base: number; readonly per_year: number; readonly max: number };
+    readonly released_forces_retirement_age: number;
+    readonly max_age: number;
+  };
+  readonly pro_dice: {
+    readonly count_weights: Readonly<Record<string, number>>;
+    readonly peak_bonus: { readonly delta: number };
+  };
+}
+
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
 export const positions = positionsJson as unknown as PositionsData;
 export const teams = teamsJson as unknown as TeamsData;
+export const leagues = leaguesJson as unknown as LeaguesData;
+export const season = seasonJson as unknown as SeasonData;
 
 export interface Team {
   readonly name: string;

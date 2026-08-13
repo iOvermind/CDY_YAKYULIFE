@@ -61,13 +61,26 @@ describe('卡片內文的跳脫', () => {
 });
 
 /** 把目前提問的第一個選項選下去，直到流程結束。 */
-function playToEnd(game: Game): Game {
+function playToEnd(game: Game, stopAtDraft = false): Game {
   while (game.flow.prompt !== null) {
+    // 養成期的斷言必須在選秀前收手——流程接上職業之後會一路跑到引退，
+    // 三十幾歲的能力早已被年齡曲線壓下去，拿它來驗證養成期的成長會失真。
+    if (stopAtDraft && reachedDraft(game)) break;
     const first = game.flow.prompt.options[0];
     if (first === undefined) throw new Error('提問沒有選項');
     game.choose(first.id);
   }
   return game;
+}
+
+/** 流程是否已推進到選秀。 */
+function reachedDraft(game: Game): boolean {
+  return game.flow.prompt?.options.some((o) => o.id.startsWith('draft:')) === true;
+}
+
+/** 一路打到高中畢業為止，不進職業。 */
+function playAmateur(game: Game): Game {
+  return playToEnd(game, true);
 }
 
 /**
@@ -77,8 +90,9 @@ function playToEnd(game: Game): Game {
  * 權重，那等於三年把點數倒進一個沒用的地方。要驗證成長相關的行為必須用這個。
  */
 const EFFECTIVE = ['con', 'pow', 'eye', 'spd', 'rng', 'fld'];
-function playWell(game: Game): Game {
+function playWell(game: Game, stopAtDraft = false): Game {
   while (game.flow.prompt !== null) {
+    if (stopAtDraft && reachedDraft(game)) break;
     const options = game.flow.prompt.options;
     const pick =
       EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
@@ -185,14 +199,14 @@ describe('養成六年（國中三年 + 高中三年）', () => {
   const totalYears = stageOf('JHS').years + stageOf('HS').years;
 
   it('跑完六年後畢業，年齡與年份都推進了六年', () => {
-    const game = playToEnd(started());
+    const game = playAmateur(started());
     const origin = game.state?.origin;
     expect(game.state?.age).toBe((origin?.age ?? 0) + totalYears);
     expect(game.state?.year).toBe((origin?.year ?? 0) + totalYears);
   });
 
   it('每一年都有自己的分隔線，加上國中畢業與高中畢業各一條', () => {
-    const dividers = playToEnd(started()).flow.log.filter((e) => e.kind === 'divider');
+    const dividers = playAmateur(started()).flow.log.filter((e) => e.kind === 'divider');
     expect(dividers).toHaveLength(totalYears + 2);
   });
 
@@ -214,7 +228,7 @@ describe('養成六年（國中三年 + 高中三年）', () => {
   });
 
   it('能力在三年後明顯成長', () => {
-    const game = playToEnd(started());
+    const game = playAmateur(started());
     const origin = game.state?.origin.ability ?? {};
     const now = game.state?.ability ?? {};
     const before = Object.values(origin).reduce((a, b) => a + b, 0);
@@ -282,7 +296,7 @@ describe('訓練骰的分配', () => {
     let rose = 0;
     const n = 20;
     for (let i = 0; i < n; i++) {
-      const game = playWell(started({ seed: `sum-${i}` }));
+      const game = playWell(started({ seed: `sum-${i}` }), true);
       const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
       if (sum(game.state?.ability ?? {}) > sum(game.state?.origin.ability ?? {})) rose++;
     }

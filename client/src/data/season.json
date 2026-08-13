@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "_note": "職業球季模擬的全部可調參數。公式定義在 docs/design/simulation_math.md §3-4，本檔只放數字——引擎不得寫死任何一個，未來的參數編輯介面直接改這裡。",
+  "_scope_note": "目前只跑 CPBL 主軸（二軍→一軍）。NPB／MLB／KBO 等體系的階梯資料在 leagues.json 已備妥，但轉會與尋路尚未實作，因此這裡的門檻只針對 CPBL 校準過。",
+
+  "playing_time": {
+    "_note": "先算上場時間，再乘機率屬性——這是整個模擬的核心哲學。時間算錯，所有累積數據一起錯。",
+
+    "stamina_factor": {
+      "_note": "體力健康係數 staF，由 sta 換算，滿分 1.0。低體力的球員撐不了整季。",
+      "ability": "sta",
+      "at": 20,
+      "value_at": 0.55,
+      "per_point": 0.009,
+      "min": 0.35,
+      "max": 1.0
+    },
+
+    "trust_factor": {
+      "_note": "教練信任度 perfF。d 值是能力減聯盟 par——打不好會被下放替補，打得好會被塞滿出賽。",
+      "base": 0.85,
+      "per_point": 0.03,
+      "min": 0.25,
+      "max": 1.0
+    },
+
+    "position_factor": {
+      "_note": "守位體能勞損，以 DH 為 1.00 基準向下遞減。捕手是斷層級懲罰，極難全勤——這讓「移防」成為延長單季出賽壽命的真實手段。",
+      "DH": 1.0,
+      "1B": 0.99,
+      "LF": 0.98,
+      "3B": 0.97,
+      "RF": 0.97,
+      "2B": 0.96,
+      "SS": 0.95,
+      "CF": 0.95,
+      "C": 0.8
+    },
+
+    "position_factor_clamp": { "min": 0.1, "max": 1.0 },
+    "games_noise": { "min": 0.97, "max": 1.03 },
+
+    "pa_per_game": {
+      "_note": "打席基數係數，由信任度與打線棒次決定。信任度高的人排在前段棒次，打席自然多。",
+      "min": 4.0,
+      "max": 4.3
+    },
+    "pa_noise": { "min": 0.97, "max": 1.03 },
+    "pa_absolute_noise_divisor": {
+      "_note": "絕對噪音為 ±G/divisor。除以場次讓噪音隨出賽動態縮放，少場次者的數據才不會崩壞。",
+      "value": 8
+    }
+  },
+
+  "batting": {
+    "_note": "所有率都是「與聯盟 par 同水準時為 base，每高一點加 per_point」。d 值統一由能力減 par 得出。",
+
+    "walk_rate": { "base": 0.08, "per_point": 0.0035, "min": 0.02, "max": 0.22, "ability": "eye" },
+
+    "intentional_walk": {
+      "_note": "故意四壞採指數型恐懼值。對手只敬遠重砲手，不敬遠快腿——敬遠快腿等於免費送他上二壘，所以 spd 是扣分項。",
+      "formula": "Dom = (pow + con + eye - spd/4) / 180",
+      "abilities": { "pow": 1, "con": 1, "eye": 1, "spd": -0.25 },
+      "divisor": 180,
+      "threshold": 1.0,
+      "exponent": 2,
+      "rate_divisor": 16,
+      "noise": { "min": 0.85, "max": 1.15 }
+    },
+
+    "hit_rate": {
+      "_note": "對打數而非打席。base 是與聯盟同水準時的打擊率。per_point 的斜率決定「能力差距換算成打擊率差距」有多陡——太陡會讓上限一直被觸發，全聯盟都在打三成八。",
+      "base": 0.265,
+      "per_point": 0.0028,
+      "min": 0.16,
+      "max": 0.35,
+      "ability": "con"
+    },
+    "hr_rate": {
+      "_note": "全壘打佔打數的比例。min 不設 0——再弱的打者一季也不會一支全壘打都沒有，設 0 會讓力量略低於聯盟平均的人直接歸零。",
+      "base": 0.025,
+      "per_point": 0.0013,
+      "min": 0.002,
+      "max": 0.075,
+      "ability": "pow"
+    },
+    "extra_base": {
+      "_note": "扣掉全壘打的安打依速度分配二三壘打。快腿的三壘打明顯較多。",
+      "double_rate": { "base": 0.2, "per_point": 0.001, "min": 0.12, "max": 0.3, "ability": "spd" },
+      "triple_rate": { "base": 0.015, "per_point": 0.0012, "min": 0.0, "max": 0.06, "ability": "spd" }
+    },
+    "rbi_per_hit": 0.55,
+    "rbi_per_hr_extra": 0.9,
+    "steal": {
+      "attempt_rate": { "base": 0.06, "per_point": 0.004, "min": 0.0, "max": 0.4, "ability": "spd" },
+      "success_rate": { "base": 0.68, "per_point": 0.005, "min": 0.4, "max": 0.92, "ability": "spd" }
+    },
+    "noise": {
+      "_note": "各項率的最終隨機波動。窄於養成期——職業一季上百場，樣本數足以收斂。",
+      "min": 0.94,
+      "max": 1.06
+    }
+  },
+
+  "pitching": {
+    "_note": "先發與後援的出賽結構完全不同，因此分開算。角色由能力決定，不由玩家指定。",
+
+    "role": {
+      "_note": "體力夠且控球好的人排進輪值，否則進牛棚。門檻是相對 par 的 d 值。",
+      "starter": { "sta_min_d": -2, "ctl_min_d": -4 }
+    },
+
+    "starter": {
+      "rotation_divisor": {
+        "_note": "先發場次上限為聯盟場次除以此值——五人輪值。",
+        "value": 5
+      },
+      "gs_factor": { "base": 0.8, "per_point": 0.03, "min": 0.3, "max": 1.0 },
+      "innings_per_start": { "base": 5.2, "per_point": 0.09, "min": 4.0, "max": 7.0, "ability": "sta" },
+      "noise": { "min": 0.95, "max": 1.05 }
+    },
+
+    "reliever": {
+      "games": { "base": 45, "per_point": 1.8, "min": 20, "max": 70 },
+      "innings_per_game": { "min": 1.0, "max": 1.2 },
+      "noise": { "min": 0.93, "max": 1.07 }
+    },
+
+    "strikeout_rate": {
+      "_note": "每局三振數。由球威與變化球決定。",
+      "base": 0.72,
+      "per_point": 0.022,
+      "min": 0.3,
+      "max": 1.5,
+      "abilities": { "vel": 0.5, "swp": 0.2, "drp": 0.2, "chg": 0.1 }
+    },
+    "walk_rate": {
+      "_note": "每局保送數。控球越好越少。",
+      "base": 0.35,
+      "per_point": -0.012,
+      "min": 0.08,
+      "max": 0.9,
+      "ability": "ctl"
+    },
+    "era": {
+      "_note": "自責分率。base 是與聯盟同水準時的防禦率。",
+      "base": 4.2,
+      "per_point": -0.11,
+      "min": 1.4,
+      "max": 9.0,
+      "abilities": { "vel": 0.3, "ctl": 0.35, "swp": 0.15, "drp": 0.15, "chg": 0.05 }
+    },
+    "decision": {
+      "_note": "勝敗場。先發的勝率由 ERA 相對聯盟 par 決定，救援成功另計。",
+      "starter_decision_rate": 0.62,
+      "win_rate": { "base": 0.5, "per_point": 0.028, "min": 0.15, "max": 0.85 },
+      "closer_save_rate": 0.55
+    },
+    "noise": { "min": 0.94, "max": 1.06 }
+  },
+
+  "movement": {
+    "_note": "升降級與戰力外。每季結束時依「能力相對該層級 par／min」判定，不看單季成績——成績本身就是能力加噪音，用成績判定等於把噪音算兩次。",
+
+    "promote": {
+      "_note": "能力超過上一層級的 min 這麼多就升上去。",
+      "margin": 0,
+      "chance": { "base": 55, "per_point": 12, "min": 20, "max": 95 }
+    },
+    "demote": {
+      "_note": "能力低於本層級 min 這麼多就被下放。",
+      "margin": 0,
+      "chance": { "base": 45, "per_point": 14, "min": 10, "max": 90 }
+    },
+    "release": {
+      "_note": "在最低層級仍達不到標準，且已待滿寬限年數，就是戰力外。",
+      "grace_years": 2,
+      "margin": 3
+    }
+  },
+
+  "aging": {
+    "_note": "年齡曲線。巔峰前緩升、巔峰後遞減，衰退幅度隨年齡加速。這裡只處理自然老化——傷病與事件另計。",
+    "peak_start": 26,
+    "peak_end": 30,
+    "growth": {
+      "_note": "巔峰之前每季自然成長的點數（在訓練骰之外）。",
+      "points": { "min": 0, "max": 2 }
+    },
+    "decline": {
+      "_note": "巔峰之後每季衰退。per_year_after_peak 是每多一歲額外掉的量。",
+      "base": 1,
+      "per_year_after_peak": 0.35,
+      "max": 6,
+      "speed_first": {
+        "_note": "速度與守備範圍先掉，接觸與選球撐得比較久——這是真實的老化順序。",
+        "fast": ["spd", "rng", "vel"],
+        "slow": ["con", "eye", "ctl", "gim"],
+        "fast_multiplier": 1.5,
+        "slow_multiplier": 0.5
+      }
+    }
+  },
+
+  "retirement": {
+    "_note": "引退判定。年齡與能力雙軌——老了會退，打不動了也會退。",
+    "min_age": 30,
+    "age_chance": { "base": 3, "per_year": 6, "max": 85 },
+    "released_forces_retirement_age": 33,
+    "max_age": 44
+  },
+
+  "pro_dice": {
+    "_note": "職業階段的季初訓練骰。比養成期少——職業球員的時間被球季佔滿，能自主訓練的空間有限。",
+    "count_weights": { "1": 30, "2": 45, "3": 20, "4": 5 },
+    "peak_bonus": {
+      "_note": "巔峰期多擲一顆，反映當打之年的吸收效率。",
+      "delta": 1
+    }
+  }
+}

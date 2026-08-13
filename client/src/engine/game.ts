@@ -46,6 +46,8 @@ import {
 import { esc, Flow, type Option } from './flow.ts';
 import { assignSchool, createPlayer, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
+import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
+import { levelOf, playSeason, positionName } from './season.ts';
 import { rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -141,6 +143,19 @@ export class Game {
   #seasonPitching: PitchingLine | null = null;
   #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
     {};
+  /**
+   * 職業狀態。尚未進職業時為 null——用它而不是用 stage 判斷是否在職業階段，
+   * 因為 stage 是養成階段的代碼，硬塞一個 'PRO' 進去會讓學校、學年那些欄位
+   * 全部失去意義。
+   */
+  #pro: {
+    level: string;
+    team: string;
+    /** 在最低層級連續待了幾季，供戰力外的寬限期判定。 */
+    yearsAtBottom: number;
+    /** 職業第幾年，從 1 起算。 */
+    year: number;
+  } | null = null;
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -188,7 +203,7 @@ export class Game {
   get #eventContext(): EventContext {
     return {
       startPosition: this.#player?.startPosition ?? 'UTIL',
-      professional: false,
+      professional: this.#pro !== null,
       traits: this.#traits,
     };
   }
@@ -654,7 +669,7 @@ export class Game {
             ? '即戰力評價，直接放入一軍名單。'
             : '先從二軍出發。'),
       );
-      this.flow.push(() => this.#professionalStart(result.level ?? ''));
+      this.flow.push(() => this.#professionalStart(result.level ?? '', result.team ?? ''));
     };
 
     if (!canRejectOffer(result, this.#age)) {
@@ -698,14 +713,204 @@ export class Game {
     );
   }
 
-  /** 進入職業。目前是流程的終點，職業生涯尚未實作。 */
-  #professionalStart(level: string): void {
+  /** 進入職業。目前只跑 CPBL 主軸——旅外體系的轉會與尋路尚未實作。 */
+  #professionalStart(level: string, team: string): void {
+    this.#pro = { level, team, yearsAtBottom: 0, year: 1 };
+    this.#seasonBatting = null;
+    this.#seasonPitching = null;
+    this.flow.push(() => this.#proYear());
+  }
+
+  /** 職業的一個年度：分隔線 → 季初訓練 → 事件卡 → 球季 → 年度結束。 */
+  #proYear(): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    const info = levelOf(pro.level);
+
+    this.flow.divider(
+      `${this.#year} 年 · ${this.#age} 歲 · ${pro.team} · ${info.name}（職業第 ${pro.year} 年）`,
+    );
+    this.flow.push(
+      () => this.#proSpringTraining(),
+      () => this.#drawEventCard(),
+      () => this.#proSeason(),
+      () => this.#proEndYear(),
+    );
+  }
+
+  /**
+   * 職業的季初訓練。
+   *
+   * 骰數比養成期少——職業球員的時間被球季佔滿，能自主訓練的空間有限。奪冠
+   * 加成仍然生效，接上養成期的同一套機制。
+   */
+  #proSpringTraining(): void {
+    const bonus = championshipDice(this.#lastChampionships);
+    const earnedBy = this.#lastChampionships;
+    this.#lastChampionships = [];
+
+    const count = proDiceCount(this.world, this.#age) + bonus;
+    const rng = this.world.stream('growth');
+    const values = Array.from({ length: count }, () => rng.int(1, 6));
+
+    this.#dice = { values, index: 0 };
+
+    let msg =
+      `自主訓練擲出 <b class="hl">${values.length}</b> 顆骰：` +
+      values.map((v) => `<b class="hl">${v}</b>`).join('、');
+    if (bonus > 0) {
+      msg += `<br>去年的冠軍（${esc(earnedBy.join('、'))}）帶來更好的訓練資源，多擲 <b class="hl">${bonus}</b> 顆骰。`;
+    }
+    this.flow.card('info', '季初訓練', msg);
+
+    // 與養成期同理：必須 unshift，否則配點會跑到球季之後。
+    this.flow.unshift(
+      ...values.map((value, index) => () => this.#allocate(value, index, values.length)),
+    );
+  }
+
+  /** 打完一季，並把成績記進生涯累計。 */
+  #proSeason(): void {
+    const pro = this.#pro;
+    const player = this.#player;
+    const r = this.rating;
+    if (pro === null || player === null || r === null) return;
+
+    const position = ratingPosition(player.startPosition);
+    const line = playSeason(this.world, {
+      level: pro.level,
+      ability: this.#ability,
+      position,
+      overall: r.overall,
+      better: r.pitcher >= r.fielder ? 'pitcher' : 'fielder',
+      twoWay: this.isTwoWay,
+    });
+
+    this.#seasonBatting = line.batting;
+    this.#seasonPitching = line.pitching;
+    this.#accumulate(line.batting, line.pitching);
+
+    const parts: string[] = [];
+    if (line.pitching !== null) {
+      const p = line.pitching;
+      parts.push(
+        `<b>投手</b>（${p.role === 'SP' ? '先發' : '後援'}）｜${p.games} 場` +
+          `${p.starts > 0 ? `・先發 ${p.starts}` : ''}・${p.ip.toFixed(1)} 局` +
+          `・${p.wins} 勝 ${p.losses} 敗${p.saves > 0 ? ` ${p.saves} 救援` : ''}` +
+          `・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}`,
+      );
+    }
+    if (line.batting !== null) {
+      const b = line.batting;
+      parts.push(
+        `<b>打者</b>（${esc(positionName(position))}）｜${b.games} 場・${b.pa} 打席` +
+          `・打擊率 <b class="hl">${fmtAvg(b.avg)}</b>／${fmtAvg(b.obp)}／${fmtAvg(b.slg)}` +
+          `・${b.hr} 轟 ${b.rbi} 打點${b.sb > 0 ? `・盜壘 ${b.sb}` : ''}` +
+          `${b.ibb > 0 ? `・故意四壞 ${b.ibb}` : ''}`,
+      );
+    }
+
+    this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
+  }
+
+  /**
+   * 職業年度結束：老化 → 升降級 → 引退判定。
+   *
+   * 順序不能換。老化先跑，因為升降級看的是**這一季結束後**的能力；引退最後
+   * 跑，因為被釋出是引退判定的輸入之一。
+   */
+  #proEndYear(): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+
+    this.#age++;
+    this.#year++;
+    pro.year++;
+
+    // ---- 老化
+    const aging = applyAging(this.world, this.#ability, this.#age);
+    this.#ability = { ...aging.ability };
+    if (aging.changes.size > 0) {
+      const lines = [...aging.changes.entries()]
+        .map(([k, v]) => `${esc(abilities.abilities[k as AbilityKey] ?? k)} ${v > 0 ? '+' : ''}${v}`)
+        .join('｜');
+      this.flow.card(
+        aging.phase === 'decline' ? 'bad' : 'good',
+        aging.phase === 'decline' ? '歲月' : '成長',
+        aging.phase === 'decline'
+          ? `身體開始誠實了。${lines}`
+          : `還在往上走。${lines}`,
+      );
+    }
+
+    // ---- 升降級
+    const r = this.rating;
+    const move = evaluateMovement(this.world, {
+      level: pro.level,
+      overall: r?.overall ?? 0,
+      yearsAtBottom: pro.yearsAtBottom,
+    });
+
+    let released = false;
+    if (move.movement === 'release') {
+      released = true;
+      this.flow.card('bad', '戰力外', `球團通知你不再續約——${esc(move.reason)}。`);
+    } else if (move.level !== null && move.level !== pro.level) {
+      const to = levelOf(move.level);
+      this.flow.card(
+        move.movement === 'promote' ? 'gold' : 'bad',
+        move.movement === 'promote' ? '升上一軍' : '下放二軍',
+        `${esc(move.reason)}，${move.movement === 'promote' ? '被叫上' : '被送回'}<b class="hl">${esc(to.name)}</b>。`,
+      );
+      pro.level = move.level;
+    }
+
+    // 只有待在體系最底層才累計寬限期——升上去就歸零。
+    pro.yearsAtBottom = pathOf(levelOf(pro.level).org)[0] === pro.level ? pro.yearsAtBottom + 1 : 0;
+
+    // ---- 引退
+    const retire = shouldRetire(this.world, { age: this.#age, released });
+    if (retire.retire || released) {
+      this.flow.push(() => this.#retire(retire.retire ? retire.reason : move.reason));
+      return;
+    }
+    this.flow.push(() => this.#proYear());
+  }
+
+  /** 引退：結算生涯。 */
+  #retire(reason: string): void {
+    const pro = this.#pro;
+    const total = this.#statsByStage['PRO'];
+    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 引退`);
+
+    const lines: string[] = [];
+    if (total?.pitching != null) {
+      const p = total.pitching;
+      lines.push(
+        `投手：${p.games} 場・${p.ip.toFixed(1)} 局・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}`,
+      );
+    }
+    if (total?.batting != null) {
+      const b = total.batting;
+      lines.push(
+        `打者：${b.games} 場・${b.hits} 安打・${b.hr} 全壘打・${b.rbi} 打點` +
+          `・生涯打擊率 <b class="hl">${fmtAvg(b.avg)}</b>`,
+      );
+    }
+
+    this.flow.card(
+      'gold',
+      '引退',
+      `${esc(reason)}。在<b class="hl">${esc(pro?.team ?? '')}</b>結束了 ${pro?.year ?? 0} 年的職業生涯。` +
+        (lines.length > 0 ? `<br>${lines.join('<br>')}` : '') +
+        (this.#honors.length > 0 ? `<br>生涯榮譽：${esc(this.#honors.join('、'))}` : ''),
+    );
     this.flow.card(
       'info',
       '尚未實作',
-      `你被分發到 <b class="hl">${esc(level)}</b>，但職業生涯的系統都還沒做——` +
-        '賽季模擬、合約、守位登錄、傷病、國際賽、引退與名人堂全部待實作。流程到這裡為止。',
+      '名人堂、生涯獎項與二週目繼承還沒做。流程到這裡為止。',
     );
+    this.#pro = null;
   }
 
   /** 生涯在進入職業之前結束。 */
@@ -738,8 +943,10 @@ export class Game {
 
   /** 把一段成績累加到目前階段。各階段分開累計，介面才能分開呈現。 */
   #accumulate(batting: BattingLine | null, pitching: PitchingLine | null): void {
-    const current = this.#statsByStage[this.#stage] ?? { batting: null, pitching: null };
-    this.#statsByStage[this.#stage] = {
+    // 職業的成績全部記在 PRO 之下——分層級記錄要等轉會系統做完才有意義。
+    const key = this.#pro === null ? this.#stage : 'PRO';
+    const current = this.#statsByStage[key] ?? { batting: null, pitching: null };
+    this.#statsByStage[key] = {
       batting: addBatting(current.batting, batting),
       pitching: addPitching(current.pitching, pitching),
     };
