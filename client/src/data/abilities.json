@@ -1,7 +1,9 @@
 {
-  "schemaVersion": 1,
-  "_source": "抽取自 index_legacy.html ABL / POS_AB / POSN / newState()",
+  "schemaVersion": 2,
+  "_source": "抽取自 index_legacy.html ABL / POS_AB / POSN / newState()，並依二刀流球員模型改寫",
   "_note": "球探量表 20-80。所有能力值共用這個尺度，上限為 80。",
+
+  "_model_note": "**每位球員都擁有全部能力**，不論起始守位——這與 index_legacy.html 的投手／野手二分不同，是刻意的模型變更。開局選擇的起始守位只影響潛力天賦的機率加權（見 talent_weights），不決定你有哪些能力。因此一個投手也可能打得好，一個游擊手也可能投得動；投打俱佳者可在選秀前取得「二刀流」天賦。",
 
   "scale": {
     "min": 20,
@@ -14,7 +16,10 @@
     "sta": "體力",
     "vel": "球速",
     "ctl": "控球",
-    "brk": "變化球",
+    "swp": "橫向變化",
+    "drp": "縱向掉落",
+    "chg": "變速下沉",
+    "gim": "特殊奇招",
     "con": "Contact",
     "pow": "力量",
     "spd": "速度",
@@ -25,44 +30,102 @@
     "cat": "配球"
   },
 
-  "position_groups": {
-    "P": "投手",
-    "C": "捕手",
-    "IF": "內野手",
-    "OF": "外野手"
+  "ability_groups": {
+    "_note": "能力的功能分組。用於介面呈現，以及判定二刀流資格時分別檢查投打兩側。sta（體力）兩側共用，不歸任一組。",
+    "pitching": ["vel", "ctl", "swp", "drp", "chg", "gim"],
+    "hitting": ["con", "pow", "spd", "eye"],
+    "fielding": ["rng", "fld", "arm", "cat"],
+    "shared": ["sta"]
   },
 
-  "position_abilities": {
-    "P": ["sta", "vel", "ctl", "brk"],
-    "C": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm", "cat"],
-    "IF": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm"],
-    "OF": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm"]
+  "pitch_families": {
+    "_note": "投手的四大球系，取代舊版單一的 brk（變化球）。見 docs/design/simulation_math.md §5——各系有獨特的數學特性，不是同一個數值的四種皮膚。代碼沿用全部能力皆 3 字母的慣例；刻意避開 spc（Specialty），因為它與既有的 spd（速度）只差一字，程式碼裡看錯的成本太高。",
+    "swp": { "name": "橫向變化", "en": "Sweeping", "pitches": ["滑球", "橫掃滑球", "卡特球"] },
+    "drp": { "name": "縱向掉落", "en": "Dropping", "pitches": ["曲球", "12-6 大曲球"] },
+    "chg": { "name": "變速下沉", "en": "Changeup", "pitches": ["變速球", "指叉球", "伸卡球"] },
+    "gim": { "name": "特殊奇招", "en": "Gimmick", "pitches": ["蝴蝶球", "螺旋球"] }
+  },
+
+  "start_positions": {
+    "_note": "開局選擇的起始守位。不含 DH——DH 不是養成期會選的起點，它是能力衰退後的去處。UTIL（守位不定）代表還沒定型的球員，天賦不做任何加權。正式的守備位置在選秀之後才由守位系統決定，見 positions.json。",
+    "P": "投手",
+    "C": "捕手",
+    "1B": "一壘手",
+    "2B": "二壘手",
+    "3B": "三壘手",
+    "SS": "游擊手",
+    "LF": "左外野手",
+    "CF": "中外野手",
+    "RF": "右外野手",
+    "UTIL": "守位不定"
+  },
+
+  "talent_weights": {
+    "_note": "潛力天賦的機率加權。權重越高，該能力越可能在洗牌時排到前面、拿到高階的潛力區間。這是起始守位唯一的作用——它讓專精者仍然專精，但不封死任何一條路。未列出的能力一律用 default。",
+    "_util_note": "UTIL（守位不定）刻意留空，代表全部能力等權重一起洗牌。它的期望值不比專精差，但拿到某一項頂尖天賦的位置完全隨機——換來的是最高的二刀流機率。",
+    "default": 1,
+    "by_start_position": {
+      "P": { "sta": 2, "vel": 3, "ctl": 3, "swp": 3, "drp": 3, "chg": 3, "gim": 3 },
+      "C": { "sta": 2, "con": 2, "pow": 2, "spd": 1, "eye": 2, "rng": 1, "fld": 3, "arm": 3, "cat": 4 },
+      "1B": { "sta": 2, "con": 2, "pow": 3, "spd": 1, "eye": 2, "rng": 1, "fld": 2, "arm": 1 },
+      "2B": { "sta": 2, "con": 2, "pow": 2, "spd": 2, "eye": 2, "rng": 3, "fld": 3, "arm": 2 },
+      "3B": { "sta": 2, "con": 2, "pow": 3, "spd": 1, "eye": 2, "rng": 2, "fld": 2, "arm": 4 },
+      "SS": { "sta": 2, "con": 2, "pow": 2, "spd": 2, "eye": 2, "rng": 4, "fld": 3, "arm": 3 },
+      "LF": { "sta": 2, "con": 2, "pow": 3, "spd": 2, "eye": 2, "rng": 2, "fld": 2, "arm": 2 },
+      "CF": { "sta": 2, "con": 2, "pow": 2, "spd": 3, "eye": 2, "rng": 4, "fld": 3, "arm": 2 },
+      "RF": { "sta": 2, "con": 2, "pow": 3, "spd": 2, "eye": 2, "rng": 2, "fld": 2, "arm": 4 },
+      "UTIL": {}
+    }
+  },
+
+  "handedness": {
+    "_note": "慣用手。simulation_math.md §5 的「同邊優勢」與「反邊剋星」需要投打雙方的慣用手才算得出來，兩邊都必須有。R 右、L 左、S 左右開弓。每位球員都有投球慣用手與打擊慣用手兩者——二刀流模型下所有人都可能上場投球或打擊。",
+    "throws": {
+      "_note": "雙手投不在此列——史上只有個位數人，放進常規機率會讓投手看起來一堆怪物。改列為隱藏特性，見 traits.json 的 switch_pitcher。",
+      "weights": { "R": 72, "L": 28 }
+    },
+    "bats": {
+      "_note": "左打比例遠高於一般人口的左撇子比例，因為左打離一壘近、且大部分投手是右投，反邊優勢的機會多得多。左右開弓在打者這邊是常見且有戰術價值的——永遠取得反邊優勢。",
+      "weights": { "R": 57, "L": 35, "S": 8 }
+    },
+    "league_batter_split": {
+      "_note": "玩家投球時，對手打者的左右分佈。打者群是抽象模擬的，用聯盟層級常數處理即可，不必逐一建模。",
+      "R": 57,
+      "L": 35,
+      "S": 8
+    }
   },
 
   "initial_ability": {
-    "_note": "開局能力：每項先擲 base，再依守位群給招牌能力額外加成。",
+    "_note": "開局能力：每項先擲 base，再依起始守位給招牌能力額外加成。UTIL 沒有加成——樣樣都練的代價就是樣樣都沒有先發優勢。",
     "base": { "min": 20, "max": 32 },
     "bonus": {
-      "P": { "vel": { "min": 0, "max": 6 }, "brk": { "min": 0, "max": 4 } },
-      "default": { "con": { "min": 0, "max": 6 }, "pow": { "min": 0, "max": 4 } }
+      "P": { "vel": { "min": 0, "max": 6 } },
+      "C": { "cat": { "min": 0, "max": 6 }, "fld": { "min": 0, "max": 4 } },
+      "1B": { "pow": { "min": 0, "max": 6 }, "con": { "min": 0, "max": 4 } },
+      "2B": { "con": { "min": 0, "max": 6 }, "fld": { "min": 0, "max": 4 } },
+      "3B": { "arm": { "min": 0, "max": 6 }, "pow": { "min": 0, "max": 4 } },
+      "SS": { "rng": { "min": 0, "max": 6 }, "fld": { "min": 0, "max": 4 } },
+      "LF": { "pow": { "min": 0, "max": 6 }, "con": { "min": 0, "max": 4 } },
+      "CF": { "spd": { "min": 0, "max": 6 }, "rng": { "min": 0, "max": 4 } },
+      "RF": { "arm": { "min": 0, "max": 6 }, "pow": { "min": 0, "max": 4 } },
+      "UTIL": {}
+    },
+    "pitch_bonus": {
+      "_note": "起始守位為投手者，另外隨機挑一個球系加成，代表少年時期最先練起來的那顆變化球。取代舊版固定加在 brk 上的做法——球系拆開後，加在哪一系本身就是一次抽取。",
+      "applies_to": ["P"],
+      "range": { "min": 0, "max": 4 }
     }
   },
 
   "potential_ceiling": {
-    "_note": "OOTP 式潛力天花板：把該守位群的能力洗牌後，依名次套用不同區間——1 項頂尖工具、1 項優質、1 項中上、其餘平庸。投手只有 4 項能力，天花板刻意更集中，避免動輒雙 70。",
-    "tiers": {
-      "P": [
-        { "min": 70, "max": 80 },
-        { "min": 58, "max": 68 },
-        { "min": 50, "max": 60 },
-        { "min": 44, "max": 54 }
-      ],
-      "default": [
-        { "min": 72, "max": 80 },
-        { "min": 64, "max": 74 },
-        { "min": 56, "max": 68 },
-        { "min": 46, "max": 62 }
-      ]
-    }
+    "_note": "OOTP 式潛力天花板：把全部能力依 talent_weights 加權洗牌後，依名次套用區間——1 項頂尖工具、1 項優質、1 項中上、其餘平庸。名次超出階梯數者一律吃最後一階。",
+    "_two_way_note": "全部 15 項能力一起洗牌，因此絕大多數球員只會在單側拿到高階天賦。投打各有一項頂尖是罕見結果——這正是二刀流稀有的來源，不需要另外設限。",
+    "tiers": [
+      { "min": 72, "max": 80 },
+      { "min": 64, "max": 74 },
+      { "min": 56, "max": 68 },
+      { "min": 46, "max": 62 }
+    ]
   }
 }

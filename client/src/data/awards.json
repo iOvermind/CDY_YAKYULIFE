@@ -5,6 +5,8 @@
 
   "_calibration_note": "比率數據（era / avg / obp）與非場次連動數據（sv / hld / sb）三個聯盟統一標準；只有吃打席與局數的（so / hr / rbi）依 120:143:162 的場次比例放大。",
 
+  "_two_way_note": "二刀流球員的投手獎項與打擊獎項**分開判定**，各自對照自己那側的門檻，互不稀釋——同一年拿下年度最佳投手與打擊王是允許的。成績的呈現與合併指標（WS / WAR）的處理見 hall_of_fame.json 的 two_way。",
+
   "thresholds": {
     "CPBL": {
       "games": 120,

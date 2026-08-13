@@ -8,7 +8,7 @@
 
   "categories": {
     "_note": "顯示順序即此處的陣列順序。",
-    "positive": ["legend", "taiwan", "goldcloth", "mrteam", "confidante", "genius", "iron", "late", "disc", "academy", "intlace", "franchise", "clutch", "phoenix", "rubber", "onetool", "smallschool", "grinder", "combo", "rainbow"],
+    "positive": ["legend", "taiwan", "goldcloth", "mrteam", "confidante", "genius", "iron", "late", "disc", "academy", "intlace", "franchise", "clutch", "phoenix", "rubber", "onetool", "smallschool", "grinder", "combo", "switch_pitcher", "rainbow"],
     "negative": ["glass", "scum", "yips", "distract", "cancer", "ambience", "thief"]
   },
 
@@ -182,6 +182,12 @@
       "effects": [
         { "type": "modify_season_dice", "val": 1 }
       ]
+    },
+    {
+      "id": "switch_pitcher", "tone": "good", "rules_complete": false,
+      "name": "雙手投",
+      "effect_text": "左右開弓的投手，永遠取得同邊優勢",
+      "trigger_note": "刻意不進開局擲骰。真實棒球史上的雙手投投手只有個位數，放進常規機率會讓投手看起來一堆怪物；當成生涯中觸發的隱藏稱號才是亮點。觸發條件待定。"
     },
     {
       "id": "rainbow", "tone": "good", "rules_complete": false,

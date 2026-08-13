@@ -3,6 +3,13 @@
   "_source": "抽取自 index_legacy.html TIER_TH / HOF_CFG / retireScene() 的 fbMult",
   "_note": "生涯評價與名人堂。tier_thresholds 是五帶金字塔的四道門檻，由高到低對應名人堂／明星／每日／替補；低於最後一道即第五帶。",
 
+  "two_way": {
+    "_note": "二刀流球員的成績呈現與評價。投手成績（W/L/SV/IP/SO/ERA…）與野手成績（PA/H/HR/RBI/AVG…）**分開累積、分開顯示、分開評獎**——它們的單位不同，硬湊在一起沒有意義。",
+    "_combined_note": "但有一類指標是投打通用的貢獻值——Win Shares、WAR 這種把不同貢獻換算成同一個尺度的統計。這類指標**可以跨投打加總**，並在介面上獨立一頁呈現「合併生涯紀錄」，讓二刀流球員能與單一領域的球員放在同一張榜上比較。公式見 ROADMAP 階段二的「綜合評價 (WAR)」。",
+    "score_rule": "career_score = pitching_score + batting_score",
+    "combined_metrics": ["WS", "WAR"]
+  },
+
   "tier_thresholds": {
     "_note": "擬真玩家尺的校準：成功稀有化、浮沉為大宗、失敗有感。索引 0 為名人堂門檻。",
     "labels": ["名人堂", "明星", "每日", "替補"],
