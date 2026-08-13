@@ -16,6 +16,7 @@ import {
   type AbilityKey,
 } from '../data/index.ts';
 import { academyUnlocked, playCups } from './amateur.ts';
+import { canRejectOffer, qualifiesAsTwoWay, runDraft, TWO_WAY_TRAIT } from './draft.ts';
 import {
   drawEvent,
   resolveEvent,
@@ -415,7 +416,7 @@ export class Game {
     this.flow.push(() => this.#graduate());
   }
 
-  /** 高中畢業。目前是流程的終點，選秀尚未實作。 */
+  /** 高中畢業：結算三年、判定二刀流，然後進選秀。 */
   #graduate(): void {
     const r = this.rating;
     this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 高中畢業`);
@@ -426,12 +427,109 @@ export class Game {
         `（投手側 ${r?.pitcher ?? 0}／野手側 ${r?.fielder ?? 0}）。` +
         (this.#honors.length > 0 ? `<br>生涯榮譽：${esc(this.#honors.join('、'))}` : ''),
     );
+
+    // 二刀流的判定在選秀之前——它會影響球團怎麼評估你。
+    if (r !== null && qualifiesAsTwoWay(r)) {
+      this.#traits.add(TWO_WAY_TRAIT);
+      this.flow.card(
+        'gold',
+        '隱藏天賦：二刀流',
+        '投得動也打得開。球探報告上多了一行少見的註記——' +
+          '<b class="hl">兩邊都值得投資</b>。從今以後，投打兩側的成長都不再像專精者那樣陡。',
+      );
+    }
+
+    this.flow.push(() => this.#draft());
+  }
+
+  /** 中華職棒選秀。 */
+  #draft(): void {
+    const overall = this.rating?.overall ?? 0;
+    const result = runDraft(this.world, { overall, age: this.#age });
+
+    if (result.undrafted) {
+      this.flow.card(
+        'bad',
+        '選秀落榜',
+        `唱名一輪又一輪，始終沒有你的名字。` +
+          `（綜合 ${overall}｜年齡加權後評價 ${result.score}）`,
+      );
+      this.flow.push(() => this.#careerOver('落榜'));
+      return;
+    }
+
+    const accept = () => {
+      this.#honors.push(`${this.#year} 中職選秀第 ${result.round} 輪`);
+      this.flow.card(
+        'gold',
+        '中華職棒選秀會',
+        `第 <b class="hl">${result.round}</b> 輪獲 <b class="hl">${esc(result.team ?? '')}</b> 指名！` +
+          `簽約金 <b class="hl">${result.bonus} 萬</b>。` +
+          (result.level === amateur.draft.first_round_direct_promotion.level
+            ? '即戰力評價，直接放入一軍名單。'
+            : '先從二軍出發。'),
+      );
+      this.flow.push(() => this.#professionalStart(result.level ?? ''));
+    };
+
+    if (!canRejectOffer(result, this.#age)) {
+      accept();
+      return;
+    }
+
+    this.flow.ask(
+      {
+        title: `中華職棒選秀會 · 第 ${result.round} 輪獲 ${result.team} 指名`,
+        options: [
+          {
+            id: 'draft:accept',
+            label: '接受指名，加盟球隊',
+            note: `簽約金 ${result.bonus} 萬｜從${
+              result.level === amateur.draft.first_round_direct_promotion.level ? '一軍' : '二軍'
+            }出發`,
+            role: 'main',
+          },
+          {
+            id: 'draft:reject',
+            label: '重返校園，再拚一年',
+            note: '放棄本次指名，明年重新參加選秀',
+            role: 'warn',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'draft:accept') {
+          accept();
+          return;
+        }
+        this.flow.card(
+          'info',
+          '重返校園',
+          '看到被選到的輪次，雙眼發黑。你握緊拳頭，決定再磨一年——' +
+            '這一次，你一定要在前段輪次被叫到名字。',
+        );
+        this.flow.push(() => this.#careerOver('重返校園'));
+      },
+    );
+  }
+
+  /** 進入職業。目前是流程的終點，職業生涯尚未實作。 */
+  #professionalStart(level: string): void {
     this.flow.card(
       'info',
       '尚未實作',
-      '選秀、二刀流判定與職業生涯都還沒做，流程到這裡為止。' +
-        '目前可用的是開局生成、訓練骰與蓄力槽、大賽結算與年度循環，' +
-        '以及流程編排與重播機制。',
+      `你被分發到 <b class="hl">${esc(level)}</b>，但職業生涯的系統都還沒做——` +
+        '賽季模擬、合約、守位登錄、傷病、國際賽、引退與名人堂全部待實作。流程到這裡為止。',
+    );
+  }
+
+  /** 生涯在進入職業之前結束。 */
+  #careerOver(reason: string): void {
+    this.flow.card(
+      'info',
+      '尚未實作',
+      `${esc(reason)}之後的流程還沒做——大學、業餘成棒與隔年重新參加選秀都待實作。` +
+        '流程到這裡為止。',
     );
   }
 

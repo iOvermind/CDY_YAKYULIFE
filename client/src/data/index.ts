@@ -13,6 +13,7 @@
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
 import positionsJson from './positions.json';
+import teamsJson from './teams.json';
 
 /** 能力代碼，例如 'pow'、'ctl'。 */
 export type AbilityKey = string;
@@ -164,6 +165,34 @@ export interface AmateurData {
     >;
     readonly schools: Readonly<Record<string, number>>;
   };
+  readonly draft: {
+    readonly evaluation: {
+      readonly age_pivot: number;
+      readonly age_bonus_per_year: number;
+      readonly noise: Range;
+    };
+    readonly rounds: {
+      readonly tiers: readonly {
+        readonly min_score: number;
+        readonly round?: number;
+        readonly round_range?: Range;
+      }[];
+    };
+    readonly signing_bonus_by_round: readonly number[];
+    readonly default_bonus: number;
+    readonly first_round_direct_promotion: {
+      readonly round: number;
+      readonly min_overall: number;
+      readonly level: string;
+      readonly fallback_level: string;
+    };
+    readonly reject_offer: { readonly reject_from_round: number; readonly max_age: number };
+  };
+  readonly two_way_talent: {
+    readonly trait: string;
+    readonly min_pitcher: number;
+    readonly min_fielder: number;
+  };
   readonly cups: {
     readonly HS: CupStage;
     readonly U: CupStage;
@@ -192,6 +221,18 @@ export type AmateurStage = 'HS' | 'U' | 'AMA';
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
 export const positions = positionsJson as unknown as PositionsData;
+export const teams = teamsJson as unknown as TeamsData;
+
+export interface Team {
+  readonly name: string;
+  readonly color: string;
+  /** 隊名代表詞，用於「◯◯先生」這類稱號；未指定時取隊名末兩字。 */
+  readonly nick?: string;
+}
+
+export interface TeamsData {
+  readonly leagues: Readonly<Record<string, readonly Team[]>>;
+}
 
 /** 全部能力代碼，順序穩定（依 abilities.json 的宣告順序）。 */
 export const ALL_ABILITIES: readonly AbilityKey[] = Object.keys(abilities.abilities);

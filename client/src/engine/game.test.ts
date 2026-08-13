@@ -139,9 +139,9 @@ describe('子序列歸屬', () => {
     expect(counts.growth).toBeGreaterThan(0);
     expect(counts.season).toBeGreaterThan(0);
     expect(counts.events).toBeGreaterThan(0);
-    // 傷病判定與生涯事件都還沒實作，這兩條流必須是零
+    expect(counts.career).toBeGreaterThan(0);
+    // 傷病判定還沒實作，這條流必須是零
     expect(counts.health).toBe(0);
-    expect(counts.career).toBe(0);
   });
 });
 
@@ -207,7 +207,8 @@ describe('高中三年', () => {
       const championCards = game.flow.log.filter(
         (e) => e.kind === 'card' && e.title === '冠軍',
       ).length;
-      const honors = game.state?.honors.length ?? 0;
+      // 榮譽也包含選秀輪次，因此只數冠軍那幾筆
+      const honors = (game.state?.honors ?? []).filter((h) => h.endsWith('冠軍')).length;
       if (championCards === 0) expect(honors).toBe(0);
       else expect(honors).toBeGreaterThan(0);
     }

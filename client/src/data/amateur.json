@@ -60,16 +60,50 @@
   },
 
   "draft": {
-    "_note": "中華職棒選秀簽約金，依指名輪次（單位：萬）。索引 0 未使用，第 1 指最高。超出表列輪次一律 50。",
+    "_note": "中華職棒選秀。球團評價 = 綜合能力 + 年齡加權 + 臨場波動；評價落在哪個區間就決定被第幾輪指名。",
+
+    "evaluation": {
+      "_note": "年齡加權：越年輕的球員球團越願意投資，因為可養成的年數更多。滿 age_pivot 歲之後不再有加分，但也不倒扣。",
+      "age_pivot": 22,
+      "age_bonus_per_year": 2,
+      "noise": { "min": -4, "max": 4 }
+    },
+
+    "rounds": {
+      "_note": "由高到低比對，取第一個評價達標的區間。round 為固定輪次，round_range 則在區間內隨機——後段輪次本來就沒那麼精確。都不達標即落榜。",
+      "tiers": [
+        { "min_score": 56, "round": 1 },
+        { "min_score": 49, "round": 2 },
+        { "min_score": 43, "round_range": { "min": 3, "max": 4 } },
+        { "min_score": 37, "round_range": { "min": 5, "max": 7 } },
+        { "min_score": 30, "round_range": { "min": 8, "max": 10 } }
+      ]
+    },
+
     "signing_bonus_by_round": [0, 1000, 600, 350, 350, 150, 150, 150, 50, 50, 50],
     "default_bonus": 50,
+
     "first_round_direct_promotion": {
       "_note": "第 1 指且綜合能力達標者直接進一軍，否則從二軍起步。",
       "round": 1,
       "min_overall": 50,
       "level": "CPBL1",
       "fallback_level": "CPBL2"
+    },
+
+    "reject_offer": {
+      "_note": "輪次不滿意時可以放棄指名、明年重來。只在第 reject_from 輪之後才給這個選項——前段指名沒有拒絕的道理；年齡達 max_age 則不給，避免玩家無限拖延。",
+      "reject_from_round": 3,
+      "max_age": 24
     }
+  },
+
+  "two_way_talent": {
+    "_note": "二刀流天賦的判定，在高中畢業（選秀之前）進行。條件是投手側與野手側**都**達到門檻——不是整體評價高就好，那只代表單邊強。取得後兩側的成長曲線都變平緩，見 abilities.json 的 growth_cost.two_way。",
+    "_calibration_note": "門檻 34 依高中畢業時的實測分佈設定（各 300 段生涯）。弱側評價的分佈：交替投打配點的玩家 p10=32 / p50=34 / p90=37；只練單側的玩家 p10=27 / p50=29 / max=32。因此專精者取得率 0%、刻意兩邊練的人約 69%。這讓二刀流成為一個**build 選擇**而非抽獎——代價是兩側都不會頂尖。調高門檻會讓它變成運氣，調低會讓專精者也順手拿到。動之前先重跑一次分佈量測。",
+    "trait": "two_way",
+    "min_pitcher": 34,
+    "min_fielder": 34
   },
 
   "international": {
