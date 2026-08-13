@@ -237,7 +237,6 @@ export interface AmateurData {
     readonly HS: CupStage;
     readonly U: CupStage;
     readonly AMA: CupStage;
-    readonly power_noise: Range;
     readonly ranks: readonly string[];
     readonly points: readonly number[];
     readonly games_by_rank: { readonly values: readonly number[] };
@@ -256,6 +255,8 @@ export interface CupStage {
   readonly thresholds: readonly number[];
   /** 該階段的對手平均水準，用於把能力值換算成成績。 */
   readonly par: number;
+  /** 該階段的單場臨場波動。國中大於高中——那個年紀更容易爆冷。 */
+  readonly power_noise: Range;
   /** 冠軍隊直通的國際賽：大賽名稱 → 國際賽代碼。 */
   readonly qualifies?: Readonly<Record<string, string>>;
 }

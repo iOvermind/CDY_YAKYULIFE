@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "client",
+  "productName": "棒球人生模擬器",
   "version": "0.1.0",
   "identifier": "com.yakyulife.app",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "client",
-        "width": 800,
-        "height": 600
+        "title": "棒球人生模擬器",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 640
       }
     ],
     "security": {

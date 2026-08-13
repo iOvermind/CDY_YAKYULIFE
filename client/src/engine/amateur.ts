@@ -73,7 +73,7 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
   let totalGames = 0;
 
   for (const cup of stage.names) {
-    const power = overall + teamBonus + rng.int(cfg.power_noise.min, cfg.power_noise.max);
+    const power = overall + teamBonus + rng.int(stage.power_noise.min, stage.power_noise.max);
     const rankIndex = rankFor(power, stage.thresholds, lastRank);
     const points = (cfg.points[rankIndex] ?? 0) + pointsBonus;
     const games = cfg.games_by_rank.values[rankIndex] ?? 1;
