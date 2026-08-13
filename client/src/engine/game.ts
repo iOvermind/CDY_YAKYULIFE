@@ -22,9 +22,10 @@ import {
   nextStageOf,
   playCups,
   playYouthTournament,
+  qualifiedTournaments,
   schoolTiersOf,
   stageOf,
-  youthTournamentOf,
+  type CupSeason,
 } from './amateur.ts';
 import {
   addBatting,
@@ -127,6 +128,8 @@ export class Game {
   #ceilingBonus: Record<AbilityKey, number> = {};
   #injuryRisk = 0;
   #dice: { values: readonly number[]; index: number } | null = null;
+  /** 這一季的大賽結果。國際賽的直通資格要看它，因此必須留著。 */
+  #lastCupSeason: CupSeason | null = null;
   #seasonBatting: BattingLine | null = null;
   #seasonPitching: PitchingLine | null = null;
   #careerBatting: BattingLine | null = null;
@@ -290,32 +293,45 @@ export class Game {
     );
   }
 
-  /** 養成期的國際賽。只在該階段的指定年度舉辦，且需通過徵召門檻。 */
+  /**
+   * 養成期的國際賽。
+   *
+   * 判定方式是「贏下掛著代表權的國內大賽」，因此必須排在大賽之後。敘事上
+   * 一律寫成入選國家隊——現實中打好國內盃賽本來就是入選的主要依據。
+   */
   #youthTournament(): void {
-    const cfg = youthTournamentOf(this.#stage);
-    if (cfg === null || this.#stageYear !== cfg.held_in_year) return;
-
+    const season = this.#lastCupSeason;
+    if (season === null) return;
     const overall = this.rating?.overall ?? 0;
-    const result = playYouthTournament(this.world, this.#stage, overall);
-    if (result === null) return;
 
-    if (!result.selected) {
+    for (const code of qualifiedTournaments(this.#stage, season)) {
+      const result = playYouthTournament(this.world, code, overall);
+      const prefix = amateur.amateur_international.honor_prefix;
+
+      // 國際賽與國內大賽的榮譽各自獨立——贏下謝國城盃是一項成就，代表台灣
+      // 打 LLB 拿冠軍是另一項。
+      this.#honors.push(`${this.#year} ${prefix}${result.tournament}${result.rank}`);
+      this.#pool += result.points;
+
       this.flow.card(
-        'info',
-        `${cfg.name} 國家隊選拔`,
-        `名單公布了，沒有你。（綜合 ${overall}｜徵召門檻 ${cfg.call_up_threshold}）`,
+        result.rankIndex <= 1 ? 'gold' : 'good',
+        result.tournament,
+        `這一年的表現讓你入選國家隊，披上中華隊戰袍。` +
+          `最終 <b class="hl">${esc(result.rank)}</b>` +
+          `（${result.games} 場・+${result.points} 點）。`,
       );
-      return;
-    }
 
-    const prefix = amateur.amateur_international.honor_prefix;
-    this.#honors.push(`${this.#year} ${prefix}${cfg.name}${result.rank}`);
-    this.#pool += result.points;
-    this.flow.card(
-      result.rankIndex <= 1 ? 'gold' : 'good',
-      `${cfg.name}`,
-      `披上中華隊戰袍。最終 <b class="hl">${esc(result.rank)}</b>（+${result.points} 點）。`,
-    );
+      // 國際賽的出賽同樣計入成績。
+      const rating = this.rating;
+      const line = playAmateurStats(this.world, this.#stage, this.#ability, result.games, {
+        better: rating?.better ?? 'fielder',
+        twoWay: this.isTwoWay,
+      });
+      this.#seasonBatting = addBatting(this.#seasonBatting, line.batting);
+      this.#seasonPitching = addPitching(this.#seasonPitching, line.pitching);
+      this.#careerBatting = addBatting(this.#careerBatting, line.batting);
+      this.#careerPitching = addPitching(this.#careerPitching, line.pitching);
+    }
   }
 
   /** 抽一張事件卡並讓玩家決定怎麼應對。 */
@@ -496,6 +512,7 @@ export class Game {
 
     if (academyUnlocked(this.#stage, season)) this.#traits.add(amateur.cups.academy_trigger.trait);
 
+    this.#lastCupSeason = season;
     this.#pool += season.points;
     // 同樣要插隊——年度結束的步驟已經排在佇列裡了。
     this.flow.unshift(() => this.#spendPool());

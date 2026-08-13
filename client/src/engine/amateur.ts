@@ -135,41 +135,59 @@ export function nextStageOf(stage: SchoolStage): SchoolStage | null {
 // ------------------------------------------------------------------ 國際賽
 
 export interface YouthCallUp {
-  /** 是否入選。未達門檻就不會被徵召。 */
-  readonly selected: boolean;
+  /** 國際賽代碼。 */
+  readonly code: string;
   readonly tournament: string;
   readonly rankIndex: number;
   readonly rank: string;
   readonly points: number;
-}
-
-/** 取得該階段的養成期國際賽設定；沒有就回傳 null。 */
-export function youthTournamentOf(stage: AmateurStage): YouthTournament | null {
-  const cfg = amateur.amateur_international[stage];
-  if (cfg === undefined || cfg === null) return null;
-  return cfg as YouthTournament;
+  readonly games: number;
 }
 
 /**
- * 打養成期的國際賽。
+ * 這一季打得到哪些國際賽。
  *
- * 不是每個人都入選——綜合能力達門檻才會被徵召，因此入選本身就是一件值得
- * 高興的事。名次由整體興衰決定，個人能力只佔一小部分。
+ * 判定方式只有一種：贏下掛著代表權的國內大賽。國中層級這是真實的直通制；
+ * 高中的 U-18 與亞青現實上是遴選國家隊，但打好國內盃賽本來就是入選的主要
+ * 依據，因此用同一套機制，敘事上一律寫成「入選國家隊」。
  */
-export function playYouthTournament(
-  world: World,
+export function qualifiedTournaments(
   stage: AmateurStage,
-  overall: number,
-): YouthCallUp | null {
-  const cfg = youthTournamentOf(stage);
-  if (cfg === null) return null;
-
-  if (overall < cfg.call_up_threshold) {
-    return { selected: false, tournament: cfg.name, rankIndex: -1, rank: '', points: 0 };
+  season: CupSeason,
+): readonly string[] {
+  const all = amateur.amateur_international.tournaments;
+  const qualifies = amateur.cups[stage].qualifies ?? {};
+  const out: string[] = [];
+  for (const cup of season.championships) {
+    const code = qualifies[cup];
+    if (code !== undefined && all[code] !== undefined) out.push(code);
   }
+  return out;
+}
+
+/** 這個階段的國內大賽各自連著哪一項國際賽，用於介面說明。 */
+export function qualificationMap(stage: AmateurStage): Readonly<Record<string, YouthTournament>> {
+  const all = amateur.amateur_international.tournaments;
+  const qualifies = amateur.cups[stage].qualifies ?? {};
+  const out: Record<string, YouthTournament> = {};
+  for (const [cup, code] of Object.entries(qualifies)) {
+    const cfg = all[code];
+    if (cfg !== undefined) out[cup] = cfg;
+  }
+  return out;
+}
+
+/**
+ * 打一場養成期的國際賽。
+ *
+ * 名次由整體興衰決定，個人能力只佔一小部分——國家隊的成績不是一個人的事。
+ */
+export function playYouthTournament(world: World, code: string, overall: number): YouthCallUp {
+  const shared = amateur.amateur_international;
+  const cfg = shared.tournaments[code];
+  if (cfg === undefined) throw new Error(`未知的國際賽代碼：${code}`);
 
   const rng = world.stream('season');
-  const shared = amateur.amateur_international;
   const bonus = Math.min(
     shared.power_bonus.max,
     Math.max(0, Math.round((overall - shared.power_bonus.base_overall) * shared.power_bonus.factor)),
@@ -186,11 +204,12 @@ export function playYouthTournament(
   }
 
   return {
-    selected: true,
+    code,
     tournament: cfg.name,
     rankIndex,
     rank: shared.ranks[rankIndex] ?? '',
-    points: cfg.points[rankIndex] ?? 0,
+    points: shared.points[rankIndex] ?? 0,
+    games: cfg.games_by_rank[rankIndex] ?? 0,
   };
 }
 

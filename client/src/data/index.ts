@@ -175,14 +175,16 @@ export interface AmateurData {
   readonly junior_high: SchoolTiers;
   readonly high_school: SchoolTiers;
   readonly amateur_international: {
+    readonly tournaments: Readonly<Record<string, YouthTournament>>;
     readonly ranks: readonly string[];
+    readonly points: readonly number[];
     readonly power_bonus: {
       readonly base_overall: number;
       readonly factor: number;
       readonly max: number;
     };
     readonly honor_prefix: string;
-  } & Readonly<Record<string, YouthTournament | unknown>>;
+  };
   readonly draft: {
     readonly evaluation: {
       readonly age_pivot: number;
@@ -254,6 +256,8 @@ export interface CupStage {
   readonly thresholds: readonly number[];
   /** 該階段的對手平均水準，用於把能力值換算成成績。 */
   readonly par: number;
+  /** 冠軍隊直通的國際賽：大賽名稱 → 國際賽代碼。 */
+  readonly qualifies?: Readonly<Record<string, string>>;
 }
 
 /** 一條率的設定：與對手同水準時是 base，每高一點加 per_point。 */
@@ -283,15 +287,24 @@ export interface SchoolTiers {
   readonly schools: Readonly<Record<string, number>>;
 }
 
+/**
+ * 養成期的國際賽。
+ *
+ * 出線方式有兩種，對應真實制度的差異：
+ * - `qualified_by`：冠軍隊直通。贏下指定的國內大賽即取得代表權（國中）。
+ * - `call_up_threshold`：遴選國家隊。綜合能力達標才會被選上（高中）。
+ */
 export interface YouthTournament {
   readonly name: string;
-  /** 只在該階段的第幾年舉辦。 */
-  readonly held_in_year: number;
-  /** 綜合能力達此值才會被徵召。 */
-  readonly call_up_threshold: number;
+  readonly stage: SchoolStage;
+  /** 冠軍隊直通：取得代表權的國內大賽名稱。 */
+  readonly qualified_by?: string;
+  /** 遴選制：綜合能力達此值才會被徵召。 */
+  readonly call_up_threshold?: number;
+  /** 遴選制：只在該階段的第幾年舉辦。 */
+  readonly held_in_year?: number;
   readonly thresholds: readonly number[];
-  readonly points: readonly number[];
-  readonly games: number | null;
+  readonly games_by_rank: readonly number[];
 }
 
 export const abilities = abilitiesJson as unknown as AbilitiesData;
