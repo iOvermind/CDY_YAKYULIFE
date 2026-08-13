@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import './app.css';
 import { abilities, START_POSITIONS, type StartPosition } from './data/index.ts';
 import type { LogEntry, Prompt } from './engine/flow.ts';
-import { Game } from './engine/game.ts';
-import type { NewPlayer } from './engine/genesis.ts';
+import { Game, type PlayerState } from './engine/game.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -156,15 +155,15 @@ function GameScreen({
   onChoose: (optionId: string) => void;
   onRestart: () => void;
 }) {
-  const player = game.player;
+  const state = game.state;
 
   return (
     <div id="app">
       <div id="mid">
-        {player && <Board player={player} seed={game.setup.seed} />}
+        {state && <Board state={state} seed={game.setup.seed} />}
         <div id="log">
           <LogView entries={game.flow.log} />
-          {player && <AbilityCard player={player} />}
+          {state && <AbilityCard state={state} />}
         </div>
       </div>
       <div id="act-side">
@@ -187,7 +186,8 @@ function GameScreen({
   );
 }
 
-function Board({ player, seed }: { player: NewPlayer; seed: string }) {
+function Board({ state, seed }: { state: PlayerState; seed: string }) {
+  const player = state.origin;
   return (
     <div id="board">
       <div id="bd-top">
@@ -210,7 +210,7 @@ function Board({ player, seed }: { player: NewPlayer; seed: string }) {
           <span>年齡</span>
         </div>
         <div className="bd-cell">
-          <b>{overall(player)}</b>
+          <b>{overall(state)}</b>
           <span>綜合</span>
         </div>
         <div className="bd-cell">
@@ -280,16 +280,16 @@ function PromptView({
   );
 }
 
-function AbilityCard({ player }: { player: NewPlayer }) {
+function AbilityCard({ state }: { state: PlayerState }) {
   const groups = abilities.ability_groups;
   const names = abilities.ability_group_names;
 
   return (
     <div className="card">
       <h4>能力</h4>
-      <AbilityBlock title={names.shared} keys={groups.shared} player={player} />
-      <AbilityBlock title={names.pitcher} keys={groups.pitcher} player={player} />
-      <AbilityBlock title={names.fielder} keys={groups.fielder} player={player} />
+      <AbilityBlock title={names.shared} keys={groups.shared} state={state} />
+      <AbilityBlock title={names.pitcher} keys={groups.pitcher} state={state} />
+      <AbilityBlock title={names.fielder} keys={groups.fielder} state={state} />
     </div>
   );
 }
@@ -297,11 +297,11 @@ function AbilityCard({ player }: { player: NewPlayer }) {
 function AbilityBlock({
   title,
   keys,
-  player,
+  state,
 }: {
   title: string;
   keys: readonly string[];
-  player: NewPlayer;
+  state: PlayerState;
 }) {
   const max = abilities.scale.max;
 
@@ -309,8 +309,9 @@ function AbilityBlock({
     <>
       <p className="divider">{title}</p>
       {keys.map((key) => {
-        const current = player.ability[key] ?? 0;
-        const ceiling = player.potential[key] ?? 0;
+        const current = state.ability[key] ?? 0;
+        const ceiling = state.origin.potential[key] ?? 0;
+        const carry = state.carry[key] ?? 0;
         return (
           <div className="abrow" key={key}>
             <span className="nm">{abilities.abilities[key] ?? key}</span>
@@ -318,9 +319,22 @@ function AbilityBlock({
               <i style={{ width: `${(current / max) * 100}%` }} />
               <em style={{ left: `${(ceiling / max) * 100}%` }} />
             </span>
-            <span className="val">
+            <span className="val" style={{ lineHeight: 1.1 }}>
               {current}
               <small style={{ opacity: 0.5 }}>/{ceiling}</small>
+              {carry > 0 && (
+                <span
+                  style={{
+                    display: 'block',
+                    opacity: 0.5,
+                    fontSize: 10.5,
+                    letterSpacing: 1,
+                    marginTop: -2,
+                  }}
+                >
+                  蓄力 {carry}
+                </span>
+              )}
             </span>
           </div>
         );
@@ -334,8 +348,8 @@ function hand(h: string): string {
 }
 
 /** 綜合能力：所有能力的平均，四捨五入。之後會由引擎提供，這裡只是暫時的顯示值。 */
-function overall(player: NewPlayer): number {
-  const values = Object.values(player.ability);
+function overall(state: PlayerState): number {
+  const values = Object.values(state.ability);
   if (values.length === 0) return 0;
   return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }

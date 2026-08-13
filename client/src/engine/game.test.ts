@@ -52,10 +52,19 @@ describe('卡片內文的跳脫', () => {
   });
 });
 
+/** 把目前提問的第一個選項選下去，直到流程結束。 */
+function playToEnd(game: Game): Game {
+  while (game.flow.prompt !== null) {
+    const first = game.flow.prompt.options[0];
+    if (first === undefined) throw new Error('提問沒有選項');
+    game.choose(first.id);
+  }
+  return game;
+}
+
 describe('重播', () => {
   it('相同設定與相同選擇必定重現同一段生涯', () => {
-    const a = started();
-    a.choose('spring:extra');
+    const a = playToEnd(started());
 
     const b = Game.replay(a.toReplayLog());
 
@@ -63,14 +72,17 @@ describe('重播', () => {
     expect(b.flow.log).toEqual(a.flow.log);
     expect(b.flow.choices).toEqual(a.flow.choices);
     expect(b.world.drawCounts()).toEqual(a.world.drawCounts());
+    // 能力與蓄力槽都必須一致——重播重建的是完整狀態，不只是敘事
+    expect(b.state?.ability).toEqual(a.state?.ability);
+    expect(b.state?.carry).toEqual(a.state?.carry);
   });
 
-  it('不同的選擇走出不同的敘事', () => {
+  it('不同的選擇走出不同的能力分佈', () => {
     const a = started();
-    a.choose('spring:train');
+    a.choose('alloc:pow');
     const b = started();
-    b.choose('spring:extra');
-    expect(a.flow.log).not.toEqual(b.flow.log);
+    b.choose('alloc:ctl');
+    expect(a.state?.ability).not.toEqual(b.state?.ability);
   });
 
   it('重播日誌帶著引擎版本', () => {
@@ -83,12 +95,10 @@ describe('重播', () => {
   });
 
   it('重播日誌只需要設定與選擇——沒有任何狀態快照', () => {
-    const game = started();
-    game.choose('spring:train');
-    const log = game.toReplayLog();
+    const log = playToEnd(started()).toReplayLog();
     expect(Object.keys(log).sort()).toEqual(['choices', 'engineVersion', 'setup']);
-    // 幾百 bytes 就夠了，這是重播日誌相對狀態快照的價值所在
-    expect(JSON.stringify(log).length).toBeLessThan(400);
+    // 一整個球季的選擇仍只有幾百 bytes，這是重播日誌相對狀態快照的價值所在
+    expect(JSON.stringify(log).length).toBeLessThan(500);
   });
 
   it('尚未做出任何選擇時也能重播', () => {
@@ -100,13 +110,46 @@ describe('重播', () => {
 });
 
 describe('子序列歸屬', () => {
-  it('開局只消耗 genesis 流', () => {
-    const counts = started().world.drawCounts();
+  it('開局用 genesis、季初擲骰用 growth，其餘一律未動', () => {
+    const counts = playToEnd(started()).world.drawCounts();
     expect(counts.genesis).toBeGreaterThan(0);
-    expect(counts.growth).toBe(0);
+    expect(counts.growth).toBeGreaterThan(0);
     expect(counts.events).toBe(0);
     expect(counts.health).toBe(0);
     expect(counts.season).toBe(0);
     expect(counts.career).toBe(0);
+  });
+});
+
+describe('訓練骰的分配', () => {
+  it('每一顆骰都是一次選擇，全部記進重播日誌', () => {
+    const game = playToEnd(started());
+    const allocs = game.flow.choices.filter((c) => c.startsWith('alloc:'));
+    expect(allocs.length).toBeGreaterThanOrEqual(2);
+    // 分配的目標必須都是實際存在的能力
+    for (const c of allocs) {
+      expect(game.state?.ability).toHaveProperty(c.slice('alloc:'.length));
+    }
+  });
+
+  it('分配後的能力值不低於開局值——訓練只會往上', () => {
+    const game = playToEnd(started());
+    const origin = game.state?.origin.ability ?? {};
+    for (const [key, value] of Object.entries(game.state?.ability ?? {})) {
+      expect(value).toBeGreaterThanOrEqual(origin[key] ?? 0);
+    }
+  });
+
+  it('投入的點數不會憑空消失——不是變成能力就是留在蓄力槽', () => {
+    const game = started();
+    const before = { ...(game.state?.ability ?? {}) };
+    const first = game.flow.prompt?.options[0];
+    if (first === undefined) throw new Error('沒有提問');
+    game.choose(first.id);
+
+    const key = first.id.slice('alloc:'.length);
+    const gained = (game.state?.ability[key] ?? 0) - (before[key] ?? 0);
+    const carry = game.state?.carry[key] ?? 0;
+    expect(gained > 0 || carry > 0).toBe(true);
   });
 });

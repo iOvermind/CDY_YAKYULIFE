@@ -125,6 +125,47 @@
     }
   },
 
+  "growth_cost": {
+    "_note": "能力成長的點數成本。tiers 由高到低比對，取第一個 current >= from 的 cost。未滿一級的點數留在蓄力槽，不蒸發（見 CONTEXT.md 的「蓄力槽」）。",
+    "_unified_note": "舊版依球員身分分兩條曲線，理由是「投手只有 4 項、野手 9 項」——曲線在補償能力項數。二刀流模型下投手側是 7 項、野手側 9 項，只差一項，不再需要分開。統一為同一條曲線，數值沿用舊版野手那條（它是為 9 項校準的）。",
+    "_negative_note": "扣值一律 1:1，不吃成本曲線——衰退與傷病不該因為能力高就扣得比較少。",
+    "default": {
+      "tiers": [
+        { "from": 72, "cost": 3 },
+        { "from": 64, "cost": 2 },
+        { "from": 0, "cost": 1 }
+      ],
+      "above_ceiling_multiplier": 3
+    },
+    "two_way": {
+      "_note": "二刀流天賦的成長曲線：變貴的門檻往後推，超過天花板的懲罰也較輕。這是取得二刀流之後的機械性回報——兩邊都要練的人，高段成長不能跟專精者一樣貴，否則二刀流只是懲罰。",
+      "tiers": [
+        { "from": 76, "cost": 3 },
+        { "from": 70, "cost": 2 },
+        { "from": 0, "cost": 1 }
+      ],
+      "above_ceiling_multiplier": 2
+    }
+  },
+
+  "training_dice": {
+    "_note": "季初自主訓練擲出的骰數與點數。骰數依權重抽，每顆骰的點數區間依特性而異。",
+    "count_weights": { "3": 35, "4": 40, "5": 20, "6": 5 },
+    "count_when_injured": 2,
+    "min_count": 2,
+    "faces": {
+      "_note": "依特性取用，命中第一個即採用；都沒有則用 default。",
+      "genius": { "min": 4, "max": 6 },
+      "late": { "min": 3, "max": 6 },
+      "default": { "min": 1, "max": 6 }
+    },
+    "count_modifiers": {
+      "_note": "只在非傷缺的球季生效。",
+      "distract": { "delta": -1 },
+      "academy": { "chance": 35, "delta": 1 }
+    }
+  },
+
   "potential_ceiling": {
     "_note": "OOTP 式潛力天花板：把全部能力依 talent_weights 加權洗牌後，依名次套用區間——1 項頂尖工具、1 項優質、1 項中上、其餘平庸。名次超出階梯數者一律吃最後一階。",
     "_two_way_note": "全部 15 項能力一起洗牌，因此絕大多數球員只會在單側拿到高階天賦。投打各有一項頂尖是罕見結果——這正是二刀流稀有的來源，不需要另外設限。",

@@ -21,9 +21,12 @@ import {
 } from '../data/index.ts';
 import type { World } from './rng.ts';
 
-/** 開局起始年齡與年份，沿用 legacy 的設定（高中一年級）。 */
-export const START_AGE = 16;
-export const START_YEAR = 2026;
+/**
+ * 生涯起點。值來自 amateur.json 的 career_start——**不得寫死在程式碼裡**，
+ * 因為所有可調參數都必須是編輯器改得到的（見 ROADMAP 的規則編輯器）。
+ */
+export const START_AGE = amateur.career_start.age;
+export const START_YEAR = amateur.career_start.year;
 
 export interface NewPlayer {
   readonly name: string;

@@ -3,6 +3,12 @@
   "_source": "抽取自 index_legacy.html hsMap / HS_CUPS / U_CUPS / amateurSeason() / runDraft() / 國際賽選項",
   "_note": "職業之前的階段：高中、大學、業餘成棒，以及選秀與國際賽的獎勵級距。",
 
+  "career_start": {
+    "_note": "生涯起點。目前是高中一年級；ROADMAP 階段一.六的國中養成階段會把 age 往前移，屆時只需改這裡。",
+    "age": 16,
+    "year": 2026
+  },
+
   "high_school": {
     "_note": "高中固定分級表（隱藏）：開局隨機分發一所學校，分級決定大賽表現的隱藏加成。",
     "tiers": {

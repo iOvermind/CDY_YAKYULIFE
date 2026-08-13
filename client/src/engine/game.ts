@@ -8,9 +8,10 @@
  * 因此「開局設定＋選擇序列」就是一段生涯的完整表述，見 ADR 0002。
  */
 
-import { abilities } from '../data/index.ts';
-import { esc, Flow } from './flow.ts';
+import { abilities, ALL_ABILITIES, type AbilityKey } from '../data/index.ts';
+import { esc, Flow, type Option } from './flow.ts';
 import { createPlayer, type NewPlayer } from './genesis.ts';
+import { growthCurve, rollTrainingDice, train } from './growth.ts';
 import { World } from './rng.ts';
 
 /** 一局遊戲的開局設定。與重播日誌合起來即可完整重建一段生涯。 */
@@ -30,12 +31,27 @@ export interface ReplayLog {
   readonly choices: readonly string[];
 }
 
+/** 球員的可變狀態。genesis 產出的是起點，之後由訓練與衰退推移。 */
+export interface PlayerState {
+  /** 開局時擲出的不變資料：姓名、潛力天花板、慣用手、出身。 */
+  readonly origin: NewPlayer;
+  /** 目前能力值。 */
+  readonly ability: Readonly<Record<AbilityKey, number>>;
+  /** 蓄力槽：每項能力未滿一級的點數。 */
+  readonly carry: Readonly<Record<AbilityKey, number>>;
+  /** 已取得的隱藏特性。 */
+  readonly traits: ReadonlySet<string>;
+}
+
 export class Game {
   readonly setup: GameSetup;
   readonly world: World;
   readonly flow = new Flow();
 
   #player: NewPlayer | null = null;
+  #ability: Record<AbilityKey, number> = {};
+  #carry: Record<AbilityKey, number> = {};
+  #traits = new Set<string>();
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -45,6 +61,22 @@ export class Game {
   /** 目前的球員。流程開始前為 null。 */
   get player(): NewPlayer | null {
     return this.#player;
+  }
+
+  /** 目前的球員狀態。流程開始前為 null。 */
+  get state(): PlayerState | null {
+    if (this.#player === null) return null;
+    return {
+      origin: this.#player,
+      ability: this.#ability,
+      carry: this.#carry,
+      traits: this.#traits,
+    };
+  }
+
+  /** 是否已取得二刀流天賦。決定成長曲線走哪一條。 */
+  get isTwoWay(): boolean {
+    return this.#traits.has('two_way');
   }
 
   /** 開始這局遊戲，推進到第一個需要玩家決定的地方。 */
@@ -93,6 +125,8 @@ export class Game {
   #genesis(): void {
     const player = createPlayer(this.world, this.setup.name, this.setup.startPosition);
     this.#player = player;
+    this.#ability = { ...player.ability };
+    this.#carry = Object.fromEntries(ALL_ABILITIES.map((k) => [k, 0]));
 
     const tier = ['', '名門', '中堅', '弱旅'][player.schoolTier] ?? '';
     const startName = abilities.start_positions[player.startPosition];
@@ -116,25 +150,83 @@ export class Game {
     this.flow.push(() => this.#firstSpring());
   }
 
-  /** 高一春天。目前是流程的終點，後續系統尚未實作。 */
+  /** 高一春天的自主訓練：擲骰，逐顆分配。 */
   #firstSpring(): void {
+    const dice = rollTrainingDice(this.world, this.#traits);
+
+    let msg = `自主訓練擲出 <b class="hl">${dice.values.length}</b> 顆骰：` +
+      dice.values.map((v) => `<b class="hl">${v}</b>`).join('、');
+    if (dice.sixes > 0) msg += `，其中 ${dice.sixes} 顆是高標值。`;
+    this.flow.card('info', '季初訓練', msg);
+
+    // 每一顆骰都是一次選擇——重播日誌因此記下「哪顆骰加在哪」。
+    dice.values.forEach((value, index) => {
+      this.flow.push(() => this.#allocate(value, index, dice.values.length));
+    });
+    this.flow.push(() => this.#springDone());
+  }
+
+  /** 分配一顆訓練骰。 */
+  #allocate(value: number, index: number, total: number): void {
     this.flow.ask(
       {
-        title: '高一春天，你要怎麼開始？',
-        options: [
-          { id: 'spring:train', label: '跟著球隊練', note: '照表操課', role: 'main' },
-          { id: 'spring:extra', label: '自主加練', note: '練得更兇，但容易累積疲勞' },
-        ],
+        title: `第 ${index + 1}／${total} 顆骰：${value} 點要加在哪？`,
+        options: ALL_ABILITIES.map((key) => this.#abilityOption(key, value)),
       },
       (choice) => {
-        this.flow.card(
-          'info',
-          '尚未實作',
-          `你選了「${choice === 'spring:extra' ? '自主加練' : '跟著球隊練'}」。` +
-            '訓練與成長系統還沒做，流程到這裡為止——' +
-            '這一頁目前只驗證流程編排與重播機制可用。',
+        const key = choice.slice('alloc:'.length);
+        const before = this.#ability[key] ?? 0;
+        const result = train(
+          before,
+          value,
+          this.#player?.potential[key] ?? abilities.scale.max,
+          this.#carry[key] ?? 0,
+          growthCurve(this.isTwoWay),
         );
+        this.#ability[key] = result.value;
+        this.#carry[key] = result.carry;
+
+        const name = abilities.abilities[key] ?? key;
+        if (result.gained > 0) {
+          this.flow.card(
+            'good',
+            undefined,
+            `<b class="hl">${esc(name)}</b> ${before} → <b class="hl">${result.value}</b>`,
+          );
+        } else {
+          this.flow.card(
+            'info',
+            undefined,
+            `<b class="hl">${esc(name)}</b> 還沒突破，${value} 點存進蓄力槽（目前 ${result.carry} 點）。`,
+          );
+        }
       },
+    );
+  }
+
+  /** 產生一個能力的分配選項，附上目前值、天花板與這一級的成本。 */
+  #abilityOption(key: AbilityKey, value: number): Option {
+    const current = this.#ability[key] ?? 0;
+    const ceiling = this.#player?.potential[key] ?? abilities.scale.max;
+    const carry = this.#carry[key] ?? 0;
+    const result = train(current, value, ceiling, carry, growthCurve(this.isTwoWay));
+
+    const name = abilities.abilities[key] ?? key;
+    const note =
+      result.gained > 0
+        ? `${current} → ${result.value}（上限 ${ceiling}）`
+        : `${current}／上限 ${ceiling}・蓄力 ${carry} → ${result.carry}`;
+
+    return { id: `alloc:${key}`, label: name, note };
+  }
+
+  /** 春訓結束。目前是流程的終點，後續系統尚未實作。 */
+  #springDone(): void {
+    this.flow.card(
+      'info',
+      '尚未實作',
+      '春訓結束。大賽、事件卡、賽季結算與升級流程都還沒做，流程到這裡為止——' +
+        '目前可用的是開局生成、訓練骰與蓄力槽，以及流程編排與重播機制。',
     );
   }
 }

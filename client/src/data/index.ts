@@ -102,10 +102,31 @@ export interface AbilitiesData {
     readonly bonus: Readonly<Record<StartPosition, Readonly<Record<AbilityKey, Range>>>>;
     readonly pitch_bonus: { readonly applies_to: readonly StartPosition[]; readonly range: Range };
   };
+  readonly growth_cost: {
+    readonly default: GrowthCurve;
+    readonly two_way: GrowthCurve;
+  };
+  readonly training_dice: {
+    /** 鍵為骰數，值為相對權重。 */
+    readonly count_weights: Readonly<Record<string, number>>;
+    readonly count_when_injured: number;
+    readonly min_count: number;
+    readonly faces: Readonly<Record<string, Range>>;
+    readonly count_modifiers: Readonly<
+      Record<string, { readonly delta: number; readonly chance?: number }>
+    >;
+  };
   readonly potential_ceiling: { readonly tiers: readonly Range[] };
 }
 
+/** 成長成本曲線。tiers 由高到低比對，取第一個 current >= from 的 cost。 */
+export interface GrowthCurve {
+  readonly tiers: readonly { readonly from: number; readonly cost: number }[];
+  readonly above_ceiling_multiplier: number;
+}
+
 export interface AmateurData {
+  readonly career_start: { readonly age: number; readonly year: number };
   readonly high_school: {
     readonly tiers: Readonly<
       Record<string, { readonly label: string; readonly power_bonus: number }>
