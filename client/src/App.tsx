@@ -125,7 +125,8 @@ export default function App() {
 
 function PlayerCard({ player }: { player: NewPlayer }) {
   const tierLabel = ['', '名門', '中堅', '弱旅'][player.schoolTier] ?? '';
-  const { pitching, hitting, fielding, shared } = abilities.ability_groups;
+  const groups = abilities.ability_groups;
+  const names = abilities.ability_group_names;
 
   return (
     <div className="card" style={{ marginTop: 22 }}>
@@ -138,9 +139,9 @@ function PlayerCard({ player }: { player: NewPlayer }) {
         {HAND_LABEL[player.bats]}
       </p>
 
-      <AbilityBlock title="投球" keys={[...shared, ...pitching]} player={player} />
-      <AbilityBlock title="打擊" keys={hitting} player={player} />
-      <AbilityBlock title="守備" keys={fielding} player={player} />
+      <AbilityBlock title={names.shared} keys={groups.shared} player={player} />
+      <AbilityBlock title={names.pitcher} keys={groups.pitcher} player={player} />
+      <AbilityBlock title={names.fielder} keys={groups.fielder} player={player} />
 
       <p className="divider">開局生成</p>
       <p style={{ fontSize: 12, color: 'var(--dim)', marginTop: 6 }}>

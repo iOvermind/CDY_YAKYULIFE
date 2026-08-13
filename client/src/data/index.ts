@@ -66,11 +66,19 @@ export interface Range {
 export interface AbilitiesData {
   readonly scale: { readonly min: number; readonly max: number; readonly hard_floor: number };
   readonly abilities: Readonly<Record<AbilityKey, string>>;
+  /**
+   * 能力只分三組：體力（共用）、投手、野手。
+   * 體力不屬於任一側，二刀流判定時不計入任何一側。
+   */
   readonly ability_groups: {
-    readonly pitching: readonly AbilityKey[];
-    readonly hitting: readonly AbilityKey[];
-    readonly fielding: readonly AbilityKey[];
     readonly shared: readonly AbilityKey[];
+    readonly pitcher: readonly AbilityKey[];
+    readonly fielder: readonly AbilityKey[];
+  };
+  readonly ability_group_names: {
+    readonly shared: string;
+    readonly pitcher: string;
+    readonly fielder: string;
   };
   readonly pitch_families: Readonly<
     Record<

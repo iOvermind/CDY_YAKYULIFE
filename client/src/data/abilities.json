@@ -20,7 +20,7 @@
     "drp": "縱向掉落",
     "chg": "變速下沉",
     "gim": "特殊奇招",
-    "con": "Contact",
+    "con": "擊球",
     "pow": "力量",
     "spd": "速度",
     "eye": "選球",
@@ -31,11 +31,18 @@
   },
 
   "ability_groups": {
-    "_note": "能力的功能分組。用於介面呈現，以及判定二刀流資格時分別檢查投打兩側。sta（體力）兩側共用，不歸任一組。",
-    "pitching": ["vel", "ctl", "swp", "drp", "chg", "gim"],
-    "hitting": ["con", "pow", "spd", "eye"],
-    "fielding": ["rng", "fld", "arm", "cat"],
-    "shared": ["sta"]
+    "_note": "能力的功能分組，只分三組：體力、投手、野手。用於介面呈現，以及判定二刀流資格時分別檢查投手側與野手側。",
+    "_shared_note": "體力是投手與野手共用的——投手要撐局數，野手要撐出賽數，同一個量。因此它不屬於任一側，二刀流判定時也不計入任何一側。",
+    "_fielder_note": "野手側同時涵蓋打擊（擊球／力量／速度／選球）與守備（守備範圍／接球／臂力／配球）。不再細分成兩組——對球員模型而言「會不會打」與「守不守得住」都是野手這條路上的事，分開只會讓二刀流的判定多一層無謂的分支。",
+    "shared": ["sta"],
+    "pitcher": ["vel", "ctl", "swp", "drp", "chg", "gim"],
+    "fielder": ["con", "pow", "spd", "eye", "rng", "fld", "arm", "cat"]
+  },
+
+  "ability_group_names": {
+    "shared": "體力",
+    "pitcher": "投手",
+    "fielder": "野手"
   },
 
   "pitch_families": {

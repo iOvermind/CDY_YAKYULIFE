@@ -18,7 +18,7 @@ const make = (seed: string, start: StartPosition = 'SS') =>
 const sample = (n: number, start: StartPosition) =>
   Array.from({ length: n }, (_, i) => make(`seed-${i}`, start));
 
-const { pitching, hitting, fielding } = abilities.ability_groups;
+const { pitcher, fielder } = abilities.ability_groups;
 
 describe('createPlayer', () => {
   it('同種子同起始守位產生完全相同的球員', () => {
@@ -107,12 +107,12 @@ describe('起始守位的天賦加權', () => {
   };
 
   it('選投手的人，高階天賦明顯偏向投球能力', () => {
-    expect(topTalentCount('P', pitching)).toBeGreaterThan(topTalentCount('SS', pitching));
+    expect(topTalentCount('P', pitcher)).toBeGreaterThan(topTalentCount('SS', pitcher));
   });
 
   it('選野手的人，高階天賦明顯偏向打擊與守備', () => {
-    const fielderTalent = topTalentCount('SS', [...hitting, ...fielding]);
-    const pitcherTalent = topTalentCount('P', [...hitting, ...fielding]);
+    const fielderTalent = topTalentCount('SS', fielder);
+    const pitcherTalent = topTalentCount('P', fielder);
     expect(fielderTalent).toBeGreaterThan(pitcherTalent);
   });
 
@@ -125,15 +125,15 @@ describe('起始守位的天賦加權', () => {
   });
 
   it('守位不定的天賦分佈介於投手與野手之間——不偏袒任何一側', () => {
-    const util = topTalentCount('UTIL', pitching);
-    expect(util).toBeLessThan(topTalentCount('P', pitching));
-    expect(util).toBeGreaterThan(topTalentCount('SS', pitching));
+    const util = topTalentCount('UTIL', pitcher);
+    expect(util).toBeLessThan(topTalentCount('P', pitcher));
+    expect(util).toBeGreaterThan(topTalentCount('SS', pitcher));
   });
 
   it('加權不封死任何一條路——選投手的人仍可能拿到打擊天賦', () => {
     const anyHittingTalent = sample(400, 'P').some((p) => {
       const best = Object.entries(p.potential).sort((a, b) => b[1] - a[1])[0];
-      return best !== undefined && hitting.includes(best[0]);
+      return best !== undefined && fielder.includes(best[0]);
     });
     expect(anyHittingTalent).toBe(true);
   });
@@ -153,7 +153,7 @@ describe('起始守位的天賦加權', () => {
       const elite = Object.entries(p.potential)
         .filter(([, v]) => v >= top.min)
         .map(([k]) => k);
-      return elite.some((k) => pitching.includes(k)) && elite.some((k) => hitting.includes(k));
+      return elite.some((k) => pitcher.includes(k)) && elite.some((k) => fielder.includes(k));
     });
     return twoWay.length / players.length;
   };
