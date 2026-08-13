@@ -86,6 +86,32 @@ export function fielderRating(ability: Abilities, position: string): number {
   return offense * (1 - dw) + defense * dw;
 }
 
+/**
+ * 依守備能力挑出守得動的最佳守位；一個都守不動就是 DH。
+ *
+ * 二刀流的野手側守位用它決定——大多數投手出身的二刀流守備分不夠，自然落到
+ * DH，但守備真的夠好的人可以站上守位。門檻與 fallback 都在 positions.json。
+ *
+ * `level` 決定門檻高低。還沒進職業時傳頂級聯盟的入門層級即可——養成期沒有
+ * 正式登錄守位，這裡算的是「以現在的守備能力，職業上得了哪個守位」。
+ */
+export function fieldingPosition(ability: Abilities, level: string): string {
+  const thresholds = positions.defense_thresholds;
+
+  // 內野與外野的光譜合起來掃，取「守得動的最高階守位」——門檻越高的守位越
+  // 難守，也越有價值。掃不到任何一個就落到 DH。
+  const candidates = [...positions.scan_order.IF, ...positions.scan_order.OF, 'C'];
+  let best: { position: string; required: number } | null = null;
+
+  for (const position of candidates) {
+    const required = thresholds[position]?.[level];
+    if (required === undefined) continue;
+    if (defenseScore(ability, position) < required) continue;
+    if (best === null || required > best.required) best = { position, required };
+  }
+  return best?.position ?? positions.scan_order.fallback;
+}
+
 /** 依起始守位推定一個用於評價的守位。正式守位要進入頂級聯盟後才登錄。 */
 export function ratingPosition(startPosition: string): string {
   const map = abilities.overall.fielder.default_position;

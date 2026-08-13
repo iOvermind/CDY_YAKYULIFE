@@ -65,6 +65,14 @@ export interface GameSetup {
   readonly bats: Hand;
 }
 
+/**
+ * 判定二刀流野手側守位時參照的聯盟層級。
+ *
+ * 養成期沒有正式登錄守位，但介面仍要說出「他守得動什麼」。用職業的入門層級
+ * 當基準，答案才有意義——「以現在的守備能力，職業上得了哪個守位」。
+ */
+export const TWO_WAY_REFERENCE_LEVEL = 'CPBL1';
+
 /** 目前引擎版本。重播日誌帶著它，跨版本一律拒絕重播（ADR 0002）。 */
 export const ENGINE_VERSION = 1;
 
@@ -395,11 +403,7 @@ export class Game {
       );
 
       // 國際賽的出賽同樣計入成績。
-      const rating = this.rating;
-      const line = playAmateurStats(this.world, this.#stage, this.#ability, result.games, {
-        better: rating?.better ?? 'fielder',
-        twoWay: this.isTwoWay,
-      });
+      const line = playAmateurStats(this.world, this.#stage, this.#ability, result.games);
       this.#seasonBatting = addBatting(this.#seasonBatting, line.batting);
       this.#seasonPitching = addPitching(this.#seasonPitching, line.pitching);
       this.#accumulate(line.batting, line.pitching);
@@ -552,11 +556,7 @@ export class Game {
     this.flow.card('info', '大賽結算', lines);
 
     // 成績依主要角色產生；二刀流投打都算。
-    const rating = this.rating;
-    const line = playAmateurStats(this.world, this.#stage, this.#ability, season.games, {
-      better: rating?.better ?? 'fielder',
-      twoWay: this.isTwoWay,
-    });
+    const line = playAmateurStats(this.world, this.#stage, this.#ability, season.games);
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#accumulate(line.batting, line.pitching);

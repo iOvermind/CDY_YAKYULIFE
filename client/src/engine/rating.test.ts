@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_ABILITIES } from '../data/index.ts';
-import { defenseScore, fielderRating, pitcherRating, rate, ratingPosition } from './rating.ts';
+import { ALL_ABILITIES, positions } from '../data/index.ts';
+import {
+  defenseScore,
+  fieldingPosition,
+  fielderRating,
+  pitcherRating,
+  rate,
+  ratingPosition,
+} from './rating.ts';
 
 const build = (base: number, over: Record<string, number> = {}) => ({
   ...Object.fromEntries(ALL_ABILITIES.map((k) => [k, base])),
@@ -122,5 +129,49 @@ describe('ratingPosition', () => {
   it('其餘一律推定為游擊', () => {
     expect(ratingPosition('UTIL')).toBe('SS');
     expect(ratingPosition('P')).toBe('SS');
+  });
+});
+
+describe('fieldingPosition', () => {
+  const LEVEL = 'CPBL1';
+  const flat = (v: number) => build(v);
+
+  it('守備一塌糊塗的人是 DH', () => {
+    expect(fieldingPosition(flat(15), LEVEL)).toBe(positions.scan_order.fallback);
+  });
+
+  it('守備頂尖的人守得動最難的守位', () => {
+    // 游擊的門檻最高，全能守備者應該落在那裡
+    expect(fieldingPosition(flat(80), LEVEL)).toBe('SS');
+  });
+
+  it('取的是守得動的最高階守位，不是守備分最高的守位', () => {
+    // 門檻越高的守位越難守也越有價值——這是 scan_order 的定義
+    const pos = fieldingPosition(flat(80), LEVEL);
+    const required = positions.defense_thresholds[pos]?.[LEVEL] ?? 0;
+    for (const other of [...positions.scan_order.IF, ...positions.scan_order.OF]) {
+      const otherReq = positions.defense_thresholds[other]?.[LEVEL] ?? 0;
+      if (otherReq <= required) continue;
+      // 更高階的守位一定是守不動才沒被選
+      expect(defenseScore(flat(80), other)).toBeLessThan(otherReq);
+    }
+  });
+
+  it('守備能力越好，守得動的守位越高階', () => {
+    const req = (v: number) =>
+      positions.defense_thresholds[fieldingPosition(flat(v), LEVEL)]?.[LEVEL] ?? 0;
+    expect(req(80)).toBeGreaterThan(req(45));
+  });
+
+  it('門檻越高的聯盟越容易被擠到 DH', () => {
+    const mid = flat(52);
+    const cpbl = fieldingPosition(mid, 'CPBL1');
+    const mlb = fieldingPosition(mid, 'MLB');
+    const rank = (p: string) => positions.defense_thresholds[p]?.['CPBL1'] ?? 0;
+    expect(rank(mlb)).toBeLessThanOrEqual(rank(cpbl));
+  });
+
+  it('相同能力永遠得到相同守位——沒有隨機成分', () => {
+    expect(fieldingPosition(flat(55), LEVEL)).toBe(fieldingPosition(flat(55), LEVEL));
   });
 });

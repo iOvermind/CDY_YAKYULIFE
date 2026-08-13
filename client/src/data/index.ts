@@ -174,7 +174,15 @@ export interface PositionsData {
   readonly defense_score_weight: Readonly<Record<string, number>>;
   readonly defense_score_scale: { readonly scale: number };
   readonly rank: Readonly<Record<string, number>>;
-  readonly scan_order: Readonly<Record<string, readonly string[] | string>>;
+  /**
+   * 移防掃描順序。IF／OF 是各自的守位光譜，fallback 是掃不到時的保底。
+   * 型別分開寫，呼叫端才不必為了取一個字串去做 union 收窄。
+   */
+  readonly scan_order: {
+    readonly IF: readonly string[];
+    readonly OF: readonly string[];
+    readonly fallback: string;
+  };
 }
 
 /** 成長成本曲線。tiers 由高到低比對，取第一個 current >= from 的 cost。 */

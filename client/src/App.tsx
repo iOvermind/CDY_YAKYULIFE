@@ -10,9 +10,10 @@ import {
 import { schoolTiersOf, stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
-import { fmtAvg, Game, type PlayerState } from './engine/game.ts';
+import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
-import type { Rating } from './engine/rating.ts';
+import { fieldingPosition, type Rating } from './engine/rating.ts';
+import { positionName } from './engine/season.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -549,6 +550,13 @@ function Board({
     state.pro === null
       ? { name: state.school, note: tierLabel }
       : { name: state.pro.team, note: state.pro.levelName };
+
+  // 取得二刀流之後，起始守位就不再說明他是什麼球員了——他是投手也是打者。
+  // 野手側的守位由守備能力決定：守得動就站守位，守不動就是 DH，這也是多數
+  // 投手出身的二刀流的歸宿。
+  const roleLabel = state.traits.has('two_way')
+    ? `二刀流·投手＋${positionName(fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL))}`
+    : abilities.start_positions[player.startPosition];
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>
@@ -556,8 +564,7 @@ function Board({
         <span id="bd-name">
           {player.name}
           <small>
-            {abilities.start_positions[player.startPosition]}·投
-            {hand(player.throws)}打{hand(player.bats)}
+            {roleLabel}·投{hand(player.throws)}打{hand(player.bats)}
           </small>
         </span>
         <span id="bd-team">

@@ -6,6 +6,11 @@ import { World } from './rng.ts';
 const flat = (v: number): Record<string, number> =>
   Object.fromEntries(ALL_ABILITIES.map((k) => [k, v]));
 
+const with_ = (v: number, over: Record<string, number>): Record<string, number> => ({
+  ...flat(v),
+  ...over,
+});
+
 const par = amateur.cups.HS.par;
 
 describe('battingLine', () => {
@@ -107,39 +112,41 @@ describe('pitchingLine', () => {
 });
 
 describe('playAmateurStats', () => {
-  const play = (better: 'pitcher' | 'fielder', twoWay: boolean) =>
-    playAmateurStats(new World('a'), 'HS', flat(45), 9, { better, twoWay });
+  const play = (ability = flat(45)) => playAmateurStats(new World('a'), 'HS', ability, 9);
 
-  it('投手側較強者只產生投球成績', () => {
-    const line = play('pitcher', false);
+  it('投打一律都記——國高中的球隊人數有限，投手排進打線是常態', () => {
+    const line = play();
     expect(line.pitching).not.toBeNull();
-    expect(line.batting).toBeNull();
+    expect(line.batting).not.toBeNull();
   });
 
-  it('野手側較強者只產生打擊成績', () => {
-    const line = play('fielder', false);
-    expect(line.batting).not.toBeNull();
-    expect(line.pitching).toBeNull();
-  });
-
-  it('二刀流投打都算——那正是二刀流在數據上的樣子', () => {
-    const line = play('fielder', true);
+  it('偏向投手的球員仍然留下打擊成績', () => {
+    const line = play(with_(45, { vel: 70, ctl: 70, con: 25, pow: 25 }));
     expect(line.batting).not.toBeNull();
     expect(line.pitching).not.toBeNull();
+  });
+
+  it('偏向野手的球員仍然留下投球成績', () => {
+    const line = play(with_(45, { con: 70, pow: 70, vel: 25, ctl: 25 }));
+    expect(line.pitching).not.toBeNull();
+    expect(line.batting).not.toBeNull();
+  });
+
+  it('能力弱的那一側自然反映成難看的數據——那本身就是資訊', () => {
+    const weak = play(with_(45, { con: 70, pow: 70, vel: 20, ctl: 20 })).pitching;
+    const strong = play(with_(45, { vel: 70, ctl: 70 })).pitching;
+    expect(weak?.era ?? 0).toBeGreaterThan(strong?.era ?? 0);
   });
 
   it('沒有出賽就沒有成績', () => {
-    const line = playAmateurStats(new World('a'), 'HS', flat(45), 0, {
-      better: 'fielder',
-      twoWay: true,
-    });
+    const line = playAmateurStats(new World('a'), 'HS', flat(45), 0);
     expect(line.batting).toBeNull();
     expect(line.pitching).toBeNull();
   });
 
   it('只消耗 season 流', () => {
     const world = new World('a');
-    playAmateurStats(world, 'HS', flat(45), 9, { better: 'fielder', twoWay: true });
+    playAmateurStats(world, 'HS', flat(45), 9);
     const counts = world.drawCounts();
     expect(counts.season).toBeGreaterThan(0);
     expect(counts.growth).toBe(0);

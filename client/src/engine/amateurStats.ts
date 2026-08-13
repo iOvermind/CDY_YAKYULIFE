@@ -141,27 +141,24 @@ export function pitchingLine(
 }
 
 /**
- * 依主要角色打出這一季的成績。
+ * 打出這一季的養成期成績。
  *
- * 投手側評價較高者投球、否則打擊；二刀流兩邊都算——那正是二刀流在數據上的
- * 樣子，也是之後合併生涯紀錄要呈現的東西。
+ * **投打一律都記，不看能力偏向。** 國高中的球隊人數有限，投手排進打線、野手
+ * 上場救火都是常態；能力弱的那一側自然會反映成難看的數據，那本身就是資訊。
+ * 職業才需要分工——那邊角色是固定的，見 season.ts。
  */
 export function playAmateurStats(
   world: World,
   stage: AmateurStage,
   ability: Abilities,
   games: number,
-  options: { readonly better: 'pitcher' | 'fielder'; readonly twoWay: boolean },
 ): AmateurLine {
   if (games <= 0) return { batting: null, pitching: null };
 
-  const asPitcher = options.twoWay || options.better === 'pitcher';
-  const asBatter = options.twoWay || options.better === 'fielder';
-
   return {
     // 順序固定：投球先於打擊，否則同一個種子會因為走訪順序不同而產生不同結果。
-    pitching: asPitcher ? pitchingLine(world, stage, ability, games) : null,
-    batting: asBatter ? battingLine(world, stage, ability, games) : null,
+    pitching: pitchingLine(world, stage, ability, games),
+    batting: battingLine(world, stage, ability, games),
   };
 }
 
