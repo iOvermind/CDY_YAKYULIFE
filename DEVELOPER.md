@@ -6,14 +6,22 @@
 
 ## 1. 技術棧與系統需求
 
+新架構（`client/`）：
+
 | 項目 | 版本 | 用途 |
 | :--- | :--- | :--- |
-| HTML5 / CSS3 / JavaScript | 最新 | 遊戲本體實作，全部內嵌於單一檔案 |
+| Node.js | 20 以上（開發機為 25.8.1） | 執行 Vite 與測試 |
+| TypeScript | 7.0 | 引擎與介面的實作語言 |
+| React | 19.1 | 介面框架 |
+| Vite | 7.0 | 開發伺服器與打包 |
+| Vitest | 4.1 | 測試 |
+| Tauri CLI | 2.x | 桌面端封裝 |
+| Rust 工具鏈 | stable | 僅桌面端封裝需要；只跑網頁版可略過 |
 | Git | 最新 | 版本控制 |
-| 現代瀏覽器 | 支援 ES6+ | 執行遊戲與除錯 |
-| 文字編輯器 | 任意 | 程式碼修改 |
 
-**作業系統限制**：無。遊戲完全在客戶端瀏覽器執行，開發環境不受限。
+舊版預覽（`index_legacy.html`）：任何支援 ES6+ 的現代瀏覽器，無其他需求。
+
+**作業系統限制**：網頁版開發不受限。桌面端封裝需要各平台自己的 Tauri 前置需求（Windows 需 WebView2 與 MSVC build tools）。
 
 ---
 
@@ -27,22 +35,49 @@
    ```
    完成後應看到專案資料夾與檔案下載完成。
 
-2. 啟動專案
-   直接使用瀏覽器開啟專案目錄下的 `index_legacy.html` 檔案即可。不需要安裝任何套件（如 npm install），無須任何編譯步驟。
+2. 安裝相依套件
+   ```bash
+   cd client
+   npm ci
+   ```
+   **`package.json` 在 `client/`，不在儲存庫根目錄** —— 在根目錄執行 npm 指令會得到 `ENOENT: no such file or directory, open '.../package.json'`。
+   完成後應看到 `client/node_modules/` 產生。
 
-> 本章節描述的是舊版單檔實作的環境。新架構（`client/`，見 §5）需要 Node.js 與 Rust 工具鏈，其環境建置步驟將於新架構可執行後補寫。
+3. 確認環境可用
+   ```bash
+   npm run typecheck
+   npm test
+   ```
+   兩者都應無錯誤結束，測試顯示全數通過。
+
+舊版預覽不需要以上任何步驟：直接用瀏覽器開啟根目錄的 `index_legacy.html` 即可。
 
 ---
 
 ## 3. 日常開發
 
-**啟動**
+**所有指令都在 `client/` 底下執行。**
 
-直接於瀏覽器開啟 `index_legacy.html`。
+| 指令 | 作用 |
+| :--- | :--- |
+| `npm run dev` | 啟動開發伺服器（<http://localhost:1420>），改檔即時反映 |
+| `npm test` | 跑完整測試一次 |
+| `npm run test:watch` | 測試監看模式，改檔自動重跑 |
+| `npm run typecheck` | 型別檢查，不產出檔案 |
+| `npm run build` | 打包網頁版到 `client/dist/` |
+| `npm run tauri dev` | 以桌面視窗啟動（需要 Rust 工具鏈） |
 
-**修改後如何反映**：需重新整理瀏覽器（Refresh）以載入最新修改。專案未設置熱更新（Hot Reload）。
+> PowerShell 5.1 沒有 `&&`，要切目錄再執行請分兩行，或用 `;` 串接：
+> ```powershell
+> cd client
+> npm run dev
+> ```
 
-**除錯**：使用瀏覽器的開發者工具（F12）。遊戲執行時的輸出與錯誤訊息皆可透過 Console 進行檢視。
+**連接埠固定為 1420**：`vite.config.js` 設了 `strictPort: true`，因為 Tauri 期望固定連接埠。被佔用時會直接失敗而非換一個，這是刻意的。
+
+**除錯**：瀏覽器開發者工具（F12）。
+
+**改動亂數相關程式碼時**：引擎的隨機必須完全確定（見 [ADR 0002](docs/adr/0002-deterministic-rng-and-replay-log.md)）。任何影響遊戲結果的地方**禁止**呼叫原生 `Math.random()`，一律經過 `src/engine/rng.ts`。改完務必跑 `npm test` —— 確定性與子序列獨立性都有測試守著。
 
 ---
 
@@ -54,7 +89,9 @@ CDY_YAKYULIFE/
 │  ├─ rules/        通用規範（本專案遵循的文件規範）
 │  └─ agents/       AI 代理設定
 ├─ client/          新架構實作（Tauri + React，開發中）
-│  ├─ src/          React 前端原始碼
+│  ├─ src/
+│  │  ├─ data/      規則資料（JSON）與型別化的載入層
+│  │  └─ engine/    模擬引擎；測試與被測檔案同層並列
 │  └─ src-tauri/    Tauri 桌面端封裝與 Rust 端
 ├─ index_legacy.html 舊版遊戲本體（HTML + CSS + JS 全部內嵌，唯讀保留）
 ├─ WIKI.md          遊戲設計文件與完整數值表
@@ -77,7 +114,12 @@ CDY_YAKYULIFE/
 | 模組 | 職責 | 依賴 |
 | :--- | :--- | :--- |
 | `index_legacy.html` | 舊版實作：包含畫面結構、樣式設計與所有遊戲邏輯 | 無外部依賴 |
-| `client/` | 新架構實作：Tauri + React，開發中 | Node.js、Rust |
+| `client/src/data/` | 規則資料與載入層。10 個 JSON 加上型別定義 | 無 |
+| `client/src/engine/` | 模擬引擎。`rng.ts` 是確定性亂數層，其餘領域模組各自宣告使用哪一條子序列 | `data/` |
+| `client/src/*.tsx` | React 介面 | `engine/`、`data/` |
+| `client/src-tauri/` | 桌面端封裝 | Rust |
+
+依賴方向是單向的：介面依賴引擎，引擎依賴資料，資料不依賴任何東西。**引擎不得反向依賴介面**——伺服器端要能不經 UI 重跑一整段生涯來驗證成績（見 ADR 0002）。
 
 ### 關鍵決策
 
@@ -93,7 +135,25 @@ CDY_YAKYULIFE/
 
 ## 6. 測試
 
-目前無。
+```bash
+cd client
+npm test          # 跑一次
+npm run test:watch # 監看模式
+```
+
+測試用 Vitest，檔案與被測程式碼同層並列（`rng.ts` 旁邊是 `rng.test.ts`），不另設 `tests/` 目錄——搬動模組時測試會跟著走。
+
+**分類**
+
+| 類型 | 內容 |
+| :--- | :--- |
+| 單元 | 各領域函式的輸入輸出 |
+| 確定性 | 同種子產生同結果、子序列彼此獨立。這類測試守的是 ADR 0002 的架構約束，不是某個函式的行為 |
+| 分佈 | 用數千個種子取樣，檢查機率落在設定的區間內。隨機系統無法逐值斷言，只能驗證分佈 |
+
+**目前沒有測試會被略過。** 未來若有測試因缺少外部檔案而略過，必須在此說明略過條件、檔案該放哪、以及如何辨識「略過」與「失敗」。
+
+**分佈測試的容許區間是刻意的驗收線**，不是隨手填的數字。例如二刀流出現率被釘在 1%–15%：掉出這個區間代表潛力階梯的重疊被改動了，二刀流會變得氾濫或絕跡。調整這類區間前先確認你真的要改變平衡。
 
 ---
 
@@ -101,11 +161,25 @@ CDY_YAKYULIFE/
 
 **建置**
 
-舊版的 `index_legacy.html` 不需建置，開啟即可執行。新架構的建置流程目前尚在開發中，未定案。
+```bash
+cd client
+npm run build        # 網頁版 → client/dist/
+npm run tauri build  # 桌面版（需要 Rust 工具鏈）
+```
+
+舊版的 `index_legacy.html` 不需建置，開啟即可執行。
 
 **產物**
 
-目前無。本專案尚未發佈任何版本，首個正式版本為 `1.0.0`。發佈的產物形式將於新架構可執行後在此明列（依 `docs/rules/RELEASE_RULES.md` §2.2 的形式標記）。
+目前無正式發佈。本專案尚未發佈任何版本，首個正式版本為 `1.0.0`。
+
+建置**中間產物**（不對外發佈）：
+
+| 產物 | 用途 |
+| :--- | :--- |
+| `client/dist/` | 網頁版的靜態檔，Tauri 打包時也吃這一份（`tauri.conf.json` 的 `frontendDist`） |
+
+發佈時的產物形式將於首次發佈前在此明列，依 `docs/rules/RELEASE_RULES.md` §2.2 的形式標記（網頁版用 `Web`）。
 
 ### 版本號
 
@@ -181,7 +255,29 @@ CDY_YAKYULIFE/
 
 ## 10. 已知陷阱
 
-目前無。
+#### 在儲存庫根目錄執行 npm 指令會失敗
+
+- **症狀**：`npm error code ENOENT` 搭配 `Could not read package.json: Error: ENOENT: no such file or directory, open 'D:\...\CDY_YAKYULIFE\package.json'`
+- **原因**：`package.json` 在 `client/`，根目錄沒有。根目錄只放文件與舊版單檔實作。
+- **處置**：先 `cd client` 再執行。PowerShell 5.1 沒有 `&&`，要串接請用 `;`。
+
+#### PowerShell 5.1 下 `cd client && npm run dev` 是語法錯誤
+
+- **症狀**：`語彙基元 '&&' 不是這個版本中的有效陳述式分隔符號` 之類的 ParserError
+- **原因**：管線串接運算子 `&&` 與 `||` 是 PowerShell 7 才加入的，5.1 沒有。
+- **處置**：分兩行寫，或用 `;` 串接（但 `;` 是無條件執行，前一個失敗仍會執行下一個）。
+
+#### 佈景主題切換後字體沒變，看起來跟原版不一樣
+
+- **症狀**：切到「電子看板」或「報紙版面」，顏色變了但字體還是系統預設，整體質感與原版不符
+- **原因**：`legacy.css` 的主題 b 指定 `DotGothic16`、主題 c 指定 `Noto Serif TC`，這些字體從 Google Fonts 載入。`client/index.html` 少了那兩行 `<link>`，或是離線狀態下載不到，字體就會 fallback。
+- **處置**：確認 `client/index.html` 的 `fonts.googleapis.com` 兩行還在。**桌面端離線時必然 fallback**——這是目前未解的問題，要讓離線也正確就必須把字體檔內嵌進產物。
+
+#### 開發伺服器啟動失敗，說連接埠被佔用
+
+- **症狀**：`Port 1420 is already in use` 而且 Vite 直接結束，不會自動換一個連接埠
+- **原因**：`vite.config.js` 設了 `strictPort: true`。這是刻意的——Tauri 的 `devUrl` 寫死指向 1420，Vite 若擅自換埠，桌面端就會連到空白頁。
+- **處置**：關掉佔用 1420 的行程（通常是另一個還開著的 `npm run dev`），不要改設定去換連接埠。
 
 ---
 

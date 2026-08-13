@@ -17,25 +17,65 @@
 
 **自訂原因**：本專案為棒球主題遊戲，視覺識別以球場綠為核心，與預設起點的中性暗色系有明確區隔需求。新架構的介面將改用科技藍主題，屆時本表整份更新。
 
-| Token | 色值 | 用在哪 |
+### 2.1 主題
+
+**色票不是一組固定值，是四組整套替換的主題。** 主題由 `body[data-theme]` 決定，預設為 `a`。每個主題覆寫**全部**色票與圓角——包括 `--r`，所以圓角也是主題的一部分，不是固定值。
+
+| 代碼 | 名稱 | 調性 |
 | :--- | :--- | :--- |
-| `--bg` | `#0b1a12` | 頁面背景 |
-| `--panel` | `#132920` | 卡片與區塊底色 |
-| `--panel2` | `#1a382a` | 按鈕與次要區塊底色 |
-| `--edge` | `#2b4d3a` | 邊框線條 |
-| `--chalk` | `#ece7d6` | 主要文字 |
-| `--dim` | `#93ab9c` | 次要文字、說明 |
-| `--amber` | `#ffc95c` | 強調、高光、球隊、正面數值 |
-| `--clay` | `#c9764a` | 標記、卡片標題裝飾 |
-| `--good` | `#8fd08f` | 正面狀態、成長 |
-| `--bad` | `#e2695c` | 負面狀態、衰退 |
-| `--blue` | `#7fb3d5` | 資訊標記 |
+| `a` | 深綠記分板 | 預設。球場綠底、琥珀色強調，帶光暈 |
+| `b` | 電子看板 | 近黑底、點陣字體、強光暈、圓角 4px |
+| `c` | 報紙版面 | 米白底、襯線字體、無光暈、直角 |
+| `d` | 現代儀表板 | 淺色底、無光暈、圓角 12px |
+
+### 2.2 Token 定義
+
+| Token | 主題 a | 主題 b | 主題 c | 主題 d | 用在哪 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `--bg` | `#081510` | `#07090c` | `#f4efe1` | `#f6f7f6` | 頁面背景 |
+| `--panel` | `#132920` | `#0c1014` | `#faf6ea` | `#ffffff` | 卡片與區塊底色 |
+| `--panel2` | `#1a382a` | `#10161c` | `#ece5d2` | `#f2f4f2` | 按鈕與次要區塊底色 |
+| `--edge` | `#2b4d3a` | `#232c36` | `#1e1c18` | `#e2e6e3` | 邊框線條 |
+| `--text` | `#ece7d6` | `#d8dde2` | `#1e1c18` | `#1a201c` | 主要文字 |
+| `--dim` | `#93ab9c` | `#5c6873` | `#6f6857` | `#7a857e` | 次要文字、說明 |
+| `--accent` | `#ffc95c` | `#ffb32e` | `#b3402f` | `#0f7b4d` | 強調、高光、球隊、正面數值 |
+| `--good` | `#8fd08f` | `#49b675` | `#2f6b3a` | `#0f7b4d` | 正面狀態、成長 |
+| `--bad` | `#e2695c` | `#e2695c` | `#b3402f` | `#c0392b` | 負面狀態、衰退 |
+| `--info` | `#7fb3d5` | `#3a7bd5` | `#35506b` | `#4a76a8` | 資訊標記、連結 |
+| `--gold` | `#ffc95c` | `#ffb32e` | `#b3402f` | `#b8862d` | 重大事件卡的框線 |
+| `--r` | `10px` | `4px` | `0px` | `12px` | 圓角 |
+| `--btnbg` | `linear-gradient(#2a5038,#1f3f2c)` | `#132018` | `#1e1c18` | `#0f7b4d` | 主要按鈕底 |
+| `--btnedge` | `#3c6a4c` | `#49b675` | `#1e1c18` | `#0f7b4d` | 主要按鈕邊框 |
+| `--btntx` | `#ece7d6` | `#d8dde2` | `#f4efe1` | `#ffffff` | 主要按鈕文字 |
+| `--shadow` | `rgba(0,0,0,.35)` | `rgba(0,0,0,.5)` | `rgba(30,28,24,.12)` | `rgba(26,32,28,.1)` | 陰影色 |
+| `--glow` | `0 0 8px rgba(255,201,92,.35)` | `0 0 10px rgba(255,179,46,.6)` | `none` | `none` | 發光效果 |
+| `--bgfx` | `radial-gradient(…)` | `none` | `none` | `none` | 球場光暈背景 |
+
+### 2.3 相容別名
+
+`--chalk` / `--amber` / `--blue` / `--clay` **不是獨立的色票**，而是指回真 token 的別名，只為了讓舊的行內樣板還能運作：
+
+```css
+--chalk: var(--text);
+--amber: var(--accent);
+--blue:  var(--info);
+--clay:  var(--accent);
+```
+
+**新程式碼禁止使用這四個別名**，一律用 `--text` / `--accent` / `--info`。特別注意 `--clay` 指向的是琥珀色，不是土色——把它當獨立的橘褐色使用會得到錯誤的顏色。
 
 ## 3. 字體與字級
 
-字體堆疊未沿用共用 token，使用專案自訂堆疊：
-- `--sans`: `'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif`
-- `--mono`: `'IBM Plex Mono',ui-monospace,Menlo,monospace`
+字體堆疊未採用 `tokens.css` 的預設起點，使用專案自訂堆疊。**其中 `--head` 與 `--disp` 隨主題變動**：
+
+| Token | 主題 a | 主題 b | 主題 c | 主題 d |
+| :--- | :--- | :--- | :--- | :--- |
+| `--sans` | `'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif`（四主題共用） | | | |
+| `--mono` | `'IBM Plex Mono',ui-monospace,Menlo,monospace`（四主題共用） | | | |
+| `--head` | `'Noto Sans TC',sans-serif` | `'DotGothic16',monospace` | `'Noto Serif TC',serif` | 同 a |
+| `--disp` | `'IBM Plex Mono',monospace` | `'DotGothic16',monospace` | `'Noto Serif TC',serif` | 同 a |
+
+`DotGothic16`、`IBM Plex Mono`、`Noto Sans TC`、`Noto Serif TC` 皆自 Google Fonts 載入，由 `client/index.html` 的 `<link>` 引入。**離線時會 fallback 成系統字體**，主題 b 與 c 的識別度會明顯下降——這是目前未解的問題，見 `DEVELOPER.md` §10。
 
 | 用途 | 字級 | 字重 | 行距 | 字體 |
 | :--- | ---: | :--- | ---: | :--- |
@@ -69,7 +109,7 @@
 | :--- | :--- |
 | 標準高度 | `44px`（按鈕，基於 `11px` 上下內邊距與 `15px` 字級加總預估） |
 | 緊湊高度 | `28px`（未特別指定，基於預設推估） |
-| 圓角 | `10px`（`.btn`、`.card`） |
+| 圓角 | `var(--r)`——**隨主題變動**（a `10px` / b `4px` / c `0px` / d `12px`），見 §2.2。小元件用 `min(var(--r), 4px)` 或 `min(var(--r), 6px)` 收斂 |
 | 水平內邊距 | `14px`（`.btn`） |
 
 同一列的控制項**必須等高、字級相同**，寬度可不同。
