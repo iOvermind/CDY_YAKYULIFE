@@ -45,7 +45,11 @@ a{color:var(--info)}
 #board{position:sticky;top:0;z-index:20;background:var(--panel);
   border-bottom:2px solid var(--edge);padding:10px 14px 8px;box-shadow:0 6px 18px var(--shadow);
   padding-top:calc(10px + env(safe-area-inset-top,0px))}
-#bd-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+/* 球隊那一欄有兩行（奪冠機率在上、隊名在下），因此不能用預設的 baseline
+   對齊——那會拿「第一行」的基準線去對，把隊名擠到姓名那行的下面。要對的是
+   最後一行。flex-end 是給不認得 last baseline 的引擎的退路。 */
+#bd-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-end}
+#bd-top{align-items:last baseline}
 #bd-name{font-family:var(--head);font-weight:900;font-size:17px;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #bd-name small{color:var(--dim);font-weight:500;font-size:12px;margin-left:6px;font-family:var(--sans)}
 #bd-team{color:var(--accent);font-size:12.5px;font-weight:700;letter-spacing:.06em;white-space:nowrap;text-align:right}
@@ -165,7 +169,8 @@ table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.
    標題與說明都置中，兩顆按鈕才像一組對稱的選擇。 */
 .row2{display:flex;gap:8px;margin-top:8px}
 /* 奪冠機率自成一行，壓在隊名上方。 */
-#bd-team .odds{display:block;font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.1em}
+#bd-team .odds{display:block;font-size:10.5px;color:var(--dim);font-weight:700;
+  letter-spacing:.1em;line-height:1.5;margin-bottom:1px}
 .row2 .btn{flex:1;text-align:center;margin-top:0}
 .row2 .btn small{text-align:center}
 /* trait side panel: desktop top-right list of unlocked hidden traits (hidden on mobile; settlement unchanged) */
