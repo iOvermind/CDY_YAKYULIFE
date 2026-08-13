@@ -673,11 +673,13 @@ function Board({
       ? { name: state.school, note: tierLabel }
       : { name: state.pro.team, note: state.pro.levelName };
 
-  // 取得二刀流之後，起始守位就不再說明他是什麼球員了——他是投手也是打者。
+  // 取得二刀流之後，起始守位就不再說明他是什麼球員了——他是投手也是打者，
+  // 因此寫成兩個守位。不再冠上「二刀流」三個字：右欄的狀態欄已經會列出這個
+  // 特性，寫兩次只是佔位。
   // 野手側的守位由守備能力決定：守得動就站守位，守不動就是 DH，這也是多數
   // 投手出身的二刀流的歸宿。
   const roleLabel = state.traits.has('two_way')
-    ? `二刀流·投手＋${positionName(fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL))}`
+    ? `投手＋${positionName(fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL))}`
     : abilities.start_positions[player.startPosition];
   return (
     <div id="board">
