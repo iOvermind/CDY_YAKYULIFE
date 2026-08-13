@@ -359,7 +359,7 @@ describe('生涯起點', () => {
   it('從國一的春天開始', () => {
     const log = started().flow.log;
     const first = log.find((e) => e.kind === 'divider');
-    expect(first?.kind === 'divider' && first.text).toContain('國一');
+    expect(first?.kind === 'divider' && first.text).toContain(stageOf('JHS').year_labels[0]);
     expect(first?.kind === 'divider' && first.text).toContain(amateur.career_start.season);
   });
 
@@ -387,10 +387,78 @@ describe('起點文案不寫死', () => {
   // 「開始生涯 ▸ 高一春天」曾經寫死在按鈕上，養成期從高中三年擴成國高中六年
   // 之後就變成錯的。這裡守住資料是唯一來源。
   it('第一個學年標籤來自資料', () => {
-    expect(stageOf('JHS').year_labels[0]).toBe('國一');
+    // 標籤本身可以改（國一 → 國中1），這裡守的是「有值且不是空的」。
+    expect(stageOf('JHS').year_labels[0]).toBeTruthy();
+  });
+
+  it('養成期的學年標籤與職業的「中職1」同一種寫法——階段＋第幾年', () => {
+    for (const stage of ['JHS', 'HS'] as const) {
+      const def = stageOf(stage);
+      def.year_labels.forEach((label, i) => {
+        expect(label).toBe(`${def.name}${i + 1}`);
+      });
+    }
   });
 
   it('起點季節來自資料', () => {
     expect(amateur.career_start.season).not.toBe('');
+  });
+});
+
+describe('職業階段的狀態', () => {
+  /** 一路打到進入職業，回傳那局遊戲。打不進職業就回傳 null。 */
+  function playToPro(seed: string): Game | null {
+    const game = started({ seed });
+    let guard = 0;
+    while (game.flow.prompt !== null && guard++ < 4000) {
+      const options = game.flow.prompt.options;
+      const pick =
+        EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options[0];
+      if (pick === undefined) break;
+      game.choose(pick.id);
+      if (game.state?.pro !== null && game.state?.pro !== undefined) return game;
+    }
+    return null;
+  }
+
+  it('進職業後 pro 不再是 null，並帶著球隊與層級', () => {
+    const game = playToPro('pro-a');
+    expect(game).not.toBeNull();
+    const pro = game?.state?.pro;
+    expect(pro?.team).not.toBe('');
+    expect(pro?.levelName).not.toBe('');
+    expect(pro?.org).toBe('CPBL');
+    expect(pro?.orgName).toBe('中職');
+    expect(pro?.year).toBeGreaterThanOrEqual(1);
+  });
+
+  it('養成期的 pro 一律是 null', () => {
+    expect(playAmateur(started()).state?.pro).toBeNull();
+  });
+
+  it('職業成績以體系為鍵，不以層級——二軍與一軍屬於同一個聯盟', () => {
+    const game = playToEnd(started({ seed: 'pro-b' }));
+    const keys = Object.keys(game.state?.statsByStage ?? {});
+    // 不該出現層級代碼
+    expect(keys).not.toContain('CPBL1');
+    expect(keys).not.toContain('CPBL2');
+    expect(keys).not.toContain('PRO');
+  });
+
+  it('在二軍與一軍之間來回不會把生涯數據拆成兩份', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playToEnd(started({ seed: `split-${i}` }));
+      const log = JSON.stringify(game.flow.log);
+      if (!log.includes('下放二軍') || !log.includes('升上一軍')) continue;
+      const cpbl = game.state?.statsByStage['CPBL'];
+      expect(cpbl).toBeDefined();
+      // 上上下下之後仍然只有一份中職紀錄
+      expect(Object.keys(game.state?.statsByStage ?? {}).filter((k) => k.startsWith('CPBL'))).toEqual(
+        ['CPBL'],
+      );
+      return;
+    }
   });
 });

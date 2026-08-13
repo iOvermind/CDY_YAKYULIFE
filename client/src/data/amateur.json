@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "_source": "抽取自 index_legacy.html hsMap / HS_CUPS / U_CUPS / amateurSeason() / runDraft() / 國際賽選項",
   "_note": "職業之前的階段：高中、大學、業餘成棒，以及選秀與國際賽的獎勵級距。",
-
   "career_start": {
     "_note": "生涯起點：國中一年級。",
     "_season_note": "台灣的學年制從九月開始，但棒球的大賽集中在春夏——遊戲的一個「年度」對齊球季而非學年，因此生涯從國一的春天算起。",
@@ -10,20 +9,48 @@
     "year": 2026,
     "season": "春天"
   },
-
   "stages": {
     "_note": "養成階段的順序與年數。跑完一個階段就進入 next；沒有 next 的階段結束後進選秀。",
-    "order": ["JHS", "HS"],
-    "JHS": { "name": "國中", "years": 3, "year_labels": ["國一", "國二", "國三"], "next": "HS" },
-    "HS": { "name": "高中", "years": 3, "year_labels": ["高一", "高二", "高三"] }
+    "order": [
+      "JHS",
+      "HS"
+    ],
+    "JHS": {
+      "name": "國中",
+      "years": 3,
+      "year_labels": [
+        "國中1",
+        "國中2",
+        "國中3"
+      ],
+      "next": "HS"
+    },
+    "HS": {
+      "name": "高中",
+      "years": 3,
+      "year_labels": [
+        "高中1",
+        "高中2",
+        "高中3"
+      ]
+    },
+    "_labels_note": "學年標籤與職業的「中職1」對齊，都是「階段＋第幾年」。原本寫國一、高一，跟職業階段擺在同一個欄位裡看起來像兩套系統。"
   },
-
   "junior_high": {
     "_note": "國中的隱藏強度分級，與高中同一套機制。名單較短——這個年齡的球隊強弱差距還不明顯。",
     "tiers": {
-      "1": { "label": "名門", "power_bonus": 6 },
-      "2": { "label": "中堅", "power_bonus": 0 },
-      "3": { "label": "弱旅", "power_bonus": -6 }
+      "1": {
+        "label": "名門",
+        "power_bonus": 6
+      },
+      "2": {
+        "label": "中堅",
+        "power_bonus": 0
+      },
+      "3": {
+        "label": "弱旅",
+        "power_bonus": -6
+      }
     },
     "schools": {
       "美崙國中": 1,
@@ -34,13 +61,21 @@
       "光復國中": 3
     }
   },
-
   "high_school": {
     "_note": "高中固定分級表（隱藏）：開局隨機分發一所學校，分級決定大賽表現的隱藏加成。",
     "tiers": {
-      "1": { "label": "名門", "power_bonus": 10 },
-      "2": { "label": "中堅", "power_bonus": 0 },
-      "3": { "label": "弱旅", "power_bonus": -10 }
+      "1": {
+        "label": "名門",
+        "power_bonus": 10
+      },
+      "2": {
+        "label": "中堅",
+        "power_bonus": 0
+      },
+      "3": {
+        "label": "弱旅",
+        "power_bonus": -10
+      }
     },
     "schools": {
       "平鎮高中": 1,
@@ -51,17 +86,30 @@
       "東大體中": 3
     }
   },
-
   "cups": {
     "_note": "各階段的年度大賽。實力值 = 綜合能力 + 學校分級加成 + 隨機波動，對照 thresholds 由高到低取第一個達標的名次。",
     "_games_note": "games 欄位保留給未來的賽事場次擴充（用於出賽數與成績累積），目前一律為 null 待填。填入之前，大賽只產生名次與能力點，不產生任何個人成績。",
     "_par_note": "par 是該階段的對手平均水準，用於把能力值換算成成績——能力高過 par 多少，決定你打得比平均好多少。",
     "_qualifies_note": "qualifies 是「贏下這項大賽即取得該項國際賽出賽機會」的對照表。國中層級這確實是直通制（謝國城盃、青少棒錦標賽、華南金控盃的冠軍隊代表台灣出賽）；高中的 U-18 與亞青現實上是遴選國家隊，但打好國內盃賽本來就是入選的主要依據，因此遊戲用同一套機制判定，敘事上一律寫成「入選國家隊」而非「冠軍隊直接出賽」。",
     "JHS": {
-      "names": ["國中棒球聯賽", "謝國城盃", "青少棒錦標賽", "華南金控盃"],
-      "thresholds": [48, 43, 38, 33, 28],
+      "names": [
+        "國中棒球聯賽",
+        "謝國城盃",
+        "青少棒錦標賽",
+        "華南金控盃"
+      ],
+      "thresholds": [
+        48,
+        43,
+        38,
+        33,
+        28
+      ],
       "par": 28,
-      "power_noise": { "min": -12, "max": 12 },
+      "power_noise": {
+        "min": -12,
+        "max": 12
+      },
       "qualifies": {
         "謝國城盃": "LLB",
         "青少棒錦標賽": "PONY",
@@ -69,10 +117,24 @@
       }
     },
     "HS": {
-      "names": ["高中棒球聯賽", "黑豹旗", "玉山盃", "王貞治盃"],
-      "thresholds": [60, 54, 48, 42, 36],
+      "names": [
+        "高中棒球聯賽",
+        "黑豹旗",
+        "玉山盃",
+        "王貞治盃"
+      ],
+      "thresholds": [
+        60,
+        54,
+        48,
+        42,
+        36
+      ],
       "par": 38,
-      "power_noise": { "min": -10, "max": 10 },
+      "power_noise": {
+        "min": -10,
+        "max": 10
+      },
       "qualifies": {
         "王貞治盃": "PONY18",
         "玉山盃": "U18",
@@ -80,27 +142,75 @@
       }
     },
     "U": {
-      "names": ["大學春季聯賽", "大專盃"],
-      "thresholds": [68, 62, 56, 50, 44],
+      "names": [
+        "大學春季聯賽",
+        "大專盃"
+      ],
+      "thresholds": [
+        68,
+        62,
+        56,
+        50,
+        44
+      ],
       "par": 46,
-      "power_noise": { "min": -10, "max": 10 }
+      "power_noise": {
+        "min": -10,
+        "max": 10
+      }
     },
     "AMA": {
-      "names": ["成棒甲組春季聯賽", "成棒甲組秋季聯賽"],
-      "thresholds": [68, 62, 56, 50, 44],
+      "names": [
+        "成棒甲組春季聯賽",
+        "成棒甲組秋季聯賽"
+      ],
+      "thresholds": [
+        68,
+        62,
+        56,
+        50,
+        44
+      ],
       "par": 48,
-      "power_noise": { "min": -10, "max": 10 }
+      "power_noise": {
+        "min": -10,
+        "max": 10
+      }
     },
     "_noise_note": "單場大賽的臨場波動改為各階段自訂（見上方每個階段的 power_noise）。國中的波動刻意大於高中——那個年紀的球員未成熟、單場變數大，本來就更容易爆冷；高中的實力落差比較誠實地反映在結果上。",
-    "ranks": ["冠軍", "亞軍", "四強", "八強", "十六強", "預賽出局"],
+    "ranks": [
+      "冠軍",
+      "亞軍",
+      "四強",
+      "八強",
+      "十六強",
+      "預賽出局"
+    ],
     "honor_ranks": {
       "_note": "只有這些名次會計入生涯成就。四強以下只給能力點，不留紀錄——否則六年下來會累積出一長串「八強」「預賽出局」，把真正的榮譽淹掉。",
-      "values": ["冠軍", "亞軍"]
+      "values": [
+        "冠軍",
+        "亞軍"
+      ]
     },
-    "points": [6, 5, 4, 3, 2, 1],
+    "points": [
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+    ],
     "games_by_rank": {
       "_note": "各名次實際出賽的場次。打進冠軍戰的人本來就打比較多場，因此場次跟名次綁在一起——這讓成績自然反映實力，而不必另外設一套判定。索引與 ranks 對應。",
-      "values": [6, 5, 4, 3, 2, 1]
+      "values": [
+        6,
+        5,
+        4,
+        3,
+        2,
+        1
+      ]
     },
     "points_bonus": {
       "_note": "依綜合能力給的額外點數，**整季只加一次**，不是每場大賽都加。原本是每場加，賽事從 3 場擴增到 4 場、再加上最多 3 項國際賽之後，一年就能拿到 50 點以上——那讓能力點多到花不完，配點也就失去取捨。",
@@ -114,15 +224,19 @@
       "trait": "academy"
     }
   },
-
   "amateur_stats": {
     "_note": "養成期的個人成績。這是簡化版——真正的賽季模擬（simulation_math.md §3-4）是為職業的百場球季寫的，而養成期一場大賽只有幾場球，用同一套公式會放大隨機噪音到失真。",
     "_role_note": "由投手側與野手側評價較高者決定主要角色；二刀流兩邊都算。",
-
     "batting": {
       "_note": "打席數固定，安打率與長打率則看能力高過對手平均多少。",
       "pa_per_game": 4,
-      "walk_rate": { "base": 0.08, "per_point": 0.004, "min": 0.02, "max": 0.25, "ability": "eye" },
+      "walk_rate": {
+        "base": 0.08,
+        "per_point": 0.004,
+        "min": 0.02,
+        "max": 0.25,
+        "ability": "eye"
+      },
       "hit_rate": {
         "_note": "安打率是對打數而非打席。base 是與對手同水準時的打擊率。",
         "base": 0.28,
@@ -149,9 +263,11 @@
         "ability": "spd"
       },
       "steal_success": 0.72,
-      "noise": { "min": -0.04, "max": 0.04 }
+      "noise": {
+        "min": -0.04,
+        "max": 0.04
+      }
     },
-
     "pitching": {
       "_note": "養成期的投手多半是球隊王牌，出賽即先發，因此局數以場次計。",
       "innings_per_game": {
@@ -161,7 +277,13 @@
         "max": 9,
         "ability": "sta"
       },
-      "k_per_nine": { "base": 6, "per_point": 0.22, "min": 1, "max": 18, "ability": "vel" },
+      "k_per_nine": {
+        "base": 6,
+        "per_point": 0.22,
+        "min": 1,
+        "max": 18,
+        "ability": "vel"
+      },
       "bb_per_nine": {
         "_note": "控球越好保送越少，因此 per_point 為負。",
         "base": 4,
@@ -170,36 +292,78 @@
         "max": 12,
         "ability": "ctl"
       },
-      "era": { "base": 3.6, "per_point": -0.09, "min": 0.3, "max": 12 },
-      "noise": { "min": -0.6, "max": 0.6 }
+      "era": {
+        "base": 3.6,
+        "per_point": -0.09,
+        "min": 0.3,
+        "max": 12
+      },
+      "noise": {
+        "min": -0.6,
+        "max": 0.6
+      }
     }
   },
-
   "draft": {
     "_note": "中華職棒選秀。球團評價 = 綜合能力 + 年齡加權 + 臨場波動；評價落在哪個區間就決定被第幾輪指名。",
     "_calibration_warning": "**這組門檻尚未依養成六年重新校準。** 它是為三年高中制設定的，六年制把畢業時的綜合能力從約 38 拉到約 46，導致輪次全面前移：實測交替配點者 16% 第 1 輪、69% 第 2 輪，連只練單側者也有 22% 第 2 輪。等於人人都是前段指名，選秀失去張力。待討論後上調。見 docs/design/formulas.md。",
-
     "evaluation": {
       "_note": "年齡加權：越年輕的球員球團越願意投資，因為可養成的年數更多。滿 age_pivot 歲之後不再有加分，但也不倒扣。",
       "age_pivot": 22,
       "age_bonus_per_year": 2,
-      "noise": { "min": -4, "max": 4 }
+      "noise": {
+        "min": -4,
+        "max": 4
+      }
     },
-
     "rounds": {
       "_note": "由高到低比對，取第一個評價達標的區間。round 為固定輪次，round_range 則在區間內隨機——後段輪次本來就沒那麼精確。都不達標即落榜。",
       "tiers": [
-        { "min_score": 56, "round": 1 },
-        { "min_score": 49, "round": 2 },
-        { "min_score": 43, "round_range": { "min": 3, "max": 4 } },
-        { "min_score": 37, "round_range": { "min": 5, "max": 7 } },
-        { "min_score": 30, "round_range": { "min": 8, "max": 10 } }
+        {
+          "min_score": 56,
+          "round": 1
+        },
+        {
+          "min_score": 49,
+          "round": 2
+        },
+        {
+          "min_score": 43,
+          "round_range": {
+            "min": 3,
+            "max": 4
+          }
+        },
+        {
+          "min_score": 37,
+          "round_range": {
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "min_score": 30,
+          "round_range": {
+            "min": 8,
+            "max": 10
+          }
+        }
       ]
     },
-
-    "signing_bonus_by_round": [0, 1000, 600, 350, 350, 150, 150, 150, 50, 50, 50],
+    "signing_bonus_by_round": [
+      0,
+      1000,
+      600,
+      350,
+      350,
+      150,
+      150,
+      150,
+      50,
+      50,
+      50
+    ],
     "default_bonus": 50,
-
     "first_round_direct_promotion": {
       "_note": "第 1 指且綜合能力達標者直接進一軍，否則從二軍起步。",
       "round": 1,
@@ -207,14 +371,12 @@
       "level": "CPBL1",
       "fallback_level": "CPBL2"
     },
-
     "reject_offer": {
       "_note": "輪次不滿意時可以放棄指名、明年重來。只在第 reject_from 輪之後才給這個選項——前段指名沒有拒絕的道理；年齡達 max_age 則不給，避免玩家無限拖延。",
       "reject_from_round": 3,
       "max_age": 24
     }
   },
-
   "two_way_talent": {
     "_note": "二刀流天賦的判定，在養成期結束、選秀之前進行。條件是投手側與野手側**都**達到門檻——不是整體評價高就好，那只代表單邊強。取得後兩側的成長曲線都變平緩，見 abilities.json 的 growth_cost.two_way。",
     "_calibration_note": "門檻 36 依養成六年結束時的實測分佈設定（各 300 段生涯，成本曲線改陡之後重新量測）。弱側評價：交替投打配點者 p50=35 / p60=36 / p70=36 / max=41；只練單側者 p50=29 / max=32。因此專精者取得率 0%、刻意兩邊練者約三成。二刀流因此是一個 build 選擇加上一點運氣——你得刻意兩邊練，還要擲得不差。代價是兩側都不會頂尖。**這個數字直接受成長成本曲線影響**：曲線一改，養成期結束時的能力就整體位移，門檻必須跟著重量。動之前先重跑分佈量測，見 docs/design/formulas.md。",
@@ -222,63 +384,141 @@
     "min_pitcher": 36,
     "min_fielder": 36
   },
-
   "amateur_international": {
     "_note": "養成期的國際賽。與職業期的國家隊徵召分開——這個年紀的球員不必承擔賽後的傷病風險。",
-
     "_qualification_note": "全部走同一套：贏下指定的國內大賽，就代表你的表現足以入選國家隊。國中層級這是真實的直通制；高中的 U-18 與亞青現實上是遴選，但打好國內盃賽本來就是入選的主要依據，因此機制相同，敘事一律寫成「入選國家隊」。",
-
     "tournaments": {
       "LLB": {
         "name": "LLB 世界次青少棒錦標賽",
         "stage": "JHS",
         "qualified_by": "謝國城盃",
-        "thresholds": [88, 76, 62, 40],
-        "games_by_rank": [7, 6, 5, 4, 3]
+        "thresholds": [
+          88,
+          76,
+          62,
+          40
+        ],
+        "games_by_rank": [
+          7,
+          6,
+          5,
+          4,
+          3
+        ]
       },
       "PONY": {
         "name": "PONY 世界青少棒錦標賽",
         "stage": "JHS",
         "qualified_by": "青少棒錦標賽",
-        "thresholds": [88, 76, 62, 40],
-        "games_by_rank": [7, 6, 5, 4, 3]
+        "thresholds": [
+          88,
+          76,
+          62,
+          40
+        ],
+        "games_by_rank": [
+          7,
+          6,
+          5,
+          4,
+          3
+        ]
       },
       "U15": {
         "name": "WBSC U-15 世界盃",
         "stage": "JHS",
         "qualified_by": "華南金控盃",
-        "thresholds": [90, 78, 64, 42],
-        "games_by_rank": [8, 7, 6, 5, 4]
+        "thresholds": [
+          90,
+          78,
+          64,
+          42
+        ],
+        "games_by_rank": [
+          8,
+          7,
+          6,
+          5,
+          4
+        ]
       },
       "PONY18": {
         "name": "PONY 小馬級世界青棒錦標賽",
         "stage": "HS",
         "qualified_by": "王貞治盃",
-        "thresholds": [88, 76, 62, 40],
-        "games_by_rank": [7, 6, 5, 4, 3]
+        "thresholds": [
+          88,
+          76,
+          62,
+          40
+        ],
+        "games_by_rank": [
+          7,
+          6,
+          5,
+          4,
+          3
+        ]
       },
       "U18": {
         "name": "WBSC U-18 世界盃棒球賽",
         "stage": "HS",
         "qualified_by": "玉山盃",
-        "thresholds": [90, 78, 64, 42],
-        "games_by_rank": [8, 7, 6, 5, 4]
+        "thresholds": [
+          90,
+          78,
+          64,
+          42
+        ],
+        "games_by_rank": [
+          8,
+          7,
+          6,
+          5,
+          4
+        ]
       },
       "ASIA18": {
         "name": "BFA 亞洲 U-18 青棒錦標賽",
         "stage": "HS",
         "qualified_by": "黑豹旗",
-        "thresholds": [86, 74, 60, 38],
-        "games_by_rank": [6, 5, 4, 4, 3]
+        "thresholds": [
+          86,
+          74,
+          60,
+          38
+        ],
+        "games_by_rank": [
+          6,
+          5,
+          4,
+          4,
+          3
+        ]
       }
     },
-
-    "ranks": ["冠軍", "亞軍", "季軍", "複賽止步", "預賽出局"],
+    "ranks": [
+      "冠軍",
+      "亞軍",
+      "季軍",
+      "複賽止步",
+      "預賽出局"
+    ],
     "honor_ranks": {
       "_note": "國際賽有季軍，因此前三名都計入。",
-      "values": ["冠軍", "亞軍", "季軍"]
+      "values": [
+        "冠軍",
+        "亞軍",
+        "季軍"
+      ]
     },
-    "points": [6, 5, 4, 3, 2],
+    "points": [
+      6,
+      5,
+      4,
+      3,
+      2
+    ],
     "_points_note": "與國內大賽同一套級距。國際賽與國內賽的榮譽各自獨立計算——拿下謝國城盃冠軍是一項成就，代表台灣打 LLB 拿冠軍是另一項。",
     "power_bonus": {
       "_note": "名次由整體興衰決定，個人能力只佔一小部分——國家隊的成績不是一個人的事。",
@@ -288,13 +528,33 @@
     },
     "honor_prefix": "中華隊"
   },
-
   "international": {
     "_note": "職業期的國家隊徵召。名次由整體興衰決定，個人能力只佔一小部分：亂數 = 隨機 0~100 + 能力加成，能力加成 = (綜合能力 − 52) × 0.35，上限 8。",
-    "power_bonus": { "base_overall": 52, "factor": 0.35, "max": 8 },
-    "thresholds": [96, 88, 79, 46],
-    "ranks": ["冠軍", "亞軍", "季軍", "複賽止步", "預賽出局"],
-    "points": [6, 5, 4, 2, 1],
+    "power_bonus": {
+      "base_overall": 52,
+      "factor": 0.35,
+      "max": 8
+    },
+    "thresholds": [
+      96,
+      88,
+      79,
+      46
+    ],
+    "ranks": [
+      "冠軍",
+      "亞軍",
+      "季軍",
+      "複賽止步",
+      "預賽出局"
+    ],
+    "points": [
+      6,
+      5,
+      4,
+      2,
+      1
+    ],
     "injury_next_season": 10,
     "intlace_effect": {
       "_note": "「國際賽之鬼」的效果：不增加下季受傷機率，且能力點保底。",

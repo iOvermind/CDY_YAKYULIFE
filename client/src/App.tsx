@@ -53,13 +53,6 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
  * 樣式在 app.css，版型比照原版。介面規格見 INTERFACE.md。
  */
 
-/** 生涯數據的分段顯示順序。職業生涯尚未實作，先留位置。 */
-const STAGE_ORDER: readonly (readonly [string, string])[] = [
-  ['JHS', '國中生涯'],
-  ['HS', '高中生涯'],
-  ['PRO', '職業生涯'],
-];
-
 const THEMES = [
   { code: 'a', name: '科技藍' },
   { code: 'b', name: '電子看板' },
@@ -380,7 +373,19 @@ function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } 
 /** 當年數據與生涯數據。 */
 function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | null }) {
   const def = stageOf(state.stage);
-  const yearLabel = def.year_labels[state.stageYear - 1] ?? `${def.name}${state.stageYear}`;
+  // 進職業之後 stage 仍停在 HS、stageYear 繼續累加，直接沿用會顯示「高中4」。
+  // 職業改用體系名加年資，與養成期的「國中1」是同一種寫法。
+  const yearLabel =
+    state.pro === null
+      ? (def.year_labels[state.stageYear - 1] ?? `${def.name}${state.stageYear}`)
+      : `${state.pro.orgName}${state.pro.year}`;
+
+  // 生涯數據只顯示目前所在的階段，其餘收起來——養成期六年加上職業，全部攤開
+  // 會把右欄佔滿，而玩家當下在意的只有現在這一段。
+  const currentSection: readonly [string, string] =
+    state.pro === null
+      ? [state.stage, `${def.name}生涯`]
+      : [state.pro.org, `${state.pro.orgName}生涯`];
 
   return (
     <div id="panel-stats">
@@ -419,7 +424,7 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
       />
 
       <h4 style={{ marginTop: 12 }}>生涯數據</h4>
-      {STAGE_ORDER.map(([code, name]) => {
+      {[currentSection].map(([code, name]) => {
         const line = state.statsByStage[code];
         if (line === undefined) return null;
         return (
@@ -537,8 +542,13 @@ function Board({
   seed: string;
 }) {
   const player = state.origin;
-  // 學校與強度都讀目前的狀態——升學會換學校，讀開局的那一份會永遠停在國中。
+  // 所屬單位一律讀目前的狀態：升學會換學校、選秀會換成球隊。讀 origin 那一份
+  // 會永遠停在開局的國中，讀 state.school 則會在進職業之後停在高中。
   const tierLabel = schoolTiersOf(state.stage)?.tiers[String(state.schoolTier)]?.label ?? '';
+  const affiliation =
+    state.pro === null
+      ? { name: state.school, note: tierLabel }
+      : { name: state.pro.team, note: state.pro.levelName };
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>
@@ -551,8 +561,10 @@ function Board({
           </small>
         </span>
         <span id="bd-team">
-          {state.school}
-          {tierLabel !== '' && <small style={{ opacity: 0.75 }}>·{tierLabel}</small>}
+          {affiliation.name}
+          {affiliation.note !== '' && (
+            <small style={{ opacity: 0.75 }}>·{affiliation.note}</small>
+          )}
         </span>
       </div>
       <div id="bd-grid">

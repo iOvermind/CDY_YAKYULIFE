@@ -12,6 +12,7 @@ import {
   abilities,
   ALL_ABILITIES,
   amateur,
+  leagues,
   PITCH_FAMILIES,
   type AbilityKey,
   type Hand,
@@ -105,10 +106,33 @@ export interface PlayerState {
   /** 當年成績。尚未打完大賽時為 null。 */
   readonly seasonBatting: BattingLine | null;
   readonly seasonPitching: PitchingLine | null;
-  /** 各階段的累計成績。鍵為階段代碼（JHS / HS / …）。 */
+  /**
+   * 各階段的累計成績。
+   *
+   * 養成期的鍵是階段代碼（JHS / HS），職業的鍵是**體系代碼**（CPBL / NPB / …）
+   * 而不是層級——二軍與一軍屬於同一個聯盟，分開記會讓一段生涯被拆成兩半。
+   * 用體系當鍵也讓「離開又回來」自然接續：回到同一個聯盟就繼續累加。
+   */
   readonly statsByStage: Readonly<
     Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }>
   >;
+  /** 職業狀態。尚未進職業時為 null。 */
+  readonly pro: ProState | null;
+}
+
+/** 職業階段的狀態。 */
+export interface ProState {
+  /** 體系代碼，例如 CPBL。生涯數據以它為鍵。 */
+  readonly org: string;
+  /** 目前層級代碼，例如 CPBL1。 */
+  readonly level: string;
+  /** 層級的中文名，例如中職一軍。 */
+  readonly levelName: string;
+  /** 體系的中文名，例如中職。 */
+  readonly orgName: string;
+  readonly team: string;
+  /** 在這個體系待到第幾年，從 1 起算。 */
+  readonly year: number;
 }
 
 export class Game {
@@ -189,6 +213,22 @@ export class Game {
       seasonBatting: this.#seasonBatting,
       seasonPitching: this.#seasonPitching,
       statsByStage: this.#statsByStage,
+      pro: this.#proState,
+    };
+  }
+
+  /** 對外的職業狀態。層級與體系的中文名在這裡查好，介面層不必再碰 leagues。 */
+  get #proState(): ProState | null {
+    const pro = this.#pro;
+    if (pro === null) return null;
+    const info = levelOf(pro.level);
+    return {
+      org: info.org,
+      level: pro.level,
+      levelName: info.name,
+      orgName: leagues.top_league_names[info.org] ?? info.org,
+      team: pro.team,
+      year: pro.year,
     };
   }
 
@@ -884,7 +924,7 @@ export class Game {
   /** 引退：結算生涯。 */
   #retire(reason: string): void {
     const pro = this.#pro;
-    const total = this.#statsByStage['PRO'];
+    const total = this.#statsByStage[levelOf(pro?.level ?? 'CPBL1').org];
     this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 引退`);
 
     const lines: string[] = [];
@@ -947,8 +987,9 @@ export class Game {
 
   /** 把一段成績累加到目前階段。各階段分開累計，介面才能分開呈現。 */
   #accumulate(batting: BattingLine | null, pitching: PitchingLine | null): void {
-    // 職業的成績全部記在 PRO 之下——分層級記錄要等轉會系統做完才有意義。
-    const key = this.#pro === null ? this.#stage : 'PRO';
+    // 職業以體系（CPBL / NPB / …）為鍵，不以層級。二軍與一軍屬於同一個聯盟，
+    // 分開記會把一段生涯拆成兩半；用體系當鍵也讓「離開又回來」自然接續。
+    const key = this.#pro === null ? this.#stage : levelOf(this.#pro.level).org;
     const current = this.#statsByStage[key] ?? { batting: null, pitching: null };
     this.#statsByStage[key] = {
       batting: addBatting(current.batting, batting),
