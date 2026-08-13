@@ -1,0 +1,10 @@
+# 根目錄的 npm script 會在這裡產生 vitest 快取——它不屬於版本庫。
+node_modules/
+
+# 建置產物
+dist/
+
+# 編輯器與作業系統
+.DS_Store
+Thumbs.db
+*.local
