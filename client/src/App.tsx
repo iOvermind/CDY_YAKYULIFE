@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react';
 import './app.css';
-import { abilities, ALL_ABILITIES, START_POSITIONS, type StartPosition } from './data/index.ts';
-import { createPlayer, type NewPlayer } from './engine/genesis.ts';
-import { newSeed, World } from './engine/rng.ts';
+import { abilities, START_POSITIONS, type StartPosition } from './data/index.ts';
+import type { LogEntry, Prompt } from './engine/flow.ts';
+import { Game } from './engine/game.ts';
+import type { NewPlayer } from './engine/genesis.ts';
+import { newSeed } from './engine/rng.ts';
 
 /**
- * 開局生成的垂直切片。
+ * 介面層。
  *
- * 樣式在 app.css（自 index_legacy.html 抽出，主題 a 改為科技藍），版型比照
- * 原版的開局畫面 #start，讓整體結構與原版一致。介面規格見 INTERFACE.md。
+ * 引擎不知道 React 的存在——依賴方向是單向的（見 DEVELOPER.md §5）。這裡只做
+ * 三件事：收集開局設定、把 flow.log 畫出來、把玩家點的選項餵回 flow.choose()。
  *
- * 這一頁同時穿過亂數層（genesis 子序列）、規則資料載入層，以及球員的狀態
- * 模型——輸入同一個種子必定得到同一位球員。
+ * 樣式在 app.css，版型比照原版。介面規格見 INTERFACE.md。
  */
 
 const THEMES = [
@@ -21,22 +22,47 @@ const THEMES = [
   { code: 'd', name: '現代儀表板' },
 ] as const;
 
-const HAND_LABEL: Record<string, string> = { R: '右', L: '左', S: '左右開弓' };
-
 export default function App() {
-  const [name, setName] = useState('');
-  const [start, setStart] = useState<StartPosition>('P');
   const [theme, setTheme] = useState('a');
-  const [seed, setSeed] = useState(newSeed());
-  const [player, setPlayer] = useState<NewPlayer | null>(null);
+  const [game, setGame] = useState<Game | null>(null);
+  // Game 是可變物件，React 不會察覺內部變化，因此用一個計數器手動觸發重繪。
+  const [, bump] = useState(0);
 
-  // 主題掛在 body 上，與原版一致（body[data-theme]）。寫 DOM 是副作用，
-  // 必須放在 effect 裡——直接寫在 render 中在 StrictMode 下會執行兩次。
   useEffect(() => {
     document.body.dataset['theme'] = theme;
   }, [theme]);
 
-  const generate = () => setPlayer(createPlayer(new World(seed), name.trim() || '無名氏', start));
+  if (game === null) {
+    return <StartScreen theme={theme} onTheme={setTheme} onStart={setGame} />;
+  }
+
+  return (
+    <GameScreen
+      game={game}
+      onChoose={(id) => {
+        game.choose(id);
+        bump((n) => n + 1);
+      }}
+      onRestart={() => setGame(null)}
+    />
+  );
+}
+
+function StartScreen({
+  theme,
+  onTheme,
+  onStart,
+}: {
+  theme: string;
+  onTheme: (t: string) => void;
+  onStart: (g: Game) => void;
+}) {
+  const [name, setName] = useState('');
+  const [startPosition, setStartPosition] = useState<StartPosition>('P');
+  const [seed, setSeed] = useState(newSeed());
+
+  const begin = () =>
+    onStart(new Game({ seed, name: name.trim() || '無名氏', startPosition }).start());
 
   return (
     <div id="start">
@@ -66,8 +92,8 @@ export default function App() {
               <button
                 key={p}
                 type="button"
-                className={p === start ? 'on' : undefined}
-                onClick={() => setStart(p)}
+                className={p === startPosition ? 'on' : undefined}
+                onClick={() => setStartPosition(p)}
               >
                 {abilities.start_positions[p]}
               </button>
@@ -83,7 +109,7 @@ export default function App() {
                 key={t.code}
                 type="button"
                 className={t.code === theme ? 'on' : undefined}
-                onClick={() => setTheme(t.code)}
+                onClick={() => onTheme(t.code)}
               >
                 {t.name}
               </button>
@@ -91,8 +117,8 @@ export default function App() {
           </div>
         </div>
 
-        <button type="button" className="btn main" style={{ marginTop: 28 }} onClick={generate}>
-          擲出球員 ▸ 高一春天
+        <button type="button" className="btn main" style={{ marginTop: 28 }} onClick={begin}>
+          開始生涯 ▸ 高一春天
         </button>
 
         <p className="seedline">
@@ -116,38 +142,154 @@ export default function App() {
           <br />
           相同種子＋相同選擇＝相同人生（可直接輸入朋友的種子碼）
         </p>
-
-        {player && <PlayerCard player={player} />}
       </div>
     </div>
   );
 }
 
-function PlayerCard({ player }: { player: NewPlayer }) {
-  const tierLabel = ['', '名門', '中堅', '弱旅'][player.schoolTier] ?? '';
+function GameScreen({
+  game,
+  onChoose,
+  onRestart,
+}: {
+  game: Game;
+  onChoose: (optionId: string) => void;
+  onRestart: () => void;
+}) {
+  const player = game.player;
+
+  return (
+    <div id="app">
+      <div id="mid">
+        {player && <Board player={player} seed={game.setup.seed} />}
+        <div id="log">
+          <LogView entries={game.flow.log} />
+          {player && <AbilityCard player={player} />}
+        </div>
+      </div>
+      <div id="act-side">
+        <div id="act-in">
+          <div id="act">
+            {game.flow.prompt ? (
+              <PromptView prompt={game.flow.prompt} onChoose={onChoose} />
+            ) : (
+              <>
+                <div className="title">流程已到目前實作的盡頭</div>
+                <button type="button" className="btn main" onClick={onRestart}>
+                  重新開局
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Board({ player, seed }: { player: NewPlayer; seed: string }) {
+  return (
+    <div id="board">
+      <div id="bd-top">
+        <span id="bd-name">
+          {player.name}
+          <small>
+            {abilities.start_positions[player.startPosition]}·投
+            {hand(player.throws)}打{hand(player.bats)}
+          </small>
+        </span>
+        <span id="bd-team">{player.school}</span>
+      </div>
+      <div id="bd-grid">
+        <div className="bd-cell">
+          <b>{player.year}</b>
+          <span>年份</span>
+        </div>
+        <div className="bd-cell">
+          <b>{player.age}</b>
+          <span>年齡</span>
+        </div>
+        <div className="bd-cell">
+          <b>{overall(player)}</b>
+          <span>綜合</span>
+        </div>
+        <div className="bd-cell">
+          <b style={{ fontSize: 12 }}>{seed}</b>
+          <span>種子</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LogView({ entries }: { entries: readonly LogEntry[] }) {
+  // divider 開啟新的年度區塊，後續卡片都掛在它底下，與原版的摺疊結構一致。
+  const blocks: { head: string | null; cards: LogEntry[] }[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'divider') blocks.push({ head: entry.text, cards: [] });
+    else {
+      const last = blocks[blocks.length - 1];
+      if (last) last.cards.push(entry);
+      else blocks.push({ head: null, cards: [entry] });
+    }
+  }
+
+  return (
+    <>
+      {blocks.map((block, i) => (
+        <div className="yr-block" key={i}>
+          {block.head !== null && <div className="yr-head has-body">{block.head}</div>}
+          <div className="yr-body">
+            {block.cards.map((entry, j) =>
+              entry.kind === 'card' ? (
+                <div className={`card ${entry.tone}`} key={j}>
+                  {entry.title !== undefined && <h4>{entry.title}</h4>}
+                  <p dangerouslySetInnerHTML={{ __html: entry.body }} />
+                </div>
+              ) : null,
+            )}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function PromptView({
+  prompt,
+  onChoose,
+}: {
+  prompt: Prompt;
+  onChoose: (optionId: string) => void;
+}) {
+  return (
+    <>
+      {prompt.title !== undefined && <div className="title">{prompt.title}</div>}
+      {prompt.options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          className={`btn${o.role === 'main' ? ' main' : ''}${o.role === 'warn' ? ' warn' : ''}`}
+          onClick={() => onChoose(o.id)}
+        >
+          {o.label}
+          {o.note !== undefined && <small>{o.note}</small>}
+        </button>
+      ))}
+    </>
+  );
+}
+
+function AbilityCard({ player }: { player: NewPlayer }) {
   const groups = abilities.ability_groups;
   const names = abilities.ability_group_names;
 
   return (
-    <div className="card" style={{ marginTop: 22 }}>
-      <h4>
-        {player.name}／{abilities.start_positions[player.startPosition]}
-      </h4>
-      <p className="statline">
-        {player.year} 年 · {player.age} 歲 · {player.school}
-        {tierLabel && `（${tierLabel}）`} · 投{HAND_LABEL[player.throws]} 打
-        {HAND_LABEL[player.bats]}
-      </p>
-
+    <div className="card">
+      <h4>能力</h4>
       <AbilityBlock title={names.shared} keys={groups.shared} player={player} />
       <AbilityBlock title={names.pitcher} keys={groups.pitcher} player={player} />
       <AbilityBlock title={names.fielder} keys={groups.fielder} player={player} />
-
-      <p className="divider">開局生成</p>
-      <p style={{ fontSize: 12, color: 'var(--dim)', marginTop: 6 }}>
-        每位球員都擁有全部 {ALL_ABILITIES.length} 項能力，起始守位只影響天賦的機率加權。
-        數字為目前能力，括號內為潛力天花板。
-      </p>
     </div>
   );
 }
@@ -177,11 +319,23 @@ function AbilityBlock({
               <em style={{ left: `${(ceiling / max) * 100}%` }} />
             </span>
             <span className="val">
-              {current} <b>({ceiling})</b>
+              {current}
+              <small style={{ opacity: 0.5 }}>/{ceiling}</small>
             </span>
           </div>
         );
       })}
     </>
   );
+}
+
+function hand(h: string): string {
+  return h === 'S' ? '雙' : h === 'L' ? '左' : '右';
+}
+
+/** 綜合能力：所有能力的平均，四捨五入。之後會由引擎提供，這裡只是暫時的顯示值。 */
+function overall(player: NewPlayer): number {
+  const values = Object.values(player.ability);
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }
