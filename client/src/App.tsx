@@ -731,7 +731,7 @@ function Board({
         {state.honors.length > 0 && (
           // 清單掛在滑鼠停留的提示上。生涯累積下來會有十幾項，攤在版面上會把
           // 記分板撐開，而它們平常並不需要被讀。
-          <span className="lamp on honors" title={state.honors.join('\n')}>
+          <span className="lamp on honors" title={sortHonors(state.honors).join('\n')}>
             <i />
             榮譽 {state.honors.length}
           </span>
@@ -739,6 +739,18 @@ function Board({
       </div>
     </div>
   );
+}
+
+/**
+ * 榮譽的顯示排序：繁體中文的預設定序就是筆劃順序。
+ *
+ * 明確指定 co-stroke 而不是依賴地區預設——不同引擎對 zh-Hant 的預設定序未必
+ * 一致，寫死才不會在別的環境裡變成注音或碼位順序。
+ */
+const HONOR_COLLATOR = new Intl.Collator('zh-Hant-TW-u-co-stroke');
+
+function sortHonors(honors: readonly string[]): string[] {
+  return [...honors].sort((a, b) => HONOR_COLLATOR.compare(a, b));
 }
 
 function LogView({ entries }: { entries: readonly LogEntry[] }) {

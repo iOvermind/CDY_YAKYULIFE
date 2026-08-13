@@ -432,7 +432,7 @@ export class Game {
       // 國際賽與國內大賽的榮譽各自獨立——贏下謝國城盃是一項成就，代表台灣
       // 打 LLB 拿冠軍是另一項。
       if (honorRanks.has(result.rank)) {
-        this.#honors.push(`${prefix}${result.tournament}${result.rank}`);
+        this.#addHonor(`${prefix}${result.tournament}${result.rank}`);
       }
       this.#pool += result.points;
       // 只有國際賽冠軍給訓練骰加成，且記的是拿下時所處的階段。
@@ -623,7 +623,7 @@ export class Game {
 
     // 只有名次夠好才計入成就，且不帶年份——六年下來會累積出一長串「八強」，
     // 把真正的榮譽淹掉。其餘名次照樣給能力點。
-    for (const h of season.honors) this.#honors.push(`${h.cup}${h.rank}`);
+    for (const h of season.honors) this.#addHonor(`${h.cup}${h.rank}`);
     if (season.championships.length > 0) {
       this.flow.card(
         'gold',
@@ -1149,6 +1149,19 @@ export class Game {
     } else if (last.source === 'pool') {
       this.#pool++;
     }
+  }
+
+  /**
+   * 記下一項榮譽，重複的不再記第二次。
+   *
+   * 連三年拿下謝國城盃冠軍是一件事，不是三件——榮譽是「他做到過什麼」的清單，
+   * 不是流水帳。同一個盃賽的冠軍與亞軍是不同的字串，因此仍然各記一筆。
+   *
+   * 次數本身有意義的地方（例如國際賽徵召次數）另外計數，不靠這份清單。
+   */
+  #addHonor(text: string): void {
+    if (this.#honors.includes(text)) return;
+    this.#honors.push(text);
   }
 
   /** 把一段成績累加到目前階段。各階段分開累計，介面才能分開呈現。 */

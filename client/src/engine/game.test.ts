@@ -656,3 +656,39 @@ describe('配點的復原與確認', () => {
     expect(game.world.drawCounts()).toEqual(before);
   });
 });
+
+describe('榮譽清單', () => {
+  it('同一項榮譽不重複記錄', () => {
+    for (let i = 0; i < 30; i++) {
+      const honors = playToEnd(started({ seed: `honor-${i}` })).state?.honors ?? [];
+      expect(new Set(honors).size).toBe(honors.length);
+    }
+  });
+
+  it('連年奪冠只算一項——榮譽是做到過什麼，不是流水帳', () => {
+    // 找一段確實連兩年拿下同一個盃賽冠軍的生涯
+    for (let i = 0; i < 60; i++) {
+      const game = playWell(started({ seed: `repeat-${i}` }), true);
+      const wins = game.flow.log.filter(
+        (e) => e.kind === 'card' && e.title === '冠軍',
+      );
+      if (wins.length < 2) continue;
+      const honors = game.state?.honors ?? [];
+      expect(new Set(honors).size).toBe(honors.length);
+      return;
+    }
+  });
+
+  it('同一個盃賽的冠軍與亞軍各記一筆——那是兩件不同的事', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      for (const h of playWell(started({ seed: `rank-${i}` }), true).state?.honors ?? []) {
+        seen.add(h);
+      }
+    }
+    // 至少要看得到某個盃賽同時出現冠軍與亞軍兩種紀錄
+    const champs = [...seen].filter((h) => h.endsWith('冠軍')).map((h) => h.slice(0, -2));
+    const runners = [...seen].filter((h) => h.endsWith('亞軍')).map((h) => h.slice(0, -2));
+    expect(champs.some((c) => runners.includes(c))).toBe(true);
+  });
+});
