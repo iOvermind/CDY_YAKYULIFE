@@ -84,7 +84,7 @@ function StartScreen({
         <h1>
           <em>棒球人生模擬器</em>
         </h1>
-        <p className="sub">國中高中六年養成 → 國際賽 → 選秀 → 中職二軍・一軍 → 衰退與引退。每一顆骰子都算數。</p>
+        <p className="sub">國中、高中六年養成 → 選秀・旅外 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
 
         <div className="field">
           <label htmlFor="in-name">球員姓名</label>
@@ -99,11 +99,12 @@ function StartScreen({
 
         <div className="field">
           <label>起始守位</label>
-          {/* 三列各自撐滿寬度：投捕與不定、內野、外野。列數不同是刻意的，
-              它讓守位的分組一眼可見，比排成一片整齊的方陣好讀。 */}
+          {/* 三列：投捕與不定、內野、外野。每列都是四格的網格，不足四個就空著
+              ——按鈕寬度因此與「打擊慣用手」那幾組完全一致，整個開局畫面看起來
+              才是同一套元件。 */}
           <div className="poslist">
             {START_POSITION_ROWS.map((row, i) => (
-              <div key={i} className="seg" style={{ gridTemplateColumns: `repeat(${row.length},1fr)` }}>
+              <div key={i} className="seg">
                 {row.map((p) => (
                   <button
                     key={p}
