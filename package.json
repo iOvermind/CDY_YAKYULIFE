@@ -1,0 +1,14 @@
+{
+  "name": "cdy-yakyulife-root",
+  "private": true,
+  "description": "只做指令轉發。實際的專案在 client/，版本號的單一來源也在 client/package.json——本檔刻意不帶 version 欄位，避免出現第二個版本號來源。",
+  "scripts": {
+    "dev": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix client run test",
+    "test:watch": "npm --prefix client run test:watch",
+    "typecheck": "npm --prefix client run typecheck",
+    "tauri": "npm --prefix client run tauri",
+    "install:client": "npm --prefix client ci"
+  }
+}

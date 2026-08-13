@@ -1,17 +1,21 @@
-/* Theme tokens: one set per body[data-theme]; default = a (深綠記分板).
-   Values mirror the design prototype (yakyulife-app.dc.html helmet style). */
+/* 主題 token：每個 body[data-theme] 一組，預設為 a（科技藍）。
+   規格見 INTERFACE.md §2。
+
+   本檔自 index_legacy.html 的 <style> 抽出，除主題 a 之外逐字保留。
+   主題 a 由原本的「深綠記分板」改為新架構的視覺識別「科技藍」；
+   b／c／d 三個主題維持原樣。原始的深綠配色仍完整保存在 index_legacy.html。 */
 body{
-  --bg:#081510;--panel:#132920;--panel2:#1a382a;--edge:#2b4d3a;--text:#ece7d6;--dim:#93ab9c;
-  --accent:#ffc95c;--good:#8fd08f;--bad:#e2695c;--info:#7fb3d5;--gold:#ffc95c;--r:10px;
+  --bg:#070d16;--panel:#0e1826;--panel2:#16243a;--edge:#24384f;--text:#dce6f2;--dim:#8298b4;
+  --accent:#38bdf8;--good:#3ddc97;--bad:#f2616b;--info:#818cf8;--gold:#f5c451;--r:10px;
   --sans:'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;
   --head:'Noto Sans TC',sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
   --disp:'IBM Plex Mono',monospace;
-  --glow:0 0 8px rgba(255,201,92,.35);
-  --btnbg:linear-gradient(#2a5038,#1f3f2c);--btnedge:#3c6a4c;--btntx:#ece7d6;
-  --bgfx:radial-gradient(ellipse 120% 60% at 50% -10%,rgba(29,70,48,.5) 0%,transparent 60%);
-  --shadow:rgba(0,0,0,.35);
-  /* legacy aliases: older inline templates still reference these */
+  --glow:0 0 8px rgba(56,189,248,.4);
+  --btnbg:linear-gradient(#1b3a5c,#132b45);--btnedge:#2f5f8f;--btntx:#e8f2ff;
+  --bgfx:radial-gradient(ellipse 120% 60% at 50% -10%,rgba(30,90,160,.45) 0%,transparent 60%);
+  --shadow:rgba(0,0,0,.45);
+  /* 相容別名：舊的行內樣板仍在引用。新程式碼禁止使用，見 INTERFACE.md §2.3 */
   --chalk:var(--text);--amber:var(--accent);--blue:var(--info);--clay:var(--accent);
 }
 body[data-theme='b']{--bg:#07090c;--panel:#0c1014;--panel2:#10161c;--edge:#232c36;--text:#d8dde2;--dim:#5c6873;

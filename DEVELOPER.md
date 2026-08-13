@@ -37,10 +37,8 @@
 
 2. 安裝相依套件
    ```bash
-   cd client
-   npm ci
+   npm run install:client
    ```
-   **`package.json` 在 `client/`，不在儲存庫根目錄** —— 在根目錄執行 npm 指令會得到 `ENOENT: no such file or directory, open '.../package.json'`。
    完成後應看到 `client/node_modules/` 產生。
 
 3. 確認環境可用
@@ -50,13 +48,15 @@
    ```
    兩者都應無錯誤結束，測試顯示全數通過。
 
+> 實際的專案在 `client/`，但**根目錄有一個只做指令轉發的 `package.json`**，所以上面的指令在根目錄或 `client/` 底下執行都可以。根目錄那份刻意不帶 `version` 欄位，以免出現第二個版本號來源（見 §7）。
+
 舊版預覽不需要以上任何步驟：直接用瀏覽器開啟根目錄的 `index_legacy.html` 即可。
 
 ---
 
 ## 3. 日常開發
 
-**所有指令都在 `client/` 底下執行。**
+指令在**根目錄或 `client/` 底下都可以執行**——根目錄的 `package.json` 會轉發到 `client/`。
 
 | 指令 | 作用 |
 | :--- | :--- |
@@ -188,6 +188,7 @@ npm run tauri build  # 桌面版（需要 Rust 工具鏈）
 | 位置 | 欄位 | 方式 |
 | :--- | :--- | :--- |
 | `client/package.json` | `version` | 手動（單一來源） |
+| ~~`package.json`（根目錄）~~ | — | **刻意不帶 `version`**。它只是指令轉發，不是第二個版本號來源 |
 | `client/src-tauri/tauri.conf.json` | `version` | 手動 |
 | `client/src-tauri/Cargo.toml` | `package.version` | 手動 |
 | `CHANGELOG.md` | 版本標題 | 手動 |
@@ -254,12 +255,6 @@ npm run tauri build  # 桌面版（需要 Rust 工具鏈）
 ---
 
 ## 10. 已知陷阱
-
-#### 在儲存庫根目錄執行 npm 指令會失敗
-
-- **症狀**：`npm error code ENOENT` 搭配 `Could not read package.json: Error: ENOENT: no such file or directory, open 'D:\...\CDY_YAKYULIFE\package.json'`
-- **原因**：`package.json` 在 `client/`，根目錄沒有。根目錄只放文件與舊版單檔實作。
-- **處置**：先 `cd client` 再執行。PowerShell 5.1 沒有 `&&`，要串接請用 `;`。
 
 #### PowerShell 5.1 下 `cd client && npm run dev` 是語法錯誤
 

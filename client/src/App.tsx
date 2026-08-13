@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import './legacy.css';
+import './app.css';
 import { abilities, ALL_ABILITIES, START_POSITIONS, type StartPosition } from './data/index.ts';
 import { createPlayer, type NewPlayer } from './engine/genesis.ts';
 import { newSeed, World } from './engine/rng.ts';
@@ -7,15 +7,15 @@ import { newSeed, World } from './engine/rng.ts';
 /**
  * 開局生成的垂直切片。
  *
- * 樣式沿用 legacy.css（自 index_legacy.html 原封不動抽出），版型比照原版的
- * 開局畫面 #start，讓整體風格與原版一致。介面規格見 INTERFACE.md。
+ * 樣式在 app.css（自 index_legacy.html 抽出，主題 a 改為科技藍），版型比照
+ * 原版的開局畫面 #start，讓整體結構與原版一致。介面規格見 INTERFACE.md。
  *
  * 這一頁同時穿過亂數層（genesis 子序列）、規則資料載入層，以及球員的狀態
  * 模型——輸入同一個種子必定得到同一位球員。
  */
 
 const THEMES = [
-  { code: 'a', name: '深綠記分板' },
+  { code: 'a', name: '科技藍' },
   { code: 'b', name: '電子看板' },
   { code: 'c', name: '報紙版面' },
   { code: 'd', name: '現代儀表板' },
