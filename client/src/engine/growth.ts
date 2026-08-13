@@ -166,10 +166,14 @@ export function rollTrainingDice(
 }
 
 /**
- * 上一季奪冠帶來的額外骰數。
+ * 上一季**國際賽**奪冠帶來的額外骰數。
  *
- * 同一季拿下多項冠軍時取最高的一項，不相加——否則一年橫掃四個盃賽就會多擲
- * 四顆，滾雪球到失控。
+ * 只有國際賽算，國內盃賽一律不給——國內大賽的回報已經是大賽點數與成就紀錄，
+ * 再給訓練骰等於同一件事獎勵兩次，而且名門學校的球員本來就容易橫掃國內盃賽，
+ * 會滾雪球到失控。
+ *
+ * 傳進來的是**拿下冠軍時所處的階段**（JHS／HS／PRO）。同一季拿下多項國際賽
+ * 冠軍時取最高的一項，不相加。
  */
 export function championshipDice(kinds: readonly string[]): number {
   const cfg = abilities.training_dice.championship_bonus;

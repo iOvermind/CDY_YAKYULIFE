@@ -316,3 +316,41 @@ describe('訓練骰的分配', () => {
     expect(gained > 0 || carry > 0).toBe(true);
   });
 });
+
+describe('國際賽冠軍的訓練骰加成', () => {
+  // 加成只給國際賽。國內盃賽的回報已經是大賽點數與成就紀錄，再給訓練骰等於
+  // 同一件事獎勵兩次——而且名門學校的球員本來就容易橫掃國內盃賽。
+  const bonusCards = (game: Game) =>
+    game.flow.log.filter(
+      (e) => e.kind === 'card' && e.title === '季初訓練' && e.body.includes('國際賽冠軍'),
+    );
+
+  it('拿下國內盃賽冠軍不會多擲骰', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = playAmateur(started({ seed: `dom-${i}` }));
+      const log = game.flow.log;
+      const wonDomestic = log.some(
+        (e) => e.kind === 'card' && e.title === '大賽結算' && e.body.includes('的冠軍'),
+      );
+      const wonIntl = log.some(
+        (e) => e.kind === 'card' && e.body.includes('最終 <b class="hl">冠軍</b>'),
+      );
+      // 只贏國內、沒贏國際的年份，不該出現加成提示
+      if (wonDomestic && !wonIntl) expect(bonusCards(game)).toHaveLength(0);
+    }
+  });
+
+  it('加成提示只在國際賽奪冠之後出現', () => {
+    for (let i = 0; i < 60; i++) {
+      const game = playAmateur(started({ seed: `intl-${i}` }));
+      if (bonusCards(game).length === 0) continue;
+      // 有加成就一定有國際賽冠軍
+      expect(
+        game.flow.log.some(
+          (e) => e.kind === 'card' && e.body.includes('最終 <b class="hl">冠軍</b>'),
+        ),
+      ).toBe(true);
+      return;
+    }
+  });
+});

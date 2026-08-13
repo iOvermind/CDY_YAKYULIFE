@@ -251,21 +251,14 @@ describe('championshipDice', () => {
     expect(championshipDice([])).toBe(0);
   });
 
-  it('高中冠軍給的骰數多於國中冠軍', () => {
+  it('階段越高，國際賽冠軍給的骰數越多', () => {
     expect(championshipDice(['HS'])).toBeGreaterThan(championshipDice(['JHS']));
+    expect(championshipDice(['PRO'])).toBeGreaterThan(championshipDice(['HS']));
   });
 
-  it('國際賽冠軍給得最多', () => {
-    const others = Object.entries(cfg)
-      .filter(([k]) => k !== 'international' && !k.startsWith('_'))
-      .map(([, v]) => v);
-    for (const v of others) expect(cfg['international']).toBeGreaterThan(v);
-  });
-
-  it('同季多項冠軍取最高的一項，不相加', () => {
-    // 一年橫掃四個盃賽不該多擲四顆——那會滾雪球到失控。
-    expect(championshipDice(['JHS', 'JHS', 'JHS', 'JHS'])).toBe(cfg['JHS']);
-    expect(championshipDice(['HS', 'international'])).toBe(cfg['international']);
+  it('同季多項國際賽冠軍取最高的一項，不相加', () => {
+    expect(championshipDice(['JHS', 'JHS', 'JHS'])).toBe(cfg['JHS']);
+    expect(championshipDice(['JHS', 'HS'])).toBe(cfg['HS']);
   });
 
   it('不認得的種類不給加成', () => {
