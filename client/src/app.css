@@ -161,7 +161,11 @@ table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.
 .btn.main{background:var(--btnbg);border-color:var(--btnedge);color:var(--btntx);text-align:center}
 .btn.main small{color:inherit;opacity:.8}
 .btn.warn{border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
-#act .row2{display:flex;gap:8px}#act .row2 .btn{flex:1;text-align:center}
+/* 並排的一組動作鈕。選擇器不掛在 #act 底下——動作區的實際 id 是 panel-act。
+   標題與說明都置中，兩顆按鈕才像一組對稱的選擇。 */
+.row2{display:flex;gap:8px;margin-top:8px}
+.row2 .btn{flex:1;text-align:center;margin-top:0}
+.row2 .btn small{text-align:center}
 /* trait side panel: desktop top-right list of unlocked hidden traits (hidden on mobile; settlement unchanged) */
 #trait-side{display:none}
 #trait-side.empty{display:none!important}

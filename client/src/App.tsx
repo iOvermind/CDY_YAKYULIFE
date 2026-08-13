@@ -277,10 +277,11 @@ function GameScreen({
   const state = game.state;
   const prompt = game.flow.prompt;
   const allocatable = allocOptions(prompt);
-  // 加點時，能力選項已經在左欄的能力列上；動作區留下其餘的，包括復原與確認。
-  const otherOptions = (prompt?.options ?? []).filter(
-    (o) => !o.id.startsWith('alloc:') || ALLOC_CONTROLS.has(o.id),
-  );
+  // 加點時，能力選項已經在左欄的能力列上；動作區留下其餘的。
+  const otherOptions = (prompt?.options ?? []).filter((o) => !o.id.startsWith('alloc:'));
+  // 復原與確認獨立一排並列——它們是一組動作（退一步／往前走），拆成上下兩顆
+  // 全寬按鈕會讓人以為是兩個不相干的選項。
+  const controlOptions = (prompt?.options ?? []).filter((o) => ALLOC_CONTROLS.has(o.id));
 
   return (
     <div id="game">
@@ -326,6 +327,24 @@ function GameScreen({
                   {o.note !== undefined && <small>{o.note}</small>}
                 </button>
               ))}
+              {controlOptions.length > 0 && (
+                <div className="row2">
+                  {controlOptions.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className={`btn${o.role === 'main' ? ' main' : ''}${
+                        o.role === 'warn' ? ' warn' : ''
+                      }`}
+                      disabled={o.disabled === true}
+                      onClick={() => onChoose(o.id)}
+                    >
+                      {o.label}
+                      {o.note !== undefined && <small>{o.note}</small>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </>
           ) : (
             <>
