@@ -8,21 +8,38 @@ const twoWay = growthCurve(true);
 const noTraits = new Set<string>();
 
 describe('abilityCost', () => {
-  it('低段一級一點', () => {
-    expect(abilityCost(30, 80, curve)).toBe(1);
-    expect(abilityCost(63, 80, curve)).toBe(1);
+  // 期望值一律從資料推導，不寫死——曲線是平衡參數，調整時測試不該跟著紅。
+  const tiers = [...curve.tiers].sort((a, b) => a.from - b.from);
+  const lowest = tiers[0];
+  const highest = tiers[tiers.length - 1];
+  if (lowest === undefined || highest === undefined) throw new Error('tiers 是空的');
+
+  it('最低段的成本最便宜', () => {
+    expect(abilityCost(abilities.scale.min, 80, curve)).toBe(lowest.cost);
   });
 
-  it('中高段變貴', () => {
-    expect(abilityCost(64, 80, curve)).toBe(2);
-    expect(abilityCost(71, 80, curve)).toBe(2);
-    expect(abilityCost(72, 80, curve)).toBe(3);
+  it('成本隨能力值單調遞增，不會忽高忽低', () => {
+    let previous = 0;
+    for (let v = abilities.scale.min; v <= abilities.scale.max; v++) {
+      const cost = abilityCost(v, 80, curve);
+      expect(cost).toBeGreaterThanOrEqual(previous);
+      previous = cost;
+    }
+  });
+
+  it('每一階的門檻都確實讓成本跳一級', () => {
+    for (const tier of tiers) {
+      if (tier.from <= abilities.scale.min) continue;
+      expect(abilityCost(tier.from, 80, curve)).toBe(tier.cost);
+      expect(abilityCost(tier.from - 1, 80, curve)).toBeLessThan(tier.cost);
+    }
   });
 
   it('超過潛力天花板要乘上懲罰倍率', () => {
     const m = curve.above_ceiling_multiplier;
-    expect(abilityCost(50, 50, curve)).toBe(1 * m);
-    expect(abilityCost(75, 50, curve)).toBe(3 * m);
+    for (const tier of tiers) {
+      expect(abilityCost(tier.from, tier.from, curve)).toBe(tier.cost * m);
+    }
   });
 
   it('二刀流的曲線較平緩——變貴的門檻往後推', () => {
@@ -55,17 +72,28 @@ describe('train', () => {
   });
 
   it('蓄力槽會累積，湊滿就升級', () => {
-    const first = train(64, 1, 80, 0, curve);
-    const second = train(64, 1, 80, first.carry, curve);
-    expect(second.gained).toBe(1);
-    expect(second.value).toBe(65);
-    expect(second.carry).toBe(0);
+    // 找一個成本大於 1 的值，逐點投入直到升級
+    const start = 64;
+    const cost = abilityCost(start, 80, curve);
+    expect(cost).toBeGreaterThan(1);
+
+    let carry = 0;
+    for (let i = 0; i < cost - 1; i++) {
+      const step = train(start, 1, 80, carry, curve);
+      expect(step.gained).toBe(0);
+      carry = step.carry;
+    }
+    const last = train(start, 1, 80, carry, curve);
+    expect(last.gained).toBe(1);
+    expect(last.value).toBe(start + 1);
+    expect(last.carry).toBe(0);
   });
 
   it('一次投入足夠的點數可以連升多級', () => {
-    // 64→65 要 2 點、65→66 要 2 點，共 4 點
-    const r = train(64, 4, 80, 0, curve);
-    expect(r.value).toBe(66);
+    const start = 64;
+    const need = abilityCost(start, 80, curve) + abilityCost(start + 1, 80, curve);
+    const r = train(start, need, 80, 0, curve);
+    expect(r.value).toBe(start + 2);
     expect(r.gained).toBe(2);
   });
 
@@ -97,8 +125,11 @@ describe('train', () => {
   });
 
   it('二刀流在高段成長得比較快', () => {
-    const normal = train(72, 9, 80, 0, curve);
-    const both = train(72, 9, 80, 0, twoWay);
+    // 投入足夠一般曲線升一級的點數，二刀流應該升得更多
+    const start = 64;
+    const budget = abilityCost(start, 80, curve) * 3;
+    const normal = train(start, budget, 80, 0, curve);
+    const both = train(start, budget, 80, 0, twoWay);
     expect(both.gained).toBeGreaterThan(normal.gained);
   });
 
