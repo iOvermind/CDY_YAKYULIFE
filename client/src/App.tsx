@@ -16,6 +16,7 @@ import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engin
 import { abilityCost, growthCurve } from './engine/growth.ts';
 import { fieldingPosition, isSideVisible, type Rating } from './engine/rating.ts';
 import { positionName } from './engine/season.ts';
+import { fmtWinRate } from './engine/teams.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -576,7 +577,14 @@ function Board({
   const affiliation =
     state.pro === null
       ? { name: state.school, note: tierLabel }
-      : { name: state.pro.team, note: state.pro.levelName };
+      : {
+          name: state.pro.team,
+          // 勝率與奪冠機率都是真的模擬出來的，不是拿隊名雜湊出來給人看的
+          // 裝飾——見 teams.ts 的說明。
+          note: `${state.pro.levelName}·${fmtWinRate(state.pro.winRate)}·奪冠 ${Math.round(
+            state.pro.championshipOdds * 100,
+          )}%`,
+        };
 
   // 取得二刀流之後，起始守位就不再說明他是什麼球員了——他是投手也是打者。
   // 野手側的守位由守備能力決定：守得動就站守位，守不動就是 DH，這也是多數

@@ -49,6 +49,13 @@ import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './gene
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
 import { levelOf, playSeason, positionName } from './season.ts';
+import {
+  advanceLeague,
+  championshipOdds,
+  initLeague,
+  playerEffect,
+  type LeagueTable,
+} from './teams.ts';
 import { isSideVisible, rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -149,6 +156,10 @@ export interface ProState {
   readonly team: string;
   /** 在這個體系待到第幾年，從 1 起算。 */
   readonly year: number;
+  /** 所屬球隊這一季的勝率。 */
+  readonly winRate: number;
+  /** 所屬球隊這一季的奪冠機率，由全聯盟的勝率推導。 */
+  readonly championshipOdds: number;
 }
 
 export class Game {
@@ -212,6 +223,13 @@ export class Game {
     /** 職業第幾年，從 1 起算。 */
     year: number;
   } | null = null;
+  /**
+   * 所屬聯盟這一季的戰力表。
+   *
+   * 球隊的興衰是世界狀態，不是球員狀態——因此它跟著聯盟走，不跟著球員走。
+   * 尚未進職業時為 null。
+   */
+  #league: LeagueTable | null = null;
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -261,6 +279,8 @@ export class Game {
       orgName: leagues.top_league_names[info.org] ?? info.org,
       team: pro.team,
       year: pro.year,
+      winRate: this.#league?.get(pro.team)?.winRate ?? 0,
+      championshipOdds: this.#league === null ? 0 : championshipOdds(this.#league, pro.team),
     };
   }
 
@@ -781,6 +801,8 @@ export class Game {
   /** 進入職業。目前只跑 CPBL 主軸——旅外體系的轉會與尋路尚未實作。 */
   #professionalStart(level: string, team: string): void {
     this.#pro = { level, team, yearsAtBottom: 0, year: 1 };
+    // 聯盟格局在進入職業的那一刻定下來：每隊各抽一個基準勝率當作體質。
+    this.#league = initLeague(this.world, levelOf(level).org);
     this.#seasonBatting = null;
     this.#seasonPitching = null;
     this.flow.push(() => this.#proYear());
@@ -894,6 +916,16 @@ export class Game {
     this.#age++;
     this.#year++;
     pro.year++;
+
+    // 聯盟推進一年。玩家的貢獻只加在自己的球隊上——棒球是九個人的運動，
+    // 再強的球員也翻不了一支爛隊，因此上限壓得很窄。
+    if (this.#league !== null) {
+      const par = levelOf(pro.level).par;
+      this.#league = advanceLeague(this.world, this.#league, {
+        playerTeam: pro.team,
+        playerEffect: playerEffect(this.rating?.overall ?? 0, par),
+      });
+    }
 
     // ---- 老化
     const aging = applyAging(this.world, this.#ability, this.#age);

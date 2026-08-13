@@ -469,6 +469,19 @@ export interface SeasonData {
     readonly released_forces_retirement_age: number;
     readonly max_age: number;
   };
+  readonly team_strength: {
+    readonly initial: Range;
+    readonly drift: {
+      readonly yearly: Range;
+      readonly mean_reversion: number;
+      readonly clamp: Range;
+    };
+    readonly player_effect: { readonly per_point: number } & Range;
+    readonly championship: {
+      readonly exponent: number;
+      readonly scale: number;
+    } & Range;
+  };
   readonly pro_dice: {
     readonly count_weights: Readonly<Record<string, number>>;
     readonly peak_bonus: { readonly delta: number };
