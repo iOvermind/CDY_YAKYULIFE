@@ -133,15 +133,40 @@ describe('重播', () => {
 });
 
 describe('子序列歸屬', () => {
-  it('開局用 genesis、季初擲骰用 growth、大賽用 season，其餘一律未動', () => {
+  it('每個系統各走自己的子序列', () => {
     const counts = playToEnd(started()).world.drawCounts();
     expect(counts.genesis).toBeGreaterThan(0);
     expect(counts.growth).toBeGreaterThan(0);
     expect(counts.season).toBeGreaterThan(0);
-    // 事件卡、傷病與生涯事件都還沒實作，這三條流必須是零
-    expect(counts.events).toBe(0);
+    expect(counts.events).toBeGreaterThan(0);
+    // 傷病判定與生涯事件都還沒實作，這兩條流必須是零
     expect(counts.health).toBe(0);
     expect(counts.career).toBe(0);
+  });
+});
+
+describe('步驟順序', () => {
+  it('季初訓練的分配排在事件卡之前', () => {
+    // 這是 unshift 與 push 的差別。用 push 會讓分配跑到事件卡與大賽之後，
+    // 因為佇列裡已經排著本年度後續的步驟。
+    const game = started();
+    expect(game.flow.prompt?.options[0]?.id.startsWith('alloc:')).toBe(true);
+  });
+
+  it('一個年度的順序是：訓練 → 事件卡 → 大賽 → 分配大賽點數', () => {
+    const game = started();
+    const seen: string[] = [];
+    while (game.flow.prompt !== null && seen.length < 40) {
+      const title = game.flow.prompt.title ?? '';
+      if (title.includes('顆骰')) seen.push('訓練');
+      else if (title.startsWith('事件')) seen.push('事件');
+      else if (title.includes('大賽點數')) seen.push('大賽點數');
+      const first = game.flow.prompt.options[0];
+      if (first === undefined) break;
+      game.choose(first.id);
+    }
+    const order = seen.filter((s, i) => s !== seen[i - 1]);
+    expect(order.slice(0, 3)).toEqual(['訓練', '事件', '大賽點數']);
   });
 });
 
@@ -224,12 +249,16 @@ describe('訓練骰的分配', () => {
     }
   });
 
-  it('分配後的能力值不低於開局值——訓練只會往上', () => {
-    const game = playToEnd(started());
-    const origin = game.state?.origin.ability ?? {};
-    for (const [key, value] of Object.entries(game.state?.ability ?? {})) {
-      expect(value).toBeGreaterThanOrEqual(origin[key] ?? 0);
+  it('能力總和在三年後上升——訓練的效果大於事件卡的損失', () => {
+    // 個別能力可能因為事件卡的壞結果下降，因此比總和而非逐項比較。
+    let rose = 0;
+    const n = 20;
+    for (let i = 0; i < n; i++) {
+      const game = playWell(started({ seed: `sum-${i}` }));
+      const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+      if (sum(game.state?.ability ?? {}) > sum(game.state?.origin.ability ?? {})) rose++;
     }
+    expect(rose).toBe(n);
   });
 
   it('投入的點數不會憑空消失——不是變成能力就是留在蓄力槽', () => {

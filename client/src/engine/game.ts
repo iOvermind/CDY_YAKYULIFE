@@ -8,11 +8,25 @@
  * 因此「開局設定＋選擇序列」就是一段生涯的完整表述，見 ADR 0002。
  */
 
-import { abilities, ALL_ABILITIES, amateur, type AbilityKey } from '../data/index.ts';
+import {
+  abilities,
+  ALL_ABILITIES,
+  amateur,
+  PITCH_FAMILIES,
+  type AbilityKey,
+} from '../data/index.ts';
 import { academyUnlocked, playCups } from './amateur.ts';
+import {
+  drawEvent,
+  resolveEvent,
+  successChances,
+  type EventContext,
+  type EventMode,
+  type GameEvent,
+} from './events.ts';
 import { esc, Flow, type Option } from './flow.ts';
 import { createPlayer, type NewPlayer } from './genesis.ts';
-import { growthCurve, rollTrainingDice, train } from './growth.ts';
+import { growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -55,6 +69,10 @@ export interface PlayerState {
   readonly honors: readonly string[];
   /** 尚未分配的能力點。 */
   readonly pool: number;
+  /** 各項能力被提升的上限點數。 */
+  readonly ceilingBonus: Readonly<Record<AbilityKey, number>>;
+  /** 本季累積的受傷機率增幅。 */
+  readonly injuryRisk: number;
 }
 
 export class Game {
@@ -71,6 +89,8 @@ export class Game {
   #stageYear = 1;
   #honors: string[] = [];
   #pool = 0;
+  #ceilingBonus: Record<AbilityKey, number> = {};
+  #injuryRisk = 0;
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -95,6 +115,17 @@ export class Game {
       stageYear: this.#stageYear,
       honors: this.#honors,
       pool: this.#pool,
+      ceilingBonus: this.#ceilingBonus,
+      injuryRisk: this.#injuryRisk,
+    };
+  }
+
+  /** 事件系統需要的情境。 */
+  get #eventContext(): EventContext {
+    return {
+      startPosition: this.#player?.startPosition ?? 'UTIL',
+      professional: false,
+      traits: this.#traits,
     };
   }
 
@@ -160,6 +191,7 @@ export class Game {
     this.#player = player;
     this.#ability = { ...player.ability };
     this.#carry = Object.fromEntries(ALL_ABILITIES.map((k) => [k, 0]));
+    this.#ceilingBonus = Object.fromEntries(ALL_ABILITIES.map((k) => [k, 0]));
     this.#age = player.age;
     this.#year = player.year;
 
@@ -190,8 +222,104 @@ export class Game {
     this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · ${label}`);
     this.flow.push(
       () => this.#springTraining(),
+      () => this.#drawEventCard(),
       () => this.#cups(),
       () => this.#endYear(),
+    );
+  }
+
+  /** 抽一張事件卡並讓玩家決定怎麼應對。 */
+  #drawEventCard(): void {
+    const event = drawEvent(this.world, this.#eventContext);
+    const chances = successChances(this.#traits);
+
+    this.flow.ask(
+      {
+        title: `事件｜${event.name} — 你要怎麼應對？`,
+        options: [
+          {
+            id: 'event:bold',
+            label: '全力一搏',
+            note: `成功率 ${chances.bold}%｜幅度最大，受傷風險也最高`,
+            role: 'warn',
+          },
+          { id: 'event:normal', label: '照常執行', note: `成功率 ${chances.normal}%`, role: 'main' },
+          { id: 'event:safe', label: '保守應對', note: `成功率 ${chances.safe}%｜幅度最小` },
+        ],
+      },
+      (choice) => this.#resolveEventCard(event, choice.slice('event:'.length) as EventMode),
+    );
+  }
+
+  /** 解算事件卡並套用結果。 */
+  #resolveEventCard(event: GameEvent, mode: EventMode): void {
+    const outcome = resolveEvent(
+      this.world,
+      event,
+      mode,
+      this.#eventContext,
+      ALL_ABILITIES,
+      PITCH_FAMILIES,
+    );
+
+    const lines: string[] = [];
+
+    for (const delta of outcome.deltas) {
+      const name = abilities.abilities[delta.key] ?? delta.key;
+      if (delta.points >= 0) {
+        const before = this.#ability[delta.key] ?? 0;
+        this.#applyPoints(delta.key, delta.points, { silent: true });
+        const after = this.#ability[delta.key] ?? 0;
+        lines.push(
+          after > before
+            ? `${esc(name)} <span class="up">+${after - before}</span>`
+            : `${esc(name)}：點數進了蓄力槽，未滿一級`,
+        );
+      } else {
+        const before = this.#ability[delta.key] ?? 0;
+        this.#ability[delta.key] = Math.max(
+          abilities.scale.hard_floor,
+          before + delta.points,
+        );
+        lines.push(
+          `${esc(name)} <span class="dn">${(this.#ability[delta.key] ?? 0) - before}</span>`,
+        );
+      }
+    }
+
+    for (const raise of outcome.ceilings) {
+      const name = abilities.abilities[raise.key] ?? raise.key;
+      const before = this.#ceilingBonus[raise.key] ?? 0;
+      this.#ceilingBonus[raise.key] = raiseCeiling(before, raise.points);
+      const gained = (this.#ceilingBonus[raise.key] ?? 0) - before;
+      lines.push(
+        gained > 0
+          ? `${esc(name)} 上限 <span class="up">+${gained}</span>`
+          : `${esc(name)} 的上限已經到頂`,
+      );
+    }
+
+    if (outcome.injury > 0) {
+      this.#injuryRisk += outcome.injury;
+      lines.push(`本季受傷機率 <span class="dn">+${outcome.injury}%</span>`);
+    }
+
+    // 非能力的特殊效果目前只實作觸發特性；禁賽、聲望等要等對應系統做出來。
+    for (const key of Object.keys(outcome.special).sort()) {
+      if (key === 'yips' || key === 'clutch') this.#traits.add(key);
+    }
+
+    const tag = mode === 'safe' ? '（保守應對）' : mode === 'bold' ? '（全力一搏）' : '';
+    const verdict =
+      mode === 'bold'
+        ? outcome.good
+          ? '<b class="hl">豪賭成功！</b>'
+          : '<b class="dn">豪賭失敗……</b>'
+        : '';
+    this.flow.card(
+      outcome.good ? 'good' : 'bad',
+      `事件卡｜${event.name}${tag}`,
+      `${esc(outcome.text)}。${verdict}<br>${lines.join('｜') || '（沒有明顯的變化）'}`,
     );
   }
 
@@ -205,9 +333,13 @@ export class Game {
     this.flow.card('info', '季初訓練', msg);
 
     // 每一顆骰都是一次選擇——重播日誌因此記下「哪顆骰加在哪」。
-    dice.values.forEach((value, index) => {
-      this.flow.push(() => this.#allocate(value, index, dice.values.length));
-    });
+    // 必須 unshift 而非 push：佇列裡已經排著本年度後續的步驟，push 會讓分配
+    // 跑到事件卡與大賽之後。
+    this.flow.unshift(
+      ...dice.values.map(
+        (value, index) => () => this.#allocate(value, index, dice.values.length),
+      ),
+    );
   }
 
   /** 這一季的大賽。 */
@@ -242,7 +374,8 @@ export class Game {
     if (academyUnlocked('HS', season)) this.#traits.add(amateur.cups.academy_trigger.trait);
 
     this.#pool += season.points;
-    this.flow.push(() => this.#spendPool());
+    // 同樣要插隊——年度結束的步驟已經排在佇列裡了。
+    this.flow.unshift(() => this.#spendPool());
   }
 
   /**
@@ -264,7 +397,7 @@ export class Game {
         this.#applyPoints(choice.slice('alloc:'.length), 1);
         this.#pool--;
         // 還有點數就再問一次，直到分完或玩家喊停。
-        this.flow.push(() => this.#spendPool());
+        this.flow.unshift(() => this.#spendPool());
       },
     );
   }
@@ -313,18 +446,26 @@ export class Game {
     );
   }
 
+  /** 這項能力目前的潛力天花板，含事件提升的部分。 */
+  #ceilingOf(key: AbilityKey): number {
+    const base = this.#player?.potential[key] ?? abilities.scale.max;
+    return base + (this.#ceilingBonus[key] ?? 0);
+  }
+
   /** 把點數投進一項能力，並產生對應的敘事。 */
-  #applyPoints(key: AbilityKey, points: number): void {
+  #applyPoints(key: AbilityKey, points: number, options: { silent?: boolean } = {}): void {
     const before = this.#ability[key] ?? 0;
     const result = train(
       before,
       points,
-      this.#player?.potential[key] ?? abilities.scale.max,
+      this.#ceilingOf(key),
       this.#carry[key] ?? 0,
       growthCurve(this.isTwoWay),
+      this.#ceilingBonus[key] ?? 0,
     );
     this.#ability[key] = result.value;
     this.#carry[key] = result.carry;
+    if (options.silent === true) return;
 
     const name = abilities.abilities[key] ?? key;
     if (result.gained > 0) {
@@ -345,9 +486,16 @@ export class Game {
   /** 產生一個能力的分配選項，附上目前值、天花板與這一級的成本。 */
   #abilityOption(key: AbilityKey, value: number): Option {
     const current = this.#ability[key] ?? 0;
-    const ceiling = this.#player?.potential[key] ?? abilities.scale.max;
+    const ceiling = this.#ceilingOf(key);
     const carry = this.#carry[key] ?? 0;
-    const result = train(current, value, ceiling, carry, growthCurve(this.isTwoWay));
+    const result = train(
+      current,
+      value,
+      ceiling,
+      carry,
+      growthCurve(this.isTwoWay),
+      this.#ceilingBonus[key] ?? 0,
+    );
 
     const name = abilities.abilities[key] ?? key;
     const note =

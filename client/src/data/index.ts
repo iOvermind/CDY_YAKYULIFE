@@ -65,7 +65,13 @@ export interface Range {
 }
 
 export interface AbilitiesData {
-  readonly scale: { readonly min: number; readonly max: number; readonly hard_floor: number };
+  readonly scale: {
+    readonly min: number;
+    readonly max: number;
+    readonly hard_floor: number;
+    /** 每項能力可被提升的上限點數。提升上限不直接加能力值，只讓你練得更高。 */
+    readonly max_ceiling_bonus: number;
+  };
   readonly abilities: Readonly<Record<AbilityKey, string>>;
   /**
    * 能力只分三組：體力（共用）、投手、野手。

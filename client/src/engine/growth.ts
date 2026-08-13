@@ -55,8 +55,9 @@ export function train(
   ceiling: number,
   carry: number,
   curve: GrowthCurve,
+  ceilingBonus = 0,
 ): TrainResult & { readonly value: number } {
-  const max = abilities.scale.max;
+  const max = hardCap(ceilingBonus);
   if (points < 0) throw new RangeError('train(): 點數不可為負，衰退請用 decline()');
 
   let value = current;
@@ -75,6 +76,31 @@ export function train(
     carry: capped ? 0 : budget,
     overflow: capped ? budget : 0,
   };
+}
+
+/**
+ * 這項能力目前的絕對上限。
+ *
+ * 球探量表的上限是 80，但被事件提升過上限的能力可以練得更高——每項最多
+ * 累積 max_ceiling_bonus 點。
+ */
+export function hardCap(ceilingBonus = 0): number {
+  return abilities.scale.max + clampCeilingBonus(ceilingBonus);
+}
+
+/**
+ * 提升上限。
+ *
+ * **不會直接增加能力值**——它讓潛力天花板與量表上限一起往上移，點數要自己
+ * 練上去。回傳提升後的累積值，超過上限的部分會被截斷。
+ */
+export function raiseCeiling(currentBonus: number, amount: number): number {
+  if (amount < 0) throw new RangeError('raiseCeiling(): 提升量不可為負');
+  return clampCeilingBonus(currentBonus + amount);
+}
+
+function clampCeilingBonus(bonus: number): number {
+  return Math.max(0, Math.min(abilities.scale.max_ceiling_bonus, bonus));
 }
 
 /**

@@ -25,12 +25,38 @@
     "clutch": "觸發「大心臟」特性"
   },
 
+  "_ceiling_note": "事件另可帶 good_ceiling / bad_ceiling 欄位，提升或降低指定能力的上限。它與 good_effects 是**不同的東西**：effects 直接加減能力值，ceiling 只移動天花板，點數仍要自己練上去。每項能力的上限提升最多累積 abilities.json 的 scale.max_ceiling_bonus 點。",
+
+  "magnitude": {
+    "_note": "效果幅度 = 事件的效果值 × 應對方式的倍率，四捨五入後至少為 1。舊版只取效果值的正負號、幅度一律由應對方式決定，因此稀有事件無法比常見事件更重——那讓「神秘的營養品」和「打擊機特訓」一樣輕。改為乘法之後，多數舊事件的值是 1-2，照常應對的結果與舊版相同。",
+    "safe": 0.5,
+    "normal": 1,
+    "bold": 1.5,
+    "clutch_bold": { "_note": "大心臟：豪賭的上檔更高、下檔更軟。", "good": 2, "bad": 1 }
+  },
+
+  "injury_magnitude": {
+    "_note": "inj 效果的受傷機率增幅，依應對方式而非效果值決定——受傷風險是「你冒了多大的險」，與事件本身加減多少能力無關。",
+    "safe": 8,
+    "normal": 12,
+    "bold": 16,
+    "clutch_bold": 12
+  },
+
   "good_result_chance": {
     "_note": "抽到好結果的機率（百分比）。命中任一 boost_traits 即提升；thief（薪水小倫）另外增加失敗率。",
     "base": 50,
     "boosted": 70,
     "boost_traits": ["genius", "late", "clutch"],
-    "fail_penalty": { "trait": "thief", "add_fail_percent": 10 }
+    "fail_penalty": { "trait": "thief", "add_fail_percent": 10 },
+    "mode_modifier": {
+      "_note": "應對方式對成功率的增減。豪賭的懲罰對大心臟無效——那正是那個特性的意義。",
+      "safe": 20,
+      "normal": 0,
+      "bold": -15,
+      "bold_immune_trait": "clutch",
+      "cap": 95
+    }
   },
 
   "events": [
@@ -53,7 +79,7 @@
     { "id": "event_17", "name": "季中低潮", "for": "*", "good_text": "靠著調整心態走出來，更強了", "bad_text": "低潮拖了一個月", "good_effects": { "eye": 1, "ctl": 1, "sta": 1 }, "bad_effects": { "con": -2, "pitch": -1, "sta": -1 } },
     { "id": "event_18", "name": "神秘的營養品 (禁藥風波)", "for": "PRO", "weight": 5, "good_text": "藥效驚人，力量與體力突破天際，且僥倖躲過尿檢", "bad_text": "尿檢未過！遭到聯盟長期禁賽，名譽掃地", "good_effects": { "pow": 5, "sta": 5, "vel": 3 }, "bad_effects": { "suspension": 50, "respect": -100, "con": -5 } },
     { "id": "event_19", "name": "黑色豪門的晚宴 (組頭接觸)", "for": "PRO", "weight": 2, "good_text": "嚴詞拒絕並舉報，獲得聯盟表揚，心智更加堅定", "bad_text": "一時貪念收了錢，東窗事發被永久逐出棒球界", "good_effects": { "clutch": 1, "respect": 50 }, "bad_effects": { "ban": true, "respect": -999 } },
-    { "id": "event_20", "name": "自費前往魔法學校改造", "for": "A", "weight": 20, "good_text": "找到了完美的發力機制，爆發力大躍進", "bad_text": "徹底迷失，連原本怎麼丟球/揮棒都忘了", "good_effects": { "pow": 4, "vel": 4 }, "bad_effects": { "yips": true, "con": -3, "ctl": -3 } },
+    { "id": "event_20", "name": "自費前往魔法學校改造", "for": "A", "weight": 20, "good_text": "找到了完美的發力機制，天花板被打開了", "bad_text": "徹底迷失，連原本怎麼丟球/揮棒都忘了", "good_ceiling": { "pow": 3, "vel": 3 }, "bad_effects": { "yips": true, "con": -3, "ctl": -3 } },
     { "id": "event_21", "name": "隱瞞肩膀的不適", "for": "A", "weight": 30, "good_text": "咬牙撐過了這個賽季，保住了先發位置", "bad_text": "勉強出賽導致韌帶徹底撕裂，必須動刀", "good_effects": { "respect": 10 }, "bad_effects": { "tj_countdown": 1, "inj": 50 } },
     { "id": "event_22", "name": "傳奇球星的私人邀請", "for": "*", "weight": 5, "good_text": "盡得真傳，棒球智商與選球眼光昇華到另一個境界", "bad_text": "學不來神仙的技巧，反而把自己的節奏搞亂了", "good_effects": { "eye": 4, "cat": 4 }, "bad_effects": { "con": -2, "ctl": -2 } }
   ]
