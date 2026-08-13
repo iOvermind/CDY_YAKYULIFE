@@ -182,6 +182,19 @@ export class Game {
   #lastChampionships: string[] = [];
   /** 養成結束後保留下來的那一側；二刀流或尚未畢業時為 null。 */
   #lockedSide: 'pitcher' | 'fielder' | null = null;
+  /**
+   * 這一輪配點的復原堆疊，存的是「加之前的樣子」。
+   *
+   * 存快照而非增量：蓄力槽跨級數之後「減掉幾點」不是單純的減法，反推會在
+   * 邊界上出錯。確認之後清空——跨輪復原沒有意義，中間已經發生別的事了。
+   */
+  #allocHistory: {
+    key: AbilityKey;
+    value: number;
+    source: 'dice' | 'pool';
+    ability: number;
+    carry: number;
+  }[] = [];
   #seasonBatting: BattingLine | null = null;
   #seasonPitching: PitchingLine | null = null;
   #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
@@ -537,10 +550,10 @@ export class Game {
     // 每一顆骰都是一次選擇——重播日誌因此記下「哪顆骰加在哪」。
     // 必須 unshift 而非 push：佇列裡已經排著本年度後續的步驟，push 會讓分配
     // 跑到事件卡與大賽之後。
+    this.#allocHistory = [];
     this.flow.unshift(
-      ...dice.values.map(
-        (value, index) => () => this.#allocate(value, index, dice.values.length),
-      ),
+      () => this.#allocationPhase('dice'),
+      () => this.#allocationConfirm('dice'),
     );
   }
 
@@ -604,32 +617,13 @@ export class Game {
     this.#lastCupSeason = season;
     this.#pool += season.points;
     // 同樣要插隊——年度結束的步驟已經排在佇列裡了。
-    this.flow.unshift(() => this.#spendPool());
-  }
-
-  /**
-   * 分配大賽得到的能力點，一次一點。
-   *
-   * 每一點都是獨立的選擇，因此重播日誌完整記下配點路徑。玩家可以隨時停手，
-   * 剩下的點數留到下一年——與訓練骰不同，大賽點數不會過期。
-   */
-  #spendPool(): void {
-    if (this.#pool <= 0) return;
-
-    const options: Option[] = this.#allocatableAbilities.map((key) => this.#abilityOption(key, 1));
-    options.push({ id: 'pool:keep', label: '先留著', note: '剩下的點數留到之後再分配' });
-
-    this.flow.ask(
-      { title: `大賽點數還有 ${this.#pool} 點`, options },
-      (choice) => {
-        if (choice === 'pool:keep') return;
-        this.#applyPoints(choice.slice('alloc:'.length), 1, { silent: true });
-        this.#pool--;
-        // 還有點數就再問一次，直到分完或玩家喊停。
-        this.flow.unshift(() => this.#spendPool());
-      },
+    this.#allocHistory = [];
+    this.flow.unshift(
+      () => this.#allocationPhase('pool'),
+      () => this.#allocationConfirm('pool'),
     );
   }
+
 
   /** 年度結束：推進年齡與年份；同階段還有下一年就繼續，否則升學或畢業。 */
   #endYear(): void {
@@ -834,8 +828,10 @@ export class Game {
     this.flow.card('info', '季初訓練', msg);
 
     // 與養成期同理：必須 unshift，否則配點會跑到球季之後。
+    this.#allocHistory = [];
     this.flow.unshift(
-      ...values.map((value, index) => () => this.#allocate(value, index, values.length)),
+      () => this.#allocationPhase('dice'),
+      () => this.#allocationConfirm('dice'),
     );
   }
 
@@ -996,23 +992,126 @@ export class Game {
   }
 
   /** 分配一顆訓練骰。 */
-  #allocate(value: number, index: number, total: number): void {
+
+  /**
+   * 配點階段。
+   *
+   * 一次提問管到底：可以逐點分配、隨時復原上一步，全部分配完才能確認往下走。
+   * 復原**本身也是一次選擇**，會寫進重播日誌——配點不消耗亂數，因此反向操作
+   * 是精確的，日誌記下「加了什麼、又退了什麼」仍然完整重現同一段生涯。
+   *
+   * 沒有「先留著」：點數留到下一年會讓每一季的起點都不一樣，玩家得記住上一季
+   * 剩多少，而畫面上並沒有地方講這件事。
+   */
+  #allocationPhase(source: 'dice' | 'pool'): void {
+    // 骰子每顆的點數不同，大賽點數一律 1 點——統一成「剩下的每一份是幾點」
+    // 的陣列，後面的計數與標題就不必再分兩套。
+    const remaining: readonly number[] =
+      source === 'dice' ? this.#remainingDice : Array.from({ length: this.#pool }, () => 1);
+    // 分配完就交給確認關卡。**這裡不能清掉復原堆疊**——在確認畫面按復原，
+    // 靠的正是這份紀錄。清空與收骰面都由確認那一步負責。
+    if (remaining.length === 0) return;
+
+    const value = remaining[0] ?? 1;
+    const done = this.#allocHistory.length;
+    const total = done + remaining.length;
+
+    const options: Option[] = this.#allocatableAbilities.map((key) =>
+      this.#abilityOption(key, value),
+    );
+    options.push({
+      id: 'alloc:undo',
+      label: '復原',
+      note: done === 0 ? '還沒有可以復原的動作' : '退回上一次加點',
+      role: 'warn',
+      disabled: done === 0,
+    });
+    options.push({
+      id: 'alloc:confirm',
+      label: '確認',
+      note: `還有 ${remaining.length} 點沒分配`,
+      role: 'main',
+      disabled: true,
+    });
+
+    const title =
+      source === 'dice'
+        ? `第 ${done + 1}／${total} 顆骰：${value} 點要加在哪？`
+        : `大賽點數 ${done + 1}／${total}：1 點要加在哪？`;
+
+    this.flow.ask({ title, options }, (choice) => {
+      if (choice === 'alloc:undo') this.#undoAllocation();
+      else this.#pushAllocation(choice.slice('alloc:'.length) as AbilityKey, value, source);
+      this.flow.unshift(() => this.#allocationPhase(source));
+    });
+  }
+
+  /** 分配完最後一點之後的確認關卡。到這裡才允許往下走。 */
+  #allocationConfirm(source: 'dice' | 'pool'): void {
+    if (this.#allocHistory.length === 0) {
+      this.#dice = null;
+      return;
+    }
     this.flow.ask(
       {
-        title: `第 ${index + 1}／${total} 顆骰：${value} 點要加在哪？`,
-        options: this.#allocatableAbilities.map((key) => this.#abilityOption(key, value)),
+        title: '點數分配完畢',
+        options: [
+          { id: 'alloc:undo', label: '復原', note: '退回上一次加點', role: 'warn' },
+          { id: 'alloc:confirm', label: '確認', note: '結束配點，繼續往下', role: 'main' },
+        ],
       },
       (choice) => {
-        // silent：能力面板會即時反映變化，再往事件紀錄丟一張卡只會把真正的
-        // 事件擠出畫面——一年十幾顆骰，紀錄會被配點洗版。
-        this.#applyPoints(choice.slice('alloc:'.length), value, { silent: true });
-        if (this.#dice !== null) {
-          this.#dice = { values: this.#dice.values, index: index + 1 };
-          // 最後一顆分配完就收起骰面——後面的提問（事件卡、大賽點數）與骰子無關。
-          if (index + 1 >= total) this.#dice = null;
+        if (choice === 'alloc:confirm') {
+          this.#allocHistory = [];
+          this.#dice = null;
+          return;
         }
+        this.#undoAllocation();
+        this.flow.unshift(() => this.#allocationPhase(source));
       },
     );
+  }
+
+  /** 這一輪還沒分配的點數。骰子是各自的點數，大賽點數一律 1 點。 */
+  get #remainingDice(): readonly number[] {
+    const dice = this.#dice;
+    if (dice === null) return [];
+    return dice.values.slice(dice.index);
+  }
+
+  /** 加一次點，並把「加之前的樣子」推進復原堆疊。 */
+  #pushAllocation(key: AbilityKey, value: number, source: 'dice' | 'pool'): void {
+    this.#allocHistory.push({
+      key,
+      value,
+      source,
+      ability: this.#ability[key] ?? 0,
+      carry: this.#carry[key] ?? 0,
+    });
+    this.#applyPoints(key, value, { silent: true });
+    if (source === 'dice' && this.#dice !== null) {
+      this.#dice = { values: this.#dice.values, index: this.#dice.index + 1 };
+    } else if (source === 'pool') {
+      this.#pool--;
+    }
+  }
+
+  /**
+   * 退回上一次加點。
+   *
+   * 直接還原快照，不做反向計算——蓄力槽跨級數之後「減掉幾點」不是單純的減法，
+   * 反推會在邊界上出錯。
+   */
+  #undoAllocation(): void {
+    const last = this.#allocHistory.pop();
+    if (last === undefined) return;
+    this.#ability[last.key] = last.ability;
+    this.#carry[last.key] = last.carry;
+    if (last.source === 'dice' && this.#dice !== null) {
+      this.#dice = { values: this.#dice.values, index: Math.max(0, this.#dice.index - 1) };
+    } else if (last.source === 'pool') {
+      this.#pool++;
+    }
   }
 
   /** 把一段成績累加到目前階段。各階段分開累計，介面才能分開呈現。 */

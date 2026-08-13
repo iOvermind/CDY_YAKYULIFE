@@ -238,11 +238,21 @@ function StartScreen({
 }
 
 /** 目前的提問是不是在要求分配點數到某項能力。 */
+/**
+ * alloc: 底下的控制項，不是能力。
+ *
+ * 它們與能力共用前綴是刻意的——同一個配點階段的選項應該長得一樣，重播日誌
+ * 看起來才是連貫的一串。但介面上它們是動作鈕，不是能力列。
+ */
+const ALLOC_CONTROLS = new Set(['alloc:undo', 'alloc:confirm']);
+
 function allocOptions(prompt: Prompt | null): Map<string, Option> {
   const map = new Map<string, Option>();
   if (prompt === null) return map;
   for (const o of prompt.options) {
-    if (o.id.startsWith('alloc:')) map.set(o.id.slice('alloc:'.length), o);
+    if (o.id.startsWith('alloc:') && !ALLOC_CONTROLS.has(o.id)) {
+      map.set(o.id.slice('alloc:'.length), o);
+    }
   }
   return map;
 }
@@ -259,8 +269,10 @@ function GameScreen({
   const state = game.state;
   const prompt = game.flow.prompt;
   const allocatable = allocOptions(prompt);
-  // 加點時，選項已經在左欄的能力列上，動作區只留下非能力的選項（例如「先留著」）
-  const otherOptions = (prompt?.options ?? []).filter((o) => !o.id.startsWith('alloc:'));
+  // 加點時，能力選項已經在左欄的能力列上；動作區留下其餘的，包括復原與確認。
+  const otherOptions = (prompt?.options ?? []).filter(
+    (o) => !o.id.startsWith('alloc:') || ALLOC_CONTROLS.has(o.id),
+  );
 
   return (
     <div id="game">
@@ -299,6 +311,7 @@ function GameScreen({
                   className={`btn${o.role === 'main' ? ' main' : ''}${
                     o.role === 'warn' ? ' warn' : ''
                   }`}
+                  disabled={o.disabled === true}
                   onClick={() => onChoose(o.id)}
                 >
                   {o.label}

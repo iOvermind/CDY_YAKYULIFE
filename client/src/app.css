@@ -233,6 +233,10 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .seg button{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--dim);
   font-family:var(--sans);font-size:14.5px;font-weight:700;padding:11px 4px;cursor:pointer}
 .seg button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}
+/* 反灰的行動鈕：留在原地但按不動——藏起來會讓版面在配點過程中跳動。
+   選擇器掛在 .btn 上而不是 #act 底下：動作區的實際 id 是 panel-act。 */
+.btn:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
+.btn:disabled:hover{border-color:var(--edge);background:var(--panel)}
 #fld-ui{display:none} /* desktop-width only; shown via the media query below */
 .seedline{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:22px}
 .seedline b{color:var(--accent)}

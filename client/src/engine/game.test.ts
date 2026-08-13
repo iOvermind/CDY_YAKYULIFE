@@ -266,24 +266,21 @@ describe('養成六年（國中三年 + 高中三年）', () => {
     expect(effective).toBeGreaterThan(naive);
   });
 
-  it('大賽點數可以留著不分配', () => {
-    const game = started();
-    // 一路選「先留著」，點數應該累積起來
-    while (game.flow.prompt !== null) {
-      const keep = game.flow.prompt.options.find((o) => o.id === 'pool:keep');
-      const first = game.flow.prompt.options[0];
-      const pick = keep ?? first;
-      if (pick === undefined) throw new Error('沒有選項');
-      game.choose(pick.id);
-    }
-    expect(game.state?.pool).toBeGreaterThan(0);
+  it('點數不能留到下一年——配點必須當場分完', () => {
+    // 「先留著」已移除：點數跨年會讓每一季的起點都不一樣，玩家得自己記住
+    // 上一季剩多少，而畫面上並沒有地方講這件事。
+    const game = playAmateur(started());
+    expect(game.state?.pool).toBe(0);
+    expect(game.flow.choices).not.toContain('pool:keep');
   });
 });
 
 describe('訓練骰的分配', () => {
   it('每一顆骰都是一次選擇，全部記進重播日誌', () => {
     const game = playToEnd(started());
-    const allocs = game.flow.choices.filter((c) => c.startsWith('alloc:'));
+    // alloc: 底下除了能力還有 undo / confirm 兩個控制項，先濾掉
+    const control = new Set(['alloc:undo', 'alloc:confirm']);
+    const allocs = game.flow.choices.filter((c) => c.startsWith('alloc:') && !control.has(c));
     expect(allocs.length).toBeGreaterThanOrEqual(2);
     // 分配的目標必須都是實際存在的能力
     for (const c of allocs) {
@@ -536,5 +533,105 @@ describe('定位鎖定', () => {
       expect(cpbl.pitching).not.toBeNull();
       return;
     }
+  });
+});
+
+
+describe('配點的復原與確認', () => {
+  /** 推進到第一個配點提問。 */
+  const toAllocation = (seed = 'undo') => {
+    const game = started({ seed });
+    let guard = 0;
+    while (game.flow.prompt !== null && guard++ < 50) {
+      if (game.flow.prompt.options.some((o) => o.id === 'alloc:confirm')) return game;
+      game.choose(game.flow.prompt.options[0]?.id ?? '');
+    }
+    throw new Error('沒有進到配點階段');
+  };
+
+  const optionOf = (game: Game, id: string) =>
+    game.flow.prompt?.options.find((o) => o.id === id);
+
+  it('沒有「先留著」這個選項了', () => {
+    expect(optionOf(toAllocation(), 'pool:keep')).toBeUndefined();
+  });
+
+  it('還沒分配時，復原與確認都反灰', () => {
+    const game = toAllocation();
+    expect(optionOf(game, 'alloc:undo')?.disabled).toBe(true);
+    expect(optionOf(game, 'alloc:confirm')?.disabled).toBe(true);
+  });
+
+  it('分配一點之後復原可按，但確認仍反灰', () => {
+    const game = toAllocation();
+    game.choose('alloc:sta');
+    expect(optionOf(game, 'alloc:undo')?.disabled).toBe(false);
+    expect(optionOf(game, 'alloc:confirm')?.disabled).toBe(true);
+  });
+
+  it('反灰的選項擋得住直接呼叫——介面之外也擋得住', () => {
+    expect(() => toAllocation().choose('alloc:confirm')).toThrow();
+  });
+
+  it('復原會把能力與蓄力槽都還原', () => {
+    const game = toAllocation();
+    const before = { ...(game.state?.ability ?? {}) };
+    const carryBefore = { ...(game.state?.carry ?? {}) };
+    game.choose('alloc:sta');
+    game.choose('alloc:undo');
+    expect(game.state?.ability).toEqual(before);
+    expect(game.state?.carry).toEqual(carryBefore);
+  });
+
+  it('復原之後又回到「什麼都還沒分配」的狀態', () => {
+    const game = toAllocation();
+    game.choose('alloc:sta');
+    game.choose('alloc:undo');
+    expect(optionOf(game, 'alloc:undo')?.disabled).toBe(true);
+  });
+
+  it('連續復原可以一路退回起點', () => {
+    const game = toAllocation();
+    const before = { ...(game.state?.ability ?? {}) };
+    let steps = 0;
+    while (optionOf(game, 'alloc:confirm')?.disabled === true) {
+      game.choose('alloc:sta');
+      steps++;
+    }
+    for (let i = 0; i < steps; i++) game.choose('alloc:undo');
+    expect(game.state?.ability).toEqual(before);
+  });
+
+  it('全部分配完之後確認才可按', () => {
+    const game = toAllocation();
+    while (optionOf(game, 'alloc:confirm')?.disabled === true) game.choose('alloc:sta');
+    expect(optionOf(game, 'alloc:confirm')?.disabled).not.toBe(true);
+  });
+
+  it('復原本身也寫進重播日誌，重播仍然完全一致', () => {
+    const game = toAllocation();
+    game.choose('alloc:sta');
+    game.choose('alloc:undo');
+    game.choose('alloc:vel');
+    while (game.flow.prompt !== null) {
+      const options = game.flow.prompt.options;
+      const pick = options.find((o) => o.disabled !== true);
+      if (pick === undefined) break;
+      game.choose(pick.id);
+    }
+    expect(game.flow.choices).toContain('alloc:undo');
+
+    const replayed = Game.replay(game.toReplayLog());
+    expect(replayed.state?.ability).toEqual(game.state?.ability);
+    expect(replayed.flow.log).toEqual(game.flow.log);
+    expect(replayed.world.drawCounts()).toEqual(game.world.drawCounts());
+  });
+
+  it('復原不消耗亂數——配點本來就不抽籤', () => {
+    const game = toAllocation();
+    const before = game.world.drawCounts();
+    game.choose('alloc:sta');
+    game.choose('alloc:undo');
+    expect(game.world.drawCounts()).toEqual(before);
   });
 });

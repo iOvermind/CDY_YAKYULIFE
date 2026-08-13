@@ -53,6 +53,13 @@ export interface Option {
   readonly label: string;
   readonly note?: string;
   readonly role?: 'main' | 'warn';
+  /**
+   * 反灰不可點。仍然出現在提問裡，因為玩家需要看見「這個按鈕存在，只是現在
+   * 不能按」——把它整個藏起來會讓版面在分配過程中跳動。
+   *
+   * choose() 一律拒絕反灰的選項，介面層擋不住的情況（鍵盤、重播日誌）也擋得住。
+   */
+  readonly disabled?: boolean;
 }
 
 export interface Prompt {
@@ -156,8 +163,12 @@ export class Flow {
     const prompt = this.#prompt;
     const handler = this.#handler;
     if (prompt === null || handler === null) throw new Error('choose(): 目前沒有待答的提問');
-    if (!prompt.options.some((o) => o.id === optionId)) {
+    const option = prompt.options.find((o) => o.id === optionId);
+    if (option === undefined) {
       throw new Error(`choose(): 選項 ${optionId} 不在目前的提問中`);
+    }
+    if (option.disabled === true) {
+      throw new Error(`choose(): 選項 ${optionId} 目前不可選`);
     }
 
     this.#choices.push(optionId);
