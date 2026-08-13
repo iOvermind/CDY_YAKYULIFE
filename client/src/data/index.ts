@@ -50,6 +50,18 @@ export const START_POSITIONS: readonly StartPosition[] = [
   'UTIL',
 ];
 
+/**
+ * 開局畫面的守位分列。
+ *
+ * 依守備位置的性質分成三列：投捕與守位不定、內野、外野。內野的順序是繞著
+ * 內野走一圈（一壘 → 二壘 → 游擊 → 三壘），不是按代碼排序。
+ */
+export const START_POSITION_ROWS: readonly (readonly StartPosition[])[] = [
+  ['P', 'C', 'UTIL'],
+  ['1B', '2B', 'SS', '3B'],
+  ['LF', 'CF', 'RF'],
+];
+
 /** 慣用手：R 右、L 左、S 左右開弓。 */
 export type Hand = 'R' | 'L' | 'S';
 

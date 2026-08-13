@@ -227,6 +227,7 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .field input:focus{border-color:var(--accent)}
 .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .seg.two{grid-template-columns:repeat(2,1fr)}
+.poslist{display:grid;gap:8px}
 .seg button{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--dim);
   font-family:var(--sans);font-size:14.5px;font-weight:700;padding:11px 4px;cursor:pointer}
 .seg button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}

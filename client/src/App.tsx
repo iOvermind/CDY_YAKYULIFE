@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './app.css';
-import { abilities, START_POSITIONS, type Hand, type StartPosition } from './data/index.ts';
+import { abilities, START_POSITION_ROWS, type Hand, type StartPosition } from './data/index.ts';
 import { schoolTiersOf, stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
@@ -82,11 +82,9 @@ function StartScreen({
     <div id="start">
       <div className="wrap">
         <h1>
-          YaKyoLife
-          <br />
           <em>棒球人生模擬器</em>
         </h1>
-        <p className="sub">高中三年養成 → 選秀・旅日・旅美 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
+        <p className="sub">國中高中六年養成 → 國際賽 → 選秀 → 中職二軍・一軍 → 衰退與引退。每一顆骰子都算數。</p>
 
         <div className="field">
           <label htmlFor="in-name">球員姓名</label>
@@ -101,16 +99,22 @@ function StartScreen({
 
         <div className="field">
           <label>起始守位</label>
-          <div className="seg two">
-            {START_POSITIONS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={p === startPosition ? 'on' : undefined}
-                onClick={() => setStartPosition(p)}
-              >
-                {abilities.start_positions[p]}
-              </button>
+          {/* 三列各自撐滿寬度：投捕與不定、內野、外野。列數不同是刻意的，
+              它讓守位的分組一眼可見，比排成一片整齊的方陣好讀。 */}
+          <div className="poslist">
+            {START_POSITION_ROWS.map((row, i) => (
+              <div key={i} className="seg" style={{ gridTemplateColumns: `repeat(${row.length},1fr)` }}>
+                {row.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={p === startPosition ? 'on' : undefined}
+                    onClick={() => setStartPosition(p)}
+                  >
+                    {abilities.start_positions[p]}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </div>
