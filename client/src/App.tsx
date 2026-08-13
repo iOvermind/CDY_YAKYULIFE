@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import './app.css';
-import { abilities, START_POSITION_ROWS, type Hand, type StartPosition } from './data/index.ts';
+import {
+  abilities,
+  amateur,
+  START_POSITION_ROWS,
+  type Hand,
+  type StartPosition,
+} from './data/index.ts';
 import { schoolTiersOf, stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
@@ -8,6 +14,35 @@ import { fmtAvg, Game, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
 import type { Rating } from './engine/rating.ts';
 import { newSeed } from './engine/rng.ts';
+
+/**
+ * 量出元素目前的像素寬度，並在尺寸變動時跟著更新。
+ *
+ * 天賦上限的標記線需要它。標記線用百分比定位會落在小數像素上，瀏覽器把
+ * 2px 的墨水抹在三欄上（例如 0.6／1／0.4），每欄的不透明度都被稀釋——同一
+ * 條線因此有時紮實、有時糊成一片，看起來就是有粗有細。只有先知道實際像素
+ * 寬度，才能把位置取整到整數像素。
+ *
+ * CSS 這邊無解：round() 不接受把百分比與 px 混在一起，因為百分比要等版面
+ * 算完才知道解析成多少。
+ */
+function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry !== undefined) setWidth(entry.contentRect.width);
+    });
+    observer.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width];
+}
 
 /**
  * 介面層。
@@ -175,7 +210,9 @@ function StartScreen({
         </div>
 
         <button type="button" className="btn main" style={{ marginTop: 28 }} onClick={begin}>
-          開始生涯 ▸ 高一春天
+          {/* 起點的學年與季節都從資料來——寫死會像先前那樣，養成期擴成六年之後
+              按鈕還停在「高一春天」。 */}
+          開始生涯 ▸ {stageOf('JHS').year_labels[0]}{amateur.career_start.season}
         </button>
 
         <p className="seedline">
@@ -662,12 +699,20 @@ function AbilityRow({
   const allocating = option !== undefined;
   const ceiling = potential + bonus;
 
+  const [barRef, barWidth] = useElementWidth<HTMLSpanElement>();
+  const markerStyle =
+    barWidth > 0
+      ? { left: `${Math.round((pct(ceiling) / 100) * barWidth)}px` }
+      : { left: `${pct(ceiling)}%` };
+
   const row = (
     <>
       <span className="nm">{abilities.abilities[abilityKey] ?? abilityKey}</span>
-      <span className="bar">
+      <span className="bar" ref={barRef}>
         <i style={{ width: `${pct(current)}%` }} />
-        <em style={{ left: `${pct(ceiling)}%` }} />
+        {/* 位置取整到整數像素，否則 2px 的線會被抹在三欄上，看起來忽粗忽細。
+            還沒量到寬度時先退回百分比——第一幀糊一下，好過整條線不見。 */}
+        <em style={markerStyle} />
       </span>
       <span className="val" style={{ lineHeight: 1.1 }}>
         {current}

@@ -382,3 +382,15 @@ describe('生涯起點', () => {
     expect(state?.year).toBe(amateur.career_start.year);
   });
 });
+
+describe('起點文案不寫死', () => {
+  // 「開始生涯 ▸ 高一春天」曾經寫死在按鈕上，養成期從高中三年擴成國高中六年
+  // 之後就變成錯的。這裡守住資料是唯一來源。
+  it('第一個學年標籤來自資料', () => {
+    expect(stageOf('JHS').year_labels[0]).toBe('國一');
+  });
+
+  it('起點季節來自資料', () => {
+    expect(amateur.career_start.season).not.toBe('');
+  });
+});
