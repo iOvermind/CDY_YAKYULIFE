@@ -87,6 +87,18 @@ export function fielderRating(ability: Abilities, position: string): number {
 }
 
 /**
+ * 這項能力在定位鎖定後是否仍然顯示／可加點。
+ *
+ * 共用能力（體力）兩邊都留——投手要撐局數、野手要撐出賽數，是同一個量。
+ * `locked` 為 null（尚未畢業或已取得二刀流）時一律可見。
+ */
+export function isSideVisible(key: string, locked: 'pitcher' | 'fielder' | null): boolean {
+  if (locked === null) return true;
+  if (abilities.ability_groups.shared.includes(key as AbilityKey)) return true;
+  return abilities.ability_groups[locked].includes(key as AbilityKey);
+}
+
+/**
  * 依守備能力挑出守得動的最佳守位；一個都守不動就是 DH。
  *
  * 二刀流的野手側守位用它決定——大多數投手出身的二刀流守備分不夠，自然落到

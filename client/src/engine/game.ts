@@ -49,7 +49,7 @@ import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './gene
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
 import { levelOf, playSeason, positionName } from './season.ts';
-import { rate, ratingPosition } from './rating.ts';
+import { isSideVisible, rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
 
@@ -126,6 +126,14 @@ export interface PlayerState {
   >;
   /** 職業狀態。尚未進職業時為 null。 */
   readonly pro: ProState | null;
+  /**
+   * 定位鎖定：養成結束時沒取得二刀流，另一側就此關閉。
+   *
+   * 值是**保留下來**的那一側。鎖定之後另一側的能力不再顯示、不能加點，投打
+   * 定位也不再隨評價高低互換——職業球員的角色是固定的，這正是二刀流稀有的
+   * 意義所在。尚未畢業或已取得二刀流時為 null。
+   */
+  readonly lockedSide: 'pitcher' | 'fielder' | null;
 }
 
 /** 職業階段的狀態。 */
@@ -172,6 +180,8 @@ export class Game {
    * 累積到再下一季。
    */
   #lastChampionships: string[] = [];
+  /** 養成結束後保留下來的那一側；二刀流或尚未畢業時為 null。 */
+  #lockedSide: 'pitcher' | 'fielder' | null = null;
   #seasonBatting: BattingLine | null = null;
   #seasonPitching: PitchingLine | null = null;
   #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
@@ -222,6 +232,7 @@ export class Game {
       seasonPitching: this.#seasonPitching,
       statsByStage: this.#statsByStage,
       pro: this.#proState,
+      lockedSide: this.#lockedSide,
     };
   }
 
@@ -605,14 +616,14 @@ export class Game {
   #spendPool(): void {
     if (this.#pool <= 0) return;
 
-    const options: Option[] = ALL_ABILITIES.map((key) => this.#abilityOption(key, 1));
+    const options: Option[] = this.#allocatableAbilities.map((key) => this.#abilityOption(key, 1));
     options.push({ id: 'pool:keep', label: '先留著', note: '剩下的點數留到之後再分配' });
 
     this.flow.ask(
       { title: `大賽點數還有 ${this.#pool} 點`, options },
       (choice) => {
         if (choice === 'pool:keep') return;
-        this.#applyPoints(choice.slice('alloc:'.length), 1);
+        this.#applyPoints(choice.slice('alloc:'.length), 1, { silent: true });
         this.#pool--;
         // 還有點數就再問一次，直到分完或玩家喊停。
         this.flow.unshift(() => this.#spendPool());
@@ -675,6 +686,21 @@ export class Game {
     );
 
     // 二刀流的判定在選秀之前——它會影響球團怎麼評估你。
+    if (r !== null && !qualifiesAsTwoWay(r)) {
+      // 沒取得二刀流就要選邊站。保留評價較高的那一側，另一側從此關閉——
+      // 這是二刀流之所以珍貴的代價面。
+      this.#lockedSide = r.pitcher >= r.fielder ? 'pitcher' : 'fielder';
+      const kept = this.#lockedSide === 'pitcher' ? '投手' : '野手';
+      const dropped = this.#lockedSide === 'pitcher' ? '打擊與守備' : '投球';
+      this.flow.card(
+        'info',
+        `定位確立：${kept}`,
+        `六年下來，你的<b class="hl">${kept}</b>能力明顯突出，球團就是這樣看你的。` +
+          `從今以後${esc(dropped)}那一側不再練，能力表也不再顯示它——` +
+          '職業球員的角色是固定的。',
+      );
+    }
+
     if (r !== null && qualifiesAsTwoWay(r)) {
       this.#traits.add(TWO_WAY_TRAIT);
       this.flow.card(
@@ -826,7 +852,9 @@ export class Game {
       ability: this.#ability,
       position,
       overall: r.overall,
-      better: r.pitcher >= r.fielder ? 'pitcher' : 'fielder',
+      // 定位鎖定之後就照鎖定的那一側打，不再每季比較評價高低——職業球員的
+      // 角色是固定的，不會因為某年打擊練得比較好就改當野手。
+      better: this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder'),
       twoWay: this.isTwoWay,
     });
 
@@ -972,10 +1000,12 @@ export class Game {
     this.flow.ask(
       {
         title: `第 ${index + 1}／${total} 顆骰：${value} 點要加在哪？`,
-        options: ALL_ABILITIES.map((key) => this.#abilityOption(key, value)),
+        options: this.#allocatableAbilities.map((key) => this.#abilityOption(key, value)),
       },
       (choice) => {
-        this.#applyPoints(choice.slice('alloc:'.length), value);
+        // silent：能力面板會即時反映變化，再往事件紀錄丟一張卡只會把真正的
+        // 事件擠出畫面——一年十幾顆骰，紀錄會被配點洗版。
+        this.#applyPoints(choice.slice('alloc:'.length), value, { silent: true });
         if (this.#dice !== null) {
           this.#dice = { values: this.#dice.values, index: index + 1 };
           // 最後一顆分配完就收起骰面——後面的提問（事件卡、大賽點數）與骰子無關。
@@ -995,6 +1025,16 @@ export class Game {
       batting: addBatting(current.batting, batting),
       pitching: addPitching(current.pitching, pitching),
     };
+  }
+
+  /**
+   * 目前還能加點的能力。
+   *
+   * 定位鎖定之後，另一側的能力不再出現在選項裡——留著只會讓玩家把點數倒進
+   * 一個永遠用不到的地方。共用能力（體力）兩邊都留。
+   */
+  get #allocatableAbilities(): readonly AbilityKey[] {
+    return ALL_ABILITIES.filter((key) => isSideVisible(key, this.#lockedSide));
   }
 
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */

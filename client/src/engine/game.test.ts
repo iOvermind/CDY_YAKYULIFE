@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amateur } from '../data/index.ts';
+import { abilities, amateur } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 
@@ -458,6 +458,82 @@ describe('職業階段的狀態', () => {
       expect(Object.keys(game.state?.statsByStage ?? {}).filter((k) => k.startsWith('CPBL'))).toEqual(
         ['CPBL'],
       );
+      return;
+    }
+  });
+});
+
+describe('定位鎖定', () => {
+  /** 打到選秀為止，回傳那局遊戲。 */
+  const toDraft = (seed: string) => playWell(started({ seed }), true);
+
+  it('沒取得二刀流就鎖定評價較高的那一側', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = toDraft(`lock-${i}`);
+      const state = game.state;
+      if (state === null) continue;
+      if (state.traits.has('two_way')) {
+        expect(state.lockedSide).toBeNull();
+      } else {
+        expect(state.lockedSide).not.toBeNull();
+        const r = game.rating;
+        expect(state.lockedSide).toBe(
+          (r?.pitcher ?? 0) >= (r?.fielder ?? 0) ? 'pitcher' : 'fielder',
+        );
+      }
+    }
+  });
+
+  it('養成期間一律不鎖——鎖定發生在畢業時', () => {
+    // playAmateur 停在選秀提問，那時畢業已經跑過了，因此要在更早的地方檢查
+    const game = started();
+    expect(game.state?.lockedSide).toBeNull();
+    for (let i = 0; i < 60 && game.flow.prompt !== null; i++) {
+      const options = game.flow.prompt.options;
+      if (options.some((o) => o.id.startsWith('draft:'))) break;
+      game.choose(options[0]?.id ?? '');
+      // 高中畢業之前一律不鎖
+      if (game.state?.stage === 'HS' && (game.state?.stageYear ?? 0) > 3) break;
+      expect(game.state?.lockedSide).toBeNull();
+    }
+  });
+
+  it('鎖定之後另一側的能力不再出現在配點選項裡', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = toDraft(`opt-${i}`);
+      const locked = game.state?.lockedSide;
+      if (locked === null || locked === undefined) continue;
+      // 繼續打到下一次配點
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 200) {
+        const options = game.flow.prompt.options;
+        const allocs = options.filter((o) => o.id.startsWith('alloc:'));
+        if (allocs.length > 0) {
+          const dropped = locked === 'pitcher' ? 'fielder' : 'pitcher';
+          for (const key of abilities.ability_groups[dropped]) {
+            expect(allocs.map((o) => o.id)).not.toContain(`alloc:${key}`);
+          }
+          // 共用能力仍然留著
+          for (const key of abilities.ability_groups.shared) {
+            expect(allocs.map((o) => o.id)).toContain(`alloc:${key}`);
+          }
+          return;
+        }
+        game.choose(options[0]?.id ?? '');
+      }
+    }
+  });
+
+  it('鎖定投手側的人不會因為某年打擊變好就改當野手', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = playToEnd(started({ seed: `role-${i}` }));
+      const locked = game.state?.lockedSide;
+      if (locked !== 'pitcher') continue;
+      // 職業生涯的累計成績只會有投球那一邊
+      const cpbl = game.state?.statsByStage['CPBL'];
+      if (cpbl === undefined) continue;
+      expect(cpbl.batting).toBeNull();
+      expect(cpbl.pitching).not.toBeNull();
       return;
     }
   });

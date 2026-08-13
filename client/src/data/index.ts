@@ -14,6 +14,7 @@ import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
 import leaguesJson from './leagues.json';
 import positionsJson from './positions.json';
+import traitsJson from './traits.json';
 import seasonJson from './season.json';
 import teamsJson from './teams.json';
 
@@ -474,9 +475,30 @@ export interface SeasonData {
   };
 }
 
+export interface Trait {
+  readonly id: string;
+  /** good 正向、bad 負向。決定標籤配色。 */
+  readonly tone: string;
+  /** 顯示名稱。dynamic_name 為 true 者為 null，名稱要依生涯內容組出來。 */
+  readonly name: string | null;
+  readonly dynamic_name?: boolean;
+  readonly effect_text: string;
+}
+
+export interface TraitsData {
+  readonly categories: { readonly positive: readonly string[]; readonly negative: readonly string[] };
+  readonly traits: readonly Trait[];
+}
+
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
 export const positions = positionsJson as unknown as PositionsData;
+export const traits = traitsJson as unknown as TraitsData;
+
+/** 依 id 取特性。找不到回傳 undefined——未知的 id 不該假裝有名字。 */
+export function traitOf(id: string): Trait | undefined {
+  return traits.traits.find((t) => t.id === id);
+}
 export const teams = teamsJson as unknown as TeamsData;
 export const leagues = leaguesJson as unknown as LeaguesData;
 export const season = seasonJson as unknown as SeasonData;

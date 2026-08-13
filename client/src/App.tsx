@@ -3,6 +3,8 @@ import './app.css';
 import {
   abilities,
   amateur,
+  traits as traitsData,
+  traitOf,
   START_POSITION_ROWS,
   type Hand,
   type StartPosition,
@@ -12,7 +14,7 @@ import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
 import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
-import { fieldingPosition, type Rating } from './engine/rating.ts';
+import { fieldingPosition, isSideVisible, type Rating } from './engine/rating.ts';
 import { positionName } from './engine/season.ts';
 import { newSeed } from './engine/rng.ts';
 
@@ -381,12 +383,6 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
       ? (def.year_labels[state.stageYear - 1] ?? `${def.name}${state.stageYear}`)
       : `${state.pro.orgName}${state.pro.year}`;
 
-  // 生涯數據只顯示目前所在的階段，其餘收起來——養成期六年加上職業，全部攤開
-  // 會把右欄佔滿，而玩家當下在意的只有現在這一段。
-  const currentSection: readonly [string, string] =
-    state.pro === null
-      ? [state.stage, `${def.name}生涯`]
-      : [state.pro.org, `${state.pro.orgName}生涯`];
 
   return (
     <div id="panel-stats">
@@ -408,57 +404,75 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
           <b>{state.pool}</b>
           <span>可分配點</span>
         </div>
-        <div className="stat-cell">
-          <b>{rating?.pitcher ?? 0}</b>
-          <span>投手側</span>
-        </div>
-        <div className="stat-cell">
-          <b>{rating?.fielder ?? 0}</b>
-          <span>野手側</span>
-        </div>
+        {state.lockedSide !== 'fielder' && (
+          <div className="stat-cell">
+            <b>{rating?.pitcher ?? 0}</b>
+            <span>投手側</span>
+          </div>
+        )}
+        {state.lockedSide !== 'pitcher' && (
+          <div className="stat-cell">
+            <b>{rating?.fielder ?? 0}</b>
+            <span>野手側</span>
+          </div>
+        )}
       </div>
 
+      {/* 只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡放的還是去年
+          的成績，寫當年是騙人的。生涯累計與榮譽都移到結算時才呈現，右欄留給
+          玩家當下真正在看的東西。 */}
       <StatLines
-        label="當年成績"
+        label="最近一季"
         batting={state.seasonBatting}
         pitching={state.seasonPitching}
       />
 
-      <h4 style={{ marginTop: 12 }}>生涯數據</h4>
-      {[currentSection].map(([code, name]) => {
-        const line = state.statsByStage[code];
-        if (line === undefined) return null;
-        return (
-          <div key={code}>
-            <p className="divider" style={{ margin: '8px 0 2px' }}>
-              {name}
-            </p>
-            <StatLines label={null} batting={line.batting} pitching={line.pitching} />
-          </div>
-        );
-      })}
-      {Object.keys(state.statsByStage).length === 0 && (
-        <p className="stat-pending" style={{ marginTop: 8 }}>
-          還沒有成績。
-        </p>
-      )}
-
-      {state.honors.length > 0 ? (
-        <p style={{ fontSize: 12, lineHeight: 1.9, margin: '8px 0 0' }}>
-          {state.honors.map((h, i) => (
-            <span className="tag" key={i} style={{ marginRight: 4 }}>
-              {h}
-            </span>
-          ))}
-        </p>
-      ) : (
-        <p className="stat-pending" style={{ marginTop: 8 }}>
-          還沒有任何榮譽。
-        </p>
-      )}
+      <TraitList traits={state.traits} />
     </div>
   );
 }
+
+/**
+ * 目前的狀態：已取得的隱藏特性。
+ *
+ * 正向在前、負向在後，同一組內依 traits.json 的宣告順序——那個順序就是設計
+ * 上的重要性排序。名稱要靠生涯內容組出來的特性（如「◯◯先生」）目前無法解析，
+ * 直接跳過而不是顯示 id：顯示一個看不懂的英文代號比不顯示更糟。
+ */
+function TraitList({ traits: owned }: { traits: ReadonlySet<string> }) {
+  const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
+  const shown = order
+    .filter((id) => owned.has(id))
+    .map((id) => traitOf(id))
+    .filter((t): t is NonNullable<typeof t> => t !== undefined && t.name !== null);
+
+  return (
+    <>
+      <h4 style={{ marginTop: 12 }}>狀態</h4>
+      {shown.length === 0 ? (
+        <p className="stat-pending" style={{ marginTop: 8 }}>
+          還沒有任何特性。
+        </p>
+      ) : (
+        <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
+          {shown.map((t) => (
+            <span
+              className="tag"
+              key={t.id}
+              title={t.effect_text}
+              style={{ marginRight: 4, ...(t.tone === 'bad' ? BAD_TAG : {}) }}
+            >
+              {t.name}
+            </span>
+          ))}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** 負向特性的標籤配色。取自 traits.json 的 tag_styles.negative。 */
+const BAD_TAG = { background: '#2a0f0f', borderColor: '#c0392b', color: '#ff8b7a' };
 
 /** 打擊與投球成績。養成期的成績依大賽場次結算，場次由名次決定。 */
 function StatLines({
@@ -654,11 +668,20 @@ function AbilityPanel({
   const names = abilities.ability_group_names;
   const common = { state, allocatable, onChoose };
 
+  // 定位鎖定之後整組收起來，不是變灰。留著一組永遠動不了的數字只會佔版面，
+  // 也會讓玩家一直以為還有機會補回來。
+  const show = (side: 'pitcher' | 'fielder') =>
+    isSideVisible(groups[side][0] ?? '', state.lockedSide);
+
   return (
     <>
       <AbilityBlock title={names.shared} keys={groups.shared} {...common} />
-      <AbilityBlock title={names.pitcher} keys={groups.pitcher} {...common} />
-      <AbilityBlock title={names.fielder} keys={groups.fielder} {...common} />
+      {show('pitcher') && (
+        <AbilityBlock title={names.pitcher} keys={groups.pitcher} {...common} />
+      )}
+      {show('fielder') && (
+        <AbilityBlock title={names.fielder} keys={groups.fielder} {...common} />
+      )}
     </>
   );
 }
