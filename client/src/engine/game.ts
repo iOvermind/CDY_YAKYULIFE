@@ -14,6 +14,7 @@ import {
   amateur,
   PITCH_FAMILIES,
   type AbilityKey,
+  type Hand,
   type SchoolStage,
 } from '../data/index.ts';
 import {
@@ -47,6 +48,10 @@ export interface GameSetup {
   readonly seed: string;
   readonly name: string;
   readonly startPosition: NewPlayer['startPosition'];
+  /** 投球慣用手。由玩家選擇，不是擲出來的。 */
+  readonly throws: Hand;
+  /** 打擊慣用手。 */
+  readonly bats: Hand;
 }
 
 /** 目前引擎版本。重播日誌帶著它，跨版本一律拒絕重播（ADR 0002）。 */
@@ -108,6 +113,7 @@ export class Game {
   #pool = 0;
   #ceilingBonus: Record<AbilityKey, number> = {};
   #injuryRisk = 0;
+  #dice: { values: readonly number[]; index: number } | null = null;
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -138,6 +144,14 @@ export class Game {
       ceilingBonus: this.#ceilingBonus,
       injuryRisk: this.#injuryRisk,
     };
+  }
+
+  /**
+   * 這一季擲出的訓練骰與分配進度，供介面畫出骰面。
+   * 不在分配階段時為 null。
+   */
+  get dice(): { readonly values: readonly number[]; readonly index: number } | null {
+    return this.#dice;
   }
 
   /** 事件系統需要的情境。 */
@@ -207,7 +221,10 @@ export class Game {
 
   /** 開局：擲出球員，並交代他的出身。 */
   #genesis(): void {
-    const player = createPlayer(this.world, this.setup.name, this.setup.startPosition);
+    const player = createPlayer(this.world, this.setup.name, this.setup.startPosition, {
+      throws: this.setup.throws,
+      bats: this.setup.bats,
+    });
     this.#player = player;
     this.#ability = { ...player.ability };
     this.#carry = Object.fromEntries(ALL_ABILITIES.map((k) => [k, 0]));
@@ -378,6 +395,8 @@ export class Game {
   /** 季初的自主訓練：擲骰，逐顆分配。 */
   #springTraining(): void {
     const dice = rollTrainingDice(this.world, this.#traits);
+
+    this.#dice = { values: dice.values, index: 0 };
 
     let msg = `自主訓練擲出 <b class="hl">${dice.values.length}</b> 顆骰：` +
       dice.values.map((v) => `<b class="hl">${v}</b>`).join('、');
@@ -620,7 +639,14 @@ export class Game {
         title: `第 ${index + 1}／${total} 顆骰：${value} 點要加在哪？`,
         options: ALL_ABILITIES.map((key) => this.#abilityOption(key, value)),
       },
-      (choice) => this.#applyPoints(choice.slice('alloc:'.length), value),
+      (choice) => {
+        this.#applyPoints(choice.slice('alloc:'.length), value);
+        if (this.#dice !== null) {
+          this.#dice = { values: this.#dice.values, index: index + 1 };
+          // 最後一顆分配完就收起骰面——後面的提問（事件卡、大賽點數）與骰子無關。
+          if (index + 1 >= total) this.#dice = null;
+        }
+      },
     );
   }
 

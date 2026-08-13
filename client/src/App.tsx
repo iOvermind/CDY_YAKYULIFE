@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import './app.css';
-import { abilities, START_POSITIONS, type StartPosition } from './data/index.ts';
-import type { LogEntry, Prompt } from './engine/flow.ts';
+import { abilities, START_POSITIONS, type Hand, type StartPosition } from './data/index.ts';
+import { stageOf } from './engine/amateur.ts';
+import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import { Game, type PlayerState } from './engine/game.ts';
+import type { Rating } from './engine/rating.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -58,10 +60,14 @@ function StartScreen({
 }) {
   const [name, setName] = useState('');
   const [startPosition, setStartPosition] = useState<StartPosition>('P');
+  const [throws, setThrows] = useState<Hand>('R');
+  const [bats, setBats] = useState<Hand>('R');
   const [seed, setSeed] = useState(newSeed());
 
   const begin = () =>
-    onStart(new Game({ seed, name: name.trim() || '無名氏', startPosition }).start());
+    onStart(
+      new Game({ seed, name: name.trim() || '無名氏', startPosition, throws, bats }).start(),
+    );
 
   return (
     <div id="start">
@@ -98,6 +104,44 @@ function StartScreen({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="field">
+          <label>投球慣用手</label>
+          <div className="seg two">
+            {abilities.handedness.selectable.throws.map((h) => (
+              <button
+                key={h}
+                type="button"
+                className={h === throws ? 'on' : undefined}
+                onClick={() => setThrows(h)}
+              >
+                {HAND_LABEL[h]}投
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label>打擊慣用手</label>
+          <div className="seg">
+            {abilities.handedness.selectable.bats.map((h) => (
+              <button
+                key={h}
+                type="button"
+                className={h === bats ? 'on' : undefined}
+                onClick={() => setBats(h)}
+              >
+                {HAND_LABEL[h]}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6, lineHeight: 1.6 }}>
+            左投與左打在棒球裡有結構性優勢，因此天賦上限會相應降低。
+            <b style={{ color: 'var(--bad)' }}>
+              注意：那份優勢（同邊／反邊對決）尚未接上賽季模擬，目前選左手只有扣分。
+            </b>
+          </p>
         </div>
 
         <div className="field">
@@ -146,6 +190,16 @@ function StartScreen({
   );
 }
 
+/** 目前的提問是不是在要求分配點數到某項能力。 */
+function allocOptions(prompt: Prompt | null): Map<string, Option> {
+  const map = new Map<string, Option>();
+  if (prompt === null) return map;
+  for (const o of prompt.options) {
+    if (o.id.startsWith('alloc:')) map.set(o.id.slice('alloc:'.length), o);
+  }
+  return map;
+}
+
 function GameScreen({
   game,
   onChoose,
@@ -156,34 +210,147 @@ function GameScreen({
   onRestart: () => void;
 }) {
   const state = game.state;
+  const prompt = game.flow.prompt;
+  const allocatable = allocOptions(prompt);
+  // 加點時，選項已經在左欄的能力列上，動作區只留下非能力的選項（例如「先留著」）
+  const otherOptions = (prompt?.options ?? []).filter((o) => !o.id.startsWith('alloc:'));
 
   return (
-    <div id="app">
-      <div id="mid">
+    <div id="game">
+      <div id="col-left">
         {state && (
           <Board state={state} rating={game.rating?.overall ?? 0} seed={game.setup.seed} />
         )}
-        <div id="log">
-          <LogView entries={game.flow.log} />
-          {state && <AbilityCard state={state} />}
-        </div>
-      </div>
-      <div id="act-side">
-        <div id="act-in">
-          <div id="act">
-            {game.flow.prompt ? (
-              <PromptView prompt={game.flow.prompt} onChoose={onChoose} />
-            ) : (
-              <>
-                <div className="title">流程已到目前實作的盡頭</div>
-                <button type="button" className="btn main" onClick={onRestart}>
-                  重新開局
-                </button>
-              </>
-            )}
+        {state && (
+          <div id="panel-abilities">
+            <h4>能力</h4>
+            <AbilityPanel state={state} allocatable={allocatable} onChoose={onChoose} />
           </div>
+        )}
+      </div>
+
+      <div id="col-right">
+        {state && <StatsPanel state={state} rating={game.rating} />}
+        <div id="panel-log">
+          <LogView entries={game.flow.log} />
+        </div>
+        <div id="panel-act">
+          {prompt !== null ? (
+            <>
+              {prompt.title !== undefined && <div className="title">{prompt.title}</div>}
+              {game.dice !== null && <DiceRow dice={game.dice} />}
+              {state !== null && state.pool > 0 && allocatable.size > 0 && game.dice === null && (
+                <div className="pool">大賽點數還有 {state.pool} 點（點一下能力 +1）</div>
+              )}
+              {allocatable.size > 0 && (
+                <div className="title" style={{ color: 'var(--accent)', letterSpacing: 0 }}>
+                  ← 點左側的能力列加點
+                </div>
+              )}
+              {otherOptions.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className={`btn${o.role === 'main' ? ' main' : ''}${
+                    o.role === 'warn' ? ' warn' : ''
+                  }`}
+                  onClick={() => onChoose(o.id)}
+                >
+                  {o.label}
+                  {o.note !== undefined && <small>{o.note}</small>}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <div className="title">流程已到目前實作的盡頭</div>
+              <button type="button" className="btn main" onClick={onRestart}>
+                重新開局
+              </button>
+            </>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 這一季擲出的訓練骰。
+ *
+ * 已分配的變暗、目前這一顆高亮——玩家看得到「還剩哪幾顆、現在要分配的是幾點」，
+ * 而不是只讀到一行文字。6 點用不同顏色標示，那是高標值。
+ */
+function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } }) {
+  return (
+    <div id="dice">
+      {dice.values.map((v, i) => (
+        <div
+          key={i}
+          className={`die${i < dice.index ? ' used' : ''}${i === dice.index ? ' active' : ''}${
+            v === 6 ? ' six' : ''
+          }`}
+        >
+          {v}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 當年數據與生涯數據。 */
+function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | null }) {
+  const def = stageOf(state.stage);
+  const yearLabel = def.year_labels[state.stageYear - 1] ?? `${def.name}${state.stageYear}`;
+
+  return (
+    <div id="panel-stats">
+      <h4>當年數據</h4>
+      <div className="stat-grid">
+        <div className="stat-cell">
+          <b>{state.year}</b>
+          <span>年份</span>
+        </div>
+        <div className="stat-cell">
+          <b>{state.age}</b>
+          <span>年齡</span>
+        </div>
+        <div className="stat-cell">
+          <b>{yearLabel}</b>
+          <span>學年</span>
+        </div>
+        <div className="stat-cell">
+          <b>{state.pool}</b>
+          <span>可分配點</span>
+        </div>
+        <div className="stat-cell">
+          <b>{rating?.pitcher ?? 0}</b>
+          <span>投手側</span>
+        </div>
+        <div className="stat-cell">
+          <b>{rating?.fielder ?? 0}</b>
+          <span>野手側</span>
+        </div>
+      </div>
+
+      <h4 style={{ marginTop: 12 }}>生涯數據</h4>
+      {state.honors.length > 0 ? (
+        <p style={{ fontSize: 12, lineHeight: 1.7, margin: 0 }}>
+          {state.honors.map((h, i) => (
+            <span className="tag" key={i} style={{ marginRight: 4 }}>
+              {h}
+            </span>
+          ))}
+        </p>
+      ) : (
+        <p className="stat-pending" style={{ marginTop: 0 }}>
+          還沒有任何榮譽。
+        </p>
+      )}
+      <p className="stat-pending">
+        打擊率、防禦率這類個人成績要等賽季模擬實作後才有——養成期的大賽目前只
+        產生名次與能力點，賽事場次（`games`）也還留空待填。
+      </p>
     </div>
   );
 }
@@ -277,42 +444,25 @@ function LogView({ entries }: { entries: readonly LogEntry[] }) {
   );
 }
 
-function PromptView({
-  prompt,
+function AbilityPanel({
+  state,
+  allocatable,
   onChoose,
 }: {
-  prompt: Prompt;
+  state: PlayerState;
+  allocatable: Map<string, Option>;
   onChoose: (optionId: string) => void;
 }) {
-  return (
-    <>
-      {prompt.title !== undefined && <div className="title">{prompt.title}</div>}
-      {prompt.options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          className={`btn${o.role === 'main' ? ' main' : ''}${o.role === 'warn' ? ' warn' : ''}`}
-          onClick={() => onChoose(o.id)}
-        >
-          {o.label}
-          {o.note !== undefined && <small>{o.note}</small>}
-        </button>
-      ))}
-    </>
-  );
-}
-
-function AbilityCard({ state }: { state: PlayerState }) {
   const groups = abilities.ability_groups;
   const names = abilities.ability_group_names;
+  const common = { state, allocatable, onChoose };
 
   return (
-    <div className="card">
-      <h4>能力</h4>
-      <AbilityBlock title={names.shared} keys={groups.shared} state={state} />
-      <AbilityBlock title={names.pitcher} keys={groups.pitcher} state={state} />
-      <AbilityBlock title={names.fielder} keys={groups.fielder} state={state} />
-    </div>
+    <>
+      <AbilityBlock title={names.shared} keys={groups.shared} {...common} />
+      <AbilityBlock title={names.pitcher} keys={groups.pitcher} {...common} />
+      <AbilityBlock title={names.fielder} keys={groups.fielder} {...common} />
+    </>
   );
 }
 
@@ -320,50 +470,104 @@ function AbilityBlock({
   title,
   keys,
   state,
+  allocatable,
+  onChoose,
 }: {
   title: string;
   keys: readonly string[];
   state: PlayerState;
+  allocatable: Map<string, Option>;
+  onChoose: (optionId: string) => void;
 }) {
-  const max = abilities.scale.max;
-
   return (
     <>
       <p className="divider">{title}</p>
-      {keys.map((key) => {
-        const current = state.ability[key] ?? 0;
-        const ceiling = state.origin.potential[key] ?? 0;
-        const carry = state.carry[key] ?? 0;
-        return (
-          <div className="abrow" key={key}>
-            <span className="nm">{abilities.abilities[key] ?? key}</span>
-            <span className="bar">
-              <i style={{ width: `${(current / max) * 100}%` }} />
-              <em style={{ left: `${(ceiling / max) * 100}%` }} />
-            </span>
-            <span className="val" style={{ lineHeight: 1.1 }}>
-              {current}
-              <small style={{ opacity: 0.5 }}>/{ceiling}</small>
-              {carry > 0 && (
-                <span
-                  style={{
-                    display: 'block',
-                    opacity: 0.5,
-                    fontSize: 10.5,
-                    letterSpacing: 1,
-                    marginTop: -2,
-                  }}
-                >
-                  蓄力 {carry}
-                </span>
-              )}
-            </span>
-          </div>
-        );
-      })}
+      {keys.map((key) => (
+        <AbilityRow
+          key={key}
+          abilityKey={key}
+          state={state}
+          option={allocatable.get(key)}
+          onChoose={onChoose}
+        />
+      ))}
     </>
   );
 }
+
+function AbilityRow({
+  abilityKey,
+  state,
+  option,
+  onChoose,
+}: {
+  abilityKey: string;
+  state: PlayerState;
+  option: Option | undefined;
+  onChoose: (optionId: string) => void;
+}) {
+  const current = state.ability[abilityKey] ?? 0;
+  const potential = state.origin.potential[abilityKey] ?? 0;
+  const carry = state.carry[abilityKey] ?? 0;
+  const bonus = state.ceilingBonus[abilityKey] ?? 0;
+
+  // 量表刻度：頭 20 尾 80。只有被事件提升過上限的能力，尾端才會延伸到 80 以上。
+  const head = abilities.scale.min;
+  const tail = abilities.scale.max + bonus;
+  const pct = (v: number) => Math.max(0, Math.min(100, ((v - head) / (tail - head)) * 100));
+
+  const allocating = option !== undefined;
+  const ceiling = potential + bonus;
+
+  const row = (
+    <>
+      <span className="nm">{abilities.abilities[abilityKey] ?? abilityKey}</span>
+      <span className="bar">
+        <i style={{ width: `${pct(current)}%` }} />
+        <em style={{ left: `${pct(ceiling)}%` }} />
+      </span>
+      <span className="val" style={{ lineHeight: 1.1 }}>
+        {current}
+        <small style={{ opacity: 0.5 }}>/{ceiling}</small>
+        {carry > 0 && (
+          <span
+            style={{ display: 'block', opacity: 0.5, fontSize: 10.5, letterSpacing: 1, marginTop: -2 }}
+          >
+            蓄力 {carry}
+          </span>
+        )}
+      </span>
+    </>
+  );
+
+  if (!allocating) {
+    return (
+      <div className="abrow" title={`${head}–${tail}${bonus > 0 ? `（上限已提升 +${bonus}）` : ''}`}>
+        {row}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="abrow pickable"
+      role="button"
+      tabIndex={0}
+      title={option.note}
+      onClick={() => onChoose(option.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onChoose(option.id);
+        }
+      }}
+    >
+      {row}
+    </div>
+  );
+}
+
+const HAND_LABEL: Record<string, string> = { R: '右', L: '左', S: '左右開弓' };
 
 function hand(h: string): string {
   return h === 'S' ? '雙' : h === 'L' ? '左' : '右';

@@ -104,6 +104,16 @@ export interface AbilitiesData {
   readonly handedness: {
     readonly throws: { readonly weights: HandWeights };
     readonly bats: { readonly weights: HandWeights };
+    readonly selectable: { readonly throws: readonly Hand[]; readonly bats: readonly Hand[] };
+    /** 左投左打的結構性優勢對價：受益的那一側，天賦上限相應降低。 */
+    readonly ceiling_modifier: {
+      readonly throws: Readonly<
+        Partial<Record<Hand, { readonly group: string; readonly delta: number }>>
+      >;
+      readonly bats: Readonly<
+        Partial<Record<Hand, { readonly group: string; readonly delta: number }>>
+      >;
+    };
   };
   readonly initial_ability: {
     readonly base: Range;

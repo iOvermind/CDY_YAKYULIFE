@@ -3,7 +3,13 @@ import { amateur } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 
-const setup: GameSetup = { seed: 'test-seed', name: '王小明', startPosition: 'SS' };
+const setup: GameSetup = {
+  seed: 'test-seed',
+  name: '王小明',
+  startPosition: 'SS',
+  throws: 'R',
+  bats: 'R',
+};
 
 const started = (over: Partial<GameSetup> = {}) => new Game({ ...setup, ...over }).start();
 

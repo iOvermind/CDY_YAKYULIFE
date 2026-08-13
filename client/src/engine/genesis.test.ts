@@ -12,7 +12,7 @@ import { createPlayer, START_AGE, START_YEAR } from './genesis.ts';
 import { World } from './rng.ts';
 
 const make = (seed: string, start: StartPosition = 'SS') =>
-  createPlayer(new World(seed), '測試員', start);
+  createPlayer(new World(seed), '測試員', start, { throws: 'R', bats: 'R' });
 
 /** 取一批球員，用於分佈檢查。 */
 const sample = (n: number, start: StartPosition) =>
@@ -173,29 +173,53 @@ describe('起始守位的天賦加權', () => {
 });
 
 describe('慣用手', () => {
-  it('投手不會擲出雙手投——那是隱藏特性，不進開局擲骰', () => {
-    for (const p of sample(500, 'P')) {
-      expect(p.throws === 'R' || p.throws === 'L').toBe(true);
-    }
+  const withHands = (throws: 'R' | 'L', bats: 'R' | 'L' | 'S', seed = 'h') =>
+    createPlayer(new World(seed), '測試員', 'UTIL', { throws, bats });
+
+  it('慣用手由玩家選擇，不是擲出來的', () => {
+    const p = withHands('L', 'S');
+    expect(p.throws).toBe('L');
+    expect(p.bats).toBe('S');
   });
 
-  it('打者的左右開弓會出現', () => {
-    const hands = new Set(sample(500, 'SS').map((p) => p.bats));
-    expect(hands).toEqual(new Set(['R', 'L', 'S']));
+  it('選慣用手不消耗任何抽取——它不是隨機的', () => {
+    const a = new World('h');
+    createPlayer(a, '測試員', 'UTIL', { throws: 'R', bats: 'R' });
+    const b = new World('h');
+    createPlayer(b, '測試員', 'UTIL', { throws: 'L', bats: 'S' });
+    expect(a.drawCounts()).toEqual(b.drawCounts());
   });
 
-  it('投球慣用手的分佈接近設定的權重', () => {
-    const players = sample(2000, 'P');
-    const left = players.filter((p) => p.throws === 'L').length / players.length;
-    // 設定為 28%，容許 ±4 個百分點
-    expect(left).toBeGreaterThan(0.24);
-    expect(left).toBeLessThan(0.32);
+  it('左投的投球天賦上限較低——那是左投結構性優勢的對價', () => {
+    const right = withHands('R', 'R');
+    const left = withHands('L', 'R');
+    const sum = (p: typeof right, keys: readonly string[]) =>
+      keys.reduce((n, k) => n + (p.potential[k] ?? 0), 0);
+    const pitching = abilities.ability_groups.pitcher;
+    expect(sum(left, pitching)).toBeLessThan(sum(right, pitching));
   });
 
-  it('每位球員都有投球與打擊兩種慣用手', () => {
-    for (const p of sample(50, 'C')) {
-      expect(p.throws).toBeTruthy();
-      expect(p.bats).toBeTruthy();
+  it('左投不影響野手側的天賦上限', () => {
+    const right = withHands('R', 'R');
+    const left = withHands('L', 'R');
+    const fielding = abilities.ability_groups.fielder;
+    for (const k of fielding) expect(left.potential[k]).toBe(right.potential[k]);
+  });
+
+  it('左打與左右開弓扣的是野手側，且左右開弓扣得更多', () => {
+    const sum = (bats: 'R' | 'L' | 'S') =>
+      abilities.ability_groups.fielder.reduce(
+        (n, k) => n + (withHands('R', bats).potential[k] ?? 0),
+        0,
+      );
+    expect(sum('L')).toBeLessThan(sum('R'));
+    expect(sum('S')).toBeLessThan(sum('L'));
+  });
+
+  it('天賦上限不會被扣到零以下', () => {
+    for (let i = 0; i < 100; i++) {
+      const p = withHands('L', 'S', `s${i}`);
+      for (const v of Object.values(p.potential)) expect(v).toBeGreaterThan(0);
     }
   });
 });
@@ -215,7 +239,7 @@ describe('出身學校', () => {
 describe('子序列歸屬', () => {
   it('只消耗 genesis 流，不動其他流', () => {
     const world = new World('seed-a');
-    createPlayer(world, '測試員', 'SS');
+    createPlayer(world, '測試員', 'SS', { throws: 'R', bats: 'R' });
     const counts = world.drawCounts();
     expect(counts.genesis).toBeGreaterThan(0);
     expect(counts.growth).toBe(0);
