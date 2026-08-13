@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { amateur } from '../data/index.ts';
+import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 
 const setup: GameSetup = { seed: 'test-seed', name: '王小明', startPosition: 'SS' };
@@ -113,15 +115,18 @@ describe('重播', () => {
     expect(() => Game.replay(log)).toThrow(/跨版本不保證重現/);
   });
 
-  it('重播日誌只需要設定與選擇——沒有任何狀態快照', () => {
+  it('重播日誌只含設定與選擇——沒有任何狀態快照', () => {
     const game = playToEnd(started());
     const log = game.toReplayLog();
-    expect(Object.keys(log).sort()).toEqual(['choices', 'engineVersion', 'setup']);
 
-    // 重播日誌相對狀態快照的價值：跑完整個高中三年，日誌仍明顯小於同一時刻
-    // 的狀態本身，而且它只會隨選擇數成長，不會隨狀態的複雜度成長。
-    const snapshot = JSON.stringify(game.state);
-    expect(JSON.stringify(log).length).toBeLessThan(snapshot.length);
+    // 重播日誌的價值不在體積——養成期每一點配點都是一次選擇，日誌其實可能比
+    // 狀態快照還大。價值在於它是**最小的完整表述**且無法偽造：裡面沒有任何
+    // 結果，只有輸入，所以伺服器能靠重跑驗證成績，而玩家改不出一個好成績。
+    expect(Object.keys(log).sort()).toEqual(['choices', 'engineVersion', 'setup']);
+    const serialised = JSON.stringify(log);
+    expect(serialised).not.toContain('ability');
+    expect(serialised).not.toContain('potential');
+    expect(serialised).not.toContain('honors');
   });
 
   it('尚未做出任何選擇時也能重播', () => {
@@ -170,24 +175,36 @@ describe('步驟順序', () => {
   });
 });
 
-describe('高中三年', () => {
-  it('跑完三年後畢業，年齡與年份都推進了三年', () => {
+describe('養成六年（國中三年 + 高中三年）', () => {
+  const totalYears = stageOf('JHS').years + stageOf('HS').years;
+
+  it('跑完六年後畢業，年齡與年份都推進了六年', () => {
     const game = playToEnd(started());
     const origin = game.state?.origin;
-    expect(game.state?.age).toBe((origin?.age ?? 0) + 3);
-    expect(game.state?.year).toBe((origin?.year ?? 0) + 3);
+    expect(game.state?.age).toBe((origin?.age ?? 0) + totalYears);
+    expect(game.state?.year).toBe((origin?.year ?? 0) + totalYears);
   });
 
-  it('每一年都有自己的分隔線，加上畢業那一條', () => {
+  it('每一年都有自己的分隔線，加上國中畢業與高中畢業各一條', () => {
     const dividers = playToEnd(started()).flow.log.filter((e) => e.kind === 'divider');
-    expect(dividers).toHaveLength(4);
+    expect(dividers).toHaveLength(totalYears + 2);
   });
 
-  it('三年都打了大賽', () => {
+  it('六年都打了大賽', () => {
     const cards = playToEnd(started()).flow.log.filter(
       (e) => e.kind === 'card' && e.title === '大賽結算',
     );
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(totalYears);
+  });
+
+  it('國中畢業後會換到高中，並重新分發學校', () => {
+    const game = started();
+    const jhs = game.state?.school ?? '';
+    expect(Object.keys(amateur.junior_high.schools)).toContain(jhs);
+
+    playToEnd(game);
+    expect(game.state?.stage).toBe('HS');
+    expect(Object.keys(amateur.high_school.schools)).toContain(game.state?.school ?? '');
   });
 
   it('能力在三年後明顯成長', () => {
@@ -199,16 +216,20 @@ describe('高中三年', () => {
     expect(after).toBeGreaterThan(before);
   });
 
-  it('生涯榮譽的數量與敘事裡的冠軍數一致', () => {
-    // 高中奪冠很罕見（門檻 52，畢業時綜合約 38），因此不斷言一定會發生，
-    // 改為驗證兩者一致——這樣不依賴稀有事件也能抓到記錄漏掉或重複的錯誤。
+  it('大賽冠軍的榮譽紀錄與敘事一致', () => {
+    // 奪冠罕見，因此不斷言一定會發生，改為驗證兩者一致——這樣不依賴稀有事件
+    // 也能抓到記錄漏掉或重複的錯誤。
+    // 榮譽同時包含選秀輪次與國際賽名次（後者也以「冠軍」結尾），因此以大賽
+    // 名稱精確比對，不能只看結尾。
+    const cupNames = [...amateur.cups.JHS.names, ...amateur.cups.HS.names];
     for (let i = 0; i < 40; i++) {
       const game = playWell(started({ seed: `champ-${i}` }));
       const championCards = game.flow.log.filter(
         (e) => e.kind === 'card' && e.title === '冠軍',
       ).length;
-      // 榮譽也包含選秀輪次，因此只數冠軍那幾筆
-      const honors = (game.state?.honors ?? []).filter((h) => h.endsWith('冠軍')).length;
+      const honors = (game.state?.honors ?? []).filter((h) =>
+        cupNames.some((cup) => h.endsWith(`${cup}冠軍`)),
+      ).length;
       if (championCards === 0) expect(honors).toBe(0);
       else expect(honors).toBeGreaterThan(0);
     }

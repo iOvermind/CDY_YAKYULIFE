@@ -5,7 +5,14 @@
  * 本模組的抽取一律走 season 子序列——大賽是這個階段的賽季，成績結算歸屬於它。
  */
 
-import { amateur, type AmateurStage } from '../data/index.ts';
+import {
+  amateur,
+  type AmateurStage,
+  type SchoolStage,
+  type SchoolTiers,
+  type StageDefinition,
+  type YouthTournament,
+} from '../data/index.ts';
 import type { Abilities } from './rating.ts';
 import { rate } from './rating.ts';
 import type { World } from './rng.ts';
@@ -88,10 +95,95 @@ function rankFor(power: number, thresholds: readonly number[], lastRank: number)
   return lastRank;
 }
 
-/** 球隊強度加成。目前只有高中有隱藏分級。 */
+/** 球隊強度加成。國中與高中各有自己的隱藏分級表。 */
 function stageTeamBonus(ctx: CupContext): number {
-  if (ctx.stage !== 'HS' || ctx.schoolTier === undefined) return 0;
-  return amateur.high_school.tiers[String(ctx.schoolTier)]?.power_bonus ?? 0;
+  if (ctx.schoolTier === undefined) return 0;
+  const tiers = schoolTiersOf(ctx.stage);
+  if (tiers === null) return 0;
+  return tiers.tiers[String(ctx.schoolTier)]?.power_bonus ?? 0;
+}
+
+/** 取得該階段的學校分級表；沒有學校的階段回傳 null。 */
+export function schoolTiersOf(stage: AmateurStage): SchoolTiers | null {
+  if (stage === 'JHS') return amateur.junior_high;
+  if (stage === 'HS') return amateur.high_school;
+  return null;
+}
+
+/** 取得階段定義。 */
+export function stageOf(stage: SchoolStage): StageDefinition {
+  const def = amateur.stages[stage];
+  if (def === undefined || Array.isArray(def) || typeof def === 'string') {
+    throw new Error(`stages 缺少 ${stage} 的定義`);
+  }
+  return def as StageDefinition;
+}
+
+/** 這個階段的下一個階段；沒有就回傳 null（接下來進選秀）。 */
+export function nextStageOf(stage: SchoolStage): SchoolStage | null {
+  return (stageOf(stage).next as SchoolStage | undefined) ?? null;
+}
+
+// ------------------------------------------------------------------ 國際賽
+
+export interface YouthCallUp {
+  /** 是否入選。未達門檻就不會被徵召。 */
+  readonly selected: boolean;
+  readonly tournament: string;
+  readonly rankIndex: number;
+  readonly rank: string;
+  readonly points: number;
+}
+
+/** 取得該階段的養成期國際賽設定；沒有就回傳 null。 */
+export function youthTournamentOf(stage: AmateurStage): YouthTournament | null {
+  const cfg = amateur.amateur_international[stage];
+  if (cfg === undefined || cfg === null) return null;
+  return cfg as YouthTournament;
+}
+
+/**
+ * 打養成期的國際賽。
+ *
+ * 不是每個人都入選——綜合能力達門檻才會被徵召，因此入選本身就是一件值得
+ * 高興的事。名次由整體興衰決定，個人能力只佔一小部分。
+ */
+export function playYouthTournament(
+  world: World,
+  stage: AmateurStage,
+  overall: number,
+): YouthCallUp | null {
+  const cfg = youthTournamentOf(stage);
+  if (cfg === null) return null;
+
+  if (overall < cfg.call_up_threshold) {
+    return { selected: false, tournament: cfg.name, rankIndex: -1, rank: '', points: 0 };
+  }
+
+  const rng = world.stream('season');
+  const shared = amateur.amateur_international;
+  const bonus = Math.min(
+    shared.power_bonus.max,
+    Math.max(0, Math.round((overall - shared.power_bonus.base_overall) * shared.power_bonus.factor)),
+  );
+  const roll = rng.int(0, 100) + bonus;
+
+  let rankIndex = cfg.thresholds.length;
+  for (let i = 0; i < cfg.thresholds.length; i++) {
+    const t = cfg.thresholds[i];
+    if (t !== undefined && roll >= t) {
+      rankIndex = i;
+      break;
+    }
+  }
+
+  return {
+    selected: true,
+    tournament: cfg.name,
+    rankIndex,
+    rank: shared.ranks[rankIndex] ?? '',
+    points: cfg.points[rankIndex] ?? 0,
+  };
 }
 
 /**

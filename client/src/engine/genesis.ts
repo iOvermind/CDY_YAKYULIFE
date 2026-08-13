@@ -17,9 +17,10 @@ import {
   PITCH_FAMILIES,
   type AbilityKey,
   type Hand,
+  type SchoolStage,
   type StartPosition,
 } from '../data/index.ts';
-import type { World } from './rng.ts';
+import type { StreamName, World } from './rng.ts';
 
 /**
  * 生涯起點。值來自 amateur.json 的 career_start——**不得寫死在程式碼裡**，
@@ -45,9 +46,9 @@ export interface NewPlayer {
   readonly ability: Readonly<Record<AbilityKey, number>>;
   /** 潛力天花板：每項能力這輩子的上限。 */
   readonly potential: Readonly<Record<AbilityKey, number>>;
-  /** 出身高中 */
+  /** 出身學校（國中） */
   readonly school: string;
-  /** 高中隱藏強度分級：1 名門 / 2 中堅 / 3 弱旅 */
+  /** 學校隱藏強度分級：1 名門 / 2 中堅 / 3 弱旅 */
   readonly schoolTier: number;
 }
 
@@ -116,13 +117,23 @@ function rollPotential(world: World, start: StartPosition): Record<AbilityKey, n
   return potential;
 }
 
-/** 分發出身高中。學校名單與隱藏分級來自 amateur.json。 */
-function assignSchool(world: World): { school: string; tier: number } {
-  const rng = world.stream('genesis');
-  const names = Object.keys(amateur.high_school.schools).sort();
+/**
+ * 分發學校。
+ *
+ * 學校名單與隱藏分級來自 amateur.json，各階段一份。生涯從國中開始，因此開局
+ * 分發的是國中；升上高中時會再分發一次。
+ */
+export function assignSchool(
+  world: World,
+  stage: SchoolStage,
+  stream: StreamName = 'genesis',
+): { school: string; tier: number } {
+  const rng = world.stream(stream);
+  const tiers = stage === 'JHS' ? amateur.junior_high : amateur.high_school;
+  const names = Object.keys(tiers.schools).sort();
   const school = rng.pick(names);
-  const tier = amateur.high_school.schools[school];
-  if (tier === undefined) throw new Error(`高中 ${school} 沒有對應的分級`);
+  const tier = tiers.schools[school];
+  if (tier === undefined) throw new Error(`${stage} 的 ${school} 沒有對應的分級`);
   return { school, tier };
 }
 
@@ -142,7 +153,7 @@ export function createPlayer(
   const potential = rollPotential(world, startPosition);
   const throws = rng.weighted(abilities.handedness.throws.weights);
   const bats = rng.weighted(abilities.handedness.bats.weights);
-  const { school, tier } = assignSchool(world);
+  const { school, tier } = assignSchool(world, 'JHS');
 
   return {
     name,

@@ -200,9 +200,9 @@ describe('慣用手', () => {
   });
 });
 
-describe('出身高中', () => {
-  it('分發的高中來自名單，分級與名單一致', () => {
-    const schools = amateur.high_school.schools;
+describe('出身學校', () => {
+  it('開局分發的是國中，分級與名單一致', () => {
+    const schools = amateur.junior_high.schools;
     const seen = new Set<string>();
     for (const p of sample(500, 'SS')) {
       expect(schools[p.school]).toBe(p.schoolTier);

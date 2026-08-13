@@ -159,12 +159,20 @@ export interface GrowthCurve {
 
 export interface AmateurData {
   readonly career_start: { readonly age: number; readonly year: number };
-  readonly high_school: {
-    readonly tiers: Readonly<
-      Record<string, { readonly label: string; readonly power_bonus: number }>
-    >;
-    readonly schools: Readonly<Record<string, number>>;
-  };
+  readonly stages: {
+    readonly order: readonly SchoolStage[];
+  } & Readonly<Record<string, StageDefinition | readonly SchoolStage[] | string>>;
+  readonly junior_high: SchoolTiers;
+  readonly high_school: SchoolTiers;
+  readonly amateur_international: {
+    readonly ranks: readonly string[];
+    readonly power_bonus: {
+      readonly base_overall: number;
+      readonly factor: number;
+      readonly max: number;
+    };
+    readonly honor_prefix: string;
+  } & Readonly<Record<string, YouthTournament | unknown>>;
   readonly draft: {
     readonly evaluation: {
       readonly age_pivot: number;
@@ -194,6 +202,7 @@ export interface AmateurData {
     readonly min_fielder: number;
   };
   readonly cups: {
+    readonly JHS: CupStage;
     readonly HS: CupStage;
     readonly U: CupStage;
     readonly AMA: CupStage;
@@ -213,10 +222,38 @@ export interface CupStage {
   readonly names: readonly string[];
   /** 由高到低的名次門檻。實力值達到第 n 個門檻即取得第 n 名次。 */
   readonly thresholds: readonly number[];
+  /** 賽事場次，保留給未來擴充；目前一律為 null。 */
+  readonly games: number | null;
 }
 
-/** 養成階段：高中、大學、業餘成棒。 */
-export type AmateurStage = 'HS' | 'U' | 'AMA';
+/** 養成階段：國中、高中、大學、業餘成棒。 */
+export type AmateurStage = 'JHS' | 'HS' | 'U' | 'AMA';
+
+/** 有學校分級的養成階段。 */
+export type SchoolStage = 'JHS' | 'HS';
+
+export interface StageDefinition {
+  readonly name: string;
+  readonly years: number;
+  readonly year_labels: readonly string[];
+  readonly next?: string;
+}
+
+export interface SchoolTiers {
+  readonly tiers: Readonly<Record<string, { readonly label: string; readonly power_bonus: number }>>;
+  readonly schools: Readonly<Record<string, number>>;
+}
+
+export interface YouthTournament {
+  readonly name: string;
+  /** 只在該階段的第幾年舉辦。 */
+  readonly held_in_year: number;
+  /** 綜合能力達此值才會被徵召。 */
+  readonly call_up_threshold: number;
+  readonly thresholds: readonly number[];
+  readonly points: readonly number[];
+  readonly games: number | null;
+}
 
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;

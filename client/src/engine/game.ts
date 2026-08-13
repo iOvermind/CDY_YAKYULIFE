@@ -14,8 +14,17 @@ import {
   amateur,
   PITCH_FAMILIES,
   type AbilityKey,
+  type SchoolStage,
 } from '../data/index.ts';
-import { academyUnlocked, playCups } from './amateur.ts';
+import {
+  academyUnlocked,
+  nextStageOf,
+  playCups,
+  playYouthTournament,
+  schoolTiersOf,
+  stageOf,
+  youthTournamentOf,
+} from './amateur.ts';
 import { canRejectOffer, qualifiesAsTwoWay, runDraft, TWO_WAY_TRAIT } from './draft.ts';
 import {
   drawEvent,
@@ -26,14 +35,12 @@ import {
   type GameEvent,
 } from './events.ts';
 import { esc, Flow, type Option } from './flow.ts';
-import { createPlayer, type NewPlayer } from './genesis.ts';
+import { assignSchool, createPlayer, type NewPlayer } from './genesis.ts';
 import { growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
-/** 高中的年數。之後會由聯盟階梯資料提供。 */
-const HIGH_SCHOOL_YEARS = 3;
-const YEAR_LABELS = ['高一', '高二', '高三'];
+
 
 /** 一局遊戲的開局設定。與重播日誌合起來即可完整重建一段生涯。 */
 export interface GameSetup {
@@ -64,8 +71,14 @@ export interface PlayerState {
   readonly traits: ReadonlySet<string>;
   readonly age: number;
   readonly year: number;
+  /** 目前的養成階段。 */
+  readonly stage: SchoolStage;
   /** 目前階段的第幾年，從 1 起算。 */
   readonly stageYear: number;
+  /** 目前就讀的學校。 */
+  readonly school: string;
+  /** 學校的隱藏強度分級。 */
+  readonly schoolTier: number;
   /** 生涯榮譽。 */
   readonly honors: readonly string[];
   /** 尚未分配的能力點。 */
@@ -87,7 +100,10 @@ export class Game {
   #traits = new Set<string>();
   #age = 0;
   #year = 0;
+  #stage: SchoolStage = 'JHS';
   #stageYear = 1;
+  #school = '';
+  #schoolTier = 2;
   #honors: string[] = [];
   #pool = 0;
   #ceilingBonus: Record<AbilityKey, number> = {};
@@ -113,7 +129,10 @@ export class Game {
       traits: this.#traits,
       age: this.#age,
       year: this.#year,
+      stage: this.#stage,
       stageYear: this.#stageYear,
+      school: this.#school,
+      schoolTier: this.#schoolTier,
       honors: this.#honors,
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
@@ -195,6 +214,8 @@ export class Game {
     this.#ceilingBonus = Object.fromEntries(ALL_ABILITIES.map((k) => [k, 0]));
     this.#age = player.age;
     this.#year = player.year;
+    this.#school = player.school;
+    this.#schoolTier = player.schoolTier;
 
     const tier = ['', '名門', '中堅', '弱旅'][player.schoolTier] ?? '';
     const startName = abilities.start_positions[player.startPosition];
@@ -217,15 +238,45 @@ export class Game {
     this.flow.push(() => this.#startYear());
   }
 
-  /** 一個年度：分隔線 → 季初訓練 → 大賽 → 分配大賽點數 → 年度結束。 */
+  /** 一個年度：分隔線 → 季初訓練 → 事件卡 → 大賽 → 國際賽 → 分配點數 → 年度結束。 */
   #startYear(): void {
-    const label = YEAR_LABELS[this.#stageYear - 1] ?? `第 ${this.#stageYear} 年`;
+    const def = stageOf(this.#stage);
+    const label = def.year_labels[this.#stageYear - 1] ?? `${def.name}第 ${this.#stageYear} 年`;
     this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · ${label}`);
     this.flow.push(
       () => this.#springTraining(),
       () => this.#drawEventCard(),
       () => this.#cups(),
+      () => this.#youthTournament(),
       () => this.#endYear(),
+    );
+  }
+
+  /** 養成期的國際賽。只在該階段的指定年度舉辦，且需通過徵召門檻。 */
+  #youthTournament(): void {
+    const cfg = youthTournamentOf(this.#stage);
+    if (cfg === null || this.#stageYear !== cfg.held_in_year) return;
+
+    const overall = this.rating?.overall ?? 0;
+    const result = playYouthTournament(this.world, this.#stage, overall);
+    if (result === null) return;
+
+    if (!result.selected) {
+      this.flow.card(
+        'info',
+        `${cfg.name} 國家隊選拔`,
+        `名單公布了，沒有你。（綜合 ${overall}｜徵召門檻 ${cfg.call_up_threshold}）`,
+      );
+      return;
+    }
+
+    const prefix = amateur.amateur_international.honor_prefix;
+    this.#honors.push(`${this.#year} ${prefix}${cfg.name}${result.rank}`);
+    this.#pool += result.points;
+    this.flow.card(
+      result.rankIndex <= 1 ? 'gold' : 'good',
+      `${cfg.name}`,
+      `披上中華隊戰袍。最終 <b class="hl">${esc(result.rank)}</b>（+${result.points} 點）。`,
     );
   }
 
@@ -349,11 +400,11 @@ export class Game {
     if (player === null) return;
 
     const season = playCups(this.world, {
-      stage: 'HS',
+      stage: this.#stage,
       ability: this.#ability,
       position: ratingPosition(player.startPosition),
       traits: this.#traits,
-      schoolTier: player.schoolTier,
+      schoolTier: this.#schoolTier,
     });
 
     const lines = season.results
@@ -372,7 +423,7 @@ export class Game {
       );
     }
 
-    if (academyUnlocked('HS', season)) this.#traits.add(amateur.cups.academy_trigger.trait);
+    if (academyUnlocked(this.#stage, season)) this.#traits.add(amateur.cups.academy_trigger.trait);
 
     this.#pool += season.points;
     // 同樣要插隊——年度結束的步驟已經排在佇列裡了。
@@ -403,17 +454,46 @@ export class Game {
     );
   }
 
-  /** 年度結束：推進年齡與年份，還有下一年就繼續，否則畢業。 */
+  /** 年度結束：推進年齡與年份；同階段還有下一年就繼續，否則升學或畢業。 */
   #endYear(): void {
     this.#age++;
     this.#year++;
     this.#stageYear++;
 
-    if (this.#stageYear <= HIGH_SCHOOL_YEARS) {
+    if (this.#stageYear <= stageOf(this.#stage).years) {
       this.flow.push(() => this.#startYear());
       return;
     }
-    this.flow.push(() => this.#graduate());
+
+    const next = nextStageOf(this.#stage);
+    if (next === null) {
+      this.flow.push(() => this.#graduate());
+      return;
+    }
+    this.flow.push(() => this.#advanceStage(next));
+  }
+
+  /** 升學：換階段、重新分發學校。 */
+  #advanceStage(next: SchoolStage): void {
+    const from = stageOf(this.#stage);
+    this.#stage = next;
+    this.#stageYear = 1;
+
+    // 升學分發走 career 流——這是生涯事件，不是開局生成。
+    const assigned = assignSchool(this.world, next, 'career');
+    this.#school = assigned.school;
+    this.#schoolTier = assigned.tier;
+
+    const tiers = schoolTiersOf(next);
+    const label = tiers?.tiers[String(assigned.tier)]?.label ?? '';
+    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · ${from.name}畢業`);
+    this.flow.card(
+      'gold',
+      `${stageOf(next).name}入學`,
+      `${esc(from.name)}三年結束，你進了<b class="hl">${esc(assigned.school)}</b>` +
+        `${label ? `（${esc(label)}）` : ''}。`,
+    );
+    this.flow.push(() => this.#startYear());
   }
 
   /** 高中畢業：結算三年、判定二刀流，然後進選秀。 */
