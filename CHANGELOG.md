@@ -6,3 +6,6 @@
 （見 `docs/rules/VERSION_RULES.md`）。日期格式為 `YYYY-MM-DD`。
 
 ## [Unreleased]
+
+### Changed (變更)
+- 舊版的單檔遊戲更名為 `index_legacy.html`，原本指向 `index.html` 的連結不再有效。

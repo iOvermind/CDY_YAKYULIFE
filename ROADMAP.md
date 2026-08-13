@@ -8,7 +8,7 @@
 *   [x] **Tauri + React 初始化**：建立 `client/` 目錄，將原有 UI 拆分為 React Components，並保留原有 CSS。
 *   [x] **確立防護與資料架構 (ADR 0001)**：制定「網頁端連線 PG，桌面端離線 SQLite」的兩棲存取策略，確立 Progression Isolation 機制。
 *   [ ] **實作 SQLite / IndexedDB 介面卡**：讓 React 前端能依據執行環境（Browser/Tauri）切換存取介面。
-*   [ ] **開發 `SimulationEngine.ts`**：將原本寫在 `index.html` 的擲骰、升降級與結算邏輯移植至 TypeScript，全面擁抱物件導向與資料驅動 (Data-Driven)。
+*   [ ] **開發 `SimulationEngine.ts`**：將原本寫在 `index_legacy.html` 的擲骰、升降級與結算邏輯移植至 TypeScript，全面擁抱物件導向與資料驅動 (Data-Driven)。
 
 ## 階段二：進階數據引擎擴充 (Advanced Analytics)
 

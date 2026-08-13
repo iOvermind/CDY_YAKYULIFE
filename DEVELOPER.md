@@ -28,7 +28,9 @@
    完成後應看到專案資料夾與檔案下載完成。
 
 2. 啟動專案
-   直接使用瀏覽器開啟專案目錄下的 `index.html` 檔案即可。不需要安裝任何套件（如 npm install），無須任何編譯步驟。
+   直接使用瀏覽器開啟專案目錄下的 `index_legacy.html` 檔案即可。不需要安裝任何套件（如 npm install），無須任何編譯步驟。
+
+> 本章節描述的是舊版單檔實作的環境。新架構（`client/`，見 §5）需要 Node.js 與 Rust 工具鏈，其環境建置步驟將於新架構可執行後補寫。
 
 ---
 
@@ -36,7 +38,7 @@
 
 **啟動**
 
-直接於瀏覽器開啟 `index.html`。
+直接於瀏覽器開啟 `index_legacy.html`。
 
 **修改後如何反映**：需重新整理瀏覽器（Refresh）以載入最新修改。專案未設置熱更新（Hot Reload）。
 
@@ -51,7 +53,10 @@ CDY_YAKYULIFE/
 ├─ docs/            
 │  ├─ rules/        通用規範（本專案遵循的文件規範）
 │  └─ agents/       AI 代理設定
-├─ index.html       遊戲本體（HTML + CSS + JS 全部內嵌）
+├─ client/          新架構實作（Tauri + React，開發中）
+│  ├─ src/          React 前端原始碼
+│  └─ src-tauri/    Tauri 桌面端封裝與 Rust 端
+├─ index_legacy.html 舊版遊戲本體（HTML + CSS + JS 全部內嵌，唯讀保留）
 ├─ WIKI.md          遊戲設計文件與完整數值表
 ├─ CONTEXT.md       領域術語表
 ├─ github.bat       Git 快速推拉腳本
@@ -71,17 +76,18 @@ CDY_YAKYULIFE/
 
 | 模組 | 職責 | 依賴 |
 | :--- | :--- | :--- |
-| `index.html` | 包含畫面結構、樣式設計與所有遊戲邏輯 | 無外部依賴 |
+| `index_legacy.html` | 舊版實作：包含畫面結構、樣式設計與所有遊戲邏輯 | 無外部依賴 |
+| `client/` | 新架構實作：Tauri + React，開發中 | Node.js、Rust |
 
 ### 關鍵決策
 
 #### [ADR 0001: 系統架構重構為 Tauri + React，並採用兩棲防護機制](docs/adr/0001-tauri-react-architecture.md)
 
-- **決定**：放棄單一 `index.html` 檔案架構，採用 **Tauri + React (Vite)** 進行全端重建。
+- **決定**：放棄單一 HTML 檔案架構，採用 **Tauri + React (Vite)** 進行全端重建。
 - **理由**：為了支援跨局成就點數、歷史生涯比較、以及未來的線上功能。引入本地資料庫 (SQLite) 用於離線儲存，並透過 Token 簽章機制防範基礎修改器作弊。
 - **代價**：開發流程需引入 Node.js 與 Rust 工具鏈，且需要維護前後端分離的狀態同步。
 
-> **注意**：舊版的單一檔案架構將封存於 `legacy/single-html` 分支。
+> **注意**：舊版的單一檔案實作以 `index_legacy.html` 保留於 `main`，作為新架構的遊戲邏輯對照基準，**唯讀、不再修改**。保留方式見 §8。
 
 ---
 
@@ -95,22 +101,24 @@ CDY_YAKYULIFE/
 
 **建置**
 
-專案不需建置步驟，無打包腳本。
+舊版的 `index_legacy.html` 不需建置，開啟即可執行。新架構的建置流程目前尚在開發中，未定案。
 
 **產物**
 
-| 產物 | 用途 |
-| :--- | :--- |
-| `index.html` | 唯一的執行檔，即是最終產物 |
+目前無。本專案尚未發佈任何版本，首個正式版本為 `1.0.0`。發佈的產物形式將於新架構可執行後在此明列（依 `docs/rules/RELEASE_RULES.md` §2.2 的形式標記）。
 
 ### 版本號
 
-**單一來源**：`index.html` 的 `<meta name="version">`（註：將於架構重構時加入）
+**單一來源**：`client/package.json` 的 `version`
 
 | 位置 | 欄位 | 方式 |
 | :--- | :--- | :--- |
-| `index.html` | `<meta name="version">` | 手動（單一來源） |
+| `client/package.json` | `version` | 手動（單一來源） |
+| `client/src-tauri/tauri.conf.json` | `version` | 手動 |
+| `client/src-tauri/Cargo.toml` | `package.version` | 手動 |
 | `CHANGELOG.md` | 版本標題 | 手動 |
+
+`index_legacy.html` 不帶版本號——它是唯讀保留的舊實作，不隨版本遞增（見 §8）。
 
 ---
 
@@ -123,11 +131,19 @@ CDY_YAKYULIFE/
 
 ### 舊實作的保留
 
-| 分支 | 內容 | 保留原因 | 解除條件 |
-| :--- | :--- | :--- | :--- |
-| `legacy/single-html` | 當前的單一 HTML 檔案實作 | 未來進行重大架構重構時，須保留這個極簡散佈的舊版本作為參考與保存 | 當新架構穩定運作，且確認不再需要維護單檔版本時 |
+舊版的單一 HTML 實作目前**與新架構共存於 `main`**，檔名為 `index_legacy.html`。
 
-舊實作以分支保留、不刪除；該分支不再接受新功能。
+| 保留形式 | 內容 | 保留原因 | 解除條件 |
+| :--- | :--- | :--- | :--- |
+| `main` 上的 `index_legacy.html` | 舊版單一 HTML 檔案實作 | 它是唯一一份完整可運作的遊戲邏輯，作為新架構的參考來源與正確性對照基準 | 新架構的行為經對照確認等價，且確認不再需要單檔版本時 |
+
+規則：
+
+- **禁止修改 `index_legacy.html`**。它是對照基準，改了就失去比對意義；任何修正只落在新架構。
+- 它不接受新功能，也不隨版本號遞增。
+- 未來若要將它從 `main` 移除，屆時再依 `docs/rules/DEVELOPER_RULES.md` §4.3 建立 `legacy/single-html` 分支保留，**禁止**直接刪除。
+
+> 目前兩者共存於 `main`，尚未觸發 `DEVELOPER_RULES.md` §4.3 的分支保留條件（該條的觸發條件是「舊實作無法與新實作共存於主分支」）。
 
 ---
 
@@ -151,8 +167,9 @@ CDY_YAKYULIFE/
 
 ### 9.3 依賴來源與鎖檔
 
-- 鎖檔：無。
-- 安裝指令：無。
+- 鎖檔：`client/package-lock.json` 與 `client/src-tauri/Cargo.lock`，兩者**皆已納入版本控制**。
+- 安裝指令：新架構的相依安裝指令將於環境建置步驟定案後於 §2 補寫；安裝時應使用會遵守鎖檔的指令（`npm ci`），不使用 `npm install`。
+- 舊版的 `index_legacy.html` 無任何第三方相依，不從外部載入資源。
 
 ### 9.4 破壞性操作的保護
 
