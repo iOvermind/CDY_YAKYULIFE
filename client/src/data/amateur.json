@@ -53,25 +53,26 @@
   "cups": {
     "_note": "各階段的年度大賽。實力值 = 綜合能力 + 學校分級加成 + 隨機波動，對照 thresholds 由高到低取第一個達標的名次。",
     "_games_note": "games 欄位保留給未來的賽事場次擴充（用於出賽數與成績累積），目前一律為 null 待填。填入之前，大賽只產生名次與能力點，不產生任何個人成績。",
+    "_par_note": "par 是該階段的對手平均水準，用於把能力值換算成成績——能力高過 par 多少，決定你打得比平均好多少。",
     "JHS": {
       "names": ["學生棒球聯賽", "諾德盃", "關懷盃"],
       "thresholds": [40, 35, 30, 25, 20],
-      "games": null
+      "par": 28
     },
     "HS": {
       "names": ["木棒聯賽", "黑豹旗", "玉山盃"],
       "thresholds": [52, 46, 40, 34, 28],
-      "games": null
+      "par": 38
     },
     "U": {
       "names": ["大學春季聯賽", "大專盃"],
       "thresholds": [60, 54, 48, 42, 36],
-      "games": null
+      "par": 46
     },
     "AMA": {
       "names": ["成棒甲組春季聯賽", "成棒甲組秋季聯賽"],
       "thresholds": [60, 54, 48, 42, 36],
-      "games": null
+      "par": 48
     },
     "power_noise": {
       "_note": "單場大賽的臨場波動。棒球是短期賽制，實力不必然轉換成名次——這個區間就是「短期賽會發生什麼事」的量化。",
@@ -80,6 +81,10 @@
     },
     "ranks": ["冠軍", "亞軍", "四強", "八強", "十六強", "預賽出局"],
     "points": [7, 5, 4, 3, 2, 1],
+    "games_by_rank": {
+      "_note": "各名次實際出賽的場次。打進冠軍戰的人本來就打比較多場，因此場次跟名次綁在一起——這讓成績自然反映實力，而不必另外設一套判定。索引與 ranks 對應。",
+      "values": [6, 5, 4, 3, 2, 1]
+    },
     "points_bonus": {
       "_note": "另加綜合能力除以此值取整。",
       "overall_divisor": 22
@@ -89,6 +94,66 @@
       "stage": "U",
       "rank": "冠軍",
       "trait": "academy"
+    }
+  },
+
+  "amateur_stats": {
+    "_note": "養成期的個人成績。這是簡化版——真正的賽季模擬（simulation_math.md §3-4）是為職業的百場球季寫的，而養成期一場大賽只有幾場球，用同一套公式會放大隨機噪音到失真。",
+    "_role_note": "由投手側與野手側評價較高者決定主要角色；二刀流兩邊都算。",
+
+    "batting": {
+      "_note": "打席數固定，安打率與長打率則看能力高過對手平均多少。",
+      "pa_per_game": 4,
+      "walk_rate": { "base": 0.08, "per_point": 0.004, "min": 0.02, "max": 0.25, "ability": "eye" },
+      "hit_rate": {
+        "_note": "安打率是對打數而非打席。base 是與對手同水準時的打擊率。",
+        "base": 0.28,
+        "per_point": 0.006,
+        "min": 0.1,
+        "max": 0.65,
+        "ability": "con"
+      },
+      "hr_rate": {
+        "_note": "全壘打佔安打的比例。",
+        "base": 0.04,
+        "per_point": 0.004,
+        "min": 0,
+        "max": 0.4,
+        "ability": "pow"
+      },
+      "rbi_per_hit": 0.55,
+      "steal_rate": {
+        "_note": "每次上壘的盜壘嘗試率，成功率另計。",
+        "base": 0.08,
+        "per_point": 0.005,
+        "min": 0,
+        "max": 0.5,
+        "ability": "spd"
+      },
+      "steal_success": 0.72,
+      "noise": { "min": -0.04, "max": 0.04 }
+    },
+
+    "pitching": {
+      "_note": "養成期的投手多半是球隊王牌，出賽即先發，因此局數以場次計。",
+      "innings_per_game": {
+        "base": 5,
+        "per_point": 0.08,
+        "min": 2,
+        "max": 9,
+        "ability": "sta"
+      },
+      "k_per_nine": { "base": 6, "per_point": 0.22, "min": 1, "max": 18, "ability": "vel" },
+      "bb_per_nine": {
+        "_note": "控球越好保送越少，因此 per_point 為負。",
+        "base": 4,
+        "per_point": -0.1,
+        "min": 0.5,
+        "max": 12,
+        "ability": "ctl"
+      },
+      "era": { "base": 3.6, "per_point": -0.09, "min": 0.3, "max": 12 },
+      "noise": { "min": -0.6, "max": 0.6 }
     }
   },
 

@@ -26,6 +26,13 @@ import {
   stageOf,
   youthTournamentOf,
 } from './amateur.ts';
+import {
+  addBatting,
+  addPitching,
+  playAmateurStats,
+  type BattingLine,
+  type PitchingLine,
+} from './amateurStats.ts';
 import { canRejectOffer, qualifiesAsTwoWay, runDraft, TWO_WAY_TRAIT } from './draft.ts';
 import {
   drawEvent,
@@ -92,6 +99,12 @@ export interface PlayerState {
   readonly ceilingBonus: Readonly<Record<AbilityKey, number>>;
   /** 本季累積的受傷機率增幅。 */
   readonly injuryRisk: number;
+  /** 當年成績。尚未打完大賽時為 null。 */
+  readonly seasonBatting: BattingLine | null;
+  readonly seasonPitching: PitchingLine | null;
+  /** 生涯累計成績。 */
+  readonly careerBatting: BattingLine | null;
+  readonly careerPitching: PitchingLine | null;
 }
 
 export class Game {
@@ -114,6 +127,10 @@ export class Game {
   #ceilingBonus: Record<AbilityKey, number> = {};
   #injuryRisk = 0;
   #dice: { values: readonly number[]; index: number } | null = null;
+  #seasonBatting: BattingLine | null = null;
+  #seasonPitching: PitchingLine | null = null;
+  #careerBatting: BattingLine | null = null;
+  #careerPitching: PitchingLine | null = null;
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -143,6 +160,10 @@ export class Game {
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
       injuryRisk: this.#injuryRisk,
+      seasonBatting: this.#seasonBatting,
+      seasonPitching: this.#seasonPitching,
+      careerBatting: this.#careerBatting,
+      careerPitching: this.#careerPitching,
     };
   }
 
@@ -427,9 +448,40 @@ export class Game {
     });
 
     const lines = season.results
-      .map((r) => `${esc(r.cup)}：<b class="hl">${esc(r.rank)}</b>（+${r.points} 點）`)
+      .map(
+        (r) =>
+          `${esc(r.cup)}：<b class="hl">${esc(r.rank)}</b>` +
+          `（${r.games} 場・+${r.points} 點）`,
+      )
       .join('<br>');
     this.flow.card('info', '大賽結算', lines);
+
+    // 成績依主要角色產生；二刀流投打都算。
+    const rating = this.rating;
+    const line = playAmateurStats(this.world, this.#stage, this.#ability, season.games, {
+      better: rating?.better ?? 'fielder',
+      twoWay: this.isTwoWay,
+    });
+    this.#seasonBatting = line.batting;
+    this.#seasonPitching = line.pitching;
+    this.#careerBatting = addBatting(this.#careerBatting, line.batting);
+    this.#careerPitching = addPitching(this.#careerPitching, line.pitching);
+
+    const statLines: string[] = [];
+    if (line.pitching !== null) {
+      const p = line.pitching;
+      statLines.push(
+        `投球 ${p.games} 場 ${p.ip} 局・${p.so} K・防禦率 <b class="hl">${p.era.toFixed(2)}</b>`,
+      );
+    }
+    if (line.batting !== null) {
+      const b = line.batting;
+      statLines.push(
+        `打擊 ${b.ab} 打數 ${b.hits} 安打 ${b.hr} 轟 ${b.rbi} 打點・` +
+          `打擊率 <b class="hl">${fmtAvg(b.avg)}</b>`,
+      );
+    }
+    if (statLines.length > 0) this.flow.card('good', '個人成績', statLines.join('<br>'));
 
     for (const cup of season.championships) {
       this.#honors.push(`${this.#year} ${cup}冠軍`);
@@ -710,6 +762,11 @@ export class Game {
     return { id: `alloc:${key}`, label: name, note };
   }
 
+}
+
+/** 打擊率的棒球慣例寫法：去掉個位數的 0，例如 .333。 */
+export function fmtAvg(avg: number): string {
+  return avg.toFixed(3).replace(/^0/, '');
 }
 
 function handLabel(hand: string): string {

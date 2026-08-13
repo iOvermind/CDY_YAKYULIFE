@@ -28,6 +28,8 @@ export interface CupResult {
   readonly points: number;
   /** 這場大賽的實力值，含分級加成與臨場波動。除錯用。 */
   readonly power: number;
+  /** 實際出賽場次。名次越好打得越多。 */
+  readonly games: number;
 }
 
 export interface CupSeason {
@@ -36,6 +38,8 @@ export interface CupSeason {
   readonly points: number;
   /** 拿下冠軍的大賽，用於榮譽紀錄。 */
   readonly championships: readonly string[];
+  /** 這一季大賽的總出賽場次。 */
+  readonly games: number;
 }
 
 export interface CupContext {
@@ -66,11 +70,13 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
   const results: CupResult[] = [];
   const championships: string[] = [];
   let total = 0;
+  let totalGames = 0;
 
   for (const cup of stage.names) {
     const power = overall + teamBonus + rng.int(cfg.power_noise.min, cfg.power_noise.max);
     const rankIndex = rankFor(power, stage.thresholds, lastRank);
     const points = (cfg.points[rankIndex] ?? 0) + pointsBonus;
+    const games = cfg.games_by_rank.values[rankIndex] ?? 1;
 
     results.push({
       cup,
@@ -78,12 +84,14 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
       rank: cfg.ranks[rankIndex] ?? '',
       points,
       power,
+      games,
     });
     total += points;
+    totalGames += games;
     if (rankIndex === 0) championships.push(cup);
   }
 
-  return { results, points: total, championships };
+  return { results, points: total, championships, games: totalGames };
 }
 
 /** 依實力值取名次索引。門檻由高到低，取第一個達標者；都不到則為最後一名次。 */

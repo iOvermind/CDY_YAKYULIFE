@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './app.css';
 import { abilities, START_POSITIONS, type Hand, type StartPosition } from './data/index.ts';
 import { stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
-import { Game, type PlayerState } from './engine/game.ts';
+import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
+import { fmtAvg, Game, type PlayerState } from './engine/game.ts';
 import type { Rating } from './engine/rating.ts';
 import { newSeed } from './engine/rng.ts';
 
@@ -231,9 +232,7 @@ function GameScreen({
 
       <div id="col-right">
         {state && <StatsPanel state={state} rating={game.rating} />}
-        <div id="panel-log">
-          <LogView entries={game.flow.log} />
-        </div>
+        <EventLog entries={game.flow.log} />
         <div id="panel-act">
           {prompt !== null ? (
             <>
@@ -271,6 +270,36 @@ function GameScreen({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 事件紀錄。新卡片出現時自動捲到底。
+ *
+ * 只在使用者原本就貼著底部時才自動捲——如果他正往回翻舊紀錄，把畫面拉走是
+ * 很煩人的事。門檻抓 40px，容許一點捲動慣性造成的誤差。
+ */
+function EventLog({ entries }: { entries: readonly LogEntry[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const stuckToBottom = useRef(true);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null || !stuckToBottom.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [entries.length]);
+
+  return (
+    <div
+      id="panel-log"
+      ref={ref}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        stuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      }}
+    >
+      <LogView entries={entries} />
     </div>
   );
 }
@@ -333,9 +362,21 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
         </div>
       </div>
 
+      <StatLines
+        label="當年成績"
+        batting={state.seasonBatting}
+        pitching={state.seasonPitching}
+      />
+
       <h4 style={{ marginTop: 12 }}>生涯數據</h4>
+      <StatLines
+        label={null}
+        batting={state.careerBatting}
+        pitching={state.careerPitching}
+      />
+
       {state.honors.length > 0 ? (
-        <p style={{ fontSize: 12, lineHeight: 1.7, margin: 0 }}>
+        <p style={{ fontSize: 12, lineHeight: 1.9, margin: '8px 0 0' }}>
           {state.honors.map((h, i) => (
             <span className="tag" key={i} style={{ marginRight: 4 }}>
               {h}
@@ -343,15 +384,84 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
           ))}
         </p>
       ) : (
-        <p className="stat-pending" style={{ marginTop: 0 }}>
+        <p className="stat-pending" style={{ marginTop: 8 }}>
           還沒有任何榮譽。
         </p>
       )}
-      <p className="stat-pending">
-        打擊率、防禦率這類個人成績要等賽季模擬實作後才有——養成期的大賽目前只
-        產生名次與能力點，賽事場次（`games`）也還留空待填。
-      </p>
     </div>
+  );
+}
+
+/** 打擊與投球成績。養成期的成績依大賽場次結算，場次由名次決定。 */
+function StatLines({
+  label,
+  batting,
+  pitching,
+}: {
+  label: string | null;
+  batting: BattingLine | null;
+  pitching: PitchingLine | null;
+}) {
+  if (batting === null && pitching === null) {
+    return (
+      <p className="stat-pending" style={{ marginTop: 8 }}>
+        {label === null ? '還沒有成績。' : `${label}：還沒打過大賽。`}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {label !== null && <h4 style={{ marginTop: 12 }}>{label}</h4>}
+      {pitching !== null && (
+        <table className="fin">
+          <thead>
+            <tr>
+              <th>G</th>
+              <th>IP</th>
+              <th>SO</th>
+              <th>BB</th>
+              <th>ERA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{pitching.games}</td>
+              <td>{pitching.ip.toFixed(1)}</td>
+              <td>{pitching.so}</td>
+              <td>{pitching.bb}</td>
+              <td>{pitching.era.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {batting !== null && (
+        <table className="fin">
+          <thead>
+            <tr>
+              <th>G</th>
+              <th>AB</th>
+              <th>H</th>
+              <th>HR</th>
+              <th>RBI</th>
+              <th>SB</th>
+              <th>AVG</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{batting.games}</td>
+              <td>{batting.ab}</td>
+              <td>{batting.hits}</td>
+              <td>{batting.hr}</td>
+              <td>{batting.rbi}</td>
+              <td>{batting.sb}</td>
+              <td>{fmtAvg(batting.avg)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </>
   );
 }
 

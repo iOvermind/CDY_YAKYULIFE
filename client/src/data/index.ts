@@ -206,6 +206,25 @@ export interface AmateurData {
     };
     readonly reject_offer: { readonly reject_from_round: number; readonly max_age: number };
   };
+  readonly amateur_stats: {
+    readonly batting: {
+      readonly pa_per_game: number;
+      readonly walk_rate: RateSpec;
+      readonly hit_rate: RateSpec;
+      readonly hr_rate: RateSpec;
+      readonly rbi_per_hit: number;
+      readonly steal_rate: RateSpec;
+      readonly steal_success: number;
+      readonly noise: Range;
+    };
+    readonly pitching: {
+      readonly innings_per_game: RateSpec;
+      readonly k_per_nine: RateSpec;
+      readonly bb_per_nine: RateSpec;
+      readonly era: RateSpec;
+      readonly noise: Range;
+    };
+  };
   readonly two_way_talent: {
     readonly trait: string;
     readonly min_pitcher: number;
@@ -219,6 +238,7 @@ export interface AmateurData {
     readonly power_noise: Range;
     readonly ranks: readonly string[];
     readonly points: readonly number[];
+    readonly games_by_rank: { readonly values: readonly number[] };
     readonly points_bonus: { readonly overall_divisor: number };
     readonly academy_trigger: {
       readonly stage: string;
@@ -232,8 +252,17 @@ export interface CupStage {
   readonly names: readonly string[];
   /** 由高到低的名次門檻。實力值達到第 n 個門檻即取得第 n 名次。 */
   readonly thresholds: readonly number[];
-  /** 賽事場次，保留給未來擴充；目前一律為 null。 */
-  readonly games: number | null;
+  /** 該階段的對手平均水準，用於把能力值換算成成績。 */
+  readonly par: number;
+}
+
+/** 一條率的設定：與對手同水準時是 base，每高一點加 per_point。 */
+export interface RateSpec {
+  readonly base: number;
+  readonly per_point: number;
+  readonly min: number;
+  readonly max: number;
+  readonly ability?: string;
 }
 
 /** 養成階段：國中、高中、大學、業餘成棒。 */
