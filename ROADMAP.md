@@ -4,11 +4,57 @@
 
 ## 階段一：架構重構與本地儲存 (已啟動)
 
-*   [x] **資料解耦**：將硬編碼的天賦、事件、常數抽出為 `traits.json`, `events.json`, `stats_config.json`。
-*   [x] **Tauri + React 初始化**：建立 `client/` 目錄，將原有 UI 拆分為 React Components，並保留原有 CSS。
+*   [x] **資料解耦**：將硬編碼的天賦、事件、常數抽出為 `client/src/data/` 底下的 10 個 JSON（`abilities` / `leagues` / `positions` / `teams` / `events` / `traits` / `awards` / `hall_of_fame` / `amateur` / `flavor`）。
+*   [x] **Tauri + React 專案初始化**：建立 `client/` 目錄與 Tauri v2 + React 19 + Vite 7 的工具鏈。
+*   [ ] **UI 元件化**：將 `index_legacy.html` 的畫面拆分為 React Components 並移植樣式。目前 `client/src/` 仍是 Vite 樣板，尚未動工。
 *   [x] **確立防護與資料架構 (ADR 0001)**：制定「網頁端連線 PG，桌面端離線 SQLite」的兩棲存取策略，確立 Progression Isolation 機制。
 *   [ ] **實作 SQLite / IndexedDB 介面卡**：讓 React 前端能依據執行環境（Browser/Tauri）切換存取介面。
 *   [ ] **開發 `SimulationEngine.ts`**：將原本寫在 `index_legacy.html` 的擲骰、升降級與結算邏輯移植至 TypeScript，全面擁抱物件導向與資料驅動 (Data-Driven)。
+
+## 階段一.五：功能對等 (Feature Parity)
+
+> **這個階段的唯一目標**：新架構能從高中開局、完整走完一段生涯到引退與名人堂結算，中途不卡關。
+>
+> **驗收線**：跑得完一段生涯所需的全部系統。外觀與周邊（四種主題、分享圖產生）不在此階段——介面本來就要改成科技藍主題，搬舊的會白做。
+>
+> **不是逐數值對等**：守備分權重已刻意修正（見 `client/src/data/positions.json` 的 `_deviation`），新舊版的守備分本來就不會相同。對等指的是**系統齊全、流程走得完**，不是數字一模一樣。
+
+### 底層（必須最先做）
+
+*   [ ] **可重現亂數（種子碼）**：README 承諾「同種子＋同選擇＝同一段人生」。這是架構層級的約束——整個引擎的亂數必須走同一條可重現序列，事後補會逼你重寫每一處取亂數的地方。
+*   [ ] **遊戲狀態模型與存檔／讀檔**
+*   [ ] **卡片與選項的流程編排**：對應 `index_legacy.html` 的 `stepQ` 佇列機制。
+
+### 養成期
+
+*   [ ] 高中／大學／業餘成棒的大賽結算與能力點分配
+*   [ ] 事件卡（保守／照常／全力一搏三種應對）
+*   [ ] 訓練骰與蓄力槽
+*   [ ] 選秀
+
+### 職業期
+
+*   [ ] 聯盟階梯升降級
+*   [ ] 賽季模擬與成績結算
+*   [ ] 守位系統與移防
+*   [ ] 合約談判（長約／短約）
+*   [ ] 投手定位（先發／中繼／終結者）
+*   [ ] TJ 量表、手術與打針抉擇
+*   [ ] 傷病與後遺症
+
+### 生涯事件
+
+*   [ ] 感情系統（交往／結婚／生子／外遇）
+*   [ ] 國際賽徵召
+*   [ ] 旅外、入札與 FA
+*   [ ] 27 種隱藏特性的觸發判定
+*   [ ] 年度獎項
+
+### 結算
+
+*   [ ] 引退流程與引退場景
+*   [ ] 生涯評價分與名人堂票選
+*   [ ] 生涯總結畫面
 
 ## 階段二：進階數據引擎擴充 (Advanced Analytics)
 
@@ -35,6 +81,7 @@
 
 *   [x] **加入稀有事件定義**：已在 `events.json` 中加入極度稀有事件的架構與權重 (Weight)。
 *   [ ] **實作 Rules Engine**：解析 `traits.json` 與 `events.json` 裡的 `conditions` (觸發條件) 與 `effects` (效果，如 `tj_countdown`, `respect`)。
+    *   注意依賴倒置：`traits.json` 目前只有 7 筆 `rules_complete: true`，其餘 20 筆的觸發條件在階段一.五會先寫死在引擎裡。做這一項時那 20 筆要再拆一次——這是刻意接受的重工，因為現階段先做 Rules Engine 會擋住功能對等。
 *   [ ] **新事件實裝**：
     *   *禁藥風波*：帶來極端能力增長，但潛藏長年禁賽與名譽掃地的風險。
     *   *組頭接觸*：測試玩家貪念，一發致富或永久被逐出棒球界。
@@ -44,7 +91,8 @@
 
 ## 階段五：聯盟拓撲 (League Topology)
 
-*   [x] **擴充聯盟資料**：已於設定檔加入韓國職棒 (KBO)、墨西哥棒球聯盟 (LMB) 與澳洲棒球聯盟 (ABL)。
+*   [x] **擴充聯盟資料**：已於 `leagues.json` / `teams.json` / `hall_of_fame.json` 加入韓國職棒 (KBO)、墨西哥棒球聯盟 (LMB) 與澳洲棒球聯盟 (ABL) 的層級、球隊與名人堂。
+*   [ ] **補齊擴充聯盟的評價門檻**：上述三個聯盟有名人堂設定，但 `hall_of_fame.json` 的 `tier_thresholds` 與 `first_ballot.multiplier` 只涵蓋 CPBL / NPB / MLB。在補齊之前，這三個聯盟算不出生涯評價分級，名人堂票選跑不起來——資料在、路徑不在。
 *   [ ] **動態升降轉會系統**：
     *   將寫死的線性升降級 (CPBL -> MiLB) 改寫為有向圖 (Directed Graph) 尋路系統。
     *   實作「在次級職棒打出鬼神成績後，被美職或日職球探重新挖角」的逆襲路徑。
