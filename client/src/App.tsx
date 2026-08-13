@@ -122,7 +122,7 @@ function StartScreen({
 
         <div className="field">
           <label>投球慣用手</label>
-          <div className="seg two">
+          <div className="seg">
             {abilities.handedness.selectable.throws.map((h) => (
               <button
                 key={h}
@@ -160,7 +160,7 @@ function StartScreen({
 
         <div className="field">
           <label>佈景主題</label>
-          <div className="seg two">
+          <div className="seg">
             {THEMES.map((t) => (
               <button
                 key={t.code}

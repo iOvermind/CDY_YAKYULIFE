@@ -184,7 +184,12 @@ export interface GrowthCurve {
 }
 
 export interface AmateurData {
-  readonly career_start: { readonly age: number; readonly year: number };
+  readonly career_start: {
+    readonly age: number;
+    readonly year: number;
+    /** 生涯起點的季節。年度對齊球季而非學年，因此從春天算起。 */
+    readonly season: string;
+  };
   readonly stages: {
     readonly order: readonly SchoolStage[];
   } & Readonly<Record<string, StageDefinition | readonly SchoolStage[] | string>>;

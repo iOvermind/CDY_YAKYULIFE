@@ -354,3 +354,31 @@ describe('國際賽冠軍的訓練骰加成', () => {
     }
   });
 });
+
+describe('生涯起點', () => {
+  it('從國一的春天開始', () => {
+    const log = started().flow.log;
+    const first = log.find((e) => e.kind === 'divider');
+    expect(first?.kind === 'divider' && first.text).toContain('國一');
+    expect(first?.kind === 'divider' && first.text).toContain(amateur.career_start.season);
+  });
+
+  it('入學卡片也點明是春天', () => {
+    const card = started().flow.log.find((e) => e.kind === 'card' && e.title === '入學');
+    expect(card?.kind === 'card' && card.body).toContain(amateur.career_start.season);
+  });
+
+  it('只有第一年標季節——之後每年都從春天開始，再標一次只是重複', () => {
+    const dividers = playAmateur(started()).flow.log.filter((e) => e.kind === 'divider');
+    const withSeason = dividers.filter(
+      (e) => e.kind === 'divider' && e.text.includes(amateur.career_start.season),
+    );
+    expect(withSeason).toHaveLength(1);
+  });
+
+  it('起點的年齡與年份都由資料決定，不寫死在程式碼裡', () => {
+    const state = started().state;
+    expect(state?.age).toBe(amateur.career_start.age);
+    expect(state?.year).toBe(amateur.career_start.year);
+  });
+});

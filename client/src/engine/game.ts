@@ -44,7 +44,7 @@ import {
   type GameEvent,
 } from './events.ts';
 import { esc, Flow, type Option } from './flow.ts';
-import { assignSchool, createPlayer, type NewPlayer } from './genesis.ts';
+import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
 import { levelOf, playSeason, positionName } from './season.ts';
@@ -287,7 +287,8 @@ export class Game {
     this.flow.card(
       'gold',
       '入學',
-      `<b class="hl">${esc(player.name)}</b>進了<b class="hl">${esc(player.school)}</b>` +
+      `${esc(START_SEASON)}，<b class="hl">${esc(player.name)}</b>進了` +
+        `<b class="hl">${esc(player.school)}</b>` +
         `${tier ? `（${esc(tier)}）` : ''}，在球隊裡的位置是<b class="hl">${esc(startName)}</b>。` +
         `投${handLabel(player.throws)}打${handLabel(player.bats)}。`,
     );
@@ -305,7 +306,12 @@ export class Game {
   #startYear(): void {
     const def = stageOf(this.#stage);
     const label = def.year_labels[this.#stageYear - 1] ?? `${def.name}第 ${this.#stageYear} 年`;
-    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · ${label}`);
+    // 只有生涯的第一年標出季節——它是整段人生的起點，之後每個年度都從春天
+    // 開始，再標一次只是重複。
+    const first = this.#stage === 'JHS' && this.#stageYear === 1;
+    this.flow.divider(
+      `${this.#year} 年 · ${this.#age} 歲 · ${label}${first ? `・${START_SEASON}` : ''}`,
+    );
     this.flow.push(
       () => this.#springTraining(),
       () => this.#drawEventCard(),

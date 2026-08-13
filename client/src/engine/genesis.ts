@@ -28,6 +28,7 @@ import type { StreamName, World } from './rng.ts';
  */
 export const START_AGE = amateur.career_start.age;
 export const START_YEAR = amateur.career_start.year;
+export const START_SEASON = amateur.career_start.season;
 
 export interface NewPlayer {
   readonly name: string;
