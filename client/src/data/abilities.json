@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "_source": "抽取自 index_legacy.html ABL / POS_AB / POSN / newState()",
+  "_note": "球探量表 20-80。所有能力值共用這個尺度，上限為 80。",
+
+  "scale": {
+    "min": 20,
+    "max": 80,
+    "hard_floor": 1,
+    "_note": "min/max 是球探量表的表述範圍；hard_floor 是能力因傷病或衰退下修時的絕對下限。"
+  },
+
+  "abilities": {
+    "sta": "體力",
+    "vel": "球速",
+    "ctl": "控球",
+    "brk": "變化球",
+    "con": "Contact",
+    "pow": "力量",
+    "spd": "速度",
+    "eye": "選球",
+    "rng": "守備範圍",
+    "fld": "接球",
+    "arm": "臂力",
+    "cat": "配球"
+  },
+
+  "position_groups": {
+    "P": "投手",
+    "C": "捕手",
+    "IF": "內野手",
+    "OF": "外野手"
+  },
+
+  "position_abilities": {
+    "P": ["sta", "vel", "ctl", "brk"],
+    "C": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm", "cat"],
+    "IF": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm"],
+    "OF": ["sta", "con", "pow", "spd", "eye", "rng", "fld", "arm"]
+  },
+
+  "initial_ability": {
+    "_note": "開局能力：每項先擲 base，再依守位群給招牌能力額外加成。",
+    "base": { "min": 20, "max": 32 },
+    "bonus": {
+      "P": { "vel": { "min": 0, "max": 6 }, "brk": { "min": 0, "max": 4 } },
+      "default": { "con": { "min": 0, "max": 6 }, "pow": { "min": 0, "max": 4 } }
+    }
+  },
+
+  "potential_ceiling": {
+    "_note": "OOTP 式潛力天花板：把該守位群的能力洗牌後，依名次套用不同區間——1 項頂尖工具、1 項優質、1 項中上、其餘平庸。投手只有 4 項能力，天花板刻意更集中，避免動輒雙 70。",
+    "tiers": {
+      "P": [
+        { "min": 70, "max": 80 },
+        { "min": 58, "max": 68 },
+        { "min": 50, "max": 60 },
+        { "min": 44, "max": 54 }
+      ],
+      "default": [
+        { "min": 72, "max": 80 },
+        { "min": 64, "max": 74 },
+        { "min": 56, "max": 68 },
+        { "min": 46, "max": 62 }
+      ]
+    }
+  }
+}

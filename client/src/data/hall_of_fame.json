@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "_source": "抽取自 index_legacy.html TIER_TH / HOF_CFG / retireScene() 的 fbMult",
+  "_note": "生涯評價與名人堂。tier_thresholds 是五帶金字塔的四道門檻，由高到低對應名人堂／明星／每日／替補；低於最後一道即第五帶。",
+
+  "tier_thresholds": {
+    "_note": "擬真玩家尺的校準：成功稀有化、浮沉為大宗、失敗有感。索引 0 為名人堂門檻。",
+    "labels": ["名人堂", "明星", "每日", "替補"],
+    "CPBL": [12000, 7000, 4300, 2100],
+    "NPB": [8500, 6200, 3000, 1900],
+    "MLB": [7500, 6200, 3500, 1900]
+  },
+
+  "halls": {
+    "CPBL": { "name": "中華職棒名人堂", "wait_years": 5, "total_voters": 132, "league": "中職" },
+    "NPB": { "name": "日本野球殿堂", "wait_years": 5, "total_voters": 326, "league": "日職" },
+    "KBO": { "name": "韓國棒球名人堂", "wait_years": 5, "total_voters": 150, "league": "韓職" },
+    "LMB": { "name": "墨西哥棒球殿堂", "wait_years": 5, "total_voters": 200, "league": "墨聯" },
+    "ABL": { "name": "澳洲棒球名人堂", "wait_years": 5, "total_voters": 50, "league": "澳職" },
+    "MLB": { "name": "美國棒球名人堂", "wait_years": 5, "total_voters": 389, "league": "大聯盟" }
+  },
+
+  "_expansion_gap": "KBO / LMB / ABL 有名人堂設定，但 tier_thresholds 與 first_ballot.multiplier 沒有對應項目。這三個聯盟目前無法計算生涯評價分級，也就無法真的進行名人堂票選。要啟用需補齊門檻。",
+
+  "first_ballot": {
+    "_note": "評價分需超過名人堂門檻的指定倍數才在第一年當選，否則等待 2~6 年。大聯盟最嚴，中職與日職放寬。",
+    "multiplier": { "CPBL": 1.12, "NPB": 1.12, "MLB": 1.2 },
+    "default_multiplier": 1.2,
+    "wait_if_not_first": { "min": 2, "max": 6 }
+  },
+
+  "vote_percent": {
+    "_note": "得票率 = 75 + (評價分 − 名人堂門檻) / 門檻 × 40 + 隨機 0~6 − (等待年數 − 1) × 4，下限 75、上限 99.1。",
+    "base": 75,
+    "over_threshold_factor": 40,
+    "random_max": 6,
+    "wait_penalty_per_year": 4,
+    "floor": 75,
+    "cap": 99.1
+  },
+
+  "representative_league": {
+    "_note": "生涯代表聯盟：先取生涯最佳分級（i 最小）的聯盟，若有多個同分級，取出賽年資最多者。帽徽由此決定。",
+    "check_order": ["MLB", "NPB", "CPBL"]
+  }
+}

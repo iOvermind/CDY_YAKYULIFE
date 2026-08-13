@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "_source": "抽取自 index_legacy.html DPN / dpScore() / DP_TH / DP_BAR / DP_MULT / DP_RANK / defScore() 的 posW",
+  "_note": "守位系統。ability_weights 是每個守位的能力權重，資格判定與守備分共用同一組——見下方 _deviation。",
+
+  "_deviation": {
+    "from": "index_legacy.html",
+    "what": "舊版有兩套權重：dpScore() 逐守位加權（判定守不守得動），以及 defScore() 內的 skill 公式（計算守備分）。後者對所有非捕手守位共用一組 rng .45 / fld .40 / arm .15，等於放棄了守位特性。",
+    "consequence": "舊版會出現矛盾：一個守得住大聯盟三壘的強臂三壘手（arm 70 / fld 50 / rng 40），資格判定得 57 剛好達標，守備分卻只有 48.5，對比 MLB par 59 得到 DEF −6——他最強的臂力在資格判定佔 45%，在守備分只佔 15%，一輩子被自己的長處扣分。",
+    "decision": "新架構統一為一組 ability_weights，資格判定與守備分共用，各自再乘自己的係數（門檻對比 vs 減 par 再乘 defense_score_weight）。這是刻意偏離，不是抽取錯誤。守備分數值會與舊版不同，需重新校準。",
+    "legacy_note": "index_legacy.html 唯讀保留，不回頭修正。"
+  },
+
+  "positions": {
+    "C": "捕手",
+    "1B": "一壘手",
+    "2B": "二壘手",
+    "3B": "三壘手",
+    "SS": "游擊手",
+    "LF": "左外野手",
+    "CF": "中外野手",
+    "RF": "右外野手",
+    "DH": "指定打擊"
+  },
+
+  "ability_weights": {
+    "_note": "各守位看重的能力。加權總和即該守位的守備分數（未減 par）。DH 不守備，無權重。",
+    "SS": { "rng": 0.5, "fld": 0.3, "arm": 0.2 },
+    "2B": { "rng": 0.45, "fld": 0.4, "arm": 0.15 },
+    "3B": { "arm": 0.45, "fld": 0.35, "rng": 0.2 },
+    "CF": { "rng": 0.55, "fld": 0.3, "arm": 0.15 },
+    "RF": { "arm": 0.45, "rng": 0.35, "fld": 0.2 },
+    "LF": { "rng": 0.4, "fld": 0.35, "arm": 0.25 },
+    "C": { "fld": 0.4, "cat": 0.4, "arm": 0.2 },
+    "1B": { "fld": 0.6, "rng": 0.2, "arm": 0.2 }
+  },
+
+  "defense_thresholds": {
+    "_note": "守備分需 >= 此值才守得動該守位。只在頂級聯盟設限，其餘層級不限制。",
+    "C": { "CPBL1": 46, "NPB1": 54, "MLB": 60 },
+    "SS": { "CPBL1": 50, "NPB1": 58, "MLB": 64 },
+    "CF": { "CPBL1": 49, "NPB1": 57, "MLB": 63 },
+    "2B": { "CPBL1": 46, "NPB1": 53, "MLB": 59 },
+    "3B": { "CPBL1": 44, "NPB1": 51, "MLB": 57 },
+    "RF": { "CPBL1": 43, "NPB1": 50, "MLB": 56 },
+    "LF": { "CPBL1": 41, "NPB1": 47, "MLB": 53 },
+    "1B": { "CPBL1": 36, "NPB1": 42, "MLB": 48 }
+  },
+
+  "youth_adjust": {
+    "_note": "年輕球員吃潛力紅利，門檻略降——球團願意給時間成長。依年齡取第一個符合的區間。",
+    "tiers": [
+      { "max_age": 23, "adjust": -3 },
+      { "max_age": 25, "adjust": -1.5 }
+    ],
+    "default": 0
+  },
+
+  "catcher_bar": {
+    "_note": "捕手容忍度較高，另走一套基準線（舊版 DP_BAR + dpBar() 的年齡折扣）。爛到底仍會被移去一壘或 DH。",
+    "base": { "CPBL1": 45, "NPB1": 54, "MLB": 60 },
+    "age_discount": [
+      { "max_age": 21, "discount": 7 },
+      { "max_age": 24, "discount": 5 },
+      { "max_age": 26, "discount": 2 }
+    ],
+    "default_discount": 0
+  },
+
+  "salary_multiplier": {
+    "_note": "守位身價係數，乘在年薪上。",
+    "SS": 1.15, "CF": 1.15, "C": 1.12,
+    "2B": 1.05, "3B": 1.05, "RF": 1.05,
+    "1B": 1.0, "LF": 1.0, "DH": 0.92
+  },
+
+  "defense_score_weight": {
+    "_note": "守備分權重，乘在 (守備分 − 聯盟 par) 上。與 salary_multiplier 是兩個不同的量：前者是守備貢獻的放大倍率，後者是薪資議價力。DH 不產生守備分。",
+    "SS": 1.25, "CF": 1.2, "C": 1.15,
+    "2B": 1.05, "3B": 1.0, "RF": 0.95,
+    "1B": 0.75, "LF": 0.8
+  },
+
+  "defense_score_scale": {
+    "_note": "守備分最終係數：DEF = (加權守備分 − par) × defense_score_weight × scale × 出賽比重。",
+    "scale": 0.55
+  },
+
+  "rank": {
+    "_note": "守位身價階層，數字越小越高階。用於判斷是否升遷到更高身價的守位。",
+    "SS": 0, "CF": 0, "C": 0,
+    "2B": 1,
+    "3B": 2, "RF": 2,
+    "1B": 3, "LF": 3,
+    "DH": 4
+  },
+
+  "scan_order": {
+    "_note": "移防掃描順序：依當前守位群走各自的光譜，選出守得動的最高階守位。掃完一律補上 DH 作為保底。",
+    "IF": ["SS", "2B", "3B", "1B"],
+    "OF": ["CF", "RF", "LF", "1B"],
+    "fallback": "DH"
+  }
+}

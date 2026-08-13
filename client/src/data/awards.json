@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "_source": "抽取自 index_legacy.html awards() 的 TH 表與各獎項判定",
+  "_note": "年度獎項門檻。每項為 [基礎門檻, 鬼神保底門檻]：達到基礎門檻才進入機率判定，達到鬼神門檻則必定入選。",
+
+  "_calibration_note": "比率數據（era / avg / obp）與非場次連動數據（sv / hld / sb）三個聯盟統一標準；只有吃打席與局數的（so / hr / rbi）依 120:143:162 的場次比例放大。",
+
+  "thresholds": {
+    "CPBL": {
+      "games": 120,
+      "era": [3.20, 2.20],
+      "sv": [22, 35],
+      "hld": [18, 30],
+      "so": [130, 180],
+      "avg": [0.300, 0.360],
+      "hr": [20, 32],
+      "rbi": [75, 105],
+      "obp": [0.370, 0.430]
+    },
+    "NPB": {
+      "games": 143,
+      "era": [3.20, 2.20],
+      "sv": [22, 35],
+      "hld": [18, 30],
+      "so": [155, 215],
+      "avg": [0.300, 0.360],
+      "hr": [24, 38],
+      "rbi": [90, 125],
+      "obp": [0.370, 0.430]
+    },
+    "MLB": {
+      "games": 162,
+      "era": [3.20, 2.20],
+      "sv": [22, 35],
+      "hld": [18, 30],
+      "so": [175, 240],
+      "avg": [0.300, 0.360],
+      "hr": [27, 43],
+      "rbi": [100, 140],
+      "obp": [0.370, 0.430]
+    }
+  },
+  "_fallback_league": "CPBL",
+
+  "all_star": {
+    "_note": "明星賽入選機率隨 d 值動態提升。台中猛瑪有人氣加成——d 值不足時入選會標註「（人氣入選）」。",
+    "base": 28,
+    "per_d": 7,
+    "clamp": { "min": 3, "max": 92 },
+    "popularity_bonus": {
+      "league": "CPBL",
+      "team": "台中猛瑪",
+      "add": 30,
+      "clamp": { "min": 3, "max": 97 },
+      "flag_below_d": 2
+    }
+  },
+
+  "rookie_of_year": {
+    "_note": "僅生涯第一個球季可得。中職的資格另要求沒有日職、大聯盟或小聯盟的出賽紀錄。",
+    "min_d": 4,
+    "base": 30,
+    "per_d_over_min": 15,
+    "clamp": { "min": 30, "max": 95 }
+  },
+
+  "pitcher_of_year": {
+    "name": "年度最佳投手",
+    "_note": "限先發投手。局數需達該聯盟場次數，ERA 需達基礎門檻。",
+    "requires_role": "SP",
+    "min_ip_equals": "games",
+    "god": { "ip": 150 },
+    "base": 30,
+    "era_factor": 35,
+    "ip_factor": 0.4,
+    "clamp": { "min": 30, "max": 95 }
+  },
+
+  "closer_award": {
+    "_note": "限終結者，依救援成功數。",
+    "requires_role": "CL",
+    "base": 28,
+    "per_sv_over_threshold": 5,
+    "clamp": { "min": 28, "max": 95 }
+  }
+}

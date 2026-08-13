@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "_source": "抽取自 index_legacy.html TEAM_COLOR / CPBL_TEAMS / NPB_TEAMS / MLB_TEAMS / teamNick()",
+  "_note": "各聯盟球隊。nick 是隊名代表詞，用於「◯◯先生」這類稱號；未列出者預設取隊名末兩字。",
+
+  "nick_fallback": {
+    "_note": "沒有 nick 欄位時的預設規則：取隊名的最後兩個字。",
+    "rule": "last_2_chars"
+  },
+
+  "leagues": {
+    "CPBL": [
+      { "name": "台中猛瑪", "color": "#ffd800", "nick": "猛瑪" },
+      { "name": "府城雄獅", "color": "#ff7f00", "nick": "雄獅" },
+      { "name": "桃園金剛", "color": "#8b1a1a", "nick": "金剛" },
+      { "name": "新北騎士", "color": "#003f87", "nick": "騎士" },
+      { "name": "台北恐龍", "color": "#c8102e", "nick": "恐龍" },
+      { "name": "高雄神鵰", "color": "#1a7a3a", "nick": "神鵰" }
+    ],
+    "NPB": [
+      { "name": "東京大人", "color": "#f97709", "nick": "東京大人" },
+      { "name": "阪神猛虎", "color": "#ffe201" },
+      { "name": "橫濱海星", "color": "#0a3ce0" },
+      { "name": "廣島紅鯉", "color": "#e60012" },
+      { "name": "神宮飛燕", "color": "#0a7bc2" },
+      { "name": "名古屋神龍", "color": "#003a70" },
+      { "name": "福岡猛禽", "color": "#f5c400" },
+      { "name": "北海道培根", "color": "#0a2d5c" },
+      { "name": "千葉海潮", "color": "#111111" },
+      { "name": "仙台金梟", "color": "#8b0000" },
+      { "name": "大阪蠻牛", "color": "#0033a0" },
+      { "name": "埼玉雄獅", "color": "#1268b3" }
+    ],
+    "KBO": [
+      { "name": "光州赤焰", "color": "#EA0029" },
+      { "name": "首爾星辰", "color": "#C30452" },
+      { "name": "大邱王者", "color": "#074CA1" },
+      { "name": "首爾巨怪", "color": "#131230" },
+      { "name": "水原魔法使", "color": "#000000" },
+      { "name": "仁川星際", "color": "#CE0E2D" },
+      { "name": "釜山霸主", "color": "#041E42" },
+      { "name": "大田風暴", "color": "#FF6600" },
+      { "name": "昌原遠古", "color": "#315288" },
+      { "name": "首爾守護者", "color": "#570514" }
+    ],
+    "KBO2": [
+      { "name": "光州赤焰二軍", "color": "#EA0029" },
+      { "name": "首爾星辰二軍", "color": "#C30452" },
+      { "name": "大邱王者二軍", "color": "#074CA1" },
+      { "name": "首爾巨怪二軍", "color": "#131230" },
+      { "name": "水原魔法使二軍", "color": "#000000" },
+      { "name": "仁川星際二軍", "color": "#CE0E2D" },
+      { "name": "釜山霸主二軍", "color": "#041E42" },
+      { "name": "大田風暴二軍", "color": "#FF6600" },
+      { "name": "昌原遠古二軍", "color": "#315288" },
+      { "name": "高陽守護者", "color": "#570514" },
+      { "name": "尚武鐵騎", "color": "#000000" },
+      { "name": "蔚山狂潮", "color": "#0033a0" }
+    ],
+    "LMB": [
+      { "name": "蒙克洛瓦重金屬", "color": "#00539C" },
+      { "name": "聯合湖收割者", "color": "#8C1D40" },
+      { "name": "杜蘭戈統帥", "color": "#11457E" },
+      { "name": "哈里斯科遊俠", "color": "#00205B" },
+      { "name": "奇瓦瓦砂金", "color": "#FFC72C" },
+      { "name": "阿瓜斯卡連特斯機車", "color": "#FDB913" },
+      { "name": "薩爾蒂約幻影", "color": "#006747" },
+      { "name": "蒙特雷王權", "color": "#002D62" },
+      { "name": "雙拉雷多暗殺者", "color": "#0C2340" },
+      { "name": "提華納狂牛", "color": "#E31837" },
+      { "name": "萊昂無畏者", "color": "#002244" },
+      { "name": "克雷塔羅密謀", "color": "#512888" },
+      { "name": "墨西哥城赤角", "color": "#C8102E" },
+      { "name": "韋拉克魯斯天劫", "color": "#D31145" },
+      { "name": "瓦哈卡鬥士", "color": "#000000" },
+      { "name": "猶加敦百獸王", "color": "#F2A900" },
+      { "name": "塔巴斯科守神", "color": "#005587" },
+      { "name": "普埃布拉翠鳥", "color": "#007A33" },
+      { "name": "坎佩切掠奪者", "color": "#BA0C2F" },
+      { "name": "金塔納羅奧虎衛", "color": "#001489" }
+    ],
+    "ABL": [
+      { "name": "阿德雷德巨石", "color": "#E31837" },
+      { "name": "布里斯本亡命之徒", "color": "#000000" },
+      { "name": "伯斯烈陽", "color": "#B30000" },
+      { "name": "雪梨碧浪", "color": "#009BDF" }
+    ],
+    "MLB": [
+      { "name": "洛城藍電", "color": "#005A9C" },
+      { "name": "聖港修士", "color": "#2F241D" },
+      { "name": "灣區大人", "color": "#FD5A1E", "nick": "灣區大人" },
+      { "name": "紐約帝國", "color": "#0C2340" },
+      { "name": "波士頓襪王", "color": "#BD3039", "nick": "紅襪王" },
+      { "name": "紐約大蘋果", "color": "#FF5910" },
+      { "name": "費城鐵魂", "color": "#E81828" },
+      { "name": "亞城戰斧", "color": "#13274F" },
+      { "name": "風城幼熊", "color": "#0E3386" },
+      { "name": "河濱緋雀", "color": "#C41E3A" },
+      { "name": "星港火箭", "color": "#EB6E1F" },
+      { "name": "孤星騎兵", "color": "#003278" },
+      { "name": "翡翠水兵", "color": "#005C5C" },
+      { "name": "洛城神使", "color": "#BA0021" },
+      { "name": "楓葉藍鴉", "color": "#134A8E" },
+      { "name": "快船金鷗", "color": "#DF4601" },
+      { "name": "海灣雷射", "color": "#092C5C" },
+      { "name": "森林悍將", "color": "#E31937" },
+      { "name": "汽車城猛虎", "color": "#0C2340" },
+      { "name": "北星雙塔", "color": "#002B5C" },
+      { "name": "風城襪王", "color": "#27251F", "nick": "白襪王" },
+      { "name": "向日葵王室", "color": "#174885" },
+      { "name": "競技者", "color": "#003831", "nick": "競技者" },
+      { "name": "奶油杜康", "color": "#FFC52F" },
+      { "name": "鋼鐵船長", "color": "#FDB827" },
+      { "name": "魔法魚人", "color": "#00A3E0" },
+      { "name": "首都人民", "color": "#AB0003" },
+      { "name": "沙漠眼鏡蛇", "color": "#A71930", "nick": "眼鏡蛇" },
+      { "name": "黛紫高原", "color": "#33006F" },
+      { "name": "女王城紅軍", "color": "#C6011F" }
+    ]
+  }
+}

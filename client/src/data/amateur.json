@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "_source": "抽取自 index_legacy.html hsMap / HS_CUPS / U_CUPS / amateurSeason() / runDraft() / 國際賽選項",
+  "_note": "職業之前的階段：高中、大學、業餘成棒，以及選秀與國際賽的獎勵級距。",
+
+  "high_school": {
+    "_note": "高中固定分級表（隱藏）：開局隨機分發一所學校，分級決定大賽表現的隱藏加成。",
+    "tiers": {
+      "1": { "label": "名門", "power_bonus": 6 },
+      "2": { "label": "中堅", "power_bonus": 0 },
+      "3": { "label": "弱旅", "power_bonus": -6 }
+    },
+    "schools": {
+      "平鎮高中": 1,
+      "穀保家商": 1,
+      "高苑工商": 2,
+      "北科附工": 2,
+      "普門高中": 3,
+      "東大體中": 3
+    }
+  },
+
+  "cups": {
+    "_note": "各階段的年度大賽。實力值 = 綜合能力 + 高中分級加成 + 隨機 −8~+8，對照 thresholds 由高到低取第一個達標的名次。",
+    "HS": {
+      "names": ["木棒聯賽", "黑豹旗", "玉山盃"],
+      "thresholds": [52, 46, 40, 34, 28]
+    },
+    "U": {
+      "names": ["大學春季聯賽", "大專盃"],
+      "thresholds": [60, 54, 48, 42, 36]
+    },
+    "AMA": {
+      "names": ["成棒甲組春季聯賽", "成棒甲組秋季聯賽"],
+      "thresholds": [60, 54, 48, 42, 36]
+    },
+    "ranks": ["冠軍", "亞軍", "四強", "八強", "十六強", "預賽出局"],
+    "points": [7, 5, 4, 3, 2, 1],
+    "points_bonus": {
+      "_note": "另加綜合能力除以此值取整。",
+      "overall_divisor": 22
+    },
+    "academy_trigger": {
+      "_note": "大學階段拿下任一大賽冠軍即解鎖「學院派」。",
+      "stage": "U",
+      "rank": "冠軍",
+      "trait": "academy"
+    }
+  },
+
+  "draft": {
+    "_note": "中華職棒選秀簽約金，依指名輪次（單位：萬）。索引 0 未使用，第 1 指最高。超出表列輪次一律 50。",
+    "signing_bonus_by_round": [0, 1000, 600, 350, 350, 150, 150, 150, 50, 50, 50],
+    "default_bonus": 50,
+    "first_round_direct_promotion": {
+      "_note": "第 1 指且綜合能力達標者直接進一軍，否則從二軍起步。",
+      "round": 1,
+      "min_overall": 50,
+      "level": "CPBL1",
+      "fallback_level": "CPBL2"
+    }
+  },
+
+  "international": {
+    "_note": "國家隊徵召。名次由整體興衰決定，個人能力只佔一小部分：亂數 = 隨機 0~100 + 能力加成，能力加成 = (綜合能力 − 52) × 0.35，上限 8。",
+    "power_bonus": { "base_overall": 52, "factor": 0.35, "max": 8 },
+    "thresholds": [96, 88, 79, 46],
+    "ranks": ["冠軍", "亞軍", "季軍", "複賽止步", "預賽出局"],
+    "points": [6, 5, 4, 2, 1],
+    "injury_next_season": 10,
+    "intlace_effect": {
+      "_note": "「國際賽之鬼」的效果：不增加下季受傷機率，且能力點保底。",
+      "trait": "intlace",
+      "injury_next_season": 0,
+      "min_points": 2
+    },
+    "taiwan_trigger": {
+      "_note": "國際賽出賽超過 5 次解鎖「Team Taiwan」。",
+      "min_count": 5,
+      "trait": "taiwan"
+    }
+  }
+}
