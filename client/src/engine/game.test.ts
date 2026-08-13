@@ -692,3 +692,57 @@ describe('榮譽清單', () => {
     expect(champs.some((c) => runners.includes(c))).toBe(true);
   });
 });
+
+describe('生涯次數統計', () => {
+  const play = (seed: string) => playWell(started({ seed }), true);
+
+  it('國內大賽項次等於實際打過的場數', () => {
+    const game = play('count-a');
+    const cups = game.flow.log.filter((e) => e.kind === 'card' && e.title === '大賽結算').length;
+    const perYear = amateur.cups['JHS'].names.length; // 國高中的場數相同
+    expect(game.state?.counts.domesticEntries).toBe(cups * perYear);
+  });
+
+  it('冠軍次數不會多於上榜次數，上榜不會多於出賽', () => {
+    for (let i = 0; i < 30; i++) {
+      const c = play(`count-${i}`).state?.counts;
+      if (c === undefined) continue;
+      expect(c.domesticTitles).toBeLessThanOrEqual(c.domesticPodiums);
+      expect(c.domesticPodiums).toBeLessThanOrEqual(c.domesticEntries);
+      expect(c.internationalTitles).toBeLessThanOrEqual(c.internationalPodiums);
+      expect(c.internationalPodiums).toBeLessThanOrEqual(c.internationalCaps);
+    }
+  });
+
+  it('連年奪冠時次數會累加，但榮譽清單不會——這正是分開記的理由', () => {
+    for (let i = 0; i < 60; i++) {
+      const game = play(`dup-${i}`);
+      const c = game.state?.counts;
+      const honors = game.state?.honors ?? [];
+      if (c === undefined || c.domesticTitles < 2) continue;
+      // 冠軍拿了兩次以上，但去重後的榮譽項數必定較少或相等
+      const titleHonors = honors.filter((h) => h.endsWith('冠軍')).length;
+      expect(titleHonors).toBeLessThanOrEqual(c.domesticTitles);
+      expect(c.domesticTitles).toBeGreaterThan(1);
+      return;
+    }
+  });
+
+  it('國際賽徵召次數等於實際打過的國際賽場數', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = play(`cap-${i}`);
+      const played = game.flow.log.filter(
+        (e) => e.kind === 'card' && e.body.includes('披上中華隊戰袍'),
+      ).length;
+      if (played === 0) continue;
+      expect(game.state?.counts.internationalCaps).toBe(played);
+      return;
+    }
+  });
+
+  it('沒打過就全部是 0', () => {
+    const c = started().state?.counts;
+    expect(c?.domesticEntries).toBe(0);
+    expect(c?.internationalCaps).toBe(0);
+  });
+});

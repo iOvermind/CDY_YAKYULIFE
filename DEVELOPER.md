@@ -91,6 +91,8 @@
 CDY_YAKYULIFE/
 ├─ docs/            
 │  ├─ rules/        通用規範（本專案遵循的文件規範）
+│  ├─ design/       數值設計：公式總表與模擬數學模型
+│  ├─ adr/          架構決策紀錄
 │  └─ agents/       AI 代理設定
 ├─ client/          新架構實作（Tauri + React，開發中）
 │  ├─ src/

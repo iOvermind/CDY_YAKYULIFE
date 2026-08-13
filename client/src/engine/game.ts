@@ -110,8 +110,13 @@ export interface PlayerState {
   readonly school: string;
   /** 學校的隱藏強度分級。 */
   readonly schoolTier: number;
-  /** 生涯榮譽。 */
+  /**
+   * 生涯榮譽。**同一項只記一次**——連三年拿下同一個盃賽冠軍是一件事，不是
+   * 三件。要數次數請用 counts，不要 filter 這份清單。
+   */
   readonly honors: readonly string[];
+  /** 生涯次數統計。榮譽清單去重之後，次數必須另外算。 */
+  readonly counts: CareerCounts;
   /** 尚未分配的能力點。 */
   readonly pool: number;
   /** 各項能力被提升的上限點數。 */
@@ -141,6 +146,28 @@ export interface PlayerState {
    * 意義所在。尚未畢業或已取得二刀流時為 null。
    */
   readonly lockedSide: 'pitcher' | 'fielder' | null;
+}
+
+/**
+ * 生涯次數統計。
+ *
+ * 榮譽清單刻意去重（見 PlayerState.honors），因此「打過幾次國際賽」「拿過幾次
+ * 冠軍」這類問題不能靠數那份清單。特性的觸發條件多半看的是次數——例如
+ * traits.json 的 taiwan 要求國際賽徵召超過五次——所以次數要獨立記。
+ */
+export interface CareerCounts {
+  /** 打過的國內大賽項次，一年打四個盃賽就加四。 */
+  readonly domesticEntries: number;
+  /** 國內大賽奪冠次數。 */
+  readonly domesticTitles: number;
+  /** 國內大賽進入榮譽名次（冠亞軍）的次數。 */
+  readonly domesticPodiums: number;
+  /** 國際賽徵召次數，也就是入選國家隊的次數。 */
+  readonly internationalCaps: number;
+  /** 國際賽奪冠次數。 */
+  readonly internationalTitles: number;
+  /** 國際賽進入榮譽名次的次數。 */
+  readonly internationalPodiums: number;
 }
 
 /** 職業階段的狀態。 */
@@ -178,6 +205,21 @@ export class Game {
   #school = '';
   #schoolTier = 2;
   #honors: string[] = [];
+  #counts: {
+    domesticEntries: number;
+    domesticTitles: number;
+    domesticPodiums: number;
+    internationalCaps: number;
+    internationalTitles: number;
+    internationalPodiums: number;
+  } = {
+    domesticEntries: 0,
+    domesticTitles: 0,
+    domesticPodiums: 0,
+    internationalCaps: 0,
+    internationalTitles: 0,
+    internationalPodiums: 0,
+  };
   #pool = 0;
   #ceilingBonus: Record<AbilityKey, number> = {};
   #injuryRisk = 0;
@@ -256,6 +298,7 @@ export class Game {
       school: this.#school,
       schoolTier: this.#schoolTier,
       honors: this.#honors,
+      counts: this.#counts,
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
       injuryRisk: this.#injuryRisk,
@@ -428,6 +471,11 @@ export class Game {
     for (const code of qualifiedTournaments(this.#stage, season)) {
       const result = playYouthTournament(this.world, code, overall);
       const prefix = amateur.amateur_international.honor_prefix;
+
+      // 徵召一次就是一次，不管名次——「國家隊常客」看的是入選次數。
+      this.#counts.internationalCaps++;
+      if (result.rankIndex === 0) this.#counts.internationalTitles++;
+      if (honorRanks.has(result.rank)) this.#counts.internationalPodiums++;
 
       // 國際賽與國內大賽的榮譽各自獨立——贏下謝國城盃是一項成就，代表台灣
       // 打 LLB 拿冠軍是另一項。
@@ -623,6 +671,9 @@ export class Game {
 
     // 只有名次夠好才計入成就，且不帶年份——六年下來會累積出一長串「八強」，
     // 把真正的榮譽淹掉。其餘名次照樣給能力點。
+    this.#counts.domesticEntries += season.results.length;
+    this.#counts.domesticTitles += season.championships.length;
+    this.#counts.domesticPodiums += season.honors.length;
     for (const h of season.honors) this.#addHonor(`${h.cup}${h.rank}`);
     if (season.championships.length > 0) {
       this.flow.card(
