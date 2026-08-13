@@ -8,11 +8,17 @@
  * 因此「開局設定＋選擇序列」就是一段生涯的完整表述，見 ADR 0002。
  */
 
-import { abilities, ALL_ABILITIES, type AbilityKey } from '../data/index.ts';
+import { abilities, ALL_ABILITIES, amateur, type AbilityKey } from '../data/index.ts';
+import { academyUnlocked, playCups } from './amateur.ts';
 import { esc, Flow, type Option } from './flow.ts';
 import { createPlayer, type NewPlayer } from './genesis.ts';
 import { growthCurve, rollTrainingDice, train } from './growth.ts';
+import { rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
+
+/** 高中的年數。之後會由聯盟階梯資料提供。 */
+const HIGH_SCHOOL_YEARS = 3;
+const YEAR_LABELS = ['高一', '高二', '高三'];
 
 /** 一局遊戲的開局設定。與重播日誌合起來即可完整重建一段生涯。 */
 export interface GameSetup {
@@ -41,6 +47,14 @@ export interface PlayerState {
   readonly carry: Readonly<Record<AbilityKey, number>>;
   /** 已取得的隱藏特性。 */
   readonly traits: ReadonlySet<string>;
+  readonly age: number;
+  readonly year: number;
+  /** 目前階段的第幾年，從 1 起算。 */
+  readonly stageYear: number;
+  /** 生涯榮譽。 */
+  readonly honors: readonly string[];
+  /** 尚未分配的能力點。 */
+  readonly pool: number;
 }
 
 export class Game {
@@ -52,6 +66,11 @@ export class Game {
   #ability: Record<AbilityKey, number> = {};
   #carry: Record<AbilityKey, number> = {};
   #traits = new Set<string>();
+  #age = 0;
+  #year = 0;
+  #stageYear = 1;
+  #honors: string[] = [];
+  #pool = 0;
 
   constructor(setup: GameSetup) {
     this.setup = setup;
@@ -71,7 +90,21 @@ export class Game {
       ability: this.#ability,
       carry: this.#carry,
       traits: this.#traits,
+      age: this.#age,
+      year: this.#year,
+      stageYear: this.#stageYear,
+      honors: this.#honors,
+      pool: this.#pool,
     };
+  }
+
+  /** 目前的綜合能力評價。 */
+  get rating() {
+    if (this.#player === null) return null;
+    return rate(this.#ability, {
+      position: ratingPosition(this.#player.startPosition),
+      traits: this.#traits,
+    });
   }
 
   /** 是否已取得二刀流天賦。決定成長曲線走哪一條。 */
@@ -127,11 +160,12 @@ export class Game {
     this.#player = player;
     this.#ability = { ...player.ability };
     this.#carry = Object.fromEntries(ALL_ABILITIES.map((k) => [k, 0]));
+    this.#age = player.age;
+    this.#year = player.year;
 
     const tier = ['', '名門', '中堅', '弱旅'][player.schoolTier] ?? '';
     const startName = abilities.start_positions[player.startPosition];
 
-    this.flow.divider(`${player.year} 年 · ${player.age} 歲 · 高中一年級`);
     // 卡片內文的 HTML 只能由程式碼寫死，變數一律先 esc()——姓名是自由輸入的。
     this.flow.card(
       'gold',
@@ -147,11 +181,22 @@ export class Game {
         '投打俱佳的人，在選秀前有機會取得二刀流。',
     );
 
-    this.flow.push(() => this.#firstSpring());
+    this.flow.push(() => this.#startYear());
   }
 
-  /** 高一春天的自主訓練：擲骰，逐顆分配。 */
-  #firstSpring(): void {
+  /** 一個年度：分隔線 → 季初訓練 → 大賽 → 分配大賽點數 → 年度結束。 */
+  #startYear(): void {
+    const label = YEAR_LABELS[this.#stageYear - 1] ?? `第 ${this.#stageYear} 年`;
+    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · ${label}`);
+    this.flow.push(
+      () => this.#springTraining(),
+      () => this.#cups(),
+      () => this.#endYear(),
+    );
+  }
+
+  /** 季初的自主訓練：擲骰，逐顆分配。 */
+  #springTraining(): void {
     const dice = rollTrainingDice(this.world, this.#traits);
 
     let msg = `自主訓練擲出 <b class="hl">${dice.values.length}</b> 顆骰：` +
@@ -163,7 +208,98 @@ export class Game {
     dice.values.forEach((value, index) => {
       this.flow.push(() => this.#allocate(value, index, dice.values.length));
     });
-    this.flow.push(() => this.#springDone());
+  }
+
+  /** 這一季的大賽。 */
+  #cups(): void {
+    const player = this.#player;
+    if (player === null) return;
+
+    const season = playCups(this.world, {
+      stage: 'HS',
+      ability: this.#ability,
+      position: ratingPosition(player.startPosition),
+      traits: this.#traits,
+      schoolTier: player.schoolTier,
+    });
+
+    const lines = season.results
+      .map((r) => `${esc(r.cup)}：<b class="hl">${esc(r.rank)}</b>（+${r.points} 點）`)
+      .join('<br>');
+    this.flow.card('info', '大賽結算', lines);
+
+    for (const cup of season.championships) {
+      this.#honors.push(`${this.#year} ${cup}冠軍`);
+    }
+    if (season.championships.length > 0) {
+      this.flow.card(
+        'gold',
+        '冠軍',
+        `拿下 <b class="hl">${esc(season.championships.join('、'))}</b> 的冠軍。`,
+      );
+    }
+
+    if (academyUnlocked('HS', season)) this.#traits.add(amateur.cups.academy_trigger.trait);
+
+    this.#pool += season.points;
+    this.flow.push(() => this.#spendPool());
+  }
+
+  /**
+   * 分配大賽得到的能力點，一次一點。
+   *
+   * 每一點都是獨立的選擇，因此重播日誌完整記下配點路徑。玩家可以隨時停手，
+   * 剩下的點數留到下一年——與訓練骰不同，大賽點數不會過期。
+   */
+  #spendPool(): void {
+    if (this.#pool <= 0) return;
+
+    const options: Option[] = ALL_ABILITIES.map((key) => this.#abilityOption(key, 1));
+    options.push({ id: 'pool:keep', label: '先留著', note: '剩下的點數留到之後再分配' });
+
+    this.flow.ask(
+      { title: `大賽點數還有 ${this.#pool} 點`, options },
+      (choice) => {
+        if (choice === 'pool:keep') return;
+        this.#applyPoints(choice.slice('alloc:'.length), 1);
+        this.#pool--;
+        // 還有點數就再問一次，直到分完或玩家喊停。
+        this.flow.push(() => this.#spendPool());
+      },
+    );
+  }
+
+  /** 年度結束：推進年齡與年份，還有下一年就繼續，否則畢業。 */
+  #endYear(): void {
+    this.#age++;
+    this.#year++;
+    this.#stageYear++;
+
+    if (this.#stageYear <= HIGH_SCHOOL_YEARS) {
+      this.flow.push(() => this.#startYear());
+      return;
+    }
+    this.flow.push(() => this.#graduate());
+  }
+
+  /** 高中畢業。目前是流程的終點，選秀尚未實作。 */
+  #graduate(): void {
+    const r = this.rating;
+    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 高中畢業`);
+    this.flow.card(
+      'gold',
+      '高中畢業',
+      `三年結束，綜合能力 <b class="hl">${r?.overall ?? 0}</b>` +
+        `（投手側 ${r?.pitcher ?? 0}／野手側 ${r?.fielder ?? 0}）。` +
+        (this.#honors.length > 0 ? `<br>生涯榮譽：${esc(this.#honors.join('、'))}` : ''),
+    );
+    this.flow.card(
+      'info',
+      '尚未實作',
+      '選秀、二刀流判定與職業生涯都還沒做，流程到這裡為止。' +
+        '目前可用的是開局生成、訓練骰與蓄力槽、大賽結算與年度循環，' +
+        '以及流程編排與重播機制。',
+    );
   }
 
   /** 分配一顆訓練骰。 */
@@ -173,35 +309,37 @@ export class Game {
         title: `第 ${index + 1}／${total} 顆骰：${value} 點要加在哪？`,
         options: ALL_ABILITIES.map((key) => this.#abilityOption(key, value)),
       },
-      (choice) => {
-        const key = choice.slice('alloc:'.length);
-        const before = this.#ability[key] ?? 0;
-        const result = train(
-          before,
-          value,
-          this.#player?.potential[key] ?? abilities.scale.max,
-          this.#carry[key] ?? 0,
-          growthCurve(this.isTwoWay),
-        );
-        this.#ability[key] = result.value;
-        this.#carry[key] = result.carry;
-
-        const name = abilities.abilities[key] ?? key;
-        if (result.gained > 0) {
-          this.flow.card(
-            'good',
-            undefined,
-            `<b class="hl">${esc(name)}</b> ${before} → <b class="hl">${result.value}</b>`,
-          );
-        } else {
-          this.flow.card(
-            'info',
-            undefined,
-            `<b class="hl">${esc(name)}</b> 還沒突破，${value} 點存進蓄力槽（目前 ${result.carry} 點）。`,
-          );
-        }
-      },
+      (choice) => this.#applyPoints(choice.slice('alloc:'.length), value),
     );
+  }
+
+  /** 把點數投進一項能力，並產生對應的敘事。 */
+  #applyPoints(key: AbilityKey, points: number): void {
+    const before = this.#ability[key] ?? 0;
+    const result = train(
+      before,
+      points,
+      this.#player?.potential[key] ?? abilities.scale.max,
+      this.#carry[key] ?? 0,
+      growthCurve(this.isTwoWay),
+    );
+    this.#ability[key] = result.value;
+    this.#carry[key] = result.carry;
+
+    const name = abilities.abilities[key] ?? key;
+    if (result.gained > 0) {
+      this.flow.card(
+        'good',
+        undefined,
+        `<b class="hl">${esc(name)}</b> ${before} → <b class="hl">${result.value}</b>`,
+      );
+    } else {
+      this.flow.card(
+        'info',
+        undefined,
+        `<b class="hl">${esc(name)}</b> 還沒突破，${points} 點存進蓄力槽（目前 ${result.carry} 點）。`,
+      );
+    }
   }
 
   /** 產生一個能力的分配選項，附上目前值、天花板與這一級的成本。 */
@@ -220,15 +358,6 @@ export class Game {
     return { id: `alloc:${key}`, label: name, note };
   }
 
-  /** 春訓結束。目前是流程的終點，後續系統尚未實作。 */
-  #springDone(): void {
-    this.flow.card(
-      'info',
-      '尚未實作',
-      '春訓結束。大賽、事件卡、賽季結算與升級流程都還沒做，流程到這裡為止——' +
-        '目前可用的是開局生成、訓練骰與蓄力槽，以及流程編排與重播機制。',
-    );
-  }
 }
 
 function handLabel(hand: string): string {

@@ -17,11 +17,11 @@ describe('Game', () => {
     expect(new Game(setup).player).toBeNull();
   });
 
-  it('開局會寫下年度分隔線與入學卡片', () => {
+  it('開局會寫下入學卡片與第一年的分隔線', () => {
     const game = started();
     const log = game.flow.log;
-    expect(log[0]).toMatchObject({ kind: 'divider' });
-    expect(log[1]).toMatchObject({ kind: 'card', tone: 'gold', title: '入學' });
+    expect(log[0]).toMatchObject({ kind: 'card', tone: 'gold', title: '入學' });
+    expect(log.some((e) => e.kind === 'divider')).toBe(true);
     // 入學卡片必須提到實際分發到的高中
     const school = game.player?.school ?? '';
     expect(JSON.stringify(log)).toContain(school);
@@ -62,6 +62,25 @@ function playToEnd(game: Game): Game {
   return game;
 }
 
+/**
+ * 把點數投進真正影響評價的能力，直到流程結束。
+ *
+ * playToEnd() 永遠選第一個選項，也就是體力——而體力在野手側的打擊計算裡不佔
+ * 權重，那等於三年把點數倒進一個沒用的地方。要驗證成長相關的行為必須用這個。
+ */
+const EFFECTIVE = ['con', 'pow', 'eye', 'spd', 'rng', 'fld'];
+function playWell(game: Game): Game {
+  while (game.flow.prompt !== null) {
+    const options = game.flow.prompt.options;
+    const pick =
+      EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
+      options[0];
+    if (pick === undefined) throw new Error('提問沒有選項');
+    game.choose(pick.id);
+  }
+  return game;
+}
+
 describe('重播', () => {
   it('相同設定與相同選擇必定重現同一段生涯', () => {
     const a = playToEnd(started());
@@ -95,10 +114,14 @@ describe('重播', () => {
   });
 
   it('重播日誌只需要設定與選擇——沒有任何狀態快照', () => {
-    const log = playToEnd(started()).toReplayLog();
+    const game = playToEnd(started());
+    const log = game.toReplayLog();
     expect(Object.keys(log).sort()).toEqual(['choices', 'engineVersion', 'setup']);
-    // 一整個球季的選擇仍只有幾百 bytes，這是重播日誌相對狀態快照的價值所在
-    expect(JSON.stringify(log).length).toBeLessThan(500);
+
+    // 重播日誌相對狀態快照的價值：跑完整個高中三年，日誌仍明顯小於同一時刻
+    // 的狀態本身，而且它只會隨選擇數成長，不會隨狀態的複雜度成長。
+    const snapshot = JSON.stringify(game.state);
+    expect(JSON.stringify(log).length).toBeLessThan(snapshot.length);
   });
 
   it('尚未做出任何選擇時也能重播', () => {
@@ -110,14 +133,83 @@ describe('重播', () => {
 });
 
 describe('子序列歸屬', () => {
-  it('開局用 genesis、季初擲骰用 growth，其餘一律未動', () => {
+  it('開局用 genesis、季初擲骰用 growth、大賽用 season，其餘一律未動', () => {
     const counts = playToEnd(started()).world.drawCounts();
     expect(counts.genesis).toBeGreaterThan(0);
     expect(counts.growth).toBeGreaterThan(0);
+    expect(counts.season).toBeGreaterThan(0);
+    // 事件卡、傷病與生涯事件都還沒實作，這三條流必須是零
     expect(counts.events).toBe(0);
     expect(counts.health).toBe(0);
-    expect(counts.season).toBe(0);
     expect(counts.career).toBe(0);
+  });
+});
+
+describe('高中三年', () => {
+  it('跑完三年後畢業，年齡與年份都推進了三年', () => {
+    const game = playToEnd(started());
+    const origin = game.state?.origin;
+    expect(game.state?.age).toBe((origin?.age ?? 0) + 3);
+    expect(game.state?.year).toBe((origin?.year ?? 0) + 3);
+  });
+
+  it('每一年都有自己的分隔線，加上畢業那一條', () => {
+    const dividers = playToEnd(started()).flow.log.filter((e) => e.kind === 'divider');
+    expect(dividers).toHaveLength(4);
+  });
+
+  it('三年都打了大賽', () => {
+    const cards = playToEnd(started()).flow.log.filter(
+      (e) => e.kind === 'card' && e.title === '大賽結算',
+    );
+    expect(cards).toHaveLength(3);
+  });
+
+  it('能力在三年後明顯成長', () => {
+    const game = playToEnd(started());
+    const origin = game.state?.origin.ability ?? {};
+    const now = game.state?.ability ?? {};
+    const before = Object.values(origin).reduce((a, b) => a + b, 0);
+    const after = Object.values(now).reduce((a, b) => a + b, 0);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it('生涯榮譽的數量與敘事裡的冠軍數一致', () => {
+    // 高中奪冠很罕見（門檻 52，畢業時綜合約 38），因此不斷言一定會發生，
+    // 改為驗證兩者一致——這樣不依賴稀有事件也能抓到記錄漏掉或重複的錯誤。
+    for (let i = 0; i < 40; i++) {
+      const game = playWell(started({ seed: `champ-${i}` }));
+      const championCards = game.flow.log.filter(
+        (e) => e.kind === 'card' && e.title === '冠軍',
+      ).length;
+      const honors = game.state?.honors.length ?? 0;
+      if (championCards === 0) expect(honors).toBe(0);
+      else expect(honors).toBeGreaterThan(0);
+    }
+  });
+
+  it('有效配點的成長明顯優於亂配', () => {
+    const ovr = (g: Game) => g.rating?.overall ?? 0;
+    let effective = 0;
+    let naive = 0;
+    for (let i = 0; i < 20; i++) {
+      effective += ovr(playWell(started({ seed: `cmp-${i}` })));
+      naive += ovr(playToEnd(started({ seed: `cmp-${i}` })));
+    }
+    expect(effective).toBeGreaterThan(naive);
+  });
+
+  it('大賽點數可以留著不分配', () => {
+    const game = started();
+    // 一路選「先留著」，點數應該累積起來
+    while (game.flow.prompt !== null) {
+      const keep = game.flow.prompt.options.find((o) => o.id === 'pool:keep');
+      const first = game.flow.prompt.options[0];
+      const pick = keep ?? first;
+      if (pick === undefined) throw new Error('沒有選項');
+      game.choose(pick.id);
+    }
+    expect(game.state?.pool).toBeGreaterThan(0);
   });
 });
 

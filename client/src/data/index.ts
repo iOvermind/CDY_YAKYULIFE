@@ -12,6 +12,7 @@
 
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
+import positionsJson from './positions.json';
 
 /** 能力代碼，例如 'pow'、'ctl'。 */
 export type AbilityKey = string;
@@ -116,7 +117,31 @@ export interface AbilitiesData {
       Record<string, { readonly delta: number; readonly chance?: number }>
     >;
   };
+  readonly overall: {
+    readonly pitcher: {
+      readonly top_weights: readonly number[];
+      readonly stamina_weight: number;
+    };
+    readonly fielder: {
+      readonly offense_top_weights: readonly number[];
+      readonly defense_weight: Readonly<Record<string, number>>;
+      readonly dh_defense_penalty: { readonly base_position: string; readonly penalty: number };
+      readonly default_position: Readonly<Record<string, string>>;
+    };
+    readonly trait_modifiers: Readonly<Record<string, number>>;
+  };
   readonly potential_ceiling: { readonly tiers: readonly Range[] };
+}
+
+export interface PositionsData {
+  readonly positions: Readonly<Record<string, string>>;
+  /** 各守位的能力權重。資格判定與守備分共用同一組，見該檔的 _deviation。 */
+  readonly ability_weights: Readonly<Record<string, Readonly<Record<AbilityKey, number>>>>;
+  readonly defense_thresholds: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  readonly defense_score_weight: Readonly<Record<string, number>>;
+  readonly defense_score_scale: { readonly scale: number };
+  readonly rank: Readonly<Record<string, number>>;
+  readonly scan_order: Readonly<Record<string, readonly string[] | string>>;
 }
 
 /** 成長成本曲線。tiers 由高到低比對，取第一個 current >= from 的 cost。 */
@@ -133,10 +158,34 @@ export interface AmateurData {
     >;
     readonly schools: Readonly<Record<string, number>>;
   };
+  readonly cups: {
+    readonly HS: CupStage;
+    readonly U: CupStage;
+    readonly AMA: CupStage;
+    readonly power_noise: Range;
+    readonly ranks: readonly string[];
+    readonly points: readonly number[];
+    readonly points_bonus: { readonly overall_divisor: number };
+    readonly academy_trigger: {
+      readonly stage: string;
+      readonly rank: string;
+      readonly trait: string;
+    };
+  };
 }
+
+export interface CupStage {
+  readonly names: readonly string[];
+  /** 由高到低的名次門檻。實力值達到第 n 個門檻即取得第 n 名次。 */
+  readonly thresholds: readonly number[];
+}
+
+/** 養成階段：高中、大學、業餘成棒。 */
+export type AmateurStage = 'HS' | 'U' | 'AMA';
 
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
+export const positions = positionsJson as unknown as PositionsData;
 
 /** 全部能力代碼，順序穩定（依 abilities.json 的宣告順序）。 */
 export const ALL_ABILITIES: readonly AbilityKey[] = Object.keys(abilities.abilities);

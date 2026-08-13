@@ -160,7 +160,9 @@ function GameScreen({
   return (
     <div id="app">
       <div id="mid">
-        {state && <Board state={state} seed={game.setup.seed} />}
+        {state && (
+          <Board state={state} rating={game.rating?.overall ?? 0} seed={game.setup.seed} />
+        )}
         <div id="log">
           <LogView entries={game.flow.log} />
           {state && <AbilityCard state={state} />}
@@ -186,7 +188,15 @@ function GameScreen({
   );
 }
 
-function Board({ state, seed }: { state: PlayerState; seed: string }) {
+function Board({
+  state,
+  rating,
+  seed,
+}: {
+  state: PlayerState;
+  rating: number;
+  seed: string;
+}) {
   const player = state.origin;
   return (
     <div id="board">
@@ -202,21 +212,33 @@ function Board({ state, seed }: { state: PlayerState; seed: string }) {
       </div>
       <div id="bd-grid">
         <div className="bd-cell">
-          <b>{player.year}</b>
+          <b>{state.year}</b>
           <span>年份</span>
         </div>
         <div className="bd-cell">
-          <b>{player.age}</b>
+          <b>{state.age}</b>
           <span>年齡</span>
         </div>
         <div className="bd-cell">
-          <b>{overall(state)}</b>
+          <b>{rating}</b>
           <span>綜合</span>
         </div>
         <div className="bd-cell">
-          <b style={{ fontSize: 12 }}>{seed}</b>
-          <span>種子</span>
+          <b>{state.pool}</b>
+          <span>可分配點</span>
         </div>
+      </div>
+      <div id="lamps">
+        <span className="lamp on">
+          <i />
+          SEED {seed}
+        </span>
+        {state.honors.length > 0 && (
+          <span className="lamp on">
+            <i />
+            榮譽 {state.honors.length}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -345,11 +367,4 @@ function AbilityBlock({
 
 function hand(h: string): string {
   return h === 'S' ? '雙' : h === 'L' ? '左' : '右';
-}
-
-/** 綜合能力：所有能力的平均，四捨五入。之後會由引擎提供，這裡只是暫時的顯示值。 */
-function overall(state: PlayerState): number {
-  const values = Object.values(state.ability);
-  if (values.length === 0) return 0;
-  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }
