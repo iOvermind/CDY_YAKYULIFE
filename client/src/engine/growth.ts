@@ -20,9 +20,20 @@ export interface TrainResult {
   readonly overflow: number;
 }
 
-/** 取得成長曲線。二刀流的曲線較平緩，是取得該天賦之後的機械性回報。 */
-export function growthCurve(isTwoWay: boolean): GrowthCurve {
-  return isTwoWay ? abilities.growth_cost.two_way : abilities.growth_cost.default;
+/**
+ * 成本情境：一條曲線，加上二刀流是否適用折扣。
+ *
+ * 二刀流不再有自己的一條曲線。舊做法是把整條 tiers 往後推，結果「便宜多少」
+ * 得靠兩張表對照才看得出來；改成直接從成本扣點，玩家看得到自己省了幾點。
+ */
+export interface CostContext {
+  readonly curve: GrowthCurve;
+  readonly twoWay: boolean;
+}
+
+/** 取得成本情境。名稱沿用 growthCurve，呼叫端不必改。 */
+export function growthCurve(isTwoWay: boolean): CostContext {
+  return { curve: abilities.growth_cost.default, twoWay: isTwoWay };
 }
 
 /**
@@ -30,8 +41,13 @@ export function growthCurve(isTwoWay: boolean): GrowthCurve {
  *
  * tiers 由高到低比對，取第一個 current >= from 的 cost；超過潛力天花板再乘上
  * above_ceiling_multiplier——天花板之上仍可成長，只是非常貴。
+ *
+ * 二刀流在最後扣點：天賦之內每級少付 within_ceiling，天賦之外少付
+ * above_ceiling（在乘上倍率之後才扣）。天賦之內的折扣只在成本大於 1 時看得
+ * 出來，也就是能力 50 以上——50 以下本來就是 1 點，扣不動。
  */
-export function abilityCost(current: number, ceiling: number, curve: GrowthCurve): number {
+export function abilityCost(current: number, ceiling: number, ctx: CostContext): number {
+  const { curve, twoWay } = ctx;
   let cost = 1;
   for (const tier of curve.tiers) {
     if (current >= tier.from) {
@@ -39,7 +55,13 @@ export function abilityCost(current: number, ceiling: number, curve: GrowthCurve
       break;
     }
   }
-  return current >= ceiling ? cost * curve.above_ceiling_multiplier : cost;
+
+  const aboveCeiling = current >= ceiling;
+  if (aboveCeiling) cost *= curve.above_ceiling_multiplier;
+  if (!twoWay) return cost;
+
+  const d = abilities.growth_cost.two_way_discount;
+  return Math.max(d.min_cost, cost - (aboveCeiling ? d.above_ceiling : d.within_ceiling));
 }
 
 /**
@@ -54,7 +76,7 @@ export function train(
   points: number,
   ceiling: number,
   carry: number,
-  curve: GrowthCurve,
+  ctx: CostContext,
   ceilingBonus = 0,
 ): TrainResult & { readonly value: number } {
   const max = hardCap(ceilingBonus);
@@ -63,7 +85,7 @@ export function train(
   let value = current;
   let budget = points + carry;
   while (budget > 0 && value < max) {
-    const cost = abilityCost(value, ceiling, curve);
+    const cost = abilityCost(value, ceiling, ctx);
     if (budget < cost) break;
     budget -= cost;
     value++;

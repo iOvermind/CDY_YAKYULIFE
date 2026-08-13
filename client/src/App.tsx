@@ -21,9 +21,17 @@ import {
 } from './engine/amateurStats.ts';
 import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
+import {
+  amateurBaseline,
+  battingWinShares,
+  eraPlus,
+  opsPlus,
+  pitchingWinShares,
+  proBaseline,
+  type Baseline,
+} from './engine/metrics.ts';
 import { fieldingPosition, isSideVisible, type Rating } from './engine/rating.ts';
 import { positionName } from './engine/season.ts';
-import { fmtWinRate } from './engine/teams.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -438,7 +446,7 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
         </div>
         <div className="stat-cell">
           <b>{yearLabel}</b>
-          <span>學年</span>
+          <span>{state.pro === null ? '學年' : '職涯'}</span>
         </div>
         <div className="stat-cell">
           <b>{state.pool}</b>
@@ -465,6 +473,7 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
         label="最近一季"
         batting={state.seasonBatting}
         pitching={state.seasonPitching}
+        base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
       />
 
       <TraitList traits={state.traits} />
@@ -525,8 +534,11 @@ const BAD_TAG = { background: '#2a0f0f', borderColor: '#c0392b', color: '#ff8b7a
 interface StatColumn<T> {
   readonly key: string;
   readonly title: string;
-  readonly value: (line: T) => string | number;
+  readonly value: (line: T, base: Baseline) => string | number;
 }
+
+/** 相對聯盟平均的指標統一這樣顯示：沒有樣本就畫破折號，不畫 0。 */
+const rel = (v: number | null) => (v === null ? '—' : v);
 
 const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'G', title: '出賽', value: (b) => b.games },
@@ -547,6 +559,8 @@ const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'OBP', title: '上壘率', value: (b) => fmtAvg(b.obp) },
   { key: 'SLG', title: '長打率', value: (b) => fmtAvg(b.slg) },
   { key: 'OPS', title: '整體攻擊指數', value: (b) => fmtAvg(ops(b)) },
+  { key: 'OPS+', title: '相對聯盟平均的攻擊表現（100 為聯盟平均）', value: (b, base) => rel(opsPlus(b, base)) },
+  { key: 'WS', title: 'Win Shares：勝利貢獻', value: (b, base) => battingWinShares(b, base).toFixed(1) },
 ];
 
 const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
@@ -565,16 +579,21 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'WHIP', title: '每局被上壘率', value: (p) => whip(p).toFixed(2) },
   { key: 'K/9', title: '每九局奪三振', value: (p) => kPerNine(p).toFixed(1) },
   { key: 'BB/9', title: '每九局四壞', value: (p) => bbPerNine(p).toFixed(1) },
+  { key: 'ERA+', title: '相對聯盟平均的防禦率（100 為聯盟平均）', value: (p, base) => rel(eraPlus(p, base)) },
+  { key: 'WS', title: 'Win Shares：勝利貢獻', value: (p, base) => pitchingWinShares(p, base).toFixed(1) },
 ];
 
 function StatLines({
   label,
   batting,
   pitching,
+  base,
 }: {
   label: string | null;
   batting: BattingLine | null;
   pitching: PitchingLine | null;
+  /** 聯盟平均。ERA+／OPS+／WS 都要跟它比。 */
+  base: Baseline;
 }) {
   if (batting === null && pitching === null) {
     return (
@@ -602,7 +621,7 @@ function StatLines({
             <tbody>
               <tr>
                 {PITCHING_COLUMNS.map((c) => (
-                  <td key={c.key}>{c.value(pitching)}</td>
+                  <td key={c.key}>{c.value(pitching, base)}</td>
                 ))}
               </tr>
             </tbody>
@@ -624,7 +643,7 @@ function StatLines({
             <tbody>
               <tr>
                 {BATTING_COLUMNS.map((c) => (
-                  <td key={c.key}>{c.value(batting)}</td>
+                  <td key={c.key}>{c.value(batting, base)}</td>
                 ))}
               </tr>
             </tbody>
@@ -652,14 +671,7 @@ function Board({
   const affiliation =
     state.pro === null
       ? { name: state.school, note: tierLabel }
-      : {
-          name: state.pro.team,
-          // 勝率與奪冠機率都是真的模擬出來的，不是拿隊名雜湊出來給人看的
-          // 裝飾——見 teams.ts 的說明。
-          note: `${state.pro.levelName}·${fmtWinRate(state.pro.winRate)}·奪冠 ${Math.round(
-            state.pro.championshipOdds * 100,
-          )}%`,
-        };
+      : { name: state.pro.team, note: state.pro.levelName };
 
   // 取得二刀流之後，起始守位就不再說明他是什麼球員了——他是投手也是打者。
   // 野手側的守位由守備能力決定：守得動就站守位，守不動就是 DH，這也是多數
@@ -678,6 +690,13 @@ function Board({
           </small>
         </span>
         <span id="bd-team">
+          {/* 奪冠機率放在隊名上方自成一行。它講的是球隊的處境，不是球員的
+              頭銜——擠在隊名後面會跟層級混成一串讀不出重點。 */}
+          {state.pro !== null && (
+            <small className="odds">
+              奪冠 {Math.round(state.pro.championshipOdds * 100)}%
+            </small>
+          )}
           {affiliation.name}
           {affiliation.note !== '' && (
             <small style={{ opacity: 0.75 }}>·{affiliation.note}</small>

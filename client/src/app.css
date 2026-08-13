@@ -48,7 +48,7 @@ a{color:var(--info)}
 #bd-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 #bd-name{font-family:var(--head);font-weight:900;font-size:17px;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #bd-name small{color:var(--dim);font-weight:500;font-size:12px;margin-left:6px;font-family:var(--sans)}
-#bd-team{color:var(--accent);font-size:12.5px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+#bd-team{color:var(--accent);font-size:12.5px;font-weight:700;letter-spacing:.06em;white-space:nowrap;text-align:right}
 #bd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
 .bd-cell{position:relative;background:var(--panel2);border:1px solid var(--edge);border-radius:var(--r);padding:4px 6px 3px;text-align:center}
 .bd-cell b{display:block;font-family:var(--disp);font-size:17px;font-weight:700;color:var(--accent);
@@ -164,6 +164,8 @@ table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.
 /* 並排的一組動作鈕。選擇器不掛在 #act 底下——動作區的實際 id 是 panel-act。
    標題與說明都置中，兩顆按鈕才像一組對稱的選擇。 */
 .row2{display:flex;gap:8px;margin-top:8px}
+/* 奪冠機率自成一行，壓在隊名上方。 */
+#bd-team .odds{display:block;font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.1em}
 .row2 .btn{flex:1;text-align:center;margin-top:0}
 .row2 .btn small{text-align:center}
 /* trait side panel: desktop top-right list of unlocked hidden traits (hidden on mobile; settlement unchanged) */

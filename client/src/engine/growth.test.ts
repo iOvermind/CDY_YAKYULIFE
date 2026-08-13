@@ -12,11 +12,12 @@ import { World } from './rng.ts';
 
 const curve = growthCurve(false);
 const twoWay = growthCurve(true);
+const tiersOf = () => abilities.growth_cost.default;
 const noTraits = new Set<string>();
 
 describe('abilityCost', () => {
   // 期望值一律從資料推導，不寫死——曲線是平衡參數，調整時測試不該跟著紅。
-  const tiers = [...curve.tiers].sort((a, b) => a.from - b.from);
+  const tiers = [...tiersOf().tiers].sort((a, b) => a.from - b.from);
   const lowest = tiers[0];
   const highest = tiers[tiers.length - 1];
   if (lowest === undefined || highest === undefined) throw new Error('tiers 是空的');
@@ -43,7 +44,7 @@ describe('abilityCost', () => {
   });
 
   it('超過潛力天花板要乘上懲罰倍率', () => {
-    const m = curve.above_ceiling_multiplier;
+    const m = tiersOf().above_ceiling_multiplier;
     for (const tier of tiers) {
       expect(abilityCost(tier.from, tier.from, curve)).toBe(tier.cost * m);
     }
@@ -58,8 +59,45 @@ describe('abilityCost', () => {
     expect(abilityCost(72, 80, twoWay)).toBeLessThan(abilityCost(72, 80, curve));
   });
 
-  it('二刀流超過天花板的懲罰也較輕', () => {
-    expect(twoWay.above_ceiling_multiplier).toBeLessThan(curve.above_ceiling_multiplier);
+  it('二刀流超過天花板時付得比較少', () => {
+    // 倍率一樣，差別在折扣：天賦之外每級少付 above_ceiling
+    for (const tier of tiersOf().tiers) {
+      if (tier.cost === 1) continue;
+      expect(abilityCost(tier.from, tier.from, twoWay)).toBeLessThan(
+        abilityCost(tier.from, tier.from, curve),
+      );
+    }
+  });
+
+  it('二刀流的折扣是直接扣點，不是另一條曲線', () => {
+    const d = abilities.growth_cost.two_way_discount;
+    // 天賦之內：v 必須低於天花板，否則走的是天賦之外那條折扣
+    for (let v = abilities.scale.min; v < abilities.scale.max; v++) {
+      const full = abilityCost(v, abilities.scale.max, curve);
+      const discounted = abilityCost(v, abilities.scale.max, twoWay);
+      expect(discounted).toBe(Math.max(d.min_cost, full - d.within_ceiling));
+    }
+    // 天賦之外：扣的是 above_ceiling，且是在乘上倍率之後才扣
+    for (const tier of tiersOf().tiers) {
+      const full = abilityCost(tier.from, tier.from, curve);
+      expect(abilityCost(tier.from, tier.from, twoWay)).toBe(
+        Math.max(d.min_cost, full - d.above_ceiling),
+      );
+    }
+  });
+
+  it('50 以下沒有折扣——本來就是 1 點，扣不動', () => {
+    for (let v = abilities.scale.min; v < 50; v++) {
+      expect(abilityCost(v, 80, twoWay)).toBe(abilityCost(v, 80, curve));
+    }
+  });
+
+  it('折扣不會把成本壓到 0 以下', () => {
+    const d = abilities.growth_cost.two_way_discount;
+    for (let v = abilities.scale.min; v <= abilities.scale.max; v++) {
+      expect(abilityCost(v, v, twoWay)).toBeGreaterThanOrEqual(d.min_cost);
+      expect(abilityCost(v, 80, twoWay)).toBeGreaterThanOrEqual(d.min_cost);
+    }
   });
 });
 
@@ -132,12 +170,16 @@ describe('train', () => {
   });
 
   it('二刀流在高段成長得比較快', () => {
-    // 投入足夠一般曲線升一級的點數，二刀流應該升得更多
-    const start = 64;
-    const budget = abilityCost(start, 80, curve) * 3;
-    const normal = train(start, budget, 80, 0, curve);
-    const both = train(start, budget, 80, 0, twoWay);
-    expect(both.gained).toBeGreaterThan(normal.gained);
+    // 折扣只有 1 點，不是每個預算都看得出差別——因此驗證兩件事：
+    // 同樣的預算下二刀流絕不吃虧，而且確實存在看得出差別的預算。
+    let better = 0;
+    for (let budget = 1; budget <= 40; budget++) {
+      const normal = train(60, budget, 80, 0, curve);
+      const both = train(60, budget, 80, 0, twoWay);
+      expect(both.gained).toBeGreaterThanOrEqual(normal.gained);
+      if (both.gained > normal.gained) better++;
+    }
+    expect(better).toBeGreaterThan(0);
   });
 
   it('拒絕負點數——衰退要走 decline()', () => {

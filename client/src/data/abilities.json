@@ -450,31 +450,13 @@
       ],
       "above_ceiling_multiplier": 3
     },
-    "two_way": {
-      "_note": "二刀流天賦的成長曲線：變貴的門檻往後推，超過天花板的懲罰也較輕。這是取得二刀流之後的機械性回報——兩邊都要練的人，高段成長不能跟專精者一樣貴，否則二刀流只是懲罰。",
-      "tiers": [
-        {
-          "from": 78,
-          "cost": 8
-        },
-        {
-          "from": 70,
-          "cost": 6
-        },
-        {
-          "from": 64,
-          "cost": 4
-        },
-        {
-          "from": 56,
-          "cost": 2
-        },
-        {
-          "from": 0,
-          "cost": 1
-        }
-      ],
-      "above_ceiling_multiplier": 2
+    "two_way_discount": {
+      "_note": "二刀流的折扣：直接從成本扣點，不再另立一條曲線。舊做法是把整條 tiers 往後推，結果「便宜多少」得靠兩張表對照才看得出來；扣點是直接的——玩家看得到自己省了幾點。",
+      "_within_note": "within_ceiling 只在成本大於 1 時才看得出來，也就是能力 50 以上。50 以下本來就是 1 點，扣不動。",
+      "_above_note": "above_ceiling 是在乘上懲罰倍率之後才扣。天賦之外的成長對誰都很貴，二刀流只是貴得少一點。",
+      "within_ceiling": 1,
+      "above_ceiling": 3,
+      "min_cost": 1
     }
   },
   "training_dice": {

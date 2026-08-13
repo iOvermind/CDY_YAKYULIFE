@@ -137,7 +137,7 @@ export interface AbilitiesData {
   };
   readonly growth_cost: {
     readonly default: GrowthCurve;
-    readonly two_way: GrowthCurve;
+    readonly two_way_discount: TwoWayDiscount;
   };
   readonly training_dice: {
     /** 鍵為骰數，值為相對權重。 */
@@ -187,6 +187,16 @@ export interface PositionsData {
 }
 
 /** 成長成本曲線。tiers 由高到低比對，取第一個 current >= from 的 cost。 */
+/** 二刀流的成本折扣。直接從成本扣點，不另立一條曲線。 */
+export interface TwoWayDiscount {
+  /** 天賦上限之內每級少付的點數。 */
+  readonly within_ceiling: number;
+  /** 天賦上限之外每級少付的點數，在乘上懲罰倍率之後才扣。 */
+  readonly above_ceiling: number;
+  /** 扣完之後的成本下限。 */
+  readonly min_cost: number;
+}
+
 export interface GrowthCurve {
   readonly tiers: readonly { readonly from: number; readonly cost: number }[];
   readonly above_ceiling_multiplier: number;
@@ -478,6 +488,12 @@ export interface SeasonData {
     readonly age_chance: { readonly base: number; readonly per_year: number; readonly max: number };
     readonly released_forces_retirement_age: number;
     readonly max_age: number;
+  };
+  readonly advanced: {
+    readonly runs_per_win: number;
+    readonly win_shares_per_win: number;
+    readonly batting_replacement: number;
+    readonly pitching_replacement_era_multiplier: number;
   };
   readonly team_strength: {
     readonly initial: Range;

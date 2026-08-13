@@ -238,6 +238,15 @@
     "max_age": 44
   },
 
+  "advanced": {
+    "_note": "進階指標的常數。ERA+／OPS+ 是相對聯盟平均的百分比（100 = 聯盟平均），WS 是勝利貢獻的簡化估計。",
+    "_ws_note": "完整的 Bill James Win Shares 要把球隊的總勝利分配給全隊，需要全隊的成績。這裡改用「相對替代水準的貢獻」直接估算個人值：算出比替代級球員多創造／少失掉幾分，除以每勝所需分數，再乘上每勝三份的慣例。數量級與真正的 WS 相當，但不保證全隊加總等於球隊勝場的三倍。",
+    "runs_per_win": 10,
+    "win_shares_per_win": 3,
+    "batting_replacement": 0.52,
+    "pitching_replacement_era_multiplier": 1.25
+  },
+
   "team_strength": {
     "_note": "球隊戰力與勝率。原版的 teamChampRate() 只把隊名雜湊成一個 8-29% 的固定數字，跟球季結束真正擲的奪冠判定毫無關聯——顯示的與實際發生的是兩套東西。這裡改成一套：勝率是真的模擬出來的，奪冠機率由勝率推導。",
 
