@@ -477,6 +477,7 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
       />
 
       <TraitList traits={state.traits} />
+      <HonorList honors={state.honors} />
     </div>
   );
 }
@@ -516,6 +517,36 @@ function TraitList({ traits: owned }: { traits: ReadonlySet<string> }) {
           ))}
         </p>
       )}
+    </>
+  );
+}
+
+/**
+ * 生涯榮譽。
+ *
+ * 只顯示件數，清單掛在滑鼠停留的提示上——六年養成加上職業生涯會累積十幾項，
+ * 全部攤開會把右欄佔滿，而它們平常並不需要被讀。
+ */
+function HonorList({ honors }: { honors: readonly string[] }) {
+  if (honors.length === 0) {
+    return (
+      <>
+        <h4 style={{ marginTop: 12 }}>榮譽</h4>
+        <p className="stat-pending" style={{ marginTop: 8 }}>
+          還沒有任何榮譽。
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h4 style={{ marginTop: 12 }}>榮譽</h4>
+      <p style={{ margin: '8px 0 0' }}>
+        <span className="tag honors" title={honors.join('\n')}>
+          共 {honors.length} 項（滑鼠停留可看清單）
+        </span>
+      </p>
     </>
   );
 }

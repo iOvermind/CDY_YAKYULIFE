@@ -169,6 +169,7 @@ table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.
    標題與說明都置中，兩顆按鈕才像一組對稱的選擇。 */
 .row2{display:flex;gap:8px;margin-top:8px}
 /* 奪冠機率自成一行，壓在隊名上方。 */
+.tag.honors{cursor:help}
 #bd-team .odds{display:block;font-size:10.5px;color:var(--dim);font-weight:700;
   letter-spacing:.1em;line-height:1.5;margin-bottom:1px}
 .row2 .btn{flex:1;text-align:center;margin-top:0}
