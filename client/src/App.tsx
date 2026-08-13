@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import './app.css';
 import { abilities, START_POSITIONS, type Hand, type StartPosition } from './data/index.ts';
-import { stageOf } from './engine/amateur.ts';
+import { schoolTiersOf, stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
 import { fmtAvg, Game, type PlayerState } from './engine/game.ts';
@@ -495,6 +495,8 @@ function Board({
   seed: string;
 }) {
   const player = state.origin;
+  // 學校與強度都讀目前的狀態——升學會換學校，讀開局的那一份會永遠停在國中。
+  const tierLabel = schoolTiersOf(state.stage)?.tiers[String(state.schoolTier)]?.label ?? '';
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>
@@ -506,7 +508,10 @@ function Board({
             {hand(player.throws)}打{hand(player.bats)}
           </small>
         </span>
-        <span id="bd-team">{player.school}</span>
+        <span id="bd-team">
+          {state.school}
+          {tierLabel !== '' && <small style={{ opacity: 0.75 }}>·{tierLabel}</small>}
+        </span>
       </div>
       <div id="bd-grid">
         <div className="bd-cell">

@@ -130,7 +130,7 @@ export interface TrainingDice {
 export function rollTrainingDice(
   world: World,
   traits: ReadonlySet<string>,
-  options: { readonly injured?: boolean } = {},
+  options: { readonly injured?: boolean; readonly bonusDice?: number } = {},
 ): TrainingDice {
   const rng = world.stream('growth');
   const cfg = abilities.training_dice;
@@ -150,6 +150,9 @@ export function rollTrainingDice(
     }
     count = Math.max(cfg.min_count, count);
   }
+  // 上一季奪冠的回報：多擲幾顆骰，骰面不變。傷缺的球季也照給——冠軍是去年
+  // 掙來的，跟今年有沒有受傷無關。
+  count += Math.max(0, options.bonusDice ?? 0);
 
   const face = pickFaceRange(traits);
   const values: number[] = [];
@@ -160,6 +163,19 @@ export function rollTrainingDice(
     if (v === 6) sixes++;
   }
   return { values, sixes };
+}
+
+/**
+ * 上一季奪冠帶來的額外骰數。
+ *
+ * 同一季拿下多項冠軍時取最高的一項，不相加——否則一年橫掃四個盃賽就會多擲
+ * 四顆，滾雪球到失控。
+ */
+export function championshipDice(kinds: readonly string[]): number {
+  const cfg = abilities.training_dice.championship_bonus;
+  let best = 0;
+  for (const kind of kinds) best = Math.max(best, cfg[kind] ?? 0);
+  return best;
 }
 
 /** 依特性取骰面區間；命中第一個即採用，都沒有則用 default。 */

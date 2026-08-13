@@ -133,6 +133,8 @@ export interface AbilitiesData {
     readonly count_modifiers: Readonly<
       Record<string, { readonly delta: number; readonly chance?: number }>
     >;
+    /** 上一季奪冠的回報：隔季多擲幾顆骰。取最高的一項，不相加。 */
+    readonly championship_bonus: Readonly<Record<string, number>>;
   };
   readonly overall: {
     readonly pitcher: {

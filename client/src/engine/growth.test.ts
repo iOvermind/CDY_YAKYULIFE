@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { abilities } from '../data/index.ts';
-import { abilityCost, decline, growthCurve, rollTrainingDice, train } from './growth.ts';
+import {
+  abilityCost,
+  championshipDice,
+  decline,
+  growthCurve,
+  rollTrainingDice,
+  train,
+} from './growth.ts';
 import { World } from './rng.ts';
 
 const curve = growthCurve(false);
@@ -234,5 +241,46 @@ describe('rollTrainingDice', () => {
     expect(counts.genesis).toBe(0);
     expect(counts.season).toBe(0);
     expect(counts.health).toBe(0);
+  });
+});
+
+describe('championshipDice', () => {
+  const cfg = abilities.training_dice.championship_bonus;
+
+  it('沒奪冠就沒有加成', () => {
+    expect(championshipDice([])).toBe(0);
+  });
+
+  it('高中冠軍給的骰數多於國中冠軍', () => {
+    expect(championshipDice(['HS'])).toBeGreaterThan(championshipDice(['JHS']));
+  });
+
+  it('國際賽冠軍給得最多', () => {
+    const others = Object.entries(cfg)
+      .filter(([k]) => k !== 'international' && !k.startsWith('_'))
+      .map(([, v]) => v);
+    for (const v of others) expect(cfg['international']).toBeGreaterThan(v);
+  });
+
+  it('同季多項冠軍取最高的一項，不相加', () => {
+    // 一年橫掃四個盃賽不該多擲四顆——那會滾雪球到失控。
+    expect(championshipDice(['JHS', 'JHS', 'JHS', 'JHS'])).toBe(cfg['JHS']);
+    expect(championshipDice(['HS', 'international'])).toBe(cfg['international']);
+  });
+
+  it('不認得的種類不給加成', () => {
+    expect(championshipDice(['nonsense'])).toBe(0);
+  });
+
+  it('加成確實讓骰數變多，骰面維持 1-6', () => {
+    for (let i = 0; i < 100; i++) {
+      const plain = rollTrainingDice(new World(`s${i}`), noTraits);
+      const boosted = rollTrainingDice(new World(`s${i}`), noTraits, { bonusDice: 3 });
+      expect(boosted.values.length).toBe(plain.values.length + 3);
+      for (const v of boosted.values) {
+        expect(v).toBeGreaterThanOrEqual(1);
+        expect(v).toBeLessThanOrEqual(6);
+      }
+    }
   });
 });

@@ -45,7 +45,7 @@ import {
 } from './events.ts';
 import { esc, Flow, type Option } from './flow.ts';
 import { assignSchool, createPlayer, type NewPlayer } from './genesis.ts';
-import { growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
+import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -131,6 +131,12 @@ export class Game {
   #dice: { values: readonly number[]; index: number } | null = null;
   /** 這一季的大賽結果。國際賽的直通資格要看它，因此必須留著。 */
   #lastCupSeason: CupSeason | null = null;
+  /**
+   * 上一季奪下的冠軍種類，供**隔季**的訓練骰加成使用。
+   *
+   * 只保留一季——加成不累積到再下一季，否則強校球員會滾雪球到失控。
+   */
+  #lastChampionships: string[] = [];
   #seasonBatting: BattingLine | null = null;
   #seasonPitching: PitchingLine | null = null;
   #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
@@ -315,6 +321,7 @@ export class Game {
         this.#honors.push(`${prefix}${result.tournament}${result.rank}`);
       }
       this.#pool += result.points;
+      if (result.rankIndex === 0) this.#lastChampionships.push('international');
 
       this.flow.card(
         result.rankIndex <= 1 ? 'gold' : 'good',
@@ -433,13 +440,22 @@ export class Game {
 
   /** 季初的自主訓練：擲骰，逐顆分配。 */
   #springTraining(): void {
-    const dice = rollTrainingDice(this.world, this.#traits);
+    // 上一季的冠軍在這裡兌現，兌現後即清空——加成只延續一季。
+    const bonus = championshipDice(this.#lastChampionships);
+    const earnedBy = this.#lastChampionships;
+    this.#lastChampionships = [];
+
+    const dice = rollTrainingDice(this.world, this.#traits, { bonusDice: bonus });
 
     this.#dice = { values: dice.values, index: 0 };
 
     let msg = `自主訓練擲出 <b class="hl">${dice.values.length}</b> 顆骰：` +
       dice.values.map((v) => `<b class="hl">${v}</b>`).join('、');
     if (dice.sixes > 0) msg += `，其中 ${dice.sixes} 顆是高標值。`;
+    if (bonus > 0) {
+      msg += `<br>去年的冠軍（${esc(earnedBy.join('、'))}）帶來更好的練習環境，` +
+        `多擲 <b class="hl">${bonus}</b> 顆骰。`;
+    }
     this.flow.card('info', '季初訓練', msg);
 
     // 每一顆骰都是一次選擇——重播日誌因此記下「哪顆骰加在哪」。
@@ -514,6 +530,7 @@ export class Game {
     if (academyUnlocked(this.#stage, season)) this.#traits.add(amateur.cups.academy_trigger.trait);
 
     this.#lastCupSeason = season;
+    if (season.championships.length > 0) this.#lastChampionships.push(this.#stage);
     this.#pool += season.points;
     // 同樣要插隊——年度結束的步驟已經排在佇列裡了。
     this.flow.unshift(() => this.#spendPool());
