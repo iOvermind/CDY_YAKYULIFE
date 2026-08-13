@@ -930,8 +930,13 @@ export class Game {
     // ---- 老化
     const aging = applyAging(this.world, this.#ability, this.#age);
     this.#ability = { ...aging.ability };
-    if (aging.changes.size > 0) {
-      const lines = [...aging.changes.entries()]
+    // 只列還在用的能力。定位鎖定之後另一側早就不顯示了，卻仍在衰退卡上刷出
+    // 一整排數字，等於在提醒玩家一堆他已經動不了的東西。
+    const visible = [...aging.changes.entries()].filter(([k]) =>
+      isSideVisible(k, this.#lockedSide),
+    );
+    if (visible.length > 0) {
+      const lines = visible
         .map(([k, v]) => `${esc(abilities.abilities[k as AbilityKey] ?? k)} ${v > 0 ? '+' : ''}${v}`)
         .join('｜');
       this.flow.card(

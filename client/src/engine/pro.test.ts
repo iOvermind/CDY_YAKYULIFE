@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { leagues, season as cfg } from '../data/index.ts';
+import { abilities, leagues, season as cfg } from '../data/index.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
 import type { Abilities } from './rating.ts';
 import { World } from './rng.ts';
@@ -235,5 +235,27 @@ describe('proDiceCount', () => {
     let pro = 0;
     for (let i = 0; i < 300; i++) pro += proDiceCount(new World(`s${i}`), 22);
     expect(pro / 300).toBeLessThan(3.5);
+  });
+});
+
+describe('衰退的下限', () => {
+  it('不會跌破球探量表的下限——20 就是底', () => {
+    let ability = flat(abilities.scale.min + 2);
+    for (let y = 0; y < 40; y++) {
+      ability = applyAging(new World(`y${y}`), ability, 40).ability;
+    }
+    for (const v of Object.values(ability)) {
+      expect(v).toBeGreaterThanOrEqual(abilities.scale.min);
+    }
+  });
+
+  it('已經在下限的能力不再列入變動——沒動就不該報告有動', () => {
+    const r = applyAging(new World('a'), flat(abilities.scale.min), 40);
+    expect(r.changes.size).toBe(0);
+    expect(r.ability).toEqual(flat(abilities.scale.min));
+  });
+
+  it('量表下限與 hard_floor 一致', () => {
+    expect(abilities.scale.hard_floor).toBe(abilities.scale.min);
   });
 });

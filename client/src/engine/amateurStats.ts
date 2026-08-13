@@ -22,27 +22,82 @@ interface RateSpec {
   readonly ability?: string;
 }
 
+/**
+ * 打擊成績。欄位比照棒球記錄的標準打擊列，養成期與職業共用同一個型別——
+ * 分成兩套會讓生涯累計在升上職業那一刻斷掉。
+ */
 export interface BattingLine {
   readonly games: number;
   readonly pa: number;
   readonly ab: number;
+  /** 得分。 */
+  readonly runs: number;
   readonly hits: number;
+  readonly double: number;
+  readonly triple: number;
   readonly hr: number;
   readonly rbi: number;
   readonly bb: number;
+  /** 故意四壞。 */
+  readonly ibb: number;
+  /** 三振。 */
+  readonly so: number;
   readonly sb: number;
+  /** 盜壘刺。 */
+  readonly cs: number;
   /** 打擊率，安打除以打數。 */
   readonly avg: number;
+  /** 上壘率。 */
+  readonly obp: number;
+  /** 長打率。 */
+  readonly slg: number;
 }
 
+/** 投球成績。同樣是養成期與職業共用的標準投球列。 */
 export interface PitchingLine {
   readonly games: number;
+  /** 先發場次。養成期不分先發後援，一律 0。 */
+  readonly starts: number;
+  readonly wins: number;
+  readonly losses: number;
+  readonly saves: number;
   /** 局數，取到小數一位。 */
   readonly ip: number;
-  readonly so: number;
-  readonly bb: number;
+  /** 被安打。 */
+  readonly hits: number;
+  /** 失分。 */
+  readonly runs: number;
   readonly er: number;
+  readonly bb: number;
+  readonly so: number;
   readonly era: number;
+}
+
+/** 長打率：壘打數除以打數。 */
+export function slugging(line: BattingLine): number {
+  if (line.ab === 0) return 0;
+  const single = line.hits - line.double - line.triple - line.hr;
+  return (single + line.double * 2 + line.triple * 3 + line.hr * 4) / line.ab;
+}
+
+/** 整體攻擊指數：上壘率加長打率。 */
+export function ops(line: BattingLine): number {
+  return line.obp + line.slg;
+}
+
+/** 每局被上壘率：被安打加保送除以局數。 */
+export function whip(line: PitchingLine): number {
+  return line.ip === 0 ? 0 : (line.hits + line.bb) / line.ip;
+}
+
+/** 每九局三振數。 */
+export function kPerNine(line: PitchingLine): number {
+  return line.ip === 0 ? 0 : (line.so * 9) / line.ip;
+}
+
+/** 每九局保送數。 */
+export function bbPerNine(line: PitchingLine): number {
+  return line.ip === 0 ? 0 : (line.bb * 9) / line.ip;
 }
 
 export interface AmateurLine {
@@ -87,22 +142,38 @@ export function battingLine(
 
   const rbi = Math.round(hits * cfg.rbi_per_hit + hr);
 
+  const rest = hits - hr;
+  const double = Math.min(rest, Math.round(rest * rateOf(cfg.double_rate, ability, par)));
+  const triple = Math.min(rest - double, Math.round(rest * rateOf(cfg.triple_rate, ability, par)));
+
+  const so = Math.min(ab - hits, Math.round(ab * Math.max(0, rateOf(cfg.strikeout_rate, ability, par))));
+
   const onBase = hits + bb;
   const stealRate = Math.max(0, rateOf(cfg.steal_rate, ability, par) + noise());
   const attempts = Math.round(onBase * stealRate);
   const sb = Math.round(attempts * cfg.steal_success);
+  const runs = Math.round(onBase * rateOf(cfg.runs_per_time_on_base, ability, par));
 
-  return {
+  const line: BattingLine = {
     games,
     pa,
     ab,
+    runs,
     hits,
+    double,
+    triple,
     hr,
     rbi,
     bb,
+    ibb: 0,
+    so,
     sb,
+    cs: Math.max(0, attempts - sb),
     avg: ab === 0 ? 0 : hits / ab,
+    obp: pa === 0 ? 0 : onBase / pa,
+    slg: 0,
   };
+  return { ...line, slg: slugging(line) };
 }
 
 /** 投出一段養成期的投球成績。 */
@@ -130,12 +201,22 @@ export function pitchingLine(
     Math.min(cfg.era.max, cfg.era.base + (stuff - par) * cfg.era.per_point + noise()),
   );
 
+  const h9 = Math.max(0, rateOf(cfg.hits_per_nine, ability, par) + noise());
+  const er = Math.round((ip * era) / 9);
+
   return {
     games,
+    // 養成期不分先發後援——一支國高中球隊的投手什麼時候上場都有可能。
+    starts: 0,
+    wins: 0,
+    losses: 0,
+    saves: 0,
     ip,
-    so: Math.round((ip * k9) / 9),
+    hits: Math.round((ip * h9) / 9),
+    runs: Math.round(er * cfg.runs_per_earned_run.value),
+    er,
     bb: Math.round((ip * bb9) / 9),
-    er: Math.round((ip * era) / 9),
+    so: Math.round((ip * k9) / 9),
     era,
   };
 }
@@ -162,22 +243,37 @@ export function playAmateurStats(
   };
 }
 
-/** 把兩段成績相加，用於年度與生涯累計。 */
+/**
+ * 把兩段成績相加，用於年度與生涯累計。
+ *
+ * 累計數直接相加，**比率一律由累計數重算**——把兩季的打擊率平均起來會得到
+ * 錯的數字，除非兩季的打數剛好一樣。
+ */
 export function addBatting(a: BattingLine | null, b: BattingLine | null): BattingLine | null {
   if (a === null) return b;
   if (b === null) return a;
-  const ab = a.ab + b.ab;
-  const hits = a.hits + b.hits;
-  return {
+  const merged = {
     games: a.games + b.games,
     pa: a.pa + b.pa,
-    ab,
-    hits,
+    ab: a.ab + b.ab,
+    runs: a.runs + b.runs,
+    hits: a.hits + b.hits,
+    double: a.double + b.double,
+    triple: a.triple + b.triple,
     hr: a.hr + b.hr,
     rbi: a.rbi + b.rbi,
     bb: a.bb + b.bb,
+    ibb: a.ibb + b.ibb,
+    so: a.so + b.so,
     sb: a.sb + b.sb,
-    avg: ab === 0 ? 0 : hits / ab,
+    cs: a.cs + b.cs,
+  };
+  const line: BattingLine = { ...merged, avg: 0, obp: 0, slg: 0 };
+  return {
+    ...merged,
+    avg: merged.ab === 0 ? 0 : merged.hits / merged.ab,
+    obp: merged.pa === 0 ? 0 : (merged.hits + merged.bb + merged.ibb) / merged.pa,
+    slg: slugging(line),
   };
 }
 
@@ -188,10 +284,16 @@ export function addPitching(a: PitchingLine | null, b: PitchingLine | null): Pit
   const er = a.er + b.er;
   return {
     games: a.games + b.games,
+    starts: a.starts + b.starts,
+    wins: a.wins + b.wins,
+    losses: a.losses + b.losses,
+    saves: a.saves + b.saves,
     ip,
-    so: a.so + b.so,
-    bb: a.bb + b.bb,
+    hits: a.hits + b.hits,
+    runs: a.runs + b.runs,
     er,
+    bb: a.bb + b.bb,
+    so: a.so + b.so,
     era: ip === 0 ? 0 : (er * 9) / ip,
   };
 }

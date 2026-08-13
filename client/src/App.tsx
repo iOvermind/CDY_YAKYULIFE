@@ -11,7 +11,14 @@ import {
 } from './data/index.ts';
 import { schoolTiersOf, stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
-import type { BattingLine, PitchingLine } from './engine/amateurStats.ts';
+import {
+  bbPerNine,
+  kPerNine,
+  ops,
+  whip,
+  type BattingLine,
+  type PitchingLine,
+} from './engine/amateurStats.ts';
 import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
 import { fieldingPosition, isSideVisible, type Rating } from './engine/rating.ts';
@@ -489,6 +496,58 @@ function TraitList({ traits: owned }: { traits: ReadonlySet<string> }) {
 const BAD_TAG = { background: '#2a0f0f', borderColor: '#c0392b', color: '#ff8b7a' };
 
 /** 打擊與投球成績。養成期的成績依大賽場次結算，場次由名次決定。 */
+/**
+ * 標準打擊列與投球列。
+ *
+ * 欄位表寫成資料，兩張表就不必各自維護一份 thead 與 tbody——欄位增減只要改
+ * 一個地方，而且順序一定對得上。表頭用縮寫（棒球記錄的通用寫法），滑鼠停留
+ * 顯示中文全名。
+ */
+interface StatColumn<T> {
+  readonly key: string;
+  readonly title: string;
+  readonly value: (line: T) => string | number;
+}
+
+const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
+  { key: 'G', title: '出賽', value: (b) => b.games },
+  { key: 'PA', title: '打席', value: (b) => b.pa },
+  { key: 'AB', title: '打數', value: (b) => b.ab },
+  { key: 'R', title: '得分', value: (b) => b.runs },
+  { key: 'H', title: '安打', value: (b) => b.hits },
+  { key: '2B', title: '二壘打', value: (b) => b.double },
+  { key: '3B', title: '三壘打', value: (b) => b.triple },
+  { key: 'HR', title: '全壘打', value: (b) => b.hr },
+  { key: 'RBI', title: '打點', value: (b) => b.rbi },
+  { key: 'BB', title: '四壞', value: (b) => b.bb },
+  { key: 'IBB', title: '故意四壞', value: (b) => b.ibb },
+  { key: 'SO', title: '三振', value: (b) => b.so },
+  { key: 'SB', title: '盜壘', value: (b) => b.sb },
+  { key: 'CS', title: '盜壘刺', value: (b) => b.cs },
+  { key: 'AVG', title: '打擊率', value: (b) => fmtAvg(b.avg) },
+  { key: 'OBP', title: '上壘率', value: (b) => fmtAvg(b.obp) },
+  { key: 'SLG', title: '長打率', value: (b) => fmtAvg(b.slg) },
+  { key: 'OPS', title: '整體攻擊指數', value: (b) => fmtAvg(ops(b)) },
+];
+
+const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
+  { key: 'G', title: '出賽', value: (p) => p.games },
+  { key: 'GS', title: '先發', value: (p) => p.starts },
+  { key: 'W', title: '勝', value: (p) => p.wins },
+  { key: 'L', title: '敗', value: (p) => p.losses },
+  { key: 'SV', title: '救援成功', value: (p) => p.saves },
+  { key: 'IP', title: '投球局數', value: (p) => p.ip.toFixed(1) },
+  { key: 'H', title: '被安打', value: (p) => p.hits },
+  { key: 'R', title: '失分', value: (p) => p.runs },
+  { key: 'ER', title: '自責分', value: (p) => p.er },
+  { key: 'BB', title: '四壞', value: (p) => p.bb },
+  { key: 'SO', title: '奪三振', value: (p) => p.so },
+  { key: 'ERA', title: '防禦率', value: (p) => p.era.toFixed(2) },
+  { key: 'WHIP', title: '每局被上壘率', value: (p) => whip(p).toFixed(2) },
+  { key: 'K/9', title: '每九局奪三振', value: (p) => kPerNine(p).toFixed(1) },
+  { key: 'BB/9', title: '每九局四壞', value: (p) => bbPerNine(p).toFixed(1) },
+];
+
 function StatLines({
   label,
   batting,
@@ -510,55 +569,52 @@ function StatLines({
     <>
       {label !== null && <h4 style={{ marginTop: 12 }}>{label}</h4>}
       {pitching !== null && (
-        <table className="fin">
-          <thead>
-            <tr>
-              <th>G</th>
-              <th>IP</th>
-              <th>SO</th>
-              <th>BB</th>
-              <th>ERA</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{pitching.games}</td>
-              <td>{pitching.ip.toFixed(1)}</td>
-              <td>{pitching.so}</td>
-              <td>{pitching.bb}</td>
-              <td>{pitching.era.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="fin-scroll">
+          <table className="fin">
+            <thead>
+              <tr>
+                {PITCHING_COLUMNS.map((c) => (
+                  <th key={c.key} title={c.title}>
+                    {c.key}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {PITCHING_COLUMNS.map((c) => (
+                  <td key={c.key}>{c.value(pitching)}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
       )}
       {batting !== null && (
-        <table className="fin">
-          <thead>
-            <tr>
-              <th>G</th>
-              <th>AB</th>
-              <th>H</th>
-              <th>HR</th>
-              <th>RBI</th>
-              <th>SB</th>
-              <th>AVG</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{batting.games}</td>
-              <td>{batting.ab}</td>
-              <td>{batting.hits}</td>
-              <td>{batting.hr}</td>
-              <td>{batting.rbi}</td>
-              <td>{batting.sb}</td>
-              <td>{fmtAvg(batting.avg)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="fin-scroll">
+          <table className="fin">
+            <thead>
+              <tr>
+                {BATTING_COLUMNS.map((c) => (
+                  <th key={c.key} title={c.title}>
+                    {c.key}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {BATTING_COLUMNS.map((c) => (
+                  <td key={c.key}>{c.value(batting)}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );
+
 }
 
 function Board({

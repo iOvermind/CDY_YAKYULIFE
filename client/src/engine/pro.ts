@@ -9,7 +9,7 @@
  * 老化走 growth 子序列（能力變動）。
  */
 
-import { leagues, season as cfg } from '../data/index.ts';
+import { abilities, leagues, season as cfg } from '../data/index.ts';
 import type { Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
@@ -165,8 +165,12 @@ export function applyAging(world: World, ability: Abilities, age: number): Aging
     const whole = Math.floor(amount);
     const drop = whole + (rng.next() < amount - whole ? 1 : 0);
     if (drop <= 0) continue;
-    next[key] = Math.max(0, (next[key] ?? 0) - drop);
-    changes.set(key, -drop);
+    // 下限是量表的底，不是 0。20 就是球探量表描述得了的最差，跌破它會產生
+    // 沒有意義的數字——「比 20 更差」在球探報告上沒有對應的說法。
+    const floored = Math.max(abilities.scale.hard_floor, (next[key] ?? 0) - drop);
+    if (floored === (next[key] ?? 0)) continue;
+    changes.set(key, floored - (next[key] ?? 0));
+    next[key] = floored;
   }
 
   return { ability: next as Abilities, changes, phase: 'decline' };

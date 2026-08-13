@@ -2,18 +2,15 @@
   "schemaVersion": 2,
   "_source": "抽取自 index_legacy.html ABL / POS_AB / POSN / newState()，並依二刀流球員模型改寫",
   "_note": "球探量表 20-80。所有能力值共用這個尺度，上限為 80。",
-
   "_model_note": "**每位球員都擁有全部能力**，不論起始守位——這與 index_legacy.html 的投手／野手二分不同，是刻意的模型變更。開局選擇的起始守位只影響潛力天賦的機率加權（見 talent_weights），不決定你有哪些能力。因此一個投手也可能打得好，一個游擊手也可能投得動；投打俱佳者可在選秀前取得「二刀流」天賦。",
-
   "scale": {
     "min": 20,
     "max": 80,
-    "hard_floor": 1,
+    "hard_floor": 20,
     "max_ceiling_bonus": 5,
-    "_note": "min/max 是球探量表的表述範圍；hard_floor 是能力因傷病或衰退下修時的絕對下限。",
+    "_note": "min/max 是球探量表的表述範圍。hard_floor 是能力因傷病或衰退下修時的絕對下限，**與 min 相同**：20 就是量表的底，衰退到那裡就停住。設得比 min 低會產生量表描述不了的數字，那對玩家沒有意義——「比 20 更差」在球探報告上沒有對應的說法。",
     "_ceiling_bonus_note": "少數事件可以提升某項能力的上限，每項最多累積 max_ceiling_bonus 點。提升上限**不會直接增加能力值**——它讓你的潛力天花板與量表上限一起往上移，你得自己把點數練上去。因此 80 不是絕對上限，被提升過的能力最高可以練到 80 + max_ceiling_bonus。"
   },
-
   "abilities": {
     "sta": "體力",
     "vel": "球速",
@@ -31,30 +28,74 @@
     "arm": "臂力",
     "cat": "配球"
   },
-
   "ability_groups": {
     "_note": "能力的功能分組，只分三組：體力、投手、野手。用於介面呈現，以及判定二刀流資格時分別檢查投手側與野手側。",
     "_shared_note": "體力是投手與野手共用的——投手要撐局數，野手要撐出賽數，同一個量。因此它不屬於任一側，二刀流判定時也不計入任何一側。",
     "_fielder_note": "野手側同時涵蓋打擊（擊球／力量／速度／選球）與守備（守備範圍／接球／臂力／配球）。不再細分成兩組——對球員模型而言「會不會打」與「守不守得住」都是野手這條路上的事，分開只會讓二刀流的判定多一層無謂的分支。",
-    "shared": ["sta"],
-    "pitcher": ["vel", "ctl", "swp", "drp", "chg", "gim"],
-    "fielder": ["con", "pow", "spd", "eye", "rng", "fld", "arm", "cat"]
+    "shared": [
+      "sta"
+    ],
+    "pitcher": [
+      "vel",
+      "ctl",
+      "swp",
+      "drp",
+      "chg",
+      "gim"
+    ],
+    "fielder": [
+      "con",
+      "pow",
+      "spd",
+      "eye",
+      "rng",
+      "fld",
+      "arm",
+      "cat"
+    ]
   },
-
   "ability_group_names": {
     "shared": "體力",
     "pitcher": "投手",
     "fielder": "野手"
   },
-
   "pitch_families": {
     "_note": "投手的四大球系，取代舊版單一的 brk（變化球）。見 docs/design/simulation_math.md §5——各系有獨特的數學特性，不是同一個數值的四種皮膚。代碼沿用全部能力皆 3 字母的慣例；刻意避開 spc（Specialty），因為它與既有的 spd（速度）只差一字，程式碼裡看錯的成本太高。",
-    "swp": { "name": "橫向變化", "en": "Sweeping", "pitches": ["滑球", "橫掃滑球", "卡特球"] },
-    "drp": { "name": "縱向掉落", "en": "Dropping", "pitches": ["曲球", "12-6 大曲球"] },
-    "chg": { "name": "變速下沉", "en": "Changeup", "pitches": ["變速球", "指叉球", "伸卡球"] },
-    "gim": { "name": "特殊奇招", "en": "Gimmick", "pitches": ["蝴蝶球", "螺旋球"] }
+    "swp": {
+      "name": "橫向變化",
+      "en": "Sweeping",
+      "pitches": [
+        "滑球",
+        "橫掃滑球",
+        "卡特球"
+      ]
+    },
+    "drp": {
+      "name": "縱向掉落",
+      "en": "Dropping",
+      "pitches": [
+        "曲球",
+        "12-6 大曲球"
+      ]
+    },
+    "chg": {
+      "name": "變速下沉",
+      "en": "Changeup",
+      "pitches": [
+        "變速球",
+        "指叉球",
+        "伸卡球"
+      ]
+    },
+    "gim": {
+      "name": "特殊奇招",
+      "en": "Gimmick",
+      "pitches": [
+        "蝴蝶球",
+        "螺旋球"
+      ]
+    }
   },
-
   "start_positions": {
     "_note": "開局選擇的起始守位。不含 DH——DH 不是養成期會選的起點，它是能力衰退後的去處。UTIL（守位不定）代表還沒定型的球員，天賦不做任何加權。正式的守備位置在選秀之後才由守位系統決定，見 positions.json。",
     "P": "投手",
@@ -68,34 +109,120 @@
     "RF": "右外野手",
     "UTIL": "守位不定"
   },
-
   "talent_weights": {
     "_note": "潛力天賦的機率加權。權重越高，該能力越可能在洗牌時排到前面、拿到高階的潛力區間。這是起始守位唯一的作用——它讓專精者仍然專精，但不封死任何一條路。未列出的能力一律用 default。",
     "_util_note": "UTIL（守位不定）刻意留空，代表全部能力等權重一起洗牌。它的期望值不比專精差，但拿到某一項頂尖天賦的位置完全隨機——換來的是最高的二刀流機率。",
     "default": 1,
     "by_start_position": {
-      "P": { "sta": 2, "vel": 3, "ctl": 3, "swp": 3, "drp": 3, "chg": 3, "gim": 3 },
-      "C": { "sta": 2, "con": 2, "pow": 2, "spd": 1, "eye": 2, "rng": 1, "fld": 3, "arm": 3, "cat": 4 },
-      "1B": { "sta": 2, "con": 2, "pow": 3, "spd": 1, "eye": 2, "rng": 1, "fld": 2, "arm": 1 },
-      "2B": { "sta": 2, "con": 2, "pow": 2, "spd": 2, "eye": 2, "rng": 3, "fld": 3, "arm": 2 },
-      "3B": { "sta": 2, "con": 2, "pow": 3, "spd": 1, "eye": 2, "rng": 2, "fld": 2, "arm": 4 },
-      "SS": { "sta": 2, "con": 2, "pow": 2, "spd": 2, "eye": 2, "rng": 4, "fld": 3, "arm": 3 },
-      "LF": { "sta": 2, "con": 2, "pow": 3, "spd": 2, "eye": 2, "rng": 2, "fld": 2, "arm": 2 },
-      "CF": { "sta": 2, "con": 2, "pow": 2, "spd": 3, "eye": 2, "rng": 4, "fld": 3, "arm": 2 },
-      "RF": { "sta": 2, "con": 2, "pow": 3, "spd": 2, "eye": 2, "rng": 2, "fld": 2, "arm": 4 },
+      "P": {
+        "sta": 2,
+        "vel": 3,
+        "ctl": 3,
+        "swp": 3,
+        "drp": 3,
+        "chg": 3,
+        "gim": 3
+      },
+      "C": {
+        "sta": 2,
+        "con": 2,
+        "pow": 2,
+        "spd": 1,
+        "eye": 2,
+        "rng": 1,
+        "fld": 3,
+        "arm": 3,
+        "cat": 4
+      },
+      "1B": {
+        "sta": 2,
+        "con": 2,
+        "pow": 3,
+        "spd": 1,
+        "eye": 2,
+        "rng": 1,
+        "fld": 2,
+        "arm": 1
+      },
+      "2B": {
+        "sta": 2,
+        "con": 2,
+        "pow": 2,
+        "spd": 2,
+        "eye": 2,
+        "rng": 3,
+        "fld": 3,
+        "arm": 2
+      },
+      "3B": {
+        "sta": 2,
+        "con": 2,
+        "pow": 3,
+        "spd": 1,
+        "eye": 2,
+        "rng": 2,
+        "fld": 2,
+        "arm": 4
+      },
+      "SS": {
+        "sta": 2,
+        "con": 2,
+        "pow": 2,
+        "spd": 2,
+        "eye": 2,
+        "rng": 4,
+        "fld": 3,
+        "arm": 3
+      },
+      "LF": {
+        "sta": 2,
+        "con": 2,
+        "pow": 3,
+        "spd": 2,
+        "eye": 2,
+        "rng": 2,
+        "fld": 2,
+        "arm": 2
+      },
+      "CF": {
+        "sta": 2,
+        "con": 2,
+        "pow": 2,
+        "spd": 3,
+        "eye": 2,
+        "rng": 4,
+        "fld": 3,
+        "arm": 2
+      },
+      "RF": {
+        "sta": 2,
+        "con": 2,
+        "pow": 3,
+        "spd": 2,
+        "eye": 2,
+        "rng": 2,
+        "fld": 2,
+        "arm": 4
+      },
       "UTIL": {}
     }
   },
-
   "handedness": {
     "_note": "慣用手。simulation_math.md §5 的「同邊優勢」與「反邊剋星」需要投打雙方的慣用手才算得出來，兩邊都必須有。R 右、L 左、S 左右開弓。每位球員都有投球慣用手與打擊慣用手兩者——二刀流模型下所有人都可能上場投球或打擊。",
     "throws": {
       "_note": "雙手投不在此列——史上只有個位數人，放進常規機率會讓投手看起來一堆怪物。改列為隱藏特性，見 traits.json 的 switch_pitcher。",
-      "weights": { "R": 72, "L": 28 }
+      "weights": {
+        "R": 72,
+        "L": 28
+      }
     },
     "bats": {
       "_note": "左打比例遠高於一般人口的左撇子比例，因為左打離一壘近、且大部分投手是右投，反邊優勢的機會多得多。左右開弓在打者這邊是常見且有戰術價值的——永遠取得反邊優勢。",
-      "weights": { "R": 57, "L": 35, "S": 8 }
+      "weights": {
+        "R": 57,
+        "L": 35,
+        "S": 8
+      }
     },
     "league_batter_split": {
       "_note": "玩家投球時，對手打者的左右分佈。打者群是抽象模擬的，用聯盟層級常數處理即可，不必逐一建模。",
@@ -103,65 +230,176 @@
       "L": 35,
       "S": 8
     },
-
     "selectable": {
       "_note": "慣用手由玩家在開局時選擇，不是擲出來的。上方的 weights 保留給未來的 NPC 生成使用。",
-      "throws": ["R", "L"],
-      "bats": ["R", "L", "S"]
+      "throws": [
+        "R",
+        "L"
+      ],
+      "bats": [
+        "R",
+        "L",
+        "S"
+      ]
     },
-
     "ceiling_modifier": {
       "_note": "左投與左打在棒球裡有結構性優勢：左投稀缺、左打離一壘近且面對的反邊投手更多。這個修正是那份優勢的對價——選了有利的一手，天賦上限相應降低。修正只作用在受益的那一側：左投扣投球能力的天花板，左打扣打擊能力的天花板。",
       "_pending_warning": "**對價的另一半尚未實作。** simulation_math.md §5 的同邊優勢與反邊剋星還沒接上賽季模擬，因此目前選左手只有扣分、沒有好處。在 platoon 機制實作之前，這裡的數值應視為暫定；要嘛先歸零，要嘛接受左手暫時偏弱。",
       "throws": {
-        "L": { "group": "pitcher", "delta": -2 }
+        "L": {
+          "group": "pitcher",
+          "delta": -2
+        }
       },
       "bats": {
-        "L": { "group": "fielder", "delta": -1 },
-        "S": { "group": "fielder", "delta": -2 }
+        "L": {
+          "group": "fielder",
+          "delta": -1
+        },
+        "S": {
+          "group": "fielder",
+          "delta": -2
+        }
       }
     }
   },
-
   "initial_ability": {
     "_note": "開局能力：每項先擲 base，再依起始守位給招牌能力額外加成。UTIL 沒有加成——樣樣都練的代價就是樣樣都沒有先發優勢。",
-    "base": { "min": 20, "max": 32 },
+    "base": {
+      "min": 20,
+      "max": 32
+    },
     "bonus": {
-      "P": { "vel": { "min": 0, "max": 6 } },
-      "C": { "cat": { "min": 0, "max": 6 }, "fld": { "min": 0, "max": 4 } },
-      "1B": { "pow": { "min": 0, "max": 6 }, "con": { "min": 0, "max": 4 } },
-      "2B": { "con": { "min": 0, "max": 6 }, "fld": { "min": 0, "max": 4 } },
-      "3B": { "arm": { "min": 0, "max": 6 }, "pow": { "min": 0, "max": 4 } },
-      "SS": { "rng": { "min": 0, "max": 6 }, "fld": { "min": 0, "max": 4 } },
-      "LF": { "pow": { "min": 0, "max": 6 }, "con": { "min": 0, "max": 4 } },
-      "CF": { "spd": { "min": 0, "max": 6 }, "rng": { "min": 0, "max": 4 } },
-      "RF": { "arm": { "min": 0, "max": 6 }, "pow": { "min": 0, "max": 4 } },
+      "P": {
+        "vel": {
+          "min": 0,
+          "max": 6
+        }
+      },
+      "C": {
+        "cat": {
+          "min": 0,
+          "max": 6
+        },
+        "fld": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "1B": {
+        "pow": {
+          "min": 0,
+          "max": 6
+        },
+        "con": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "2B": {
+        "con": {
+          "min": 0,
+          "max": 6
+        },
+        "fld": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "3B": {
+        "arm": {
+          "min": 0,
+          "max": 6
+        },
+        "pow": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "SS": {
+        "rng": {
+          "min": 0,
+          "max": 6
+        },
+        "fld": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "LF": {
+        "pow": {
+          "min": 0,
+          "max": 6
+        },
+        "con": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "CF": {
+        "spd": {
+          "min": 0,
+          "max": 6
+        },
+        "rng": {
+          "min": 0,
+          "max": 4
+        }
+      },
+      "RF": {
+        "arm": {
+          "min": 0,
+          "max": 6
+        },
+        "pow": {
+          "min": 0,
+          "max": 4
+        }
+      },
       "UTIL": {}
     },
     "pitch_bonus": {
       "_note": "起始守位為投手者，另外隨機挑一個球系加成，代表少年時期最先練起來的那顆變化球。取代舊版固定加在 brk 上的做法——球系拆開後，加在哪一系本身就是一次抽取。",
-      "applies_to": ["P"],
-      "range": { "min": 0, "max": 4 }
+      "applies_to": [
+        "P"
+      ],
+      "range": {
+        "min": 0,
+        "max": 4
+      }
     }
   },
-
   "overall": {
     "_note": "綜合能力的計算。二刀流模型下每位球員兩側都有能力，因此兩側各算一個評價，整體取較高者——上場時你打的是自己擅長的位置。",
     "_two_way_note": "另一側的能力目前不計入整體評價。二刀流的價值在於「能同時貢獻兩種角色」，那要等賽季模擬能讓同一個人既投又打時才體現得出來，硬塞一個加成進評價只是憑空編數字。這是待校準項。",
     "pitcher": {
       "_note": "取投球能力中最好的三項加權，再加上體力。沿用舊版的權重形狀——舊版取球速／控球／變化球三項，球系拆開後改為六項取前三，讓「一顆決勝球加上基本功」自然勝出。",
-      "top_weights": [0.42, 0.3, 0.18],
+      "top_weights": [
+        0.42,
+        0.3,
+        0.18
+      ],
       "stamina_weight": 0.1
     },
     "fielder": {
       "_note": "打擊取擊球／力量／選球／速度四項加權，守備取所在守位的守備分，兩者再依守位的守備權重合成。",
-      "offense_top_weights": [0.38, 0.27, 0.2, 0.15],
+      "offense_top_weights": [
+        0.38,
+        0.27,
+        0.2,
+        0.15
+      ],
       "defense_weight": {
         "_note": "關鍵守位的守備佔比最高，角落守位降低。未指定守位時用 default。",
-        "SS": 0.3, "CF": 0.3, "C": 0.3,
-        "2B": 0.22, "3B": 0.22,
-        "RF": 0.2, "LF": 0.14,
-        "1B": 0.12, "DH": 0.12,
+        "SS": 0.3,
+        "CF": 0.3,
+        "C": 0.3,
+        "2B": 0.22,
+        "3B": 0.22,
+        "RF": 0.2,
+        "LF": 0.14,
+        "1B": 0.12,
+        "DH": 0.12,
         "default": 0.24
       },
       "dh_defense_penalty": {
@@ -172,7 +410,9 @@
       "default_position": {
         "_note": "尚未登錄守備位置時，依起始守位推定一個用於評價的守位。",
         "C": "C",
-        "LF": "CF", "CF": "CF", "RF": "CF",
+        "LF": "CF",
+        "CF": "CF",
+        "RF": "CF",
         "default": "SS"
       }
     },
@@ -181,49 +421,96 @@
       "yips": -3
     }
   },
-
   "growth_cost": {
     "_note": "能力成長的點數成本。tiers 由高到低比對，取第一個 current >= from 的 cost。未滿一級的點數留在蓄力槽，不蒸發（見 CONTEXT.md 的「蓄力槽」）。",
     "_unified_note": "舊版依球員身分分兩條曲線，理由是「投手只有 4 項、野手 9 項」——曲線在補償能力項數。二刀流模型下投手側是 7 項、野手側 9 項，只差一項，不再需要分開。曲線的陡度接近舊版投手那條（最貴 8 點），高段成長因此非常昂貴——這是刻意的：養成期的點數必須有取捨，不能什麼都點滿。",
     "_negative_note": "扣值一律 1:1，不吃成本曲線——衰退與傷病不該因為能力高就扣得比較少。",
     "default": {
       "tiers": [
-        { "from": 72, "cost": 8 },
-        { "from": 64, "cost": 6 },
-        { "from": 58, "cost": 4 },
-        { "from": 50, "cost": 2 },
-        { "from": 0, "cost": 1 }
+        {
+          "from": 72,
+          "cost": 8
+        },
+        {
+          "from": 64,
+          "cost": 6
+        },
+        {
+          "from": 58,
+          "cost": 4
+        },
+        {
+          "from": 50,
+          "cost": 2
+        },
+        {
+          "from": 0,
+          "cost": 1
+        }
       ],
       "above_ceiling_multiplier": 3
     },
     "two_way": {
       "_note": "二刀流天賦的成長曲線：變貴的門檻往後推，超過天花板的懲罰也較輕。這是取得二刀流之後的機械性回報——兩邊都要練的人，高段成長不能跟專精者一樣貴，否則二刀流只是懲罰。",
       "tiers": [
-        { "from": 78, "cost": 8 },
-        { "from": 70, "cost": 6 },
-        { "from": 64, "cost": 4 },
-        { "from": 56, "cost": 2 },
-        { "from": 0, "cost": 1 }
+        {
+          "from": 78,
+          "cost": 8
+        },
+        {
+          "from": 70,
+          "cost": 6
+        },
+        {
+          "from": 64,
+          "cost": 4
+        },
+        {
+          "from": 56,
+          "cost": 2
+        },
+        {
+          "from": 0,
+          "cost": 1
+        }
       ],
       "above_ceiling_multiplier": 2
     }
   },
-
   "training_dice": {
     "_note": "季初自主訓練擲出的骰數與點數。骰數依權重抽，每顆骰的點數區間依特性而異。",
-    "count_weights": { "3": 35, "4": 40, "5": 20, "6": 5 },
+    "count_weights": {
+      "3": 35,
+      "4": 40,
+      "5": 20,
+      "6": 5
+    },
     "count_when_injured": 2,
     "min_count": 2,
     "faces": {
       "_note": "依特性取用，命中第一個即採用；都沒有則用 default。",
-      "genius": { "min": 4, "max": 6 },
-      "late": { "min": 3, "max": 6 },
-      "default": { "min": 1, "max": 6 }
+      "genius": {
+        "min": 4,
+        "max": 6
+      },
+      "late": {
+        "min": 3,
+        "max": 6
+      },
+      "default": {
+        "min": 1,
+        "max": 6
+      }
     },
     "count_modifiers": {
       "_note": "只在非傷缺的球季生效。",
-      "distract": { "delta": -1 },
-      "academy": { "chance": 35, "delta": 1 }
+      "distract": {
+        "delta": -1
+      },
+      "academy": {
+        "chance": 35,
+        "delta": 1
+      }
     },
     "championship_bonus": {
       "_note": "**國際賽**奪冠的回報，在隔季多擲幾顆骰。骰面維持 1-6，多的是顆數不是點數——披上中華隊戰袍拿下冠軍帶來的是更好的訓練資源與眼界，不是每一球都變強。加成只延續一季，不累積到再下一季。",
@@ -235,15 +522,26 @@
       "PRO": 3
     }
   },
-
   "potential_ceiling": {
     "_note": "OOTP 式潛力天花板：把全部能力依 talent_weights 加權洗牌後，依名次套用區間——1 項頂尖工具、1 項優質、1 項中上、其餘平庸。名次超出階梯數者一律吃最後一階。",
     "_two_way_note": "全部 15 項能力一起洗牌，因此絕大多數球員只會在單側拿到高階天賦。投打各有一項頂尖是罕見結果——這正是二刀流稀有的來源，不需要另外設限。",
     "tiers": [
-      { "min": 72, "max": 80 },
-      { "min": 64, "max": 74 },
-      { "min": 56, "max": 68 },
-      { "min": 46, "max": 62 }
+      {
+        "min": 72,
+        "max": 80
+      },
+      {
+        "min": 64,
+        "max": 74
+      },
+      {
+        "min": 56,
+        "max": 68
+      },
+      {
+        "min": 46,
+        "max": 62
+      }
     ]
   }
 }

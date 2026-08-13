@@ -89,6 +89,22 @@
       "double_rate": { "base": 0.2, "per_point": 0.001, "min": 0.12, "max": 0.3, "ability": "spd" },
       "triple_rate": { "base": 0.015, "per_point": 0.0012, "min": 0.0, "max": 0.06, "ability": "spd" }
     },
+    "strikeout_rate": {
+      "_note": "三振佔打數的比例。選球好的人三振少，但揮大棒的人三振多——因此同時看選球與力量。",
+      "base": 0.19,
+      "per_point": -0.003,
+      "min": 0.06,
+      "max": 0.35,
+      "abilities": { "eye": 0.7, "con": 0.5, "pow": -0.2 }
+    },
+    "runs_per_time_on_base": {
+      "_note": "每次上壘能回來得分的比例。跑得快的人比較容易靠隊友的安打回本壘。",
+      "base": 0.31,
+      "per_point": 0.0022,
+      "min": 0.2,
+      "max": 0.45,
+      "ability": "spd"
+    },
     "rbi_per_hit": 0.55,
     "rbi_per_hr_extra": 0.9,
     "steal": {
@@ -126,6 +142,18 @@
       "noise": { "min": 0.93, "max": 1.07 }
     },
 
+    "hits_per_inning": {
+      "_note": "每局被安打數。壓制力越好被打得越少。",
+      "base": 0.98,
+      "per_point": -0.014,
+      "min": 0.45,
+      "max": 1.6,
+      "abilities": { "vel": 0.35, "ctl": 0.3, "swp": 0.15, "drp": 0.15, "chg": 0.05 }
+    },
+    "runs_per_earned_run": {
+      "_note": "失分與自責分的比例。守備失誤造成的非自責分讓失分永遠略高於自責分。",
+      "value": 1.08
+    },
     "strikeout_rate": {
       "_note": "每局三振數。由球威與變化球決定。",
       "base": 0.72,

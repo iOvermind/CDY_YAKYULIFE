@@ -66,15 +66,39 @@ function playToEnd(game: Game, stopAtDraft = false): Game {
     // 養成期的斷言必須在選秀前收手——流程接上職業之後會一路跑到引退，
     // 三十幾歲的能力早已被年齡曲線壓下去，拿它來驗證養成期的成長會失真。
     if (stopAtDraft && reachedDraft(game)) break;
-    const first = game.flow.prompt.options[0];
-    if (first === undefined) throw new Error('提問沒有選項');
-    game.choose(first.id);
+    const pick = defaultPick(game);
+    if (pick === undefined) throw new Error('提問沒有選項');
+    game.choose(pick);
   }
   return game;
 }
 
-/** 流程是否已推進到選秀。 */
+/**
+ * 自動作答時該選哪一個。
+ *
+ * **絕不選復原**：配點階段的第一個非能力選項就是復原，照順序挑會讓自動代理
+ * 在「加點 → 復原 → 加點」之間無限來回。確認優先於其他選項，其餘取第一個
+ * 可選的。
+ */
+function defaultPick(game: Game, prefer: readonly string[] = []): string | undefined {
+  const options = game.flow.prompt?.options ?? [];
+  const usable = options.filter((o) => o.disabled !== true && o.id !== 'alloc:undo');
+  for (const key of prefer) {
+    const hit = usable.find((o) => o.id === `alloc:${key}`);
+    if (hit !== undefined) return hit.id;
+  }
+  return (usable.find((o) => o.id === 'alloc:confirm') ?? usable[0])?.id;
+}
+
+/**
+ * 流程是否已離開養成期。
+ *
+ * **不能只看有沒有 draft: 提問**：指名不可拒絕時選秀不會產生提問，直接就進了
+ * 職業。只看提問會讓「養成期」的測試一路跑到三十幾歲，把年齡衰退算進養成的
+ * 成長裡——那正是這個判斷寫錯時發生過的事。
+ */
 function reachedDraft(game: Game): boolean {
+  if (game.state?.pro !== null && game.state?.pro !== undefined) return true;
   return game.flow.prompt?.options.some((o) => o.id.startsWith('draft:')) === true;
 }
 
@@ -93,12 +117,9 @@ const EFFECTIVE = ['con', 'pow', 'eye', 'spd', 'rng', 'fld'];
 function playWell(game: Game, stopAtDraft = false): Game {
   while (game.flow.prompt !== null) {
     if (stopAtDraft && reachedDraft(game)) break;
-    const options = game.flow.prompt.options;
-    const pick =
-      EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
-      options[0];
+    const pick = defaultPick(game, EFFECTIVE);
     if (pick === undefined) throw new Error('提問沒有選項');
-    game.choose(pick.id);
+    game.choose(pick);
   }
   return game;
 }

@@ -266,7 +266,40 @@
       "noise": {
         "min": -0.04,
         "max": 0.04
-      }
+      },
+      "strikeout_rate": {
+        "_note": "三振佔打數的比例。",
+        "base": 0.2,
+        "per_point": -0.004,
+        "min": 0.06,
+        "max": 0.4,
+        "ability": "eye"
+      },
+      "runs_per_time_on_base": {
+        "_note": "每次上壘能回來得分的比例。",
+        "base": 0.33,
+        "per_point": 0.003,
+        "min": 0.2,
+        "max": 0.5,
+        "ability": "spd"
+      },
+      "double_rate": {
+        "_note": "二壘打佔非全壘打安打的比例。",
+        "base": 0.2,
+        "per_point": 0.0015,
+        "min": 0.1,
+        "max": 0.32,
+        "ability": "spd"
+      },
+      "triple_rate": {
+        "_note": "三壘打佔非全壘打安打的比例。",
+        "base": 0.02,
+        "per_point": 0.0018,
+        "min": 0.0,
+        "max": 0.08,
+        "ability": "spd"
+      },
+      "caught_stealing_note": "盜壘刺由嘗試次數扣掉成功數得出，不另外設率。"
     },
     "pitching": {
       "_note": "養成期的投手多半是球隊王牌，出賽即先發，因此局數以場次計。",
@@ -301,6 +334,18 @@
       "noise": {
         "min": -0.6,
         "max": 0.6
+      },
+      "hits_per_nine": {
+        "_note": "每九局被安打數。",
+        "base": 9.2,
+        "per_point": -0.13,
+        "min": 4.0,
+        "max": 16.0,
+        "ability": "ctl"
+      },
+      "runs_per_earned_run": {
+        "_note": "失分與自責分的比例。養成期的守備比職業粗糙，非自責分更多。",
+        "value": 1.18
       }
     }
   },

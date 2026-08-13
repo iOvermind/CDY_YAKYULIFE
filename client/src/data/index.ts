@@ -246,6 +246,10 @@ export interface AmateurData {
       readonly hit_rate: RateSpec;
       readonly hr_rate: RateSpec;
       readonly rbi_per_hit: number;
+      readonly double_rate: RateSpec;
+      readonly triple_rate: RateSpec;
+      readonly strikeout_rate: RateSpec;
+      readonly runs_per_time_on_base: RateSpec;
       readonly steal_rate: RateSpec;
       readonly steal_success: number;
       readonly noise: Range;
@@ -254,6 +258,8 @@ export interface AmateurData {
       readonly innings_per_game: RateSpec;
       readonly k_per_nine: RateSpec;
       readonly bb_per_nine: RateSpec;
+      readonly hits_per_nine: RateSpec;
+      readonly runs_per_earned_run: { readonly value: number };
       readonly era: RateSpec;
       readonly noise: Range;
     };
@@ -408,6 +414,8 @@ export interface SeasonData {
     readonly hit_rate: RateSpec;
     readonly hr_rate: RateSpec;
     readonly extra_base: { readonly double_rate: RateSpec; readonly triple_rate: RateSpec };
+    readonly strikeout_rate: RateSpec;
+    readonly runs_per_time_on_base: RateSpec;
     readonly rbi_per_hit: number;
     readonly rbi_per_hr_extra: number;
     readonly steal: { readonly attempt_rate: RateSpec; readonly success_rate: RateSpec };
@@ -427,6 +435,8 @@ export interface SeasonData {
       readonly noise: Range;
     };
     readonly strikeout_rate: RateSpec;
+    readonly hits_per_inning: RateSpec;
+    readonly runs_per_earned_run: { readonly value: number };
     readonly walk_rate: RateSpec;
     readonly era: RateSpec;
     readonly decision: {

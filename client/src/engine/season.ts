@@ -24,25 +24,12 @@ interface RateSpec {
   readonly abilities?: Readonly<Record<string, number>>;
 }
 
-/** 職業打擊成績。比養成期多了長打分項與勝負無關的累積數。 */
-export interface ProBattingLine extends BattingLine {
-  readonly ibb: number;
-  readonly double: number;
-  readonly triple: number;
-  readonly cs: number;
-  /** 上壘率。 */
-  readonly obp: number;
-  /** 長打率。 */
-  readonly slg: number;
-}
+/** 職業打擊成績。與養成期共用同一組欄位，生涯累計才不會在升上職業時斷掉。 */
+export type ProBattingLine = BattingLine;
 
-/** 職業投球成績。 */
+/** 職業投球成績。只多一個角色標記——先發與後援的敘述不同。 */
 export interface ProPitchingLine extends PitchingLine {
   readonly role: 'SP' | 'RP';
-  readonly starts: number;
-  readonly wins: number;
-  readonly losses: number;
-  readonly saves: number;
 }
 
 export interface SeasonLine {
@@ -211,18 +198,23 @@ export function proBattingLine(
   const single = rest - double - triple;
   const bases = single + double * 2 + triple * 3 + hr * 4;
 
+  const so = Math.min(ab - hits, Math.round(ab * rateOf(b.strikeout_rate, ability, par) * noise()));
+  const runs = Math.round(onBase * rateOf(b.runs_per_time_on_base, ability, par));
+
   return {
     games,
     pa,
     ab,
+    runs,
     hits,
+    double,
+    triple,
     hr,
     rbi,
     bb,
-    sb,
     ibb,
-    double,
-    triple,
+    so,
+    sb,
     cs: Math.max(0, attempts - sb),
     avg: ab === 0 ? 0 : hits / ab,
     obp: pa === 0 ? 0 : (hits + bb + ibb) / pa,
@@ -296,14 +288,18 @@ export function proPitchingLine(
   const decisions = role === 'SP' ? Math.round(starts * p.decision.starter_decision_rate) : 0;
   const wins = Math.round(decisions * winRate);
 
+  const er = Math.round((ip * era) / 9);
+
   return {
     role,
     games,
     starts,
     ip,
-    so: Math.round(ip * kPerInning),
+    hits: Math.round(ip * rateOf(p.hits_per_inning, ability, par) * noise()),
+    runs: Math.round(er * p.runs_per_earned_run.value),
+    er,
     bb: Math.round(ip * bbPerInning),
-    er: Math.round((ip * era) / 9),
+    so: Math.round(ip * kPerInning),
     era,
     wins,
     losses: decisions - wins,
