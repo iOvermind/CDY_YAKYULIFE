@@ -44,7 +44,15 @@ import {
   type EventMode,
   type GameEvent,
 } from './events.ts';
+import { assignPosition, defenseRuns, positionLabel, DH } from './defense.ts';
 import { esc, Flow, type Option } from './flow.ts';
+import {
+  advanceStandards,
+  initStandards,
+  standardOf,
+  standardsNote,
+  type LeagueStandards,
+} from './league.ts';
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
@@ -187,6 +195,16 @@ export interface ProState {
   readonly winRate: number;
   /** 所屬球隊這一季的奪冠機率，由全聯盟的勝率推導。 */
   readonly championshipOdds: number;
+  /** 登錄的守備位置代碼。只有頂級聯盟的野手才有，其餘為 null。 */
+  readonly position: string | null;
+  /** 登錄守位的中文名。 */
+  readonly positionName: string | null;
+  /** 在這個層級累計的守備分。 */
+  readonly defenseRuns: number;
+  /** 這個層級**當年**的平均水準。逐年浮動，不是 leagues.json 的基準值。 */
+  readonly par: number;
+  /** 這個層級**當年**的最低門檻，也就是替代水準。 */
+  readonly min: number;
 }
 
 export class Game {
@@ -264,7 +282,25 @@ export class Game {
     yearsAtBottom: number;
     /** 職業第幾年，從 1 起算。 */
     year: number;
+    /**
+     * 目前登錄的守備位置；尚未登錄時為 null。
+     *
+     * 只有頂級聯盟才登錄——二軍不挑守位。投手一律為 null，他們走投手定位那條
+     * 線（先發／後援），不進守位系統。
+     */
+    position: string | null;
   } | null = null;
+  /**
+   * 各層級當年的水準。尚未進職業時為 null。
+   *
+   * 聯盟水準是世界狀態，與球隊戰力同層——因此和 #league 一樣掛在這裡，不掛在
+   * 球員身上。見 league.ts。
+   */
+  #standards: LeagueStandards | null = null;
+  /** 生涯累計的守備分，以層級為鍵。 */
+  #defenseRuns: Record<string, number> = {};
+  /** 上一年說過的聯盟風向。用來避免同一句話年年重複。 */
+  #lastStandardsNote: string | null = null;
   /**
    * 所屬聯盟這一季的戰力表。
    *
@@ -324,6 +360,11 @@ export class Game {
       year: pro.year,
       winRate: this.#league?.get(pro.team)?.winRate ?? 0,
       championshipOdds: this.#league === null ? 0 : championshipOdds(this.#league, pro.team),
+      position: pro.position,
+      positionName: pro.position === null ? null : positionLabel(pro.position),
+      defenseRuns: this.#defenseRuns[pro.level] ?? 0,
+      par: standardOf(this.#standards, pro.level).par,
+      min: standardOf(this.#standards, pro.level).min,
     };
   }
 
@@ -851,9 +892,11 @@ export class Game {
 
   /** 進入職業。目前只跑 CPBL 主軸——旅外體系的轉會與尋路尚未實作。 */
   #professionalStart(level: string, team: string): void {
-    this.#pro = { level, team, yearsAtBottom: 0, year: 1 };
+    this.#pro = { level, team, yearsAtBottom: 0, year: 1, position: null };
     // 聯盟格局在進入職業的那一刻定下來：每隊各抽一個基準勝率當作體質。
     this.#league = initLeague(this.world, levelOf(level).org);
+    // 生涯的第一年就是基準值——它是玩家認識這個世界的參照點。
+    this.#standards = initStandards();
     this.#seasonBatting = null;
     this.#seasonPitching = null;
     this.flow.push(() => this.#proYear());
@@ -868,12 +911,68 @@ export class Game {
     this.flow.divider(
       `${this.#year} 年 · ${this.#age} 歲 · ${pro.team} · ${info.name}（職業第 ${pro.year} 年）`,
     );
+    // 只在「風向變了」的那一年說。同一句話連講四年是雜訊，玩家會學會略過它。
+    const note = this.#standards === null ? null : standardsNote(this.#standards, pro.level);
+    if (note !== null && note !== this.#lastStandardsNote) {
+      this.flow.card('info', '聯盟風向', note);
+    }
+    this.#lastStandardsNote = note;
+
     this.flow.push(
       () => this.#proSpringTraining(),
+      () => this.#positionReview(),
       () => this.#drawEventCard(),
       () => this.#proSeason(),
       () => this.#proEndYear(),
     );
+  }
+
+  /**
+   * 球季前的守位檢視。
+   *
+   * 只在頂級聯盟登錄——二軍不挑守位，能上場就讓你上。純投手不進這個系統，
+   * 他們走投手定位那條線。
+   *
+   * 每年都重跑一次：守備會退化，也會練回來。移防不是單向的。
+   */
+  #positionReview(): void {
+    const pro = this.#pro;
+    const player = this.#player;
+    if (pro === null || player === null) return;
+
+    if (levelOf(pro.level).top === undefined) {
+      // 離開頂級聯盟就撤銷登錄——回來時重新掃一次，不沿用兩年前的守位。
+      pro.position = null;
+      return;
+    }
+    if (!this.#playsField) {
+      pro.position = null;
+      return;
+    }
+
+    const result = assignPosition({
+      ability: this.#ability,
+      current: pro.position,
+      level: pro.level,
+      age: this.#age,
+      startPosition: player.startPosition,
+    });
+    pro.position = result.position;
+
+    if (result.move === 'stay') return;
+    this.flow.card(
+      result.move === 'demote' ? 'bad' : result.move === 'promote' ? 'good' : 'info',
+      '守位會議',
+      `${esc(result.reason)}。`,
+    );
+  }
+
+  /** 這一季要不要打野手側。投手側單獨鎖定的球員不守備。 */
+  get #playsField(): boolean {
+    if (this.isTwoWay) return true;
+    if (this.#lockedSide !== null) return this.#lockedSide === 'fielder';
+    const r = this.rating;
+    return r !== null && r.fielder > r.pitcher;
   }
 
   /**
@@ -915,7 +1014,9 @@ export class Game {
     const r = this.rating;
     if (pro === null || player === null || r === null) return;
 
-    const position = ratingPosition(player.startPosition);
+    // 登錄守位優先——那才是他這一季真正站的位置。沒登錄（二軍、或還沒進頂級
+    // 聯盟）才退回用起始守位推定的那個，出賽勞損總得有個依據。
+    const position = pro.position ?? ratingPosition(player.startPosition);
     const line = playSeason(this.world, {
       level: pro.level,
       ability: this.#ability,
@@ -925,11 +1026,25 @@ export class Game {
       // 角色是固定的，不會因為某年打擊練得比較好就改當野手。
       better: this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder'),
       twoWay: this.isTwoWay,
+      standards: this.#standards,
     });
 
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#accumulate(line.batting, line.pitching);
+
+    // 守備分只在登錄了守位時才算——沒登錄就沒有守位權重可乘。
+    let def: number | null = null;
+    if (pro.position !== null && pro.position !== DH && line.batting !== null) {
+      def = defenseRuns({
+        ability: this.#ability,
+        position: pro.position,
+        level: pro.level,
+        standards: this.#standards,
+        gamesShare: line.batting.games / levelOf(pro.level).games,
+      });
+      this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
+    }
 
     const parts: string[] = [];
     if (line.pitching !== null) {
@@ -947,7 +1062,8 @@ export class Game {
         `<b>打者</b>（${esc(positionName(position))}）｜${b.games} 場・${b.pa} 打席` +
           `・打擊率 <b class="hl">${fmtAvg(b.avg)}</b>／${fmtAvg(b.obp)}／${fmtAvg(b.slg)}` +
           `・${b.hr} 轟 ${b.rbi} 打點${b.sb > 0 ? `・盜壘 ${b.sb}` : ''}` +
-          `${b.ibb > 0 ? `・故意四壞 ${b.ibb}` : ''}`,
+          `${b.ibb > 0 ? `・故意四壞 ${b.ibb}` : ''}` +
+          `${def === null ? '' : `・守備 ${def > 0 ? '+' : ''}${def}`}`,
       );
     }
 
@@ -968,10 +1084,15 @@ export class Game {
     this.#year++;
     pro.year++;
 
+    // 聯盟水準推進一年。人才有興衰，同一個聯盟在不同年代不是同一個聯盟。
+    if (this.#standards !== null) {
+      this.#standards = advanceStandards(this.world, this.#standards);
+    }
+
     // 聯盟推進一年。玩家的貢獻只加在自己的球隊上——棒球是九個人的運動，
     // 再強的球員也翻不了一支爛隊，因此上限壓得很窄。
     if (this.#league !== null) {
-      const par = levelOf(pro.level).par;
+      const par = standardOf(this.#standards, pro.level).par;
       this.#league = advanceLeague(this.world, this.#league, {
         playerTeam: pro.team,
         playerEffect: playerEffect(this.rating?.overall ?? 0, par),
@@ -1005,6 +1126,7 @@ export class Game {
       level: pro.level,
       overall: r?.overall ?? 0,
       yearsAtBottom: pro.yearsAtBottom,
+      standards: this.#standards,
     });
 
     let released = false;

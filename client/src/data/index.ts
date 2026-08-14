@@ -172,6 +172,18 @@ export interface PositionsData {
   /** 各守位的能力權重。資格判定與守備分共用同一組，見該檔的 _deviation。 */
   readonly ability_weights: Readonly<Record<string, Readonly<Record<AbilityKey, number>>>>;
   readonly defense_thresholds: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** 年輕球員的門檻折扣，依年齡取第一個符合的區間。 */
+  readonly youth_adjust: {
+    readonly tiers: readonly { readonly max_age: number; readonly adjust: number }[];
+    readonly default: number;
+  };
+  /** 捕手的獨立基準線——蹲捕的容忍度比其他守位高。 */
+  readonly catcher_bar: {
+    readonly base: Readonly<Record<string, number>>;
+    readonly age_discount: readonly { readonly max_age: number; readonly discount: number }[];
+    readonly default_discount: number;
+  };
+  readonly salary_multiplier: Readonly<Record<string, number>>;
   readonly defense_score_weight: Readonly<Record<string, number>>;
   readonly defense_score_scale: { readonly scale: number };
   readonly rank: Readonly<Record<string, number>>;
@@ -394,6 +406,18 @@ export interface LeaguesData {
 }
 
 export interface SeasonData {
+  readonly league_standards: {
+    readonly level_drift: {
+      readonly yearly: Range;
+      readonly mean_reversion: number;
+      readonly clamp: Range;
+    };
+    readonly gap_drift: {
+      readonly yearly: Range;
+      readonly mean_reversion: number;
+      readonly clamp: Range;
+    };
+  };
   readonly playing_time: {
     readonly stamina_factor: {
       readonly ability: string;

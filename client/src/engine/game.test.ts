@@ -746,3 +746,87 @@ describe('生涯次數統計', () => {
     expect(c?.internationalCaps).toBe(0);
   });
 });
+
+describe('守位登錄與移防', () => {
+  /** 打完一整段生涯，回傳那局遊戲。 */
+  const full = (seed: string) => playWell(started({ seed }));
+
+  it('進入頂級聯盟的野手會登錄守位', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = full(`dpos-${i}`);
+      const log = JSON.stringify(game.flow.log);
+      if (!log.includes('守位會議')) continue;
+      expect(log).toMatch(/登錄為|改守|改任指定打擊/);
+      return;
+    }
+    throw new Error('四十局都沒有人登錄過守位');
+  });
+
+  it('二軍不登錄守位——那裡不挑位置', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = full(`dpos2-${i}`);
+      const state = game.state;
+      if (state?.pro == null) continue;
+      if (state.pro.levelName.includes('二軍')) {
+        expect(state.pro.position).toBeNull();
+        return;
+      }
+    }
+  });
+
+  it('守備分只在登錄了守位之後才累積', () => {
+    for (let i = 0; i < 60; i++) {
+      const game = full(`def-${i}`);
+      const log = JSON.stringify(game.flow.log);
+      if (!log.includes('守備 ')) continue;
+      expect(log).toMatch(/守備 [+-]?\d/);
+      return;
+    }
+  });
+
+  it('純投手不進守位系統', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = playWell(started({ seed: `pit-${i}`, startPosition: 'P' }));
+      const state = game.state;
+      if (state?.lockedSide !== 'pitcher' || state.pro == null) continue;
+      expect(state.pro.position).toBeNull();
+      return;
+    }
+  });
+});
+
+describe('聯盟水準逐年浮動', () => {
+  it('職業期間的 par 會逐年變動，不是固定值', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = started({ seed: `std-${i}` });
+      const pars = new Set<number>();
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 5000) {
+        const options = game.flow.prompt.options;
+        const pick =
+          EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find(
+            (o) => o !== undefined,
+          ) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options[0];
+        if (pick === undefined) break;
+        game.choose(pick.id);
+        const pro = game.state?.pro;
+        if (pro != null) pars.add(pro.par);
+      }
+      if (pars.size <= 1) continue;
+      expect(pars.size).toBeGreaterThan(1);
+      return;
+    }
+    throw new Error('四十局都沒有觀察到聯盟水準浮動');
+  });
+
+  it('浮動之後 min 仍然低於 par', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playWell(started({ seed: `stdmin-${i}` }));
+      const pro = game.state?.pro;
+      if (pro == null) continue;
+      expect(pro.min).toBeLessThan(pro.par);
+    }
+  });
+});

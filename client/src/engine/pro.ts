@@ -10,6 +10,7 @@
  */
 
 import { abilities, leagues, season as cfg } from '../data/index.ts';
+import { standardOf, type LeagueStandards } from './league.ts';
 import type { Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
@@ -61,22 +62,27 @@ export function evaluateMovement(
     readonly level: string;
     readonly overall: number;
     readonly yearsAtBottom: number;
+    /** 當年的聯盟水準。null 表示用基準值。 */
+    readonly standards?: LeagueStandards | null;
   },
 ): MovementResult {
   const rng = world.stream('career');
   const { path, index } = indexOf(options.level);
   const mv = cfg.movement;
+  const standards = options.standards ?? null;
 
   const above = index >= 0 && index < path.length - 1 ? path[index + 1] : undefined;
   if (above !== undefined) {
     const target = leagues.levels[above];
     if (target !== undefined) {
-      const d = options.overall - (target.min + mv.promote.margin);
+      // 門檻用當年的值：人才斷層的年份比較好擠上去，這正是浮動該有的效果。
+      const targetMin = Math.round(standardOf(standards, above).min);
+      const d = options.overall - (targetMin + mv.promote.margin);
       if (d >= 0 && rng.chance(chanceOf(mv.promote.chance, d))) {
         return {
           movement: 'promote',
           level: above,
-          reason: `能力達到${target.name}的標準（綜合 ${options.overall}／門檻 ${target.min}）`,
+          reason: `能力達到${target.name}的標準（綜合 ${options.overall}／門檻 ${targetMin}）`,
         };
       }
     }
@@ -84,7 +90,8 @@ export function evaluateMovement(
 
   const here = leagues.levels[options.level];
   if (here === undefined) throw new Error(`未知的聯盟層級：${options.level}`);
-  const shortfall = here.min + mv.demote.margin - options.overall;
+  const hereMin = Math.round(standardOf(standards, options.level).min);
+  const shortfall = hereMin + mv.demote.margin - options.overall;
 
   if (shortfall > 0 && index > 0) {
     const below = path[index - 1];
@@ -92,13 +99,13 @@ export function evaluateMovement(
       return {
         movement: 'demote',
         level: below,
-        reason: `跟不上${here.name}的水準（綜合 ${options.overall}／門檻 ${here.min}）`,
+        reason: `跟不上${here.name}的水準（綜合 ${options.overall}／門檻 ${hereMin}）`,
       };
     }
   }
 
   // 已經在最低層級卻仍達不到標準，且撐過了寬限期，就是戰力外。
-  if (index === 0 && options.overall < here.min - mv.release.margin) {
+  if (index === 0 && options.overall < hereMin - mv.release.margin) {
     if (options.yearsAtBottom >= mv.release.grace_years) {
       return {
         movement: 'release',

@@ -464,6 +464,29 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
             <span>野手側</span>
           </div>
         )}
+        {/* 登錄守位只有頂級聯盟才有——二軍不挑位置，那裡沒有守位可顯示。 */}
+        {state.pro?.positionName != null && (
+          <div className="stat-cell">
+            <b>{state.pro.positionName}</b>
+            <span>登錄守位</span>
+          </div>
+        )}
+        {state.pro?.positionName != null && (
+          <div className="stat-cell">
+            <b>
+              {state.pro.defenseRuns > 0 ? '+' : ''}
+              {state.pro.defenseRuns}
+            </b>
+            <span>累計守備分</span>
+          </div>
+        )}
+        {/* 當年的聯盟水準，不是 leagues.json 的基準值——它逐年浮動。 */}
+        {state.pro !== null && (
+          <div className="stat-cell">
+            <b>{state.pro.par.toFixed(1)}</b>
+            <span>聯盟水準</span>
+          </div>
+        )}
       </div>
 
       {/* 只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡放的還是去年

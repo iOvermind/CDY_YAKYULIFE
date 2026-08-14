@@ -6,7 +6,7 @@
 
 *   [x] **資料解耦**：將硬編碼的天賦、事件、常數抽出為 `client/src/data/` 底下的 10 個 JSON（`abilities` / `leagues` / `positions` / `teams` / `events` / `traits` / `awards` / `hall_of_fame` / `amateur` / `flavor`）。
 *   [x] **Tauri + React 專案初始化**：建立 `client/` 目錄與 Tauri v2 + React 19 + Vite 7 的工具鏈。
-*   [ ] **UI 元件化**：將 `index_legacy.html` 的畫面拆分為 React Components 並移植樣式。目前 `client/src/` 仍是 Vite 樣板，尚未動工。
+*   [ ] **UI 元件化**：將 `index_legacy.html` 的畫面拆分為 React Components 並移植樣式。`client/src/App.tsx` 已有開始畫面、事件卡日誌、狀態欄、能力表、成績表與訓練骰列；尚未拆成獨立元件，主題與周邊視覺也還沒動。
 *   [x] **確立防護與資料架構 (ADR 0001)**：制定「網頁端連線 PG，桌面端離線 SQLite」的兩棲存取策略，確立 Progression Isolation 機制。
 *   [ ] **實作 SQLite / IndexedDB 介面卡**：讓 React 前端能依據執行環境（Browser/Tauri）切換存取介面。
 *   [ ] **開發 `SimulationEngine.ts`**：將原本寫在 `index_legacy.html` 的擲骰、升降級與結算邏輯移植至 TypeScript，全面擁抱物件導向與資料驅動 (Data-Driven)。
@@ -62,8 +62,10 @@
 *   [x] **年齡曲線與引退**：26 歲前緩升、26–30 巔峰、之後遞減且隨年齡加速；速度與守備範圍先掉，接觸與選球撐得久。
 *   [x] **球隊戰力與奪冠機率**：`client/src/engine/teams.ts`。取代舊版那個「把隊名雜湊成 8–29%」的假數字。
 *   [x] **進階指標**：ERA+／OPS+／Win Shares，`client/src/engine/metrics.ts`。WS 是近似值，見 `docs/design/formulas.md`。
-*   [ ] 守位系統與移防（`positions.json` 的門檻與 `scan_order` 已備妥，只差流程接上）
-*   [ ] 合約談判（長約／短約）與薪資
+*   [ ] **守位系統與移防**（`positions.json` 的門檻與 `scan_order` 已備妥，只差流程接上）。守備分是生涯評價分的三個分量之一，因此它是結算的前置作業，見 [ADR 0003](docs/adr/0003-win-loss-shares-career-score.md)。
+*   [ ] **聯盟水準逐年浮動**：par 與 min 在基準上下擺盪，**以體系為單位**——一軍與二軍同進同退。兩者的差距本身也會擺盪，因此評價分的替代水準逐年不同。走 `season` 子序列，重播可還原。讀 par 的地方（成績產生、升降級、守備門檻、難度係數）全部改讀當年的值。
+*   [ ] **逐段（stint）成績紀錄**：取代目前的桶式累加，支援季中下放與季中轉隊。呈現沿用 legacy 的「舊隊／新隊／合計」三行，逐年表的球隊欄寫「舊隊→新隊」。
+*   [ ] 合約談判（長約／短約）與薪資。續約時的「召開引退記者會」與 FA 乏人問津的引退選擇點掛在這裡，要等它做完才接得上。
 *   [ ] 投手定位細分（中繼／終結者；目前只分先發與後援）
 *   [ ] TJ 量表、手術與打針抉擇
 *   [ ] 傷病與後遺症
@@ -75,14 +77,17 @@
 *   [x] **養成期的國際賽徵召**：入選判定與奪冠回報（隔季多擲訓練骰）都已接上。
 *   [ ] 職業期的國際賽徵召（`abilities.json` 的 `championship_bonus.PRO` 已預留）
 *   [ ] 旅外、入札與 FA
-*   [ ] 27 種隱藏特性的觸發判定（生涯次數統計 `PlayerState.counts` 已備妥，特性的觸發條件多半看次數）
-*   [ ] 年度獎項
+*   [ ] 27 種隱藏特性的觸發判定（生涯次數統計 `PlayerState.counts` 已備妥，特性的觸發條件多半看次數）。其中 `legend` / `smallschool` / `grinder` 三個只在結算時判定，隨結算一起做，其餘 24 個仍在這一項。
+*   [ ] **年度獎項**：`awards.json` 的門檻表已備妥。它是結算的前置作業——榮譽分缺席的話，名人堂門檻永遠碰不到。獎項另存**結構化紀錄**（`year / org / level / code / side`），榮譽字串清單只負責顯示、不參與計分。`awards.json` 目前缺 MVP 與金手套／守備王的機率參數，要補進 JSON 而不是寫死在引擎裡。
 
 ### 結算
 
-*   [ ] 引退流程與引退場景
-*   [ ] 生涯評價分與名人堂票選
-*   [ ] 生涯總結畫面
+*   [ ] **勝利份額／敗戰份額雙帳重寫**：`metrics.ts` 現有的單帳估算改為「責任額 × 勝率」，打擊、投球、守備三分量統一。見 [ADR 0003](docs/adr/0003-win-loss-shares-career-score.md)。
+*   [ ] **生涯評價分**：`WS − k × LS` 加上榮譽與里程碑，只算頂級聯盟，每個頂級聯盟各一份。門檻統一為一套，難度由 par 導出的係數在分數端承擔。
+*   [ ] **名人堂票選**：等待年數、首輪入選門檻、得票率公式沿用 `hall_of_fame.json`。可多聯盟並存。
+*   [ ] **引退流程與引退場景**：接兩個玩家選擇點（不願下放而引退、高齡主動宣布引退），場景文案已在 `flavor.json`。沒進職業的生涯併進同一個出口，跳過名人堂，接第二人生文案。
+*   [ ] **生涯總結畫面**：引退卡、逐年＋通算成績表、引退場景、名人堂票選、里程碑清單、粉絲留言板。生涯時間軸與分享圖不做——歸「外觀與周邊」。
+*   [ ] **門檻校準**：`client/scripts/calibrate.ts` 與輕量護欄測試。目標分佈為名人堂 2%／明星 8%／每日 25%／替補 40%／過客 25%，母體取有職業出賽紀錄的生涯。四項校準目標：統一門檻表、難度係數指數、守備佔全體份額的比重（靶 16–17%）、`grinder` 的潛力分位數。
 
 ## 階段一.七：規則編輯器
 
@@ -122,6 +127,8 @@
 
 ## 階段四：深度事件與劇情擴充
 
+*   [ ] **大學與業餘成棒**：`amateur.json` 的 `cups` 已備妥。在它做完之前，選秀落選等於生涯結束（會走完整的結算流程，不再卡在「尚未實作」）。做完之後落選才有下一條路。
+*   [ ] **投手時代／打者時代**：聯盟水準浮動的分項偏移——「今年全聯盟打擊率集體下降」這種細緻模型。基礎的整體浮動已在階段一.五做掉。
 *   [x] **加入稀有事件定義**：已在 `events.json` 中加入極度稀有事件的架構與權重 (Weight)。
 *   [ ] **實作 Rules Engine**：解析 `traits.json` 與 `events.json` 裡的 `conditions` (觸發條件) 與 `effects` (效果，如 `tj_countdown`, `respect`)。
     *   注意依賴倒置：`traits.json` 目前只有 7 筆 `rules_complete: true`，其餘 20 筆的觸發條件在階段一.五會先寫死在引擎裡。做這一項時那 20 筆要再拆一次——這是刻意接受的重工，因為現階段先做 Rules Engine 會擋住功能對等。
@@ -135,7 +142,7 @@
 ## 階段五：聯盟拓撲 (League Topology)
 
 *   [x] **擴充聯盟資料**：已於 `leagues.json` / `teams.json` / `hall_of_fame.json` 加入韓國職棒 (KBO)、墨西哥棒球聯盟 (LMB) 與澳洲棒球聯盟 (ABL) 的層級、球隊與名人堂。
-*   [ ] **補齊擴充聯盟的評價門檻**：上述三個聯盟有名人堂設定，但 `hall_of_fame.json` 的 `tier_thresholds` 與 `first_ballot.multiplier` 只涵蓋 CPBL / NPB / MLB。在補齊之前，這三個聯盟算不出生涯評價分級，名人堂票選跑不起來——資料在、路徑不在。
+*   [x] **補齊擴充聯盟的評價門檻**：由 [ADR 0003](docs/adr/0003-win-loss-shares-career-score.md) 的統一門檻表解消。難度改由 par 導出的係數在分數端承擔，因此任何聯盟只要 `leagues.json` 給了 par 與 min 就算得出分級，不必再各生一組門檻。`first_ballot.multiplier` 仍逐聯盟設定——那是各國票選文化的差異，不是難度。
 *   [ ] **動態升降轉會系統**：
     *   將寫死的線性升降級 (CPBL -> MiLB) 改寫為有向圖 (Directed Graph) 尋路系統。
     *   實作「在次級職棒打出鬼神成績後，被美職或日職球探重新挖角」的逆襲路徑。

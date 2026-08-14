@@ -11,6 +11,7 @@
 
 import { leagues, positions, season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import { standardOf, type LeagueStandards } from './league.ts';
 import type { Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
@@ -46,9 +47,17 @@ export interface SeasonContext {
   readonly overall: number;
   readonly better: 'pitcher' | 'fielder';
   readonly twoWay: boolean;
+  /** 當年的聯盟水準。null 表示用 leagues.json 的基準值。 */
+  readonly standards?: LeagueStandards | null;
 }
 
-/** 取聯盟層級設定。找不到就是資料壞了，直接炸開比默默用預設值好。 */
+/**
+ * 取聯盟層級設定。找不到就是資料壞了，直接炸開比默默用預設值好。
+ *
+ * 注意：這裡的 par／min 是**基準值**。實際判定要用當年的值，見 `league.ts` 的
+ * `standardOf()`——聯盟水準逐年浮動，直接讀這裡等於假裝聯盟永遠一樣強。
+ * 場次數（games）不浮動，讀這裡是對的。
+ */
 export function levelOf(level: string) {
   const info = leagues.levels[level];
   if (info === undefined) throw new Error(`未知的聯盟層級：${level}`);
@@ -88,9 +97,11 @@ export function gamesPlayed(
   position: string,
   level: string,
   overall: number,
+  standards: LeagueStandards | null = null,
 ): number {
   const rng = world.stream('season');
   const info = levelOf(level);
+  const par = standardOf(standards, level).par;
   const pt = cfg.playing_time;
 
   const staF = clamp(
@@ -105,7 +116,7 @@ export function gamesPlayed(
   const posF = pt.position_factor[position] ?? 1.0;
   const load = clamp(staF * posF, pt.position_factor_clamp.min, pt.position_factor_clamp.max);
 
-  const perfF = trustFactor(overall, info.par);
+  const perfF = trustFactor(overall, par);
   const noise = pt.games_noise.min + rng.next() * (pt.games_noise.max - pt.games_noise.min);
 
   return Math.round(Math.min(info.games, info.games * load * perfF * noise));
@@ -165,13 +176,14 @@ export function proBattingLine(
   position: string,
   level: string,
   overall: number,
+  standards: LeagueStandards | null = null,
 ): ProBattingLine {
   const rng = world.stream('season');
   const b = cfg.batting;
-  const par = levelOf(level).par;
+  const par = standardOf(standards, level).par;
   const noise = () => b.noise.min + rng.next() * (b.noise.max - b.noise.min);
 
-  const games = gamesPlayed(world, ability, position, level, overall);
+  const games = gamesPlayed(world, ability, position, level, overall, standards);
   const pa = plateAppearances(world, games, overall, par);
 
   const bb = Math.round(pa * rateOf(b.walk_rate, ability, par) * noise());
@@ -223,8 +235,12 @@ export function proBattingLine(
 }
 
 /** 投手角色：體力夠且控球好的排進輪值，否則進牛棚。 */
-export function pitcherRole(ability: Abilities, level: string): 'SP' | 'RP' {
-  const par = levelOf(level).par;
+export function pitcherRole(
+  ability: Abilities,
+  level: string,
+  standards: LeagueStandards | null = null,
+): 'SP' | 'RP' {
+  const par = standardOf(standards, level).par;
   const r = cfg.pitching.role.starter;
   const sta = (ability['sta'] ?? par) - par;
   const ctl = (ability['ctl'] ?? par) - par;
@@ -237,13 +253,14 @@ export function proPitchingLine(
   ability: Abilities,
   level: string,
   overall: number,
+  standards: LeagueStandards | null = null,
 ): ProPitchingLine {
   const rng = world.stream('season');
   const p = cfg.pitching;
   const info = levelOf(level);
-  const par = info.par;
+  const par = standardOf(standards, level).par;
   const d = overall - par;
-  const role = pitcherRole(ability, level);
+  const role = pitcherRole(ability, level, standards);
 
   let games: number;
   let starts: number;
@@ -317,11 +334,14 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
   const asPitcher = ctx.twoWay || ctx.better === 'pitcher';
   const asBatter = ctx.twoWay || ctx.better === 'fielder';
 
+  const standards = ctx.standards ?? null;
   return {
     level: ctx.level,
-    pitching: asPitcher ? proPitchingLine(world, ctx.ability, ctx.level, ctx.overall) : null,
+    pitching: asPitcher
+      ? proPitchingLine(world, ctx.ability, ctx.level, ctx.overall, standards)
+      : null,
     batting: asBatter
-      ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, ctx.overall)
+      ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, ctx.overall, standards)
       : null,
   };
 }
