@@ -623,6 +623,18 @@ export interface TransferOrg {
 
 export interface TransferData {
   readonly import_premium: { readonly value: number };
+  /** 入札制度。與自由球員互斥——分界正是合約。 */
+  readonly posting: {
+    readonly consent: {
+      readonly base: number;
+      readonly per_service_year: number;
+      readonly fee_unit: number;
+      readonly per_fee_unit: number;
+      readonly clamp: Range;
+    };
+    readonly bidders: Range;
+    readonly overseas_fa_years: { readonly value: number };
+  };
   readonly scouting: {
     readonly offers_per_org: Range;
     readonly min_win_pct: { readonly value: number };

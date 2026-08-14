@@ -236,6 +236,134 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
 }
 
 /**
+ * 入札的目的地。這個體系沒有入札制度時回傳 null。
+ *
+ * 入札是**體系自己的屬性**，不是寫死日職——真實世界裡日職與韓職都有對大聯盟
+ * 的入札制度，中職沒有。
+ */
+export function postingTarget(org: string): string | null {
+  return orgConfig(org)?.posting?.to ?? null;
+}
+
+/**
+ * 申請得了入札嗎。
+ *
+ * 資格只有一條：**落地層級等於目標體系的頂級聯盟**。那筆錢買的就是即戰力，
+ * 沒有人會花入札金買一個要去小聯盟磨的人。因此門檻不另外設數字——它就是
+ * 落地規則的 `min + import_premium`，而那與 legacy 的 60 完全一致。
+ */
+export function canRequestPosting(options: {
+  readonly org: string;
+  readonly overall: number;
+  readonly standards: LeagueStandards | null;
+}): boolean {
+  const target = postingTarget(options.org);
+  if (target === null) return false;
+  const level = landingLevel(target, options.overall, options.standards);
+  if (level === null) return false;
+  return leagues.levels[level]?.top !== undefined;
+}
+
+/**
+ * 母隊同意放人的機率。
+ *
+ * 看**年資**與**入札金**：待越久越沒有理由留你（也是對忠誠的回報），你越強
+ * 那筆錢越可觀。被拒絕不是挫折，是還沒到時候。
+ */
+export function postingConsentChance(options: {
+  readonly serviceYears: number;
+  readonly fee: number;
+}): number {
+  const c = cfg.posting.consent;
+  const raw =
+    c.base +
+    options.serviceYears * c.per_service_year +
+    (options.fee / c.fee_unit) * c.per_fee_unit;
+  return Math.max(c.clamp.min, Math.min(c.clamp.max, raw));
+}
+
+export interface OverseasContext {
+  readonly org: string;
+  readonly overall: number;
+  readonly age: number;
+  readonly playedOrgs: ReadonlySet<string>;
+  readonly standards: LeagueStandards | null;
+}
+
+/**
+ * 目標體系頂級聯盟的報價。入札與海外 FA 共用同一批球團。
+ *
+ * 年齡窗口影響的是**有沒有人出價**，不是母隊同不同意。點頭了卻沒有球團出手，
+ * 那是另一種失落——而它是真實會發生的事。
+ *
+ * 落地一律是頂級聯盟：那筆錢（或那個年資）買的就是即戰力。
+ */
+function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOffer[] {
+  const target = postingTarget(ctx.org);
+  const rng = world.stream('career');
+
+  // 抽取次數必須與資格無關，否則同一個種子會因為某年差一分而讓後面所有判定
+  // 整串偏移——與挖角同樣的理由。
+  const roll = rng.next() * 100;
+  const count = rng.int(cfg.posting.bidders.min, cfg.posting.bidders.max);
+  if (target === null) return [];
+
+  const level = landingLevel(target, ctx.overall, ctx.standards);
+  if (level === null || leagues.levels[level]?.top === undefined) return [];
+
+  const overBar = ctx.overall - topLandingBar(target, ctx.standards);
+  if (roll >= ageGate(target, ctx.age, overBar) * 100) return [];
+
+  const bids: TransferOffer[] = [];
+  const used = new Set<string>();
+  for (let i = 0; i < count; i++) {
+    const team = pickTeam(world, target, null);
+    if (team === null || used.has(team)) continue;
+    used.add(team);
+    bids.push({
+      org: target,
+      orgName: orgLabel(target),
+      level,
+      levelName: leagues.levels[level]?.name ?? level,
+      team,
+      bonus: signingBonus(target, overBar),
+      homecoming: ctx.playedOrgs.has(target),
+    });
+  }
+  return bids;
+}
+
+/** 入札的競標。母隊點頭之後才會走到這裡。 */
+export function postingBids(world: World, ctx: OverseasContext): readonly TransferOffer[] {
+  return overseasOffers(world, ctx);
+}
+
+/**
+ * 取得海外 FA 資格了嗎。
+ *
+ * 在同一個體系待滿指定年資之後，合約到期時**不需母隊同意**即可轉往目標體系。
+ * 與入札的差別是「要嘛求球團放你走，要嘛熬到不需要求人」。
+ */
+export function hasOverseasFreeAgency(org: string, serviceYears: number): boolean {
+  if (postingTarget(org) === null) return false;
+  return serviceYears >= cfg.posting.overseas_fa_years.value;
+}
+
+/**
+ * 海外 FA 的報價。年資不足時沒有這條路。
+ *
+ * 與入札走同一批球團，差別只在不必經過母隊，也不必付入札金——年資本身就是
+ * 對價。
+ */
+export function overseasFaOffers(
+  world: World,
+  ctx: OverseasContext & { readonly serviceYears: number },
+): readonly TransferOffer[] {
+  if (!hasOverseasFreeAgency(ctx.org, ctx.serviceYears)) return [];
+  return overseasOffers(world, ctx);
+}
+
+/**
  * 這一年球探的關注度，給敘述用。
  *
  * **講觀察到的現象，不講機率**——「美國那邊的球探今年沒有再出現」比「窗口

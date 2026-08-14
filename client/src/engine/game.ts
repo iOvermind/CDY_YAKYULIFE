@@ -96,10 +96,15 @@ import {
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
-import { fmtMoney, salaryFor } from './salary.ts';
+import { fmtMoney, postingFee, salaryFor } from './salary.ts';
 import {
+  canRequestPosting,
   fallbackOffers,
   orgLabel,
+  overseasFaOffers,
+  postingBids,
+  postingConsentChance,
+  postingTarget,
   scoutingNote,
   scoutingOffers,
   type TransferOffer,
@@ -1641,10 +1646,19 @@ export class Game {
 
     // FA 問的是「誰想要你」，因此不列比現在更差的舞台。真的沒有人開價，
     // 那才叫市場冷。
-    const offers = fallbackOffers(this.world, {
-      ...this.#transferContext,
-      minPar: standardOf(this.#standards, pro.level).par,
-    });
+    //
+    // 海外 FA 併在同一份報價單裡：**熬滿年資之後不必再求誰放你走**，那條路
+    // 與國內市場一起攤在桌上，玩家自己選。
+    const offers = [
+      ...overseasFaOffers(this.world, {
+        ...this.#overseasContext,
+        serviceYears: pro.serviceYears,
+      }),
+      ...fallbackOffers(this.world, {
+        ...this.#transferContext,
+        minPar: standardOf(this.#standards, pro.level).par,
+      }),
+    ];
     if (offers.length === 0) {
       this.flow.card(
         'bad',
@@ -1685,11 +1699,15 @@ export class Game {
       return;
     }
 
+    const overseas = postingTarget(levelOf(pro.level).org);
     const options: Option[] = [
       ...offers.map((o, i) => ({
         id: `market:${i}`,
         label: `${o.orgName}　${o.team}（${o.levelName}）`,
-        note: `簽約金 ${fmtMoney(o.bonus)}${o.homecoming ? '｜落葉歸根' : ''}`,
+        note:
+          `簽約金 ${fmtMoney(o.bonus)}` +
+          (o.org === overseas ? `｜海外 FA・不需母隊同意` : '') +
+          (o.homecoming ? '｜落葉歸根' : ''),
       })),
       { id: 'market:stay', label: `回 ${pro.team} 續約`, role: 'main' },
     ];
@@ -1917,18 +1935,149 @@ export class Game {
     );
   }
 
+  /** 入札與海外 FA 共用的上下文。 */
+  get #overseasContext() {
+    const pro = this.#pro;
+    return {
+      org: pro === null ? '' : levelOf(pro.level).org,
+      overall: this.rating?.overall ?? 0,
+      age: this.#age,
+      playedOrgs: this.#playedOrgs,
+      standards: this.#standards,
+    };
+  }
+
   /**
-   * 年末的引退選擇。合約處理完、挖角問過才輪到它——先知道明年有沒有球打、
-   * 在哪裡打，再決定要不要走。
+   * 入札申請。
+   *
+   * **入札與自由球員是互斥的兩條路，分界正是合約**——入札存在的理由就是「他
+   * 還有合約，但他想走」。因此它由玩家在合約期間主動提出，母隊依年資與入札金
+   * 決定放不放。
+   *
+   * 被拒絕不是挫折，是還沒到時候——那個邏輯玩家看得懂。
+   */
+  #posting(next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null || pro.changedOrg || pro.serviceYears < 1) {
+      next();
+      return;
+    }
+
+    const ctx = this.#overseasContext;
+    if (!canRequestPosting(ctx)) {
+      next();
+      return;
+    }
+    const target = postingTarget(ctx.org);
+    if (target === null) {
+      next();
+      return;
+    }
+
+    this.flow.ask(
+      {
+        title: `你的能力已經站得上${orgLabel(target)}。要向球團提出入札申請嗎？`,
+        options: [
+          {
+            id: 'posting:ask',
+            label: '提出入札申請',
+            note: '母隊收下入札金才會放人｜年資越深越容易點頭',
+          },
+          { id: 'posting:wait', label: '再等等，先打完現有合約', role: 'main' },
+        ],
+      },
+      (choice) => {
+        if (choice !== 'posting:ask') {
+          next();
+          return;
+        }
+        this.#postingResult(target, next);
+      },
+    );
+  }
+
+  /** 母隊的答覆與競標結果。 */
+  #postingResult(target: string, next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null) {
+      next();
+      return;
+    }
+
+    // 先問有沒有人要——入札金是簽約金的倍數，沒有報價就沒有金額可談。
+    const bids = postingBids(this.world, this.#overseasContext);
+    if (bids.length === 0) {
+      this.flow.card(
+        'bad',
+        '入札流標',
+        `球團同意把你掛上入札名單，但競標期結束時<b class="dn">沒有任何球團出價</b>。` +
+          `<br><span class="sub">${esc(orgLabel(target))}要的是可以養的年輕人，而你已經不是了。</span>`,
+      );
+      next();
+      return;
+    }
+
+    const best = bids.reduce((a, b) => (b.bonus > a.bonus ? b : a));
+    const fee = postingFee(best.bonus);
+    const chance = postingConsentChance({ serviceYears: pro.serviceYears, fee });
+    if (!this.world.stream('career').chance(chance)) {
+      this.flow.card(
+        'bad',
+        '球團的答覆',
+        `球團婉拒了你的入札申請——<b class="dn">再打幾年，我們就放你走</b>。` +
+          `<br><span class="sub">服務年資 ${pro.serviceYears} 年。待得越久，球團越沒有理由留你。</span>`,
+      );
+      next();
+      return;
+    }
+
+    this.flow.card(
+      'gold',
+      '入札成立',
+      `球團同意掛牌，入札金 <b class="hl">${fmtMoney(fee)}</b> 進了母隊口袋。` +
+        `<br>${esc(orgLabel(target))}遞出了報價——`,
+    );
+
+    this.flow.ask(
+      {
+        title: '入札 · 選擇你的新東家',
+        options: [
+          ...bids.map((b, i) => ({
+            id: `posting:${i}`,
+            label: `${b.orgName}　${b.team}（${b.levelName}）`,
+            note: `簽約金 ${fmtMoney(b.bonus)}${b.homecoming ? '｜回到熟悉的聯盟' : ''}`,
+          })),
+          { id: 'posting:cancel', label: '反悔，留在原隊', role: 'warn' as const },
+        ],
+      },
+      (choice) => {
+        const picked = bids[Number(choice.split(':')[1])];
+        if (picked === undefined) {
+          this.flow.card('info', '撤回申請', '你在最後一刻收回了申請。球團什麼也沒說。');
+          next();
+          return;
+        }
+        // 入札不必付買斷——母隊拿到的入札金就是對價。
+        this.#moveTo(picked, '入札成功');
+        next();
+      },
+    );
+  }
+
+  /**
+   * 年末的引退選擇。合約處理完、挖角與入札問過才輪到它——先知道明年有沒有球
+   * 打、在哪裡打，再決定要不要走。
    */
   #endOfYearChoices(demotedTo: string | null): void {
-    this.#scouting(() => {
-      if (demotedTo === null) {
-        this.#retirementChoices(null);
-        return;
-      }
-      this.#demotionOffers(demotedTo, () => this.#retirementChoices(demotedTo));
-    });
+    this.#scouting(() =>
+      this.#posting(() => {
+        if (demotedTo === null) {
+          this.#retirementChoices(null);
+          return;
+        }
+        this.#demotionOffers(demotedTo, () => this.#retirementChoices(demotedTo));
+      }),
+    );
   }
 
   /**
