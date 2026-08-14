@@ -1137,3 +1137,139 @@ describe('薪資', () => {
     }
   });
 });
+
+describe('合約', () => {
+  const DURABLE = ['sta', 'con', 'pow', 'rng', 'fld', 'eye'];
+
+  /** 打到底；合約提問一律選長約（沒有長約就短約）。 */
+  function playWithContracts(seed: string, preferShort = false): Game {
+    const game = started({ seed });
+    let guard = 0;
+    let k = 0;
+    while (game.flow.prompt !== null && guard++ < 6000) {
+      const options = game.flow.prompt.options;
+      const term = preferShort
+        ? options.find((o) => o.id === 'term:short')
+        : (options.find((o) => o.id === 'term:long') ?? options.find((o) => o.id === 'term:short'));
+      const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+      const pick =
+        term ??
+        options.find((o) => o.id === 'retire:stay') ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options[0];
+      if (pick === undefined) break;
+      if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+      game.choose(pick.id);
+    }
+    return game;
+  }
+
+  const cards = (game: Game) =>
+    game.flow.log.filter((e) => e.kind === 'card') as { title?: string; body: string }[];
+
+  it('進職業時有一張新人合約', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = started({ seed: `ct-init-${i}` });
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 5000) {
+        const options = game.flow.prompt.options;
+        const pick =
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+          options[0];
+        if (pick === undefined) break;
+        game.choose(pick.id);
+        if (game.state?.pro != null) return;
+      }
+    }
+  });
+
+  /** 掌控期的意義：選秀球隊用一個順位賭了你，就先擁有你幾年。 */
+  it('掌控期內合約到期時由球團行使續約權，玩家沒有選擇', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = playWithContracts(`ct-ctrl-${i}`);
+      const hit = cards(game).find((c) => c.title === '球團續約');
+      if (hit === undefined) continue;
+      expect(hit.body).toContain('掌控期');
+      return;
+    }
+    throw new Error('三十局都沒有出現球團續約');
+  });
+
+  it('取得 FA 資格之後，合約到期會讓玩家自己談', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = playWithContracts(`ct-fa-${i}`);
+      if (cards(game).some((c) => c.title === '續約')) return;
+    }
+    throw new Error('三十局都沒有出現球員自己談的續約');
+  });
+
+  it('母隊會在合約剩一年時提前來談延長', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = playWithContracts(`ct-ext-${i}`);
+      if (cards(game).some((c) => c.title === '延長續約')) return;
+    }
+    throw new Error('三十局都沒有出現延長續約');
+  });
+
+  it('選長約與選短約會走出不同的生涯', () => {
+    for (let i = 0; i < 30; i++) {
+      const long = playWithContracts(`ct-diff-${i}`);
+      const short = playWithContracts(`ct-diff-${i}`, true);
+      if (long.state?.earnings === short.state?.earnings) continue;
+      expect(long.flow.log).not.toEqual(short.flow.log);
+      return;
+    }
+    throw new Error('三十局都沒有出現長短約的分歧');
+  });
+
+  /**
+   * 提問不會進 flow.log（那裡只有卡片與分隔線），因此要在跑的過程中攔截。
+   * 「沒有長約可選」本身就是資訊——那個缺席比任何文字都清楚。
+   */
+  it('年紀大到一定程度就只剩短約', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = started({ seed: `ct-old-${i}` });
+      let guard = 0;
+      let k = 0;
+      let sawLongOption = false;
+      let sawShortOnly = false;
+      while (game.flow.prompt !== null && guard++ < 6000) {
+        const options = game.flow.prompt.options;
+        const hasTerm = options.some((o) => o.id.startsWith('term:'));
+        if (hasTerm) {
+          if (options.some((o) => o.id === 'term:long')) sawLongOption = true;
+          else sawShortOnly = true;
+        }
+        const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+        const pick =
+          options.find((o) => o.id === 'term:long') ??
+          options.find((o) => o.id === 'term:short') ??
+          options.find((o) => o.id === 'retire:stay') ??
+          rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options[0];
+        if (pick === undefined) break;
+        if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+        game.choose(pick.id);
+      }
+      if (sawLongOption && sawShortOnly) return;
+    }
+    throw new Error('四十局都沒有出現「先有長約、後來只剩短約」的生涯');
+  });
+
+  it('流程仍然跑得完，不會卡在合約提問上', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playWithContracts(`ct-end-${i}`);
+      expect(game.flow.prompt).toBeNull();
+      expect(cards(game).map((c) => c.title)).not.toContain('尚未實作');
+    }
+  });
+
+  it('相同種子加相同選擇，合約結果完全相同', () => {
+    expect(playWithContracts('ct-replay').flow.log).toEqual(
+      playWithContracts('ct-replay').flow.log,
+    );
+  });
+});

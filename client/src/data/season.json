@@ -2,29 +2,36 @@
   "schemaVersion": 1,
   "_note": "職業球季模擬的全部可調參數。公式定義在 docs/design/simulation_math.md §3-4，本檔只放數字——引擎不得寫死任何一個，未來的參數編輯介面直接改這裡。",
   "_scope_note": "目前只跑 CPBL 主軸（二軍→一軍）。NPB／MLB／KBO 等體系的階梯資料在 leagues.json 已備妥，但轉會與尋路尚未實作，因此這裡的門檻只針對 CPBL 校準過。",
-
   "league_standards": {
     "_note": "聯盟水準的逐年浮動。leagues.json 的 par／min 是基準值，實際的當年數值圍繞它擺盪——人才有興衰，同一個聯盟在不同年代不是同一個聯盟。以體系為單位：一軍與二軍共用同一組當年數值，同進同退。",
     "_scoring_note": "浮動影響成績單，但不影響生涯評價分的公平性——評價分的難度係數與替代水準都用當年的數值計算，會把浮動吃掉。見 ADR 0003。",
-
     "level_drift": {
       "_note": "整體水準的位移，直接加在 par 上。長期被基準值拉回去——mean_reversion 是每年往基準靠攏的比例。",
-      "yearly": { "min": -0.9, "max": 0.9 },
+      "yearly": {
+        "min": -0.9,
+        "max": 0.9
+      },
       "mean_reversion": 0.3,
-      "clamp": { "min": -2, "max": 2 }
+      "clamp": {
+        "min": -2,
+        "max": 2
+      }
     },
-
     "gap_drift": {
       "_note": "平均與最低門檻的差距倍率。1.0 是基準差距。差距大代表平均與邊緣拉開（人才斷層，只有少數強者撐場），差距小代表競爭白熱（混不下去的立刻被換掉）。它直接決定該年的替代水準，因此也決定生涯評價分的零點。",
-      "yearly": { "min": -0.12, "max": 0.12 },
+      "yearly": {
+        "min": -0.12,
+        "max": 0.12
+      },
       "mean_reversion": 0.3,
-      "clamp": { "min": 0.65, "max": 1.45 }
+      "clamp": {
+        "min": 0.65,
+        "max": 1.45
+      }
     }
   },
-
   "playing_time": {
     "_note": "先算上場時間，再乘機率屬性——這是整個模擬的核心哲學。時間算錯，所有累積數據一起錯。",
-
     "stamina_factor": {
       "_note": "體力健康係數 staF，由 sta 換算，滿分 1.0。低體力的球員撐不了整季。",
       "ability": "sta",
@@ -34,7 +41,6 @@
       "min": 0.35,
       "max": 1.0
     },
-
     "trust_factor": {
       "_note": "教練信任度 perfF。d 值是能力減聯盟 par——打不好會被下放替補，打得好會被塞滿出賽。",
       "base": 0.85,
@@ -42,7 +48,6 @@
       "min": 0.25,
       "max": 1.0
     },
-
     "position_factor": {
       "_note": "守位體能勞損，以 DH 為 1.00 基準向下遞減。捕手是斷層級懲罰，極難全勤——這讓「移防」成為延長單季出賽壽命的真實手段。",
       "DH": 1.0,
@@ -55,38 +60,55 @@
       "CF": 0.95,
       "C": 0.8
     },
-
-    "position_factor_clamp": { "min": 0.1, "max": 1.0 },
-    "games_noise": { "min": 0.97, "max": 1.03 },
-
+    "position_factor_clamp": {
+      "min": 0.1,
+      "max": 1.0
+    },
+    "games_noise": {
+      "min": 0.97,
+      "max": 1.03
+    },
     "pa_per_game": {
       "_note": "打席基數係數，由信任度與打線棒次決定。信任度高的人排在前段棒次，打席自然多。",
       "min": 4.0,
       "max": 4.3
     },
-    "pa_noise": { "min": 0.97, "max": 1.03 },
+    "pa_noise": {
+      "min": 0.97,
+      "max": 1.03
+    },
     "pa_absolute_noise_divisor": {
       "_note": "絕對噪音為 ±G/divisor。除以場次讓噪音隨出賽動態縮放，少場次者的數據才不會崩壞。",
       "value": 8
     }
   },
-
   "batting": {
     "_note": "所有率都是「與聯盟 par 同水準時為 base，每高一點加 per_point」。d 值統一由能力減 par 得出。",
-
-    "walk_rate": { "base": 0.08, "per_point": 0.0035, "min": 0.02, "max": 0.22, "ability": "eye" },
-
+    "walk_rate": {
+      "base": 0.08,
+      "per_point": 0.0035,
+      "min": 0.02,
+      "max": 0.22,
+      "ability": "eye"
+    },
     "intentional_walk": {
       "_note": "故意四壞採指數型恐懼值。對手只敬遠重砲手，不敬遠快腿——敬遠快腿等於免費送他上二壘，所以 spd 是扣分項。",
       "formula": "Dom = (pow + con + eye - spd/4) / 180",
-      "abilities": { "pow": 1, "con": 1, "eye": 1, "spd": -0.25 },
+      "abilities": {
+        "pow": 1,
+        "con": 1,
+        "eye": 1,
+        "spd": -0.25
+      },
       "divisor": 180,
       "threshold": 1.0,
       "exponent": 2,
       "rate_divisor": 16,
-      "noise": { "min": 0.85, "max": 1.15 }
+      "noise": {
+        "min": 0.85,
+        "max": 1.15
+      }
     },
-
     "hit_rate": {
       "_note": "對打數而非打席。base 是與聯盟同水準時的打擊率。per_point 的斜率決定「能力差距換算成打擊率差距」有多陡——太陡會讓上限一直被觸發，全聯盟都在打三成八。",
       "base": 0.265,
@@ -105,8 +127,20 @@
     },
     "extra_base": {
       "_note": "扣掉全壘打的安打依速度分配二三壘打。快腿的三壘打明顯較多。",
-      "double_rate": { "base": 0.2, "per_point": 0.001, "min": 0.12, "max": 0.3, "ability": "spd" },
-      "triple_rate": { "base": 0.015, "per_point": 0.0012, "min": 0.0, "max": 0.06, "ability": "spd" }
+      "double_rate": {
+        "base": 0.2,
+        "per_point": 0.001,
+        "min": 0.12,
+        "max": 0.3,
+        "ability": "spd"
+      },
+      "triple_rate": {
+        "base": 0.015,
+        "per_point": 0.0012,
+        "min": 0.0,
+        "max": 0.06,
+        "ability": "spd"
+      }
     },
     "strikeout_rate": {
       "_note": "三振佔打數的比例。選球好的人三振少，但揮大棒的人三振多——因此同時看選球與力量。",
@@ -114,7 +148,11 @@
       "per_point": -0.003,
       "min": 0.06,
       "max": 0.35,
-      "abilities": { "eye": 0.7, "con": 0.5, "pow": -0.2 }
+      "abilities": {
+        "eye": 0.7,
+        "con": 0.5,
+        "pow": -0.2
+      }
     },
     "runs_per_time_on_base": {
       "_note": "每次上壘能回來得分的比例。跑得快的人比較容易靠隊友的安打回本壘。",
@@ -127,8 +165,20 @@
     "rbi_per_hit": 0.55,
     "rbi_per_hr_extra": 0.9,
     "steal": {
-      "attempt_rate": { "base": 0.06, "per_point": 0.004, "min": 0.0, "max": 0.4, "ability": "spd" },
-      "success_rate": { "base": 0.68, "per_point": 0.005, "min": 0.4, "max": 0.92, "ability": "spd" }
+      "attempt_rate": {
+        "base": 0.06,
+        "per_point": 0.004,
+        "min": 0.0,
+        "max": 0.4,
+        "ability": "spd"
+      },
+      "success_rate": {
+        "base": 0.68,
+        "per_point": 0.005,
+        "min": 0.4,
+        "max": 0.92,
+        "ability": "spd"
+      }
     },
     "noise": {
       "_note": "各項率的最終隨機波動。窄於養成期——職業一季上百場，樣本數足以收斂。",
@@ -136,38 +186,67 @@
       "max": 1.06
     }
   },
-
   "pitching": {
     "_note": "先發與後援的出賽結構完全不同，因此分開算。角色由能力決定，不由玩家指定。",
-
     "role": {
       "_note": "體力夠且控球好的人排進輪值，否則進牛棚。門檻是相對 par 的 d 值。",
-      "starter": { "sta_min_d": -2, "ctl_min_d": -4 }
+      "starter": {
+        "sta_min_d": -2,
+        "ctl_min_d": -4
+      }
     },
-
     "starter": {
       "rotation_divisor": {
         "_note": "先發場次上限為聯盟場次除以此值——五人輪值。",
         "value": 5
       },
-      "gs_factor": { "base": 0.8, "per_point": 0.03, "min": 0.3, "max": 1.0 },
-      "innings_per_start": { "base": 5.2, "per_point": 0.09, "min": 4.0, "max": 7.0, "ability": "sta" },
-      "noise": { "min": 0.95, "max": 1.05 }
+      "gs_factor": {
+        "base": 0.8,
+        "per_point": 0.03,
+        "min": 0.3,
+        "max": 1.0
+      },
+      "innings_per_start": {
+        "base": 5.2,
+        "per_point": 0.09,
+        "min": 4.0,
+        "max": 7.0,
+        "ability": "sta"
+      },
+      "noise": {
+        "min": 0.95,
+        "max": 1.05
+      }
     },
-
     "reliever": {
-      "games": { "base": 45, "per_point": 1.8, "min": 20, "max": 70 },
-      "innings_per_game": { "min": 1.0, "max": 1.2 },
-      "noise": { "min": 0.93, "max": 1.07 }
+      "games": {
+        "base": 45,
+        "per_point": 1.8,
+        "min": 20,
+        "max": 70
+      },
+      "innings_per_game": {
+        "min": 1.0,
+        "max": 1.2
+      },
+      "noise": {
+        "min": 0.93,
+        "max": 1.07
+      }
     },
-
     "hits_per_inning": {
       "_note": "每局被安打數。壓制力越好被打得越少。",
       "base": 0.98,
       "per_point": -0.014,
       "min": 0.45,
       "max": 1.6,
-      "abilities": { "vel": 0.35, "ctl": 0.3, "swp": 0.15, "drp": 0.15, "chg": 0.05 }
+      "abilities": {
+        "vel": 0.35,
+        "ctl": 0.3,
+        "swp": 0.15,
+        "drp": 0.15,
+        "chg": 0.05
+      }
     },
     "runs_per_earned_run": {
       "_note": "失分與自責分的比例。守備失誤造成的非自責分讓失分永遠略高於自責分。",
@@ -179,7 +258,12 @@
       "per_point": 0.022,
       "min": 0.3,
       "max": 1.5,
-      "abilities": { "vel": 0.5, "swp": 0.2, "drp": 0.2, "chg": 0.1 }
+      "abilities": {
+        "vel": 0.5,
+        "swp": 0.2,
+        "drp": 0.2,
+        "chg": 0.1
+      }
     },
     "walk_rate": {
       "_note": "每局保送數。控球越好越少。",
@@ -196,29 +280,51 @@
       "per_point": -0.11,
       "min": 1.4,
       "max": 9.0,
-      "abilities": { "vel": 0.3, "ctl": 0.35, "swp": 0.15, "drp": 0.15, "chg": 0.05 }
+      "abilities": {
+        "vel": 0.3,
+        "ctl": 0.35,
+        "swp": 0.15,
+        "drp": 0.15,
+        "chg": 0.05
+      }
     },
     "decision": {
       "_note": "勝敗場。先發的勝率由 ERA 相對聯盟 par 決定，救援成功另計。",
       "starter_decision_rate": 0.62,
-      "win_rate": { "base": 0.5, "per_point": 0.028, "min": 0.15, "max": 0.85 },
+      "win_rate": {
+        "base": 0.5,
+        "per_point": 0.028,
+        "min": 0.15,
+        "max": 0.85
+      },
       "closer_save_rate": 0.55
     },
-    "noise": { "min": 0.94, "max": 1.06 }
+    "noise": {
+      "min": 0.94,
+      "max": 1.06
+    }
   },
-
   "movement": {
     "_note": "升降級與戰力外。每季結束時依「能力相對該層級 par／min」判定，不看單季成績——成績本身就是能力加噪音，用成績判定等於把噪音算兩次。",
-
     "promote": {
       "_note": "能力超過上一層級的 min 這麼多就升上去。",
       "margin": 0,
-      "chance": { "base": 55, "per_point": 12, "min": 20, "max": 95 }
+      "chance": {
+        "base": 55,
+        "per_point": 12,
+        "min": 20,
+        "max": 95
+      }
     },
     "demote": {
       "_note": "能力低於本層級 min 這麼多就被下放。",
       "margin": 0,
-      "chance": { "base": 45, "per_point": 14, "min": 10, "max": 90 }
+      "chance": {
+        "base": 45,
+        "per_point": 14,
+        "min": 10,
+        "max": 90
+      }
     },
     "release": {
       "_note": "在最低層級仍達不到標準，且已待滿寬限年數，就是戰力外。",
@@ -226,14 +332,16 @@
       "margin": 3
     }
   },
-
   "aging": {
     "_note": "年齡曲線。巔峰前緩升、巔峰後遞減，衰退幅度隨年齡加速。這裡只處理自然老化——傷病與事件另計。",
     "peak_start": 26,
     "peak_end": 30,
     "growth": {
       "_note": "巔峰之前每季自然成長的點數（在訓練骰之外）。",
-      "points": { "min": 0, "max": 2 }
+      "points": {
+        "min": 0,
+        "max": 2
+      }
     },
     "decline": {
       "_note": "巔峰之後每季衰退。per_year_after_peak 是每多一歲額外掉的量。",
@@ -242,33 +350,42 @@
       "max": 6,
       "speed_first": {
         "_note": "速度與守備範圍先掉，接觸與選球撐得比較久——這是真實的老化順序。",
-        "fast": ["spd", "rng", "vel"],
-        "slow": ["con", "eye", "ctl", "gim"],
+        "fast": [
+          "spd",
+          "rng",
+          "vel"
+        ],
+        "slow": [
+          "con",
+          "eye",
+          "ctl",
+          "gim"
+        ],
         "fast_multiplier": 1.5,
         "slow_multiplier": 0.5
       }
     }
   },
-
   "retirement": {
     "_note": "引退判定。年齡與能力雙軌——老了會退，打不動了也會退。",
     "min_age": 30,
-    "age_chance": { "base": 3, "per_year": 6, "max": 85 },
+    "age_chance": {
+      "base": 3,
+      "per_year": 6,
+      "max": 85
+    },
     "released_forces_retirement_age": 33,
     "max_age": 44,
-
     "_choice_note": "引退不只是判定，也可以是玩家自己按下的。自己決定掛靴與被系統告知「你老了」是兩種完全不同的情緒，而引退場景要承接的正是這個。續約時的「召開引退記者會」與 FA 乏人問津的引退掛在合約系統上，那個系統還沒做——見 ROADMAP。",
     "voluntary_from_age": 33,
     "refuse_demotion_from_age": 28,
     "second_life_max_age": 25
   },
-
   "advanced": {
     "_note": "進階指標的常數。ERA+／OPS+ 是相對聯盟平均的百分比（100 = 聯盟平均），WS 是勝利貢獻的簡化估計。",
     "_ws_note": "完整的 Bill James Win Shares 要把球隊的總勝利分配給全隊，需要全隊的成績。這裡改用「相對替代水準的貢獻」直接估算個人值：算出比替代級球員多創造／少失掉幾分，除以每勝所需分數，再乘上每勝三份的慣例。數量級與真正的 WS 相當，但不保證全隊加總等於球隊勝場的三倍。",
     "runs_per_win": 10,
     "win_shares_per_win": 3,
-
     "shares": {
       "_note": "勝利份額與敗戰份額的雙帳制參數。球隊每場球產生 per_game 份（勝場 ×3 是勝利份額，敗場 ×3 是敗戰份額，合計即該隊的總份額），依 split 切給打擊、投球、守備三段，再依球員佔用的時間分給個人。見 ADR 0003。",
       "_team_note": "**兩本帳的切分錨在球隊戰績上，不只看個人表現。** 真實的 Win Shares 裡，球隊的勝利份額總額是「勝場 × 3」——一支 0 勝的球隊沒有任何勝利份額可分，隊上再強的球員也拿不到。因此個人勝率要用球隊勝率當基準平移：一個表現剛好等於聯盟平均的球員，勝率就是他球隊的勝率；比平均好多少，就在球隊勝率之上加多少。",
@@ -276,38 +393,46 @@
       "_split_note": "進攻約 52%、投球約 32%、守備約 16%，這是 Bill James 的 Win Shares 結構比例。守備那 16% 再依守位的責任占比切開（見 positions.json 的 fielding_responsibility），其中投手應得的 9% 我們不做，因此守備段實際只發出 91%。",
       "_win_pct_note": "勝率用畢氏公式：把球員的相對表現當成得分／失分比，win% = r^exponent / (r^exponent + 1)。表現與聯盟同水準時 r = 1，勝率剛好 .500。三個分段共用同一條映射，行為才會一致。",
       "per_game": 3,
-      "split": { "batting": 0.52, "pitching": 0.32, "fielding": 0.16 },
+      "split": {
+        "batting": 0.52,
+        "pitching": 0.32,
+        "fielding": 0.16
+      },
       "team_pa_per_game": 38,
       "team_ip_per_game": 9,
       "pythagorean_exponent": 2,
-      "win_pct_clamp": { "min": 0.02, "max": 0.98 },
+      "win_pct_clamp": {
+        "min": 0.02,
+        "max": 0.98
+      },
       "team_coupling": 1.0
     }
   },
-
   "team_strength": {
     "_note": "球隊戰力與勝率。原版的 teamChampRate() 只把隊名雜湊成一個 8-29% 的固定數字，跟球季結束真正擲的奪冠判定毫無關聯——顯示的與實際發生的是兩套東西。這裡改成一套：勝率是真的模擬出來的，奪冠機率由勝率推導。",
-
     "initial": {
       "_note": "開局時每隊各抽一個基準勝率。抽一次就固定成為該隊的「體質」，之後的逐年變動都圍繞它擺盪——沒有這個錨，幾年之後所有球隊會回歸同一個平均值，強弱隊的區別就消失了。",
       "min": 0.4,
       "max": 0.6
     },
-
     "drift": {
       "_note": "每年的自然變動。球隊會補強也會崩盤，但長期被基準勝率拉回去——mean_reversion 是每年往基準靠攏的比例。",
-      "yearly": { "min": -0.06, "max": 0.06 },
+      "yearly": {
+        "min": -0.06,
+        "max": 0.06
+      },
       "mean_reversion": 0.35,
-      "clamp": { "min": 0.3, "max": 0.7 }
+      "clamp": {
+        "min": 0.3,
+        "max": 0.7
+      }
     },
-
     "player_effect": {
       "_note": "玩家自己對球隊勝率的貢獻。一個球員撐不起一支球隊，但頂級球員確實看得出來——以綜合能力相對聯盟 par 換算，上限刻意壓低。",
       "per_point": 0.004,
       "min": -0.04,
       "max": 0.06
     },
-
     "championship": {
       "_note": "由勝率推導奪冠機率。season_share 是勝率轉換成「打進季後賽並奪冠」的基礎比例，exponent 讓強隊的優勢被放大——短期賽制有運氣成分，但強隊本來就該明顯佔優。",
       "exponent": 4,
@@ -316,13 +441,143 @@
       "max": 0.55
     }
   },
-
   "pro_dice": {
     "_note": "職業階段的季初訓練骰。比養成期少——職業球員的時間被球季佔滿，能自主訓練的空間有限。",
-    "count_weights": { "1": 30, "2": 45, "3": 20, "4": 5 },
+    "count_weights": {
+      "1": 30,
+      "2": 45,
+      "3": 20,
+      "4": 5
+    },
     "peak_bonus": {
       "_note": "巔峰期多擲一顆，反映當打之年的吸收效率。",
       "delta": 1
+    }
+  },
+  "contract": {
+    "_note": "合約。這裡只有談判層——年限、長短約取捨、掌控期、續約權。金額在 leagues.json 的 salary。",
+    "_source": "抽取自 index_legacy.html 的 faYears / termParams / termChoice / faFlow。",
+    "years": {
+      "_note": "合約年限。成績穩定、傷病少的人簽得到長約；年齡大則被年齡上限截斷——球團不會賭老將的長約。",
+      "_formula": "years = round(base + perf × (cap − base) − injuryPenalty × cap)，再取 min(年齡上限)。perf 是 d 值映射到 0~1。",
+      "base": 2,
+      "perf": {
+        "_note": "d 值映射到 0~1 的線性區間。d = d_at_zero 時是 0，d = d_at_full 時是 1。",
+        "d_at_zero": -2,
+        "d_at_full": 6
+      },
+      "cap": {
+        "_note": "年限上限。投手遠低於野手——手臂的風險讓球團不敢給長約，這是真實的市場行為。",
+        "_real_world_note": "野手 15 年不是誇張：Juan Soto 2024 年與大都會簽下 15 年 7.65 億美元。",
+        "pitcher": 7,
+        "fielder": 15
+      },
+      "injury_penalty": {
+        "_note": "傷病史對年限的折扣，乘在 cap 上。",
+        "_pending_note": "**傷病系統尚未實作，因此這兩個輸入目前恆為 0。** 公式照 legacy 寫完整是刻意的——傷病上線時只要把數字接進來，不必回頭改邏輯。見 ROADMAP。",
+        "per_major_injury": 0.12,
+        "per_tj_surgery": 0.15
+      },
+      "age_caps": {
+        "_note": "年齡上限，取第一個符合的區間。球團不會給一個 36 歲的人五年約——那五年裡有三年他已經退休了。",
+        "tiers": [
+          {
+            "min_age": 36,
+            "max_years": 2
+          },
+          {
+            "min_age": 34,
+            "max_years": 3
+          },
+          {
+            "min_age": 32,
+            "max_years": 5
+          },
+          {
+            "min_age": 30,
+            "max_years": 8
+          }
+        ]
+      }
+    },
+    "multiplier": {
+      "_note": "年薪係數，乘在該層級的基礎年薪上。長約年限長但係數略低，短約反過來——這就是那個取捨：要穩定還是要賭下次身價。",
+      "by_performance": {
+        "_note": "依上季 d 值決定基礎係數，由高到低取第一個符合的。",
+        "tiers": [
+          {
+            "min_d": 3,
+            "value": 1.2
+          },
+          {
+            "min_d": 0,
+            "value": 1.0
+          }
+        ],
+        "default": 0.8
+      },
+      "long_factor": 0.92,
+      "short_factor": 1.12,
+      "injury_short_bonus": {
+        "_note": "傷病史多卻只簽得到短約的人，年薪補高一些——球團用錢換掉年限的風險。",
+        "_pending_note": "同樣等傷病系統，目前不會觸發。",
+        "min_injuries": 2,
+        "max_years": 3,
+        "add": 0.15
+      },
+      "trade_refuse_penalty": {
+        "_note": "否決過交易的人，下一張合約的係數打折。球團記住了那件事。",
+        "_pending_note": "季中交易尚未實作，目前恆不觸發。",
+        "value": 0.85
+      },
+      "trait_modifiers": {
+        "_note": "特性對續約條件的影響。神主牌保底、更衣室毒瘤設上限。",
+        "_pending_note": "這兩個特性目前不會被授予（見 ROADMAP 的 24 個待做特性），因此暫時不會觸發。",
+        "franchise_min": 1.2,
+        "cancer_max": 0.95,
+        "cancer_no_offer_chance": 45
+      }
+    },
+    "long_contract": {
+      "_note": "長約的資格。年限算出來要超過短約的上限，而且成績不能太差——球團不會用長約綁一個正在下滑的人。",
+      "requires_years_over": 2,
+      "requires_min_d": 0,
+      "min_years": 3
+    },
+    "short_contract": {
+      "_note": "短約。永遠給得起，是談判破局時的保底。",
+      "min_years": 1,
+      "max_years": 2
+    },
+    "control": {
+      "_note": "選秀球隊的掌控期。取得 FA 資格之前，合約到期時球團可以逐年行使續約權，球員沒有選擇——這是選秀球隊的回報：他們用一個順位賭了你，就先擁有你幾年。",
+      "_cross_org_note": "換過體系的人直接取得 FA 資格。新東家沒有理由享有原球團的掌控權。",
+      "years": 5,
+      "club_option": {
+        "_note": "掌控期內的續約權：短約，薪資照層級基數不加成。",
+        "years": {
+          "min": 1,
+          "max": 2
+        },
+        "multiplier": 1.0
+      }
+    },
+    "extension": {
+      "_note": "母隊提前延長續約。合約剩一年、已取得 FA 資格、上季打得不錯時，球團可能主動來談——它想在你進自由市場之前先綁住你。",
+      "chance": 45,
+      "requires_min_d": 1,
+      "requires_top_level": true
+    },
+    "buyout": {
+      "_note": "提前結束合約的給付，以剩餘年數的年薪計算。",
+      "_asymmetry_note": "玩家自請離開只付七成，球團主動終止要付十成——**違約的一方付全額**，這是合約的基本精神。",
+      "player_initiated": 0.7,
+      "club_initiated": 1.0
+    },
+    "rookie_contract": {
+      "_note": "選秀進來的第一張約。",
+      "years": 2,
+      "multiplier": 1.0
     }
   }
 }

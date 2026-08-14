@@ -58,6 +58,14 @@ import {
   DH,
 } from './defense.ts';
 import {
+  buyoutCost,
+  isFreeAgentEligible,
+  offersExtension,
+  rookieContract,
+  termOptions,
+  type Contract,
+} from './contract.ts';
+import {
   difficultyOf,
   summarizeCareer,
   type CareerSummary,
@@ -246,6 +254,12 @@ export interface ProState {
   readonly min: number;
   /** 這一季的年薪，單位萬元。 */
   readonly salary: number;
+  /** 合約剩餘年數。 */
+  readonly contractYears: number;
+  /** 在頂級聯盟累積的服務年資。 */
+  readonly serviceYears: number;
+  /** 取得 FA 資格了嗎。掌控期內為 false——合約到期時球團說了算。 */
+  readonly freeAgentEligible: boolean;
 }
 
 export class Game {
@@ -323,6 +337,12 @@ export class Game {
     yearsAtBottom: number;
     /** 職業第幾年，從 1 起算。 */
     year: number;
+    /** 目前的合約。 */
+    contract: Contract;
+    /** 在頂級聯盟累積的服務年資，供 FA 資格判定。 */
+    serviceYears: number;
+    /** 是否換過體系。換過的人直接取得 FA 資格。 */
+    changedOrg: boolean;
     /**
      * 目前登錄的守備位置；尚未登錄時為 null。
      *
@@ -357,6 +377,13 @@ export class Game {
   #seasons: SeasonRecord[] = [];
   /** 結算出來的生涯總結。引退之前為 null。 */
   #summary: CareerSummary | null = null;
+  /**
+   * 上一季的 d 值——綜合能力減當年的 par。
+   *
+   * 合約談判與挖角看的都是它，而**必須是球季當下的值**：年末已經跑過老化，
+   * 那時再算會用到衰退後的能力，把一個剛打完生涯年的三十歲球員算成下坡。
+   */
+  #lastD = 0;
   /**
    * 生涯累積收入，單位萬元。
    *
@@ -442,6 +469,12 @@ export class Game {
       par: standardOf(this.#standards, pro.level).par,
       min: standardOf(this.#standards, pro.level).min,
       salary: this.#seasonSalary,
+      contractYears: pro.contract.years,
+      serviceYears: pro.serviceYears,
+      freeAgentEligible: isFreeAgentEligible({
+        serviceYears: pro.serviceYears,
+        changedOrg: pro.changedOrg,
+      }),
     };
   }
 
@@ -982,7 +1015,16 @@ export class Game {
 
   /** 進入職業。目前只跑 CPBL 主軸——旅外體系的轉會與尋路尚未實作。 */
   #professionalStart(level: string, team: string): void {
-    this.#pro = { level, team, yearsAtBottom: 0, year: 1, position: null };
+    this.#pro = {
+      level,
+      team,
+      yearsAtBottom: 0,
+      year: 1,
+      position: null,
+      contract: rookieContract(),
+      serviceYears: 0,
+      changedOrg: false,
+    };
     // 聯盟格局在進入職業的那一刻定下來：每隊各抽一個基準勝率當作體質。
     this.#league = initLeague(this.world, levelOf(level).org);
     // 生涯的第一年就是基準值——它是玩家認識這個世界的參照點。
@@ -1135,6 +1177,8 @@ export class Game {
       });
       this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
     }
+
+    this.#lastD = r.overall - standardOf(this.#standards, pro.level).par;
 
     // 領薪水。**在成績結算之後才領**——年薪看的是這一季的 d 值，而 d 值要等
     // 這季打完、能力定案才算得準。
@@ -1387,10 +1431,174 @@ export class Game {
     // ---- 引退
     const retire = shouldRetire(this.world, { age: this.#age, released });
     if (retire.retire || released) {
+      // 球團主動終止要付全額；球員自己撐不下去而引退則只拿七成。
+      this.#payBuyout(released ? 'club' : 'player');
       this.flow.push(() => this.#retire(retire.retire ? retire.reason : move.reason));
       return;
     }
 
+    // 合約處理排在升降級之後、引退選擇之前——談約要先知道自己在哪一層。
+    this.flow.push(() => this.#contractPhase(demotedTo));
+  }
+
+  /**
+   * 年度的合約處理：倒數 → 延長續約 → 到期。
+   *
+   * 到期之後分兩條路：**掌控期內由球團行使續約權**（球員沒有選擇），**取得
+   * FA 資格則由球員自己談**。那正是掌控期的意義——選秀球隊用一個順位賭了你，
+   * 就先擁有你幾年。
+   */
+  #contractPhase(demotedTo: string | null): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    const info = levelOf(pro.level);
+    const top = info.top !== undefined;
+
+    // 服務年資只在頂級聯盟累積——二軍的年份不算進掌控期。
+    if (top) pro.serviceYears++;
+    const eligible = isFreeAgentEligible({
+      serviceYears: pro.serviceYears,
+      changedOrg: pro.changedOrg,
+    });
+
+    pro.contract = { ...pro.contract, years: pro.contract.years - 1 };
+
+    if (offersExtension({ contract: pro.contract, topLevel: top, freeAgentEligible: eligible, d: this.#lastD })) {
+      this.#askTerms(
+        `母隊提前延長續約 · ${pro.team}（合約剩 1 年）`,
+        (years, mult) => {
+          pro.contract = {
+            years: pro.contract.years + years,
+            mult,
+            extensionOffered: true,
+          };
+          this.flow.card(
+            'gold',
+            '延長續約',
+            `與 <b class="hl">${esc(pro.team)}</b> 達成延長協議，追加 <b class="hl">${years} 年</b>` +
+              `（年薪係數 ×${mult.toFixed(2)}）。`,
+          );
+          this.#endOfYearChoices(demotedTo);
+        },
+        () => {
+          pro.contract = { ...pro.contract, extensionOffered: true };
+          this.flow.card('info', '婉拒延長', '你婉拒了母隊的提前延長，選擇打完現有合約再說。');
+          this.#endOfYearChoices(demotedTo);
+        },
+      );
+      return;
+    }
+
+    if (pro.contract.years > 0) {
+      this.#endOfYearChoices(demotedTo);
+      return;
+    }
+
+    // ---- 合約到期
+    if (!top) {
+      // 非頂級層級沒有談判可言——續個短約繼續打。
+      const opt = seasonCfg.contract.control.club_option;
+      pro.contract = {
+        years: this.world.stream('career').int(opt.years.min, opt.years.max),
+        mult: opt.multiplier,
+        extensionOffered: false,
+      };
+      this.#endOfYearChoices(demotedTo);
+      return;
+    }
+
+    if (!eligible) {
+      const opt = seasonCfg.contract.control.club_option;
+      pro.contract = {
+        years: this.world.stream('career').int(opt.years.min, opt.years.max),
+        mult: opt.multiplier,
+        extensionOffered: false,
+      };
+      this.flow.card(
+        'info',
+        '球團續約',
+        `你仍在選秀球隊的掌控期（服務 ${pro.serviceYears}／${seasonCfg.contract.control.years} 年），` +
+          `球團行使續約權——續 <b class="hl">${pro.contract.years} 年</b>，薪資照層級基數。`,
+      );
+      this.#endOfYearChoices(demotedTo);
+      return;
+    }
+
+    this.#askTerms(`合約到期 · 與 ${pro.team} 續約`, (years, mult) => {
+      pro.contract = { years, mult, extensionOffered: false };
+      this.flow.card(
+        'info',
+        '續約',
+        `與 <b class="hl">${esc(pro.team)}</b> 完成 <b class="hl">${years} 年</b>續約` +
+          `（年薪係數 ×${mult.toFixed(2)}）。`,
+      );
+      this.#endOfYearChoices(demotedTo);
+    });
+  }
+
+  /**
+   * 長短約的提問。
+   *
+   * 只有夠格的人才看得到長約選項——**年齡大或成績不佳時，球團乾脆只給短約**，
+   * 那個「沒有選擇」本身就是資訊。
+   */
+  #askTerms(
+    title: string,
+    onPick: (years: number, mult: number) => void,
+    onReject?: () => void,
+  ): void {
+    const pro = this.#pro;
+    const player = this.#player;
+    if (pro === null || player === null) return;
+
+    // 括號不可省：`a ?? b >= c ? x : y` 會解析成 `(a ?? (b >= c)) ? x : y`，
+    // 而 #lockedSide 是非空字串時永遠 truthy——鎖定成野手的人會被當成投手
+    // 談約，年限上限因此被壓到投手的 7 年。
+    const side: 'pitcher' | 'fielder' =
+      this.#lockedSide ??
+      ((this.rating?.pitcher ?? 0) >= (this.rating?.fielder ?? 0) ? 'pitcher' : 'fielder');
+
+    const terms = termOptions({
+      d: this.#lastD,
+      age: this.#age,
+      side,
+      traits: this.#traits,
+    });
+
+    const base = salaryFor(pro.level, this.#lastD);
+    const options: Option[] = [];
+    if (terms.longEligible) {
+      options.push({
+        id: 'term:long',
+        label: `長約（${terms.longYears} 年）`,
+        note: `年薪係數 ×${terms.longMult.toFixed(2)}，約 ${fmtMoney(Math.round(base * terms.longMult))}／年｜穩定保障`,
+        role: 'main',
+      });
+    }
+    options.push({
+      id: 'term:short',
+      label: `短約（${terms.shortYears} 年）`,
+      note:
+        `年薪係數 ×${terms.shortMult.toFixed(2)}，約 ${fmtMoney(Math.round(base * terms.shortMult))}／年｜` +
+        (terms.longEligible ? '賭下次身價' : '以你目前的年齡與成績，球團只願提供短約'),
+      role: terms.longEligible ? 'warn' : 'main',
+    });
+    if (onReject !== undefined) {
+      options.push({ id: 'term:reject', label: '婉拒，維持現狀', role: 'warn' });
+    }
+
+    this.flow.ask({ title, options }, (choice) => {
+      if (choice === 'term:reject') {
+        onReject?.();
+        return;
+      }
+      if (choice === 'term:long') onPick(terms.longYears, terms.longMult);
+      else onPick(terms.shortYears, terms.shortMult);
+    });
+  }
+
+  /** 年末的引退選擇。合約處理完才問——先知道明年有沒有球打，再決定要不要走。 */
+  #endOfYearChoices(demotedTo: string | null): void {
     // 被下放的老將可以選擇不接受。年輕人不給這個選項——他們還有再拚一次的
     // 餘地，讓他們在二十出頭就能一鍵結束生涯只會製造後悔。
     const cfg = seasonCfg.retirement;
@@ -1417,6 +1625,25 @@ export class Game {
     this.flow.push(() => this.#proYear());
   }
 
+  /** 提前結束合約要付的錢。玩家自請離開付七成，球團主動終止付十成。 */
+  #payBuyout(initiator: 'player' | 'club'): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    const cost = buyoutCost({
+      contract: pro.contract,
+      seasonSalary: this.#seasonSalary,
+      initiator,
+    });
+    if (cost <= 0) return;
+    // 買斷是球團付給球員的——提前解約的人拿到剩餘合約的一部分。
+    this.#earnings += cost;
+    this.flow.card(
+      'info',
+      '合約買斷',
+      `剩餘 ${pro.contract.years - 1} 年的合約以 <b class="hl">${fmtMoney(cost)}</b> 結清。`,
+    );
+  }
+
   /** 問玩家要不要就此引退。選擇本身會寫進重播日誌。 */
   #askRetire(question: string, stay: string, quit: string): void {
     this.flow.ask(
@@ -1429,6 +1656,8 @@ export class Game {
       },
       (choice) => {
         if (choice === 'retire:quit') {
+          // 自請提前結束合約，因此只拿七成。
+          this.#payBuyout('player');
           this.flow.push(() => this.#retire(quit));
           return;
         }

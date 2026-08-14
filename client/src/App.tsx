@@ -498,6 +498,14 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
             <span>年薪</span>
           </div>
         )}
+        {state.pro !== null && (
+          <div className="stat-cell">
+            <b>{state.pro.contractYears}</b>
+            {/* 掌控期內合約到期由球團說了算，取得 FA 資格之後才輪到自己談。
+                那個差別玩家該看得到，因此標題會變。 */}
+            <span>{state.pro.freeAgentEligible ? '合約剩餘' : '合約（掌控期）'}</span>
+          </div>
+        )}
         {state.earnings > 0 && (
           <div className="stat-cell">
             <b>{fmtMoneyShort(state.earnings)}</b>

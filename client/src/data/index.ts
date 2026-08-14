@@ -738,6 +738,57 @@ export interface SeasonData {
       readonly team_coupling: number;
     };
   };
+  /** 合約的談判層。金額在 leagues.json 的 salary。 */
+  readonly contract: {
+    readonly years: {
+      readonly base: number;
+      readonly perf: { readonly d_at_zero: number; readonly d_at_full: number };
+      readonly cap: { readonly pitcher: number; readonly fielder: number };
+      readonly injury_penalty: {
+        readonly per_major_injury: number;
+        readonly per_tj_surgery: number;
+      };
+      readonly age_caps: {
+        readonly tiers: readonly { readonly min_age: number; readonly max_years: number }[];
+      };
+    };
+    readonly multiplier: {
+      readonly by_performance: {
+        readonly tiers: readonly { readonly min_d: number; readonly value: number }[];
+        readonly default: number;
+      };
+      readonly long_factor: number;
+      readonly short_factor: number;
+      readonly injury_short_bonus: {
+        readonly min_injuries: number;
+        readonly max_years: number;
+        readonly add: number;
+      };
+      readonly trade_refuse_penalty: { readonly value: number };
+      readonly trait_modifiers: {
+        readonly franchise_min: number;
+        readonly cancer_max: number;
+        readonly cancer_no_offer_chance: number;
+      };
+    };
+    readonly long_contract: {
+      readonly requires_years_over: number;
+      readonly requires_min_d: number;
+      readonly min_years: number;
+    };
+    readonly short_contract: { readonly min_years: number; readonly max_years: number };
+    readonly control: {
+      readonly years: number;
+      readonly club_option: { readonly years: Range; readonly multiplier: number };
+    };
+    readonly extension: {
+      readonly chance: number;
+      readonly requires_min_d: number;
+      readonly requires_top_level: boolean;
+    };
+    readonly buyout: { readonly player_initiated: number; readonly club_initiated: number };
+    readonly rookie_contract: { readonly years: number; readonly multiplier: number };
+  };
   readonly team_strength: {
     readonly initial: Range;
     readonly drift: {
