@@ -7,9 +7,14 @@ import { World } from './rng.ts';
 const draft = (seed: string, overall: number, age = 19) =>
   runDraft(new World(seed), { overall, age });
 
-const rating = (pitcher: number, fielder: number): Rating => ({
+/**
+ * 二刀流判定看的是**打擊**，不是野手側評價——因此測試裡要分開給。
+ * 預設讓兩者相同，只有在驗證「守備好但打擊差」時才拆開。
+ */
+const rating = (pitcher: number, fielder: number, batting = fielder): Rating => ({
   pitcher,
   fielder,
+  batting,
   overall: Math.max(pitcher, fielder),
   better: pitcher >= fielder ? 'pitcher' : 'fielder',
 });
@@ -155,5 +160,32 @@ describe('qualifiesAsTwoWay', () => {
 
   it('兩側都不到不算', () => {
     expect(qualifiesAsTwoWay(rating(cfg.min_pitcher - 1, cfg.min_fielder - 1))).toBe(false);
+  });
+});
+
+describe('二刀流看的是投打，不是投守', () => {
+  const min = amateur.two_way_talent;
+
+  /**
+   * 「二刀流」在棒球裡指的是投打二刀流。守備一流、打擊平庸的游擊手就算會
+   * 投球，也不是大谷——他是一個會投球的游擊手。
+   */
+  it('守備撐起來的野手側評價不算數', () => {
+    const glove = rating(min.min_pitcher + 5, min.min_fielder + 10, min.min_fielder - 8);
+    expect(qualifiesAsTwoWay(glove)).toBe(false);
+  });
+
+  it('打擊達標才算', () => {
+    const real = rating(min.min_pitcher + 5, min.min_fielder + 10, min.min_fielder + 2);
+    expect(qualifiesAsTwoWay(real)).toBe(true);
+  });
+
+  it('投球不夠一樣不算', () => {
+    expect(qualifiesAsTwoWay(rating(min.min_pitcher - 5, min.min_fielder + 10))).toBe(false);
+  });
+
+  it('野手側評價再高也救不了打擊不足', () => {
+    const a = rating(min.min_pitcher + 5, 99, min.min_fielder - 1);
+    expect(qualifiesAsTwoWay(a)).toBe(false);
   });
 });

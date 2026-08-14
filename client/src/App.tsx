@@ -13,6 +13,7 @@ import { schoolTiersOf, stageOf } from './engine/amateur.ts';
 import type { LogEntry, Option, Prompt } from './engine/flow.ts';
 import {
   bbPerNine,
+  fmtInnings,
   kPerNine,
   ops,
   whip,
@@ -652,7 +653,7 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'W', title: '勝', value: (p) => p.wins },
   { key: 'L', title: '敗', value: (p) => p.losses },
   { key: 'SV', title: '救援成功', value: (p) => p.saves },
-  { key: 'IP', title: '投球局數', value: (p) => p.ip.toFixed(1) },
+  { key: 'IP', title: '投球局數（小數點後是出局數，.1 為一人出局）', value: (p) => fmtInnings(p.outs) },
   { key: 'H', title: '被安打', value: (p) => p.hits },
   { key: 'R', title: '失分', value: (p) => p.runs },
   { key: 'ER', title: '自責分', value: (p) => p.er },
@@ -769,7 +770,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
                     </td>
                     <td>{p.games}</td>
                     <td>{p.starts}</td>
-                    <td>{p.ip.toFixed(1)}</td>
+                    <td>{fmtInnings(p.outs)}</td>
                     <td>{p.wins}</td>
                     <td>{p.losses}</td>
                     <td>{p.saves}</td>

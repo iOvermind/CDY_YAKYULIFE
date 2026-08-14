@@ -22,7 +22,7 @@
  */
 
 import { awards as cfg, type FieldingAward, type LeaderAward } from '../data/index.ts';
-import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { proBaseline, proBaselineAt, type Baseline } from './metrics.ts';
 import type { World } from './rng.ts';
 
@@ -167,7 +167,7 @@ function qualifies(ctx: AwardContext, award: LeaderAward): boolean {
   if (award.side === 'pitcher') {
     if (ctx.pitching === null) return false;
     if (award.requires_role !== undefined && ctx.role !== award.requires_role) return false;
-    if (award.min_ip_equals_games === true && ctx.pitching.ip < ctx.leagueGames) return false;
+    if (award.min_ip_equals_games === true && innings(ctx.pitching) < ctx.leagueGames) return false;
     return true;
   }
   if (ctx.batting === null) return false;
@@ -200,7 +200,7 @@ function qualifiesForMvp(ctx: AwardContext): boolean {
   if (ctx.pitching !== null && ctx.role !== null) {
     const ok =
       ctx.role === 'SP'
-        ? ctx.pitching.ip >= q.starter_min_ip
+        ? innings(ctx.pitching) >= q.starter_min_ip
         : ctx.pitching.games >= q.reliever_min_games;
     if (ok) return true;
   }

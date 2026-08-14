@@ -27,7 +27,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 });
 
 const pit = (over: Partial<ProPitchingLine> = {}): ProPitchingLine => ({
-  role: 'SP', games: 26, starts: 26, wins: 12, losses: 8, saves: 0, ip: 160, hits: 150,
+  role: 'SP', games: 26, starts: 26, wins: 12, losses: 8, saves: 0, outs: 480, hits: 150,
   runs: 65, er: 60, bb: 40, so: 120, era: 3.38,
   ...over,
 });
@@ -151,15 +151,15 @@ describe('年度最佳投手', () => {
 
   it('限先發——後援投手拿不到', () => {
     const era = lineAt(0) - 0.5;
-    expect(rate({ pitching: pit({ era, ip: 200 }), role: 'SP', batting: null }, 'pitcher_of_year')).toBe(1);
+    expect(rate({ pitching: pit({ era, outs: 600 }), role: 'SP', batting: null }, 'pitcher_of_year')).toBe(1);
     expect(
-      rate({ pitching: pit({ role: 'RP', era, ip: 200 }), role: 'RP', batting: null }, 'pitcher_of_year'),
+      rate({ pitching: pit({ role: 'RP', era, outs: 600 }), role: 'RP', batting: null }, 'pitcher_of_year'),
     ).toBe(0);
   });
 
   it('局數不足該聯盟場次就沒有資格', () => {
     expect(
-      rate({ pitching: pit({ era: 1.5, ip: 80 }), role: 'SP', batting: null }, 'pitcher_of_year'),
+      rate({ pitching: pit({ era: 1.5, outs: 240 }), role: 'SP', batting: null }, 'pitcher_of_year'),
     ).toBe(0);
   });
 
@@ -170,7 +170,7 @@ describe('年度最佳投手', () => {
   it('防禦率高於最寬鬆的那條線就一定拿不到', () => {
     expect(
       rate(
-        { pitching: pit({ era: lineAt(0) + 0.3, ip: 200 }), role: 'SP', batting: null },
+        { pitching: pit({ era: lineAt(0) + 0.3, outs: 600 }), role: 'SP', batting: null },
         'pitcher_of_year',
       ),
     ).toBe(0);
@@ -230,7 +230,7 @@ describe('年度 MVP', () => {
   it('投手靠局數就取得資格，不必有打席', () => {
     expect(
       rate(
-        { winShares: lineAt(1) + 5, batting: null, pitching: pit({ ip: 180 }), role: 'SP' },
+        { winShares: lineAt(1) + 5, batting: null, pitching: pit({ outs: 540 }), role: 'SP' },
         'mvp',
       ),
     ).toBe(1);

@@ -172,6 +172,8 @@ export interface AbilitiesData {
       readonly stamina_weight: number;
     };
     readonly fielder: {
+      /** 純打擊的能力清單。二刀流判定看它——「二刀流」指的是投打，不是投守。 */
+      readonly offense_abilities: readonly AbilityKey[];
       readonly offense_top_weights: readonly number[];
       readonly defense_weight: Readonly<Record<string, number>>;
       readonly dh_defense_penalty: { readonly base_position: string; readonly penalty: number };
@@ -397,6 +399,19 @@ export interface GrowthCurve {
   readonly above_ceiling_multiplier: number;
 }
 
+/** 養成期投手的定位與勝敗設定。 */
+export interface AmateurPitchingExtras {
+  readonly role: {
+    readonly starter_min_stamina: Readonly<Record<string, number>>;
+    readonly default_min_stamina: number;
+    readonly reliever_innings_factor: { readonly value: number };
+  };
+  readonly decision: {
+    readonly starter_share: { readonly value: number };
+    readonly reliever_save_share: { readonly value: number };
+  };
+}
+
 export interface AmateurData {
   readonly career_start: {
     readonly age: number;
@@ -467,7 +482,7 @@ export interface AmateurData {
       readonly runs_per_earned_run: { readonly value: number };
       readonly era: RateSpec;
       readonly noise: Range;
-    };
+    } & AmateurPitchingExtras;
   };
   readonly two_way_talent: {
     readonly trait: string;
@@ -482,6 +497,8 @@ export interface AmateurData {
     readonly ranks: readonly string[];
     readonly points: readonly number[];
     readonly games_by_rank: { readonly values: readonly number[] };
+    /** 各名次的敗場。單淘汰裡輸一場就回家，第四名例外——他輸兩場。 */
+    readonly losses_by_rank: { readonly values: readonly number[] };
     readonly honor_ranks: { readonly values: readonly string[] };
     readonly points_bonus: { readonly overall_divisor: number; readonly per_season: boolean };
     readonly academy_trigger: {

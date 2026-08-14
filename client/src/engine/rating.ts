@@ -63,6 +63,23 @@ export function pitcherRating(ability: Abilities): number {
 }
 
 /**
+ * 純打擊評價。
+ *
+ * **二刀流判定看的是它，不是野手側評價**——「二刀流」在棒球裡指的是投打二刀
+ * 流，不是投守二刀流。野手側評價含守備，因此一個守備一流、打擊平庸的游擊手
+ * 會被誤判成二刀流，而那不是這個詞的意思。
+ *
+ * 守備仍然留在野手側評價裡（綜合能力、守位、薪資都要用），只是不參與二刀流。
+ */
+export function battingRating(ability: Abilities): number {
+  const cfg = abilities.overall.fielder;
+  return weightedSum(
+    topValues(ability, cfg.offense_abilities, cfg.offense_top_weights.length),
+    cfg.offense_top_weights,
+  );
+}
+
+/**
  * 野手側評價：打擊與守備依守位的守備權重合成。
  *
  * position 是用於評價的守位。尚未登錄守備位置時，呼叫端應先用
@@ -70,11 +87,7 @@ export function pitcherRating(ability: Abilities): number {
  */
 export function fielderRating(ability: Abilities, position: string): number {
   const cfg = abilities.overall.fielder;
-  const hitting = ['con', 'pow', 'eye', 'spd'];
-  const offense = weightedSum(
-    topValues(ability, hitting, cfg.offense_top_weights.length),
-    cfg.offense_top_weights,
-  );
+  const offense = battingRating(ability);
 
   const dh = cfg.dh_defense_penalty;
   const defense =
@@ -133,6 +146,8 @@ export function ratingPosition(startPosition: string): string {
 export interface Rating {
   readonly pitcher: number;
   readonly fielder: number;
+  /** 純打擊評價。二刀流判定看它——「二刀流」指的是投打，不是投守。 */
+  readonly batting: number;
   /** 整體評價：兩側取較高者，再套用特性修正。 */
   readonly overall: number;
   /** 較高的是哪一側。 */
@@ -167,6 +182,7 @@ export function rate(
   return {
     pitcher: Math.round(pitcher),
     fielder: Math.round(fielder),
+    batting: Math.round(battingRating(ability)),
     overall: Math.round(overall),
     better: pitcher >= fielder ? 'pitcher' : 'fielder',
   };

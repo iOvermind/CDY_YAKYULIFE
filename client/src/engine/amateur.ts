@@ -30,6 +30,22 @@ export interface CupResult {
   readonly power: number;
   /** 實際出賽場次。名次越好打得越多。 */
   readonly games: number;
+  /** 球隊在這場大賽贏了幾場。 */
+  readonly wins: number;
+}
+
+/**
+ * 單淘汰的勝場數：場次減掉敗場。
+ *
+ * 敗場寫在資料裡而不是在這裡推測——**冠軍全勝、第四名輸兩場（準決賽輸掉、
+ * 季軍戰又輸）、其餘恰好輸一場**，這是賽制決定的，不是猜的。
+ *
+ * 不另外擲骰的理由：賽制本來就決定了勝敗，再擲一次只會產生「打進冠軍戰卻
+ * 只贏兩場」這種不可能的紀錄。
+ */
+export function winsForRank(rankIndex: number, games: number): number {
+  const losses = amateur.cups.losses_by_rank.values[rankIndex] ?? 1;
+  return Math.max(0, games - losses);
 }
 
 export interface CupSeason {
@@ -42,6 +58,8 @@ export interface CupSeason {
   readonly championships: readonly string[];
   /** 這一季大賽的總出賽場次。 */
   readonly games: number;
+  /** 這一季大賽的總勝場。 */
+  readonly wins: number;
 }
 
 export interface CupContext {
@@ -76,6 +94,7 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
   const honorRanks = new Set(cfg.honor_ranks.values);
   let total = 0;
   let totalGames = 0;
+  let totalWins = 0;
 
   for (const cup of stage.names) {
     const power = overall + teamBonus + rng.int(stage.power_noise.min, stage.power_noise.max);
@@ -83,22 +102,32 @@ export function playCups(world: World, ctx: CupContext): CupSeason {
     const points = cfg.points[rankIndex] ?? 0;
     const games = cfg.games_by_rank.values[rankIndex] ?? 1;
 
+    const rank = cfg.ranks[rankIndex] ?? '';
     results.push({
       cup,
       rankIndex,
-      rank: cfg.ranks[rankIndex] ?? '',
+      rank,
       points,
       power,
       games,
+      wins: winsForRank(rankIndex, games),
     });
     total += points;
     totalGames += games;
+    totalWins += winsForRank(rankIndex, games);
     if (rankIndex === 0) championships.push(cup);
     const rankName = cfg.ranks[rankIndex] ?? '';
     if (honorRanks.has(rankName)) honors.push({ cup, rank: rankName });
   }
 
-  return { results, points: total + seasonBonus, honors, championships, games: totalGames };
+  return {
+    results,
+    points: total + seasonBonus,
+    honors,
+    championships,
+    games: totalGames,
+    wins: totalWins,
+  };
 }
 
 /** 依實力值取名次索引。門檻由高到低，取第一個達標者；都不到則為最後一名次。 */

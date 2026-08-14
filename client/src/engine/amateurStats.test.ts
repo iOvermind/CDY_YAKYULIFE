@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_ABILITIES, amateur } from '../data/index.ts';
-import { addBatting, addPitching, battingLine, pitchingLine, playAmateurStats } from './amateurStats.ts';
+import {
+  addBatting,
+  addPitching,
+  battingLine,
+  fmtInnings,
+  innings,
+  pitchingLine,
+  playAmateurStats,
+  type PitchingLine,
+} from './amateurStats.ts';
 import { World } from './rng.ts';
 
 const flat = (v: number): Record<string, number> =>
@@ -107,7 +116,7 @@ describe('pitchingLine', () => {
   });
 
   it('局數與場次成正比', () => {
-    expect(pit('a', 45, 18).ip).toBeGreaterThan(pit('a', 45, 6).ip);
+    expect(pit('a', 45, 18).outs).toBeGreaterThan(pit('a', 45, 6).outs);
   });
 });
 
@@ -170,7 +179,15 @@ describe('累加', () => {
     const b = pitchingLine(new World('b'), 'HS', flat(20), 9);
     const sum = addPitching(a, b);
     expect(sum?.er).toBe(a.er + b.er);
-    expect(sum?.era).toBeCloseTo(((a.er + b.er) * 9) / (a.ip + b.ip), 3);
+    // 分母是**局數**，不是出局數——出局數要除以三才是局數。
+    expect(sum?.era).toBeCloseTo(((a.er + b.er) * 9) / ((a.outs + b.outs) / 3), 3);
+  });
+
+  it('出局數是整數，累加不會產生小數誤差', () => {
+    const a = pitchingLine(new World('a'), 'HS', flat(60), 9);
+    const b = pitchingLine(new World('b'), 'HS', flat(20), 9);
+    expect(Number.isInteger(a.outs)).toBe(true);
+    expect(addPitching(a, b)?.outs).toBe(a.outs + b.outs);
   });
 
   it('與 null 相加等於原值', () => {
@@ -191,5 +208,35 @@ describe('階段差異', () => {
       return total / 100;
     };
     expect(avg('JHS')).toBeGreaterThan(avg('HS'));
+  });
+});
+
+describe('局數的棒球寫法', () => {
+  it('小數點後是出局數，不是十進位小數', () => {
+    expect(fmtInnings(0)).toBe('0.0');
+    expect(fmtInnings(1)).toBe('0.1');
+    expect(fmtInnings(2)).toBe('0.2');
+    expect(fmtInnings(3)).toBe('1.0');
+    expect(fmtInnings(88)).toBe('29.1');
+    expect(fmtInnings(89)).toBe('29.2');
+    expect(fmtInnings(90)).toBe('30.0');
+  });
+
+  /** 這正是換掉小數模型的理由：29.5 局在棒球裡不存在。 */
+  it('永遠不會產生 .3 到 .9 的局數', () => {
+    for (let outs = 0; outs < 500; outs++) {
+      const decimal = Number(fmtInnings(outs).split('.')[1]);
+      expect(decimal).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('真實局數是出局數除以三，與顯示的寫法不同', () => {
+    const line = { outs: 88 } as PitchingLine;
+    expect(innings(line)).toBeCloseTo(88 / 3, 10);
+    expect(fmtInnings(line.outs)).toBe('29.1');
+  });
+
+  it('負數不會產生怪字串', () => {
+    expect(fmtInnings(-5)).toBe('0.0');
   });
 });

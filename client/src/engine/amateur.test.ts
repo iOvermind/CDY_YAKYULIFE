@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { amateur } from '../data/index.ts';
-import { academyUnlocked, playCups, type CupContext } from './amateur.ts';
+import { academyUnlocked, playCups, winsForRank, type CupContext } from './amateur.ts';
+import { amateurRole, starterStaminaBar } from './amateurStats.ts';
 import { World } from './rng.ts';
 
 const flat = (value: number): Record<string, number> =>
@@ -146,5 +147,84 @@ describe('academyUnlocked', () => {
   it('大學沒拿冠軍不解鎖', () => {
     const season = playCups(new World('a'), ctx({ stage: 'U', ability: flat(20) }));
     expect(academyUnlocked('U', season)).toBe(false);
+  });
+});
+
+describe('單淘汰的名次、場次與勝敗', () => {
+  const cups = amateur.cups;
+
+  it('季軍是獨立名次，而且列入生涯成就', () => {
+    expect(cups.ranks).toContain('季軍');
+    expect(cups.honor_ranks.values).toContain('季軍');
+  });
+
+  /** 那一場輸贏不改變「你打進了四強」這件事。 */
+  it('季軍與四強同分', () => {
+    const third = cups.ranks.indexOf('季軍');
+    const fourth = cups.ranks.indexOf('四強');
+    expect(cups.points[third]).toBe(cups.points[fourth]);
+  });
+
+  /** 兩支打決賽、兩支打季軍戰——四支隊伍都打滿五場。 */
+  it('進了四強的四個名次場次相同', () => {
+    const semiFinalists = ['冠軍', '亞軍', '季軍', '四強'].map((r) => cups.ranks.indexOf(r));
+    const games = semiFinalists.map((i) => cups.games_by_rank.values[i]);
+    expect(new Set(games).size).toBe(1);
+  });
+
+  it('場次隨名次遞減，且預賽出局只打一場', () => {
+    const values = cups.games_by_rank.values;
+    for (let i = 1; i < values.length; i++) {
+      expect(values[i]!).toBeLessThanOrEqual(values[i - 1]!);
+    }
+    expect(values.at(-1)).toBe(1);
+  });
+
+  it('冠軍全勝', () => {
+    const games = cups.games_by_rank.values[0]!;
+    expect(winsForRank(0, games)).toBe(games);
+  });
+
+  /** 輸一場就回家——只有第四名例外，他準決賽輸掉、季軍戰又輸。 */
+  it('除了冠軍與第四名，每支球隊都恰好輸一場', () => {
+    cups.ranks.forEach((rank, i) => {
+      const games = cups.games_by_rank.values[i]!;
+      const losses = games - winsForRank(i, games);
+      if (rank === '冠軍') expect(losses).toBe(0);
+      else if (rank === '四強') expect(losses).toBe(2);
+      else expect(losses).toBe(1);
+    });
+  });
+
+  it('勝場永遠不會是負的', () => {
+    for (let i = 0; i < cups.ranks.length; i++) {
+      expect(winsForRank(i, cups.games_by_rank.values[i] ?? 0)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('每個名次都有場次、敗場與能力點', () => {
+    const n = cups.ranks.length;
+    expect(cups.points).toHaveLength(n);
+    expect(cups.games_by_rank.values).toHaveLength(n);
+    expect(cups.losses_by_rank.values).toHaveLength(n);
+  });
+
+  it('各階段的門檻數比名次少一——最後一個名次是沒達到任何門檻', () => {
+    for (const stage of ['JHS', 'HS'] as const) {
+      expect(amateur.cups[stage].thresholds).toHaveLength(cups.ranks.length - 1);
+    }
+  });
+});
+
+describe('養成期的投手定位', () => {
+  it('體力達標才是先發', () => {
+    const bar = starterStaminaBar('HS');
+    expect(amateurRole('HS', { sta: bar } as never)).toBe('SP');
+    expect(amateurRole('HS', { sta: bar - 1 } as never)).toBe('RP');
+  });
+
+  /** 球賽變長、對手變強，同一個體力值在國中撐得完一場，在高中撐不完。 */
+  it('階段越高，先發門檻越高', () => {
+    expect(starterStaminaBar('HS')).toBeGreaterThan(starterStaminaBar('JHS'));
   });
 });

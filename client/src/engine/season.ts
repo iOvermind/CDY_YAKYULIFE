@@ -265,6 +265,7 @@ export function proPitchingLine(
   let games: number;
   let starts: number;
   let ip: number;
+  
 
   if (role === 'SP') {
     const slots = info.games / p.starter.rotation_divisor.value;
@@ -289,7 +290,9 @@ export function proPitchingLine(
     const n = p.reliever.noise;
     ip = games * per * (n.min + rng.next() * (n.max - n.min));
   }
-  ip = Math.round(ip * 10) / 10;
+  // 出局數才是原子單位——存小數會生出 29.5 這種棒球裡不存在的局數。
+  const outs = Math.max(0, Math.round(ip * 3));
+  ip = outs / 3;
 
   const noise = () => p.noise.min + rng.next() * (p.noise.max - p.noise.min);
   const kPerInning = rateOf(p.strikeout_rate, ability, par) * noise();
@@ -311,7 +314,7 @@ export function proPitchingLine(
     role,
     games,
     starts,
-    ip,
+    outs,
     hits: Math.round(ip * rateOf(p.hits_per_inning, ability, par) * noise()),
     runs: Math.round(er * p.runs_per_earned_run.value),
     er,

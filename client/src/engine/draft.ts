@@ -86,12 +86,17 @@ export function canRejectOffer(result: DraftResult, age: number): boolean {
 /**
  * 判定是否取得二刀流天賦。
  *
- * 條件是投手側與野手側**都**達到門檻——不是整體評價高就好，那只代表單邊強。
+ * 條件是投球與**打擊**都達到門檻——不是整體評價高就好，那只代表單邊強。
+ *
+ * **看打擊而不是野手側評價**：野手側含守備，因此一個守備一流、打擊平庸的
+ * 游擊手只要會投球就會被判成二刀流。但「二刀流」在棒球裡指的是投打二刀流，
+ * 不是投守二刀流。
+ *
  * 判定時機在高中畢業、選秀之前，因為二刀流會影響球團的評估。
  */
 export function qualifiesAsTwoWay(rating: Rating): boolean {
   const cfg = amateur.two_way_talent;
-  return rating.pitcher >= cfg.min_pitcher && rating.fielder >= cfg.min_fielder;
+  return rating.pitcher >= cfg.min_pitcher && rating.batting >= cfg.min_fielder;
 }
 
 /** 二刀流天賦的特性代碼。 */

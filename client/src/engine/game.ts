@@ -34,6 +34,7 @@ import {
 import {
   addBatting,
   addPitching,
+  fmtInnings,
   playAmateurStats,
   type BattingLine,
   type PitchingLine,
@@ -811,7 +812,7 @@ export class Game {
     this.flow.card('info', '大賽結算', lines);
 
     // 成績依主要角色產生；二刀流投打都算。
-    const line = playAmateurStats(this.world, this.#stage, this.#ability, season.games);
+    const line = playAmateurStats(this.world, this.#stage, this.#ability, season.games, season.wins);
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#accumulate(line.batting, line.pitching);
@@ -820,7 +821,7 @@ export class Game {
     if (line.pitching !== null) {
       const p = line.pitching;
       statLines.push(
-        `投球 ${p.games} 場 ${p.ip} 局・${p.so} K・防禦率 <b class="hl">${p.era.toFixed(2)}</b>`,
+        `投球 ${p.games} 場 ${fmtInnings(p.outs)} 局・${p.so} K・防禦率 <b class="hl">${p.era.toFixed(2)}</b>`,
       );
     }
     if (line.batting !== null) {
@@ -1192,7 +1193,7 @@ export class Game {
       const p = line.pitching;
       parts.push(
         `<b>投手</b>（${p.role === 'SP' ? '先發' : '後援'}）｜${p.games} 場` +
-          `${p.starts > 0 ? `・先發 ${p.starts}` : ''}・${p.ip.toFixed(1)} 局` +
+          `${p.starts > 0 ? `・先發 ${p.starts}` : ''}・${fmtInnings(p.outs)} 局` +
           `・${p.wins} 勝 ${p.losses} 敗${p.saves > 0 ? ` ${p.saves} 救援` : ''}` +
           `・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}`,
       );
@@ -1721,7 +1722,7 @@ export class Game {
       const parts: string[] = [];
       if (pitching !== null) {
         parts.push(
-          `投手 ${pitching.games} 場・${pitching.ip.toFixed(1)} 局・` +
+          `投手 ${pitching.games} 場・${fmtInnings(pitching.outs)} 局・` +
             `${pitching.wins} 勝 ${pitching.losses} 敗` +
             `${pitching.saves > 0 ? ` ${pitching.saves} 救援` : ''}・` +
             `防禦率 <b class="hl">${pitching.era.toFixed(2)}</b>・奪三振 ${pitching.so}`,

@@ -61,8 +61,17 @@ export interface PitchingLine {
   readonly wins: number;
   readonly losses: number;
   readonly saves: number;
-  /** 局數，取到小數一位。 */
-  readonly ip: number;
+  /**
+   * 投球出局數。
+   *
+   * **棒球的原子單位是出局，不是局。** 存成小數會生出 29.5 這種不存在的
+   * 局數——棒球只有 .0／.1／.2（0、1、2 人出局）。存出局數就不會有這個問題，
+   * 而且加總是精確的整數運算。
+   *
+   * 局數與顯示都從它導出：`innings()` 給真實局數（用於防禦率等除法），
+   * `fmtInnings()` 給棒球寫法（29.1 = 29 局又 1 人出局）。
+   */
+  readonly outs: number;
   /** 被安打。 */
   readonly hits: number;
   /** 失分。 */
@@ -85,19 +94,42 @@ export function ops(line: BattingLine): number {
   return line.obp + line.slg;
 }
 
+/**
+ * 真實局數。
+ *
+ * 用於所有把局數當分母的計算——防禦率、WHIP、每九局。**這是真實的三分之一
+ * 進位**，不是顯示用的 29.1：拿 29.1 去除會少算 0.2 局。
+ */
+export function innings(line: PitchingLine): number {
+  return line.outs / 3;
+}
+
+/**
+ * 局數的棒球寫法：29.1 表示 29 局又 1 人出局。
+ *
+ * 小數點後只會是 0、1、2——那不是小數，是出局數。
+ */
+export function fmtInnings(outs: number): string {
+  const whole = Math.floor(Math.max(0, outs) / 3);
+  return `${whole}.${Math.max(0, outs) % 3}`;
+}
+
 /** 每局被上壘率：被安打加保送除以局數。 */
 export function whip(line: PitchingLine): number {
-  return line.ip === 0 ? 0 : (line.hits + line.bb) / line.ip;
+  const ip = innings(line);
+  return ip === 0 ? 0 : (line.hits + line.bb) / ip;
 }
 
 /** 每九局三振數。 */
 export function kPerNine(line: PitchingLine): number {
-  return line.ip === 0 ? 0 : (line.so * 9) / line.ip;
+  const ip = innings(line);
+  return ip === 0 ? 0 : (line.so * 9) / ip;
 }
 
 /** 每九局保送數。 */
 export function bbPerNine(line: PitchingLine): number {
-  return line.ip === 0 ? 0 : (line.bb * 9) / line.ip;
+  const ip = innings(line);
+  return ip === 0 ? 0 : (line.bb * 9) / ip;
 }
 
 export interface AmateurLine {
@@ -176,20 +208,48 @@ export function battingLine(
   return { ...line, slg: slugging(line) };
 }
 
-/** 投出一段養成期的投球成績。 */
+/**
+ * 這個階段的先發體力門檻。
+ *
+ * 國高中的球隊人數有限，體力撐得住的人自然被排進先發輪值。門檻隨階段提高
+ * 是因為球賽變長、對手變強——同一個體力值在國中撐得完一場，在高中撐不完。
+ */
+export function starterStaminaBar(stage: AmateurStage): number {
+  const r = amateur.amateur_stats.pitching.role;
+  return r.starter_min_stamina[stage] ?? r.default_min_stamina;
+}
+
+/** 這個球員在這個階段是先發還是後援。 */
+export function amateurRole(stage: AmateurStage, ability: Abilities): 'SP' | 'RP' {
+  return (ability['sta'] ?? 0) >= starterStaminaBar(stage) ? 'SP' : 'RP';
+}
+
+/**
+ * 投出一段養成期的投球成績。
+ *
+ * `teamWins` 是球隊在這段大賽裡贏了幾場——**單淘汰的勝敗直接由名次推導**，
+ * 不另外擲骰：打進冠軍戰的球隊贏了四場輸了一場，冠軍則是五戰全勝。那才是
+ * 單淘汰的樣子。傳 null 表示不計勝敗（例如國際賽另計）。
+ */
 export function pitchingLine(
   world: World,
   stage: AmateurStage,
   ability: Abilities,
   games: number,
+  teamWins: number | null = null,
 ): PitchingLine {
   const rng = world.stream('season');
   const cfg = amateur.amateur_stats.pitching;
   const par = amateur.cups[stage].par;
   const noise = () => cfg.noise.min + rng.next() * (cfg.noise.max - cfg.noise.min);
 
+  const role = amateurRole(stage, ability);
   const ipPerGame = rateOf(cfg.innings_per_game, ability, par);
-  const ip = Math.round(games * ipPerGame * 10) / 10;
+  // 後援投手不是每場都上，上了也投不久。
+  const share = role === 'SP' ? 1 : cfg.role.reliever_innings_factor.value;
+  // 直接算出局數——那才是棒球的原子單位，而且加總是精確的整數運算。
+  const outs = Math.round(games * ipPerGame * share * 3);
+  const ip = outs / 3;
 
   const k9 = Math.max(0, rateOf(cfg.k_per_nine, ability, par) + noise());
   const bb9 = Math.max(0, rateOf(cfg.bb_per_nine, ability, par) + noise());
@@ -204,14 +264,22 @@ export function pitchingLine(
   const h9 = Math.max(0, rateOf(cfg.hits_per_nine, ability, par) + noise());
   const er = Math.round((ip * era) / 9);
 
+  // 單淘汰的勝敗：贏了幾場、輸了幾場全由名次決定，不擲骰。先發扛大部分的
+  // 勝敗，後援則把球隊的勝場轉換成救援成功。
+  const dec = cfg.decision;
+  const wonGames = teamWins ?? 0;
+  const lostGames = teamWins === null ? 0 : Math.max(0, games - teamWins);
+  const wins = role === 'SP' ? Math.round(wonGames * dec.starter_share.value) : 0;
+  const losses = role === 'SP' ? Math.round(lostGames * dec.starter_share.value) : 0;
+  const saves = role === 'RP' ? Math.round(wonGames * dec.reliever_save_share.value) : 0;
+
   return {
     games,
-    // 養成期不分先發後援——一支國高中球隊的投手什麼時候上場都有可能。
-    starts: 0,
-    wins: 0,
-    losses: 0,
-    saves: 0,
-    ip,
+    outs,
+    starts: role === 'SP' ? games : 0,
+    wins,
+    losses,
+    saves,
     hits: Math.round((ip * h9) / 9),
     runs: Math.round(er * cfg.runs_per_earned_run.value),
     er,
@@ -233,12 +301,13 @@ export function playAmateurStats(
   stage: AmateurStage,
   ability: Abilities,
   games: number,
+  teamWins: number | null = null,
 ): AmateurLine {
   if (games <= 0) return { batting: null, pitching: null };
 
   return {
     // 順序固定：投球先於打擊，否則同一個種子會因為走訪順序不同而產生不同結果。
-    pitching: pitchingLine(world, stage, ability, games),
+    pitching: pitchingLine(world, stage, ability, games, teamWins),
     batting: battingLine(world, stage, ability, games),
   };
 }
@@ -280,15 +349,16 @@ export function addBatting(a: BattingLine | null, b: BattingLine | null): Battin
 export function addPitching(a: PitchingLine | null, b: PitchingLine | null): PitchingLine | null {
   if (a === null) return b;
   if (b === null) return a;
-  const ip = Math.round((a.ip + b.ip) * 10) / 10;
+  const outs = a.outs + b.outs;
+  const ip = outs / 3;
   const er = a.er + b.er;
   return {
     games: a.games + b.games,
+    outs,
     starts: a.starts + b.starts,
     wins: a.wins + b.wins,
     losses: a.losses + b.losses,
     saves: a.saves + b.saves,
-    ip,
     hits: a.hits + b.hits,
     runs: a.runs + b.runs,
     er,

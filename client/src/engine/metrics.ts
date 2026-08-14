@@ -9,7 +9,7 @@
  */
 
 import { amateur, season as cfg } from '../data/index.ts';
-import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
 import { levelOf } from './season.ts';
 
@@ -127,7 +127,7 @@ function build(
  * 沒有投球局數就沒有意義，回傳 null 而不是 0——0 會被誤讀成「差到極點」。
  */
 export function eraPlus(line: PitchingLine, base: Baseline): number | null {
-  if (line.ip === 0 || line.era === 0) return null;
+  if (line.outs === 0 || line.era === 0) return null;
   return Math.round((base.era / line.era) * 100);
 }
 
@@ -285,11 +285,11 @@ export function pitchingShares(
   base: Baseline,
   teamWinRate: number | null = null,
 ): Shares {
-  if (line.ip === 0 || base.era === 0) return { win: 0, loss: 0 };
+  if (line.outs === 0 || base.era === 0) return { win: 0, loss: 0 };
   // 防禦率 0 是完美，不是無限差——直接除會炸開，改用一個極小值代替。
   const era = line.era <= 0 ? 0.01 : line.era;
   return splitShares(
-    pitchingResponsibility(line.ip),
+    pitchingResponsibility(innings(line)),
     teamAdjustedWinPct(pythagoreanWinPct(base.era / era), teamWinRate),
   );
 }

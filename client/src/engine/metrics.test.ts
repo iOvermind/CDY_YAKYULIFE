@@ -36,7 +36,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 });
 
 const pit = (over: Partial<PitchingLine> = {}): PitchingLine => ({
-  games: 25, starts: 25, wins: 10, losses: 8, saves: 0, ip: 150, hits: 145,
+  games: 25, starts: 25, wins: 10, losses: 8, saves: 0, outs: 450, hits: 145,
   runs: 70, er: 65, bb: 45, so: 120, era: 3.9,
   ...over,
 });
@@ -94,7 +94,7 @@ describe('eraPlus', () => {
   });
 
   it('沒有投球局數時回傳 null，不是 0——0 會被誤讀成差到極點', () => {
-    expect(eraPlus(pit({ ip: 0 }), base)).toBeNull();
+    expect(eraPlus(pit({ outs: 0 }), base)).toBeNull();
   });
 });
 
@@ -205,7 +205,7 @@ describe('雙帳制', () => {
       win: 0,
       loss: 0,
     });
-    expect(pitchingShares(pit({ ip: 0 }), base)).toEqual({ win: 0, loss: 0 });
+    expect(pitchingShares(pit({ outs: 0 }), base)).toEqual({ win: 0, loss: 0 });
   });
 
   it('投得越好勝利份額越高', () => {
@@ -215,8 +215,8 @@ describe('雙帳制', () => {
   });
 
   it('同樣的防禦率，投得越多兩本帳都越大', () => {
-    const many = pitchingShares(pit({ ip: 200 }), base);
-    const few = pitchingShares(pit({ ip: 60 }), base);
+    const many = pitchingShares(pit({ outs: 600 }), base);
+    const few = pitchingShares(pit({ outs: 180 }), base);
     expect(many.win).toBeGreaterThan(few.win);
     expect(many.loss).toBeGreaterThan(few.loss);
   });
