@@ -290,7 +290,11 @@ export function tierLabel(tier: number): string {
 /** 在這些紀錄裡效力最久的球隊。用於名人堂帽徽。 */
 function longestTeam(records: readonly SeasonRecord[]): string {
   const tally = new Map<string, number>();
-  for (const r of records) tally.set(r.team, (tally.get(r.team) ?? 0) + 1);
+  // 季中轉隊的兩段各算半年——待了兩個月的球隊不該和待了整季的並列。
+  for (const r of records) {
+    const share = records.filter((o) => o.year === r.year).length;
+    tally.set(r.team, (tally.get(r.team) ?? 0) + 1 / share);
+  }
   let best = '';
   let most = 0;
   for (const [team, count] of tally) {
@@ -318,6 +322,16 @@ function totalLines(records: readonly SeasonRecord[]): {
 /** 這個體系的中文名。 */
 function orgNameOf(org: string): string {
   return leagues.top_league_names[org] ?? leagues.org_names[org] ?? org;
+}
+
+/**
+ * 這批紀錄橫跨幾個球季。
+ *
+ * **數的是年份而不是段數**——季中被交易的那一年是一年，不是兩年。逐段紀錄
+ * 讓同一年可以有兩列，年資不能跟著翻倍。
+ */
+function seasonCount(list: readonly SeasonRecord[]): number {
+  return new Set(list.map((r) => r.year)).size;
 }
 
 /**
@@ -375,7 +389,7 @@ export function summarizeCareer(
     leagueCareers.push({
       org,
       orgName: orgNameOf(org),
-      seasons: list.length,
+      seasons: seasonCount(list),
       batting: lines.batting,
       pitching: lines.pitching,
       defenseRuns: list.reduce((sum, r) => sum + r.defenseRuns, 0),
@@ -406,7 +420,7 @@ export function summarizeCareer(
       return {
         level,
         levelName: list[0]?.levelName ?? level,
-        seasons: list.length,
+        seasons: seasonCount(list),
         batting: lines.batting,
         pitching: lines.pitching,
       };

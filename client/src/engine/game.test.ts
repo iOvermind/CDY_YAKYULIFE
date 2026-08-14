@@ -1356,3 +1356,55 @@ describe('跨聯盟轉會', () => {
     expect(playAbroad('ab-replay').flow.log).toEqual(playAbroad('ab-replay').flow.log);
   });
 });
+
+describe('季中交易', () => {
+  /** 找出第一個出現季中交易的生涯。找不到就回傳 null。 */
+  function playToTrade(): Game | null {
+    for (let i = 0; i < 60; i++) {
+      const game = playWell(started({ seed: `trade-${i}` }));
+      const seasons = game.summary?.seasons ?? [];
+      const years = new Map<number, number>();
+      for (const r of seasons) years.set(r.year, (years.get(r.year) ?? 0) + 1);
+      if ([...years.values()].some((n) => n > 1)) return game;
+    }
+    return null;
+  }
+
+  it('被交易的年份記成兩段，兩段在同一個層級、不同球隊', () => {
+    const game = playToTrade();
+    expect(game).not.toBeNull();
+    const seasons = game?.summary?.seasons ?? [];
+    for (const year of new Set(seasons.map((r) => r.year))) {
+      const list = seasons.filter((r) => r.year === year);
+      if (list.length === 1) continue;
+      expect(list).toHaveLength(2);
+      expect(list[0]?.level).toBe(list[1]?.level);
+      expect(list[0]?.team).not.toBe(list[1]?.team);
+    }
+  });
+
+  it('兩段相加等於生涯累計——切分不能讓數據憑空增減', () => {
+    const game = playToTrade();
+    const seasons = game?.summary?.seasons ?? [];
+    const acc = game?.state?.statsByStage['CPBL'];
+    expect(acc).toBeDefined();
+
+    const cpbl = seasons.filter((r) => r.org === 'CPBL');
+    const hits = cpbl.reduce((n, r) => n + (r.batting?.hits ?? 0), 0);
+    const outs = cpbl.reduce((n, r) => n + (r.pitching?.outs ?? 0), 0);
+    expect(hits).toBe(acc?.batting?.hits ?? 0);
+    expect(outs).toBe(acc?.pitching?.outs ?? 0);
+  });
+
+  it('年資數的是年份不是段數——被交易的那一年是一年', () => {
+    const game = playToTrade();
+    const summary = game?.summary;
+    expect(summary).toBeDefined();
+    for (const league of summary?.leagues ?? []) {
+      const years = new Set(
+        (summary?.seasons ?? []).filter((r) => r.org === league.org && r.top !== null).map((r) => r.year),
+      );
+      expect(league.seasons).toBe(years.size);
+    }
+  });
+});

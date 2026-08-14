@@ -111,6 +111,15 @@ import {
 } from './transfer.ts';
 import { levelOf, playSeason, positionName, type ProPitchingLine } from './season.ts';
 import {
+  isStar,
+  isUntouchable,
+  splitBatting,
+  splitPitching,
+  tradeChance,
+  tradeSplit,
+  tradeTarget,
+} from './trade.ts';
+import {
   advanceLeague,
   championshipOdds,
   initLeague,
@@ -358,6 +367,8 @@ export class Game {
     serviceYears: number;
     /** 是否換過體系。換過的人直接取得 FA 資格。 */
     changedOrg: boolean;
+    /** 這一季季中被交易前的球隊；沒有交易時為 null。逐段紀錄看它。 */
+    tradedFrom: string | null;
     /**
      * 目前登錄的守備位置；尚未登錄時為 null。
      *
@@ -415,6 +426,10 @@ export class Game {
    * 那時再算會用到衰退後的能力，把一個剛打完生涯年的三十歲球員算成下坡。
    */
   #lastD = 0;
+  /** 公開抱怨過幾次。第二次會被貼上「氣氛大師」的標籤。 */
+  #complains = 0;
+  /** 否決交易的餘波還剩幾年。影響下一張合約的係數。 */
+  #tradeRefuseYears = 0;
   /**
    * 生涯累積收入，單位萬元。
    *
@@ -1073,6 +1088,7 @@ export class Game {
       contract: rookieContract(),
       serviceYears: 0,
       changedOrg: false,
+      tradedFrom: null,
     };
     // 聯盟格局在進入職業的那一刻定下來：每隊各抽一個基準勝率當作體質。
     this.#league = initLeague(this.world, levelOf(level).org);
@@ -1103,6 +1119,7 @@ export class Game {
       () => this.#proSpringTraining(),
       () => this.#positionReview(),
       () => this.#drawEventCard(),
+      () => this.#tradeDeadline(),
       () => this.#proSeason(),
       () => this.#proEndYear(),
     );
@@ -1235,16 +1252,24 @@ export class Game {
     const salary = this.#seasonSalary;
     this.#earnings += salary;
 
-    this.#recordSeason(line.batting, line.pitching, def ?? 0);
-    // 上季勝率：三個分段的份額加總。挖角的成績門檻看它。
-    const record = this.#seasons.at(-1);
-    if (record !== undefined) {
-      this.#lastWinPct = winPct(
-        sumShares(record.shares.batting, record.shares.pitching, record.shares.fielding),
-      );
-    }
+    const stints = this.#recordStints(line.batting, line.pitching, def ?? 0);
+    // 上季勝率：這一年所有分段的份額加總。季中轉隊的人不能只算後半段。
+    this.#lastWinPct = winPct(
+      sumShares(
+        ...stints.flatMap((s) => [s.shares.batting, s.shares.pitching, s.shares.fielding]),
+      ),
+    );
 
     const parts: string[] = [];
+    if (pro.tradedFrom !== null && stints.length === 2) {
+      // 兩段各自的出賽量說明了大限落在哪裡。合計在下面照常列出——**逐年表要
+      // 看得到兩段，生涯數字仍然是一個人的**。
+      const games = (s: SeasonRecord): number => s.batting?.games ?? s.pitching?.games ?? 0;
+      parts.push(
+        `<span class="sub">季中轉隊　${esc(stints[0]!.team)} ${games(stints[0]!)} 場` +
+          `　→　${esc(stints[1]!.team)} ${games(stints[1]!)} 場</span>`,
+      );
+    }
     if (line.pitching !== null) {
       const p = line.pitching;
       parts.push(
@@ -1274,7 +1299,187 @@ export class Game {
   }
 
   /**
-   * 把這一季記進生涯紀錄。
+   * 交易大限。
+   *
+   * 在球季打完之前問——**大限就在球季中間**，那正是一年會出現兩段成績的原因。
+   * 只在頂級聯盟發生：二軍的異動不是新聞。
+   *
+   * 三條路徑，差別在球員有多少話語權：毒瘤直接被打包、明星有否決權、其他人
+   * 只有抱怨或沉默。夠強的人才有得選，那個差別本身就是資訊。
+   */
+  #tradeDeadline(): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    pro.tradedFrom = null;
+    if (levelOf(pro.level).top === undefined) return;
+
+    const rng = this.world.stream('career');
+    // 機率一律先抽，與資格無關——否則某年剛好非賣品會讓後面整串判定偏移。
+    const rolled = rng.chance(tradeChance(this.#traits));
+    if (!rolled) return;
+
+    if (isUntouchable(this.#traits)) {
+      this.flow.card(
+        'info',
+        '非賣品',
+        '他隊捧著誘人的包裹來詢價，高層連會議都沒開就回絕了——' +
+          '<b class="hl">「他是這座城市的象徵，非賣品。」</b>',
+      );
+      return;
+    }
+
+    if (this.#traits.has('cancer')) {
+      this.#executeTrade();
+      this.flow.card('bad', '毒瘤交易', '球團受夠了休息室的氣氛，直接把你打包送走。');
+      return;
+    }
+
+    const par = standardOf(this.#standards, pro.level).par;
+    if (isStar(this.rating?.overall ?? 0, par)) {
+      this.#tradeVeto();
+      return;
+    }
+    this.#tradeRumor();
+  }
+
+  /** 明星的否決權。留下來要付代價，但那件球衣他留住了。 */
+  #tradeVeto(): void {
+    const t = seasonCfg.trade.refuse;
+    this.flow.ask(
+      {
+        title: '交易大限：他隊送來報價，球團徵詢你的否決權',
+        options: [
+          { id: 'trade:accept', label: '點頭同意，換個環境', role: 'main' },
+          {
+            id: 'trade:veto',
+            label: '行使否決權，我要留下',
+            note: `未來 ${t.years} 年的下一張合約薪水打折`,
+            role: 'warn',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'trade:accept') {
+          this.#executeTrade();
+          this.flow.card('info', '轉隊', '你打包行李，前往新的城市。');
+          return;
+        }
+        this.#tradeRefuseYears = t.years;
+        this.flow.card(
+          'info',
+          '否決交易',
+          '你按下否決鍵。忠誠是一種選擇——球團的重建計畫被你打亂了，' +
+            '下張合約也會付出一點代價，但這件球衣，你留下來了。',
+        );
+      },
+    );
+  }
+
+  /** 非明星的交易傳言。抱怨或沉默，兩者的差別只在機率。 */
+  #tradeRumor(): void {
+    const r = seasonCfg.trade.rumor;
+    this.flow.ask(
+      {
+        title: '交易傳言：媒體報導你可能被交易',
+        options: [
+          {
+            id: 'trade:complain',
+            label: '公開抱怨表達不滿',
+            note: '增加本次被交易的可能性',
+            role: 'warn',
+          },
+          { id: 'trade:silent', label: '保持沉默，專心打球', note: '交易機率不變', role: 'main' },
+        ],
+      },
+      (choice) => {
+        const complained = choice === 'trade:complain';
+        if (complained) {
+          this.#complains++;
+          if (this.#complains >= r.ambience.complains) {
+            this.#unlockTrait(
+              r.ambience.trait,
+              '氣氛大師',
+              '你又一次對媒體大吐苦水。球團高層看在眼裡——這種選手，留著也是不定時炸彈。' +
+                '<b class="dn">往後被交易的機率永久提高</b>。',
+              'bad',
+            );
+          }
+        }
+
+        const chance = complained ? r.complain_chance : r.silence_chance;
+        if (!this.world.stream('career').chance(chance)) {
+          this.flow.card(
+            'info',
+            complained ? '雷聲大雨點小' : '留了下來',
+            complained
+              ? '抱怨歸抱怨，這次交易最後沒有成局。你還在原隊，但氣氛有點僵。'
+              : '傳言就是傳言。這個球季，你還是穿著同一件球衣。',
+          );
+          return;
+        }
+        this.#executeTrade();
+        this.flow.card(
+          complained ? 'bad' : 'info',
+          complained ? '弄假成真' : '交易成局',
+          complained
+            ? '你的抱怨上了頭條，球團順勢把你送走。新東家，好好打吧。'
+            : '儘管你不動聲色，球團還是完成了這筆交易。',
+        );
+      },
+    );
+  }
+
+  /**
+   * 成交。
+   *
+   * 同體系內換隊，因此**該重置的只有球隊層級的東西**——年資、合約、守位登錄
+   * 都跟著球員走，那正是季中交易與跨體系轉會的差別。
+   */
+  #executeTrade(): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    const team = tradeTarget(this.world, levelOf(pro.level).org, pro.team);
+    if (team === null) return;
+    pro.tradedFrom = pro.team;
+    pro.team = team;
+  }
+
+  /**
+   * 把這一季記進生涯紀錄，季中轉隊的年份記成兩段。
+   *
+   * 兩段各自帶著**自己那支球隊的戰績**去切兩本帳——那正是逐段紀錄存在的理由：
+   * 前半季在墊底球隊、後半季在冠軍隊，那是兩件不同的事。
+   *
+   * 切分用相減而不是各自四捨五入，因此兩段相加精確等於全季，生涯累積與逐年表
+   * 不會對不起來。
+   */
+  #recordStints(
+    batting: BattingLine | null,
+    pitching: ProPitchingLine | null,
+    defense: number,
+  ): readonly SeasonRecord[] {
+    const pro = this.#pro;
+    if (pro === null) return [];
+
+    const from = pro.tradedFrom;
+    if (from === null) {
+      this.#recordSeason(batting, pitching, defense, pro.team);
+      const one = this.#seasons.at(-1);
+      return one === undefined ? [] : [one];
+    }
+
+    const ratio = tradeSplit(this.world);
+    const bat = batting === null ? null : splitBatting(batting, ratio);
+    const pit = pitching === null ? null : splitPitching(pitching, ratio);
+    const d1 = Math.round(defense * ratio);
+
+    this.#recordSeason(bat?.[0] ?? null, pit?.[0] ?? null, d1, from);
+    this.#recordSeason(bat?.[1] ?? null, pit?.[1] ?? null, defense - d1, pro.team);
+    return this.#seasons.slice(-2);
+  }
+
+  /**
+   * 把一段記進生涯紀錄。
    *
    * **份額與 k 在當下就算好存進去**，不留到結算時回算：那些值取決於當年的聯盟
    * 水準，而聯盟水準逐年浮動，事後回算會把整段生涯都套上引退那年的數字。
@@ -1283,6 +1488,7 @@ export class Game {
     batting: BattingLine | null,
     pitching: ProPitchingLine | null,
     defense: number,
+    team: string,
   ): void {
     const pro = this.#pro;
     if (pro === null) return;
@@ -1291,7 +1497,7 @@ export class Game {
     const baseline = proBaseline(pro.level);
     // 球隊戰績決定兩本帳怎麼切——0 勝的球隊沒有勝利份額可分。二軍沒有聯盟
     // 戰力表，那裡的球隊勝率視為未知，不做調整。
-    const teamWinRate = this.#league?.get(pro.team)?.winRate ?? null;
+    const teamWinRate = this.#league?.get(team)?.winRate ?? null;
 
     // 守備的份額：沒登錄守位（二軍、投手、指定打擊）就沒有守備責任。
     let fielding: Shares = { win: 0, loss: 0 };
@@ -1321,7 +1527,7 @@ export class Game {
       org: info.org,
       level: pro.level,
       levelName: info.name,
-      team: pro.team,
+      team,
       position: pro.position,
       batting,
       pitching,
@@ -1420,6 +1626,8 @@ export class Game {
     this.#age++;
     this.#year++;
     pro.year++;
+    // 否決交易的餘波會過去。球團記得那件事，但不是記一輩子。
+    if (this.#tradeRefuseYears > 0) this.#tradeRefuseYears--;
 
     // 聯盟水準推進一年。人才有興衰，同一個聯盟在不同年代不是同一個聯盟。
     if (this.#standards !== null) {
@@ -1754,6 +1962,7 @@ export class Game {
       age: this.#age,
       side,
       traits: this.#traits,
+      tradeRefused: this.#tradeRefuseYears > 0,
     });
 
     const base = salaryFor(pro.level, this.#lastD);
@@ -2449,10 +2658,10 @@ export class Game {
   }
 
   /** 取得一個特性並跳卡。已經有了就不重複。 */
-  #unlockTrait(id: string, name: string, text: string): void {
+  #unlockTrait(id: string, name: string, text: string, tone: 'gold' | 'bad' = 'gold'): void {
     if (this.#traits.has(id)) return;
     this.#traits.add(id);
-    this.flow.card('gold', `隱藏特性：${name}`, text);
+    this.flow.card(tone, `隱藏特性：${name}`, text);
   }
 
   /**

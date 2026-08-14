@@ -454,6 +454,47 @@
       "delta": 1
     }
   },
+  "trade": {
+    "_note": "季中交易。交易大限落在球季中段，因此**一年可以有兩段成績**——它是逐段紀錄的唯一使用者。只在頂級聯盟發生：二軍的異動不是新聞。",
+    "_star_note": "明星有否決權，一般球員只有抱怨或沉默。那個差別本身就是資訊——夠強的人才有得選。",
+    "chance": {
+      "_note": "被交易的基礎機率，以及兩個特性的加成。更衣室毒瘤不必問，球團直接打包。",
+      "base": 15,
+      "trait_bonus": {
+        "cancer": 25,
+        "ambience": 20
+      }
+    },
+    "star_margin": {
+      "_note": "明星的定義：綜合能力高過當年聯盟平均這麼多。用當年的 par，不是基準值。",
+      "value": 4
+    },
+    "untouchable_traits": {
+      "_note": "一人一城。神主牌與球隊代名詞是城市的象徵，球團連會議都不開。",
+      "value": ["franchise", "mrteam"]
+    },
+    "rumor": {
+      "_note": "非明星的交易傳言。抱怨會提高成局機率，沉默則維持原本的水位。",
+      "complain_chance": 60,
+      "silence_chance": 35,
+      "ambience": {
+        "_note": "抱怨到第幾次會被貼上「氣氛大師」的標籤。球團看在眼裡。",
+        "complains": 2,
+        "trait": "ambience"
+      }
+    },
+    "refuse": {
+      "_note": "否決交易的代價：接下來幾年的奪冠機率打折，下一張合約的係數也打折（見 multiplier.trade_refuse_penalty）。忠誠是一種選擇，而選擇有成本。",
+      "_pending_note": "職業聯盟的奪冠判定尚未實作，championship_factor 目前無處可接；合約那一半已經生效。",
+      "years": 2,
+      "championship_factor": 0.75
+    },
+    "split": {
+      "_note": "交易大限在球季的哪個位置。舊隊的出賽比例落在這個區間——大限前後的差距不會太懸殊。",
+      "min": 0.35,
+      "max": 0.65
+    }
+  },
   "contract": {
     "_note": "合約。這裡只有談判層——年限、長短約取捨、掌控期、續約權。金額在 leagues.json 的 salary。",
     "_source": "抽取自 index_legacy.html 的 faYears / termParams / termChoice / faFlow。",
@@ -527,7 +568,6 @@
       },
       "trade_refuse_penalty": {
         "_note": "否決過交易的人，下一張合約的係數打折。球團記住了那件事。",
-        "_pending_note": "季中交易尚未實作，目前恆不觸發。",
         "value": 0.85
       },
       "trait_modifiers": {

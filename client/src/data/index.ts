@@ -804,6 +804,22 @@ export interface SeasonData {
       readonly team_coupling: number;
     };
   };
+  /** 季中交易。逐段成績紀錄的唯一使用者。 */
+  readonly trade: {
+    readonly chance: {
+      readonly base: number;
+      readonly trait_bonus: Readonly<Record<string, number>>;
+    };
+    readonly star_margin: { readonly value: number };
+    readonly untouchable_traits: { readonly value: readonly string[] };
+    readonly rumor: {
+      readonly complain_chance: number;
+      readonly silence_chance: number;
+      readonly ambience: { readonly complains: number; readonly trait: string };
+    };
+    readonly refuse: { readonly years: number; readonly championship_factor: number };
+    readonly split: Range;
+  };
   /** 合約的談判層。金額在 leagues.json 的 salary。 */
   readonly contract: {
     readonly years: {
