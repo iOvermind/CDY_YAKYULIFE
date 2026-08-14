@@ -409,10 +409,25 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
    */
   const ignoreScroll = useRef(false);
 
+  /**
+   * 開一個「接下來的捲動事件都不算數」的窗口，到下一幀為止。
+   *
+   * **必須是窗口，不能是用完就清的一次性旗標。** 版面一縮，瀏覽器會先把
+   * scrollTop 夾回合法範圍（第一個事件），我們接著又指定新的 scrollTop
+   * （第二個事件）——一次性旗標只擋得住第一個，第二個就被當成「玩家自己往上
+   * 捲了」，貼底旗標於是被關掉。這就是「有時候」不捲的那個有時候。
+   */
+  const muteScroll = () => {
+    ignoreScroll.current = true;
+    requestAnimationFrame(() => {
+      ignoreScroll.current = false;
+    });
+  };
+
   const pin = () => {
     const el = ref.current;
     if (el === null || !stuckToBottom.current) return;
-    ignoreScroll.current = true;
+    muteScroll();
     el.scrollTop = el.scrollHeight - el.clientHeight;
   };
 
@@ -423,12 +438,8 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
     const inner = innerRef.current;
     if (el === null || inner === null) return;
     const observer = new ResizeObserver(() => {
-      // 尺寸變動當下送出的捲動事件不算數，等這一輪畫面更新完再恢復。
-      ignoreScroll.current = true;
+      muteScroll();
       pin();
-      requestAnimationFrame(() => {
-        ignoreScroll.current = false;
-      });
     });
     observer.observe(el);
     observer.observe(inner);
@@ -440,10 +451,8 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
       id="panel-log"
       ref={ref}
       onScroll={(e) => {
-        if (ignoreScroll.current) {
-          ignoreScroll.current = false;
-          return;
-        }
+        // 窗口內一律不理，也不清掉窗口——一次尺寸變動可能連送好幾個事件。
+        if (ignoreScroll.current) return;
         const el = e.currentTarget;
         stuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
