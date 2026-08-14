@@ -22,7 +22,7 @@
 
 import { describe, it } from 'vitest';
 import { hallOfFame, positions } from '../src/data/index.ts';
-import { summarizeCareer, type CareerSummary } from '../src/engine/career.ts';
+import { applyTierFloors, summarizeCareer, type CareerSummary } from '../src/engine/career.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import { responsibilityOf } from '../src/engine/metrics.ts';
 
@@ -101,6 +101,35 @@ function pct(part: number, whole: number): string {
   return whole === 0 ? '—' : `${((part / whole) * 100).toFixed(1)}%`;
 }
 
+/**
+ * 算出能真正produce目標分佈的門檻。
+ *
+ * 純分位數不夠用：保底規則會把拿過獎的人從下面推上來，因此實際落在某一帶的
+ * 人永遠比分位數多。作法是把「已經被保底送進這一帶或更高」的人先挑掉，剩下
+ * 的人才用分數排序去填滿剩餘的名額。
+ */
+function suggestThresholds(results: readonly CareerResult[]): readonly number[] {
+  // 累進目標：名人堂 2%、含明星 10%、含每日 35%、含替補 75%
+  const cumulative = [0.02, 0.1, 0.35, 0.75];
+  const total = results.length;
+
+  return cumulative.map((target, tier) => {
+    const floorOf = (r: CareerResult) =>
+      applyTierFloors(Number.MAX_SAFE_INTEGER, new Set(r.awardCodes));
+
+    // 被保底送進這一帶（或更高）的人，不管門檻訂多少都會在這裡。
+    const free = results.filter((r) => floorOf(r) <= tier).length;
+    const slots = Math.round(target * total) - free;
+    if (slots <= 0) return Number.NaN;
+
+    const rest = results
+      .filter((r) => floorOf(r) > tier)
+      .map((r) => r.summary.leagues[0]?.score ?? 0)
+      .sort((a, b) => b - a);
+    return Math.round(rest[Math.min(rest.length - 1, slots - 1)] ?? 0);
+  });
+}
+
 /** 產出校準報表。 */
 function report(results: readonly CareerResult[], policy: PolicyName, runs: number): void {
   const withPro = results.filter((r) => r.reachedTop);
@@ -127,10 +156,13 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
     );
   });
 
-  console.log('\n── 建議門檻（把 2／8／25／40 的累進分位數當門檻）');
-  const suggested = [0.98, 0.9, 0.65, 0.25].map((p) => Math.round(quantile(scores, p)));
-  console.log(`  ${suggested.join(' / ')}`);
-  console.log(`  現行 ${hallOfFame.tier_thresholds.values.join(' / ')}`);
+  console.log('\n── 建議門檻');
+  const naive = [0.98, 0.9, 0.65, 0.25].map((p) => Math.round(quantile(scores, p)));
+  console.log(`  純分位數     ${naive.join(' / ')}`);
+  console.log(`  考慮保底後   ${suggestThresholds(withPro).join(' / ')}`);
+  console.log(`  現行         ${hallOfFame.tier_thresholds.values.join(' / ')}`);
+  console.log('  ※ 純分位數會系統性偏低——保底規則把人從下面推上來，因此實際落在該帶的');
+  console.log('     人永遠比分位數多。要用的是「考慮保底後」那一組。');
   console.log(
     `  評價分分位　p10 ${quantile(scores, 0.1).toFixed(0)}` +
       `　p50 ${quantile(scores, 0.5).toFixed(0)}` +
