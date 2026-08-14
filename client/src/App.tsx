@@ -564,7 +564,7 @@ function StatsPanel({
       )}
 
       {summary !== null && <CareerTable summary={summary} />}
-      <AwardList awards={state.awards} showYears={summary !== null} />
+      <AwardList awards={state.awards} showYears={summary !== null} summary={summary} />
       <TraitList traits={state.traits} />
     </div>
   );
@@ -585,11 +585,21 @@ function StatsPanel({
 function AwardList({
   awards,
   showYears,
+  summary,
 }: {
   awards: readonly AwardRecord[];
   showYears: boolean;
+  summary: CareerSummary | null;
 }) {
-  if (awards.length === 0) return null;
+  // 里程碑與獎項是同一類東西：這個人做到過什麼。但它們只在結算時算得出來。
+  const milestones =
+    summary === null
+      ? []
+      : [
+          ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName}${m}`)),
+          ...summary.careerMilestones,
+        ];
+  if (awards.length === 0 && milestones.length === 0) return null;
 
   const tally = new Map<string, { label: string; years: number[] }>();
   for (const a of awards) {
@@ -613,6 +623,12 @@ function AwardList({
               : a.years.length > 1
                 ? ` ×${a.years.length}`
                 : ''}
+          </span>
+        ))}
+        {/* 里程碑用不同的底色區隔：它是累積出來的，不是誰投票給你的。 */}
+        {milestones.map((m) => (
+          <span className="tag milestone" key={m} style={{ marginRight: 4 }}>
+            {m}
           </span>
         ))}
       </p>
@@ -726,6 +742,60 @@ interface TotalRow {
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
   readonly defenseRuns: number;
+  readonly base: Baseline;
+}
+
+/** 生涯年表的一列。養成期與職業共用同一個形狀，年表才接得起來。 */
+interface CareerRow {
+  readonly key: string;
+  readonly year: number;
+  readonly age: number;
+  /** 球隊或學校。 */
+  readonly team: string;
+  /** 層級或學制的補充說明；頂級聯盟不必寫。 */
+  readonly note: string | null;
+  readonly position: string | null;
+  readonly batting: BattingLine | null;
+  readonly pitching: PitchingLine | null;
+  readonly defenseRuns: number;
+  readonly base: Baseline;
+}
+
+/**
+ * 成績表的資料列。
+ *
+ * 欄位定義直接沿用 `BATTING_COLUMNS` / `PITCHING_COLUMNS`——**同一份成績在
+ * 年表與「最近一季」必須長得一樣**。各寫一份遲早會分岔，玩家會以為那是兩種
+ * 不同的東西。
+ */
+function StatCells<T>({
+  columns,
+  line,
+  base,
+}: {
+  columns: readonly StatColumn<T>[];
+  line: T;
+  base: Baseline;
+}) {
+  return (
+    <>
+      {columns.map((c) => (
+        <td key={c.key}>{c.value(line, base)}</td>
+      ))}
+    </>
+  );
+}
+
+function StatHeadCells<T>({ columns }: { columns: readonly StatColumn<T>[] }) {
+  return (
+    <>
+      {columns.map((c) => (
+        <th key={c.key} title={c.title}>
+          {c.key}
+        </th>
+      ))}
+    </>
+  );
 }
 
 /**
@@ -748,39 +818,20 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>聯盟</th>
-                <th>季</th>
-                <th>G</th>
-                <th>PA</th>
-                <th>AVG</th>
-                <th>OBP</th>
-                <th>SLG</th>
-                <th>H</th>
-                <th>HR</th>
-                <th>RBI</th>
-                <th>SB</th>
-                <th>DEF</th>
+                <th title="出賽季數">季</th>
+                <StatHeadCells columns={BATTING_COLUMNS} />
+                <th title="守備分">DEF</th>
               </tr>
             </thead>
             <tbody>
-              {batting.map((r) => {
-                const b = r.batting!;
-                return (
-                  <tr key={r.label}>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
-                    <td>{r.seasons}</td>
-                    <td>{b.games}</td>
-                    <td>{b.pa}</td>
-                    <td>{fmtAvg(b.avg)}</td>
-                    <td>{fmtAvg(b.obp)}</td>
-                    <td>{fmtAvg(b.slg)}</td>
-                    <td>{b.hits}</td>
-                    <td>{b.hr}</td>
-                    <td>{b.rbi}</td>
-                    <td>{b.sb}</td>
-                    <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
-                  </tr>
-                );
-              })}
+              {batting.map((r) => (
+                <tr key={r.label}>
+                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
+                  <td>{r.seasons}</td>
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} />
+                  <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -791,39 +842,18 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>聯盟</th>
-                <th>季</th>
-                <th>G</th>
-                <th>GS</th>
-                <th>IP</th>
-                <th>W</th>
-                <th>L</th>
-                <th>SV</th>
-                <th>SO</th>
-                <th>BB</th>
-                <th>ERA</th>
-                <th>WHIP</th>
+                <th title="出賽季數">季</th>
+                <StatHeadCells columns={PITCHING_COLUMNS} />
               </tr>
             </thead>
             <tbody>
-              {pitching.map((r) => {
-                const p = r.pitching!;
-                return (
-                  <tr key={r.label}>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
-                    <td>{r.seasons}</td>
-                    <td>{p.games}</td>
-                    <td>{p.starts}</td>
-                    <td>{fmtInnings(p.outs)}</td>
-                    <td>{p.wins}</td>
-                    <td>{p.losses}</td>
-                    <td>{p.saves}</td>
-                    <td>{p.so}</td>
-                    <td>{p.bb}</td>
-                    <td>{p.era.toFixed(2)}</td>
-                    <td>{whip(p).toFixed(2)}</td>
-                  </tr>
-                );
-              })}
+              {pitching.map((r) => (
+                <tr key={r.label}>
+                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
+                  <td>{r.seasons}</td>
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -835,19 +865,36 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
 /**
  * 生涯年表。
  *
- * 一段效力一列——目前一年就是一段，將來接上季中交易之後同一年會出現兩列，
- * 表格的形狀不必改。投打分兩張表：單位不同，硬湊在同一列會讓兩邊的欄位都
- * 看不懂（見 `hall_of_fame.json` 的 `two_way`）。
+ * **含國中與高中**——養成六年也是這段生涯的一部分。一段效力一列；目前一年
+ * 就是一段，將來接上季中交易之後同一年會出現兩列，表格的形狀不必改。
  *
- * 年表下面接兩張通算表：**各頂級聯盟各一列**，以及**所有一軍加起來的一列**。
- * 前者回答「他在日職打成什麼樣」，後者回答「他這輩子在一軍累積了什麼」。
+ * 投打分兩張表：單位不同，硬湊在同一列會讓兩邊的欄位都看不懂（見
+ * `hall_of_fame.json` 的 `two_way`）。
  */
 function CareerTable({ summary }: { summary: CareerSummary }) {
-  const seasons = summary.seasons;
-  if (seasons.length === 0) return null;
+  const rows = careerRows(summary);
+  if (rows.length === 0) return null;
 
-  const batting = seasons.filter((s) => s.batting !== null);
-  const pitching = seasons.filter((s) => s.pitching !== null);
+  const batting = rows.filter((r) => r.batting !== null);
+  const pitching = rows.filter((r) => r.pitching !== null);
+
+  const headLead = (
+    <>
+      <th title="年度">年</th>
+      <th title="年齡">齡</th>
+      <th style={{ textAlign: 'left' }}>球隊</th>
+    </>
+  );
+  const rowLead = (r: CareerRow) => (
+    <>
+      <td>{r.year}</td>
+      <td>{r.age}</td>
+      <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+        {r.team}
+        {r.note !== null && <span className="sub">・{r.note}</span>}
+      </td>
+    </>
+  );
 
   return (
     <div id="panel-career">
@@ -857,47 +904,21 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
           <table className="fin">
             <thead>
               <tr>
-                <th>年</th>
-                <th>齡</th>
-                <th style={{ textAlign: 'left' }}>球隊</th>
-                <th>守位</th>
-                <th>G</th>
-                <th>PA</th>
-                <th>AVG</th>
-                <th>OBP</th>
-                <th>SLG</th>
-                <th>H</th>
-                <th>HR</th>
-                <th>RBI</th>
-                <th>SB</th>
-                <th>DEF</th>
+                {headLead}
+                <th title="登錄守位">守位</th>
+                <StatHeadCells columns={BATTING_COLUMNS} />
+                <th title="守備分">DEF</th>
               </tr>
             </thead>
             <tbody>
-              {batting.map((s, i) => {
-                const b = s.batting!;
-                return (
-                  <tr key={`${s.year}-${s.level}-${i}`}>
-                    <td>{s.year}</td>
-                    <td>{s.age}</td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      {s.team}
-                      {s.top === null && <span className="sub">・{s.levelName}</span>}
-                    </td>
-                    <td>{s.position === null ? '—' : positionName(s.position)}</td>
-                    <td>{b.games}</td>
-                    <td>{b.pa}</td>
-                    <td>{fmtAvg(b.avg)}</td>
-                    <td>{fmtAvg(b.obp)}</td>
-                    <td>{fmtAvg(b.slg)}</td>
-                    <td>{b.hits}</td>
-                    <td>{b.hr}</td>
-                    <td>{b.rbi}</td>
-                    <td>{b.sb}</td>
-                    <td>{s.defenseRuns > 0 ? `+${s.defenseRuns}` : s.defenseRuns}</td>
-                  </tr>
-                );
-              })}
+              {batting.map((r) => (
+                <tr key={r.key}>
+                  {rowLead(r)}
+                  <td>{r.position === null ? '—' : positionName(r.position)}</td>
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} />
+                  <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -908,45 +929,17 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
           <table className="fin">
             <thead>
               <tr>
-                <th>年</th>
-                <th>齡</th>
-                <th style={{ textAlign: 'left' }}>球隊</th>
-                <th>G</th>
-                <th>GS</th>
-                <th>IP</th>
-                <th>W</th>
-                <th>L</th>
-                <th>SV</th>
-                <th>SO</th>
-                <th>BB</th>
-                <th>ERA</th>
-                <th>WHIP</th>
+                {headLead}
+                <StatHeadCells columns={PITCHING_COLUMNS} />
               </tr>
             </thead>
             <tbody>
-              {pitching.map((s, i) => {
-                const p = s.pitching!;
-                return (
-                  <tr key={`${s.year}-${s.level}-${i}`}>
-                    <td>{s.year}</td>
-                    <td>{s.age}</td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      {s.team}
-                      {s.top === null && <span className="sub">・{s.levelName}</span>}
-                    </td>
-                    <td>{p.games}</td>
-                    <td>{p.starts}</td>
-                    <td>{fmtInnings(p.outs)}</td>
-                    <td>{p.wins}</td>
-                    <td>{p.losses}</td>
-                    <td>{p.saves}</td>
-                    <td>{p.so}</td>
-                    <td>{p.bb}</td>
-                    <td>{p.era.toFixed(2)}</td>
-                    <td>{whip(p).toFixed(2)}</td>
-                  </tr>
-                );
-              })}
+              {pitching.map((r) => (
+                <tr key={r.key}>
+                  {rowLead(r)}
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -960,6 +953,38 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
   );
 }
 
+/** 養成期與職業合成一份年表，依年度排序。 */
+function careerRows(summary: CareerSummary): readonly CareerRow[] {
+  const amateurRows: CareerRow[] = summary.amateurSeasons.map((a, i) => ({
+    key: `am-${a.year}-${i}`,
+    year: a.year,
+    age: a.age,
+    team: a.school,
+    note: a.stageName,
+    position: null,
+    batting: a.batting,
+    pitching: a.pitching,
+    defenseRuns: 0,
+    base: amateurBaseline(),
+  }));
+
+  const proRows: CareerRow[] = summary.seasons.map((s, i) => ({
+    key: `pro-${s.year}-${s.level}-${i}`,
+    year: s.year,
+    age: s.age,
+    team: s.team,
+    // 頂級聯盟不必註明——那是預設。二軍與小聯盟要講清楚。
+    note: s.top === null ? s.levelName : null,
+    position: s.position,
+    batting: s.batting,
+    pitching: s.pitching,
+    defenseRuns: s.defenseRuns,
+    base: proBaseline(s.level),
+  }));
+
+  return [...amateurRows, ...proRows].sort((a, b) => a.year - b.year);
+}
+
 /** 各頂級聯盟各一列。二軍不列——那不是這張表在回答的問題。 */
 function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
   return summary.leagues.map((l) => ({
@@ -968,6 +993,7 @@ function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
     batting: l.batting,
     pitching: l.pitching,
     defenseRuns: l.defenseRuns,
+    base: proBaseline(`${l.org}1`),
   }));
 }
 
@@ -979,6 +1005,7 @@ function topTotalRow(summary: CareerSummary): TotalRow {
     batting: summary.topTotal.batting,
     pitching: summary.topTotal.pitching,
     defenseRuns: summary.leagues.reduce((n, l) => n + l.defenseRuns, 0),
+    base: proBaseline('CPBL1'),
   };
 }
 

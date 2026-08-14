@@ -64,6 +64,26 @@ export interface SeasonRecord {
   readonly top: string | null;
 }
 
+/**
+ * 一年的養成期紀錄。
+ *
+ * 與職業的 `SeasonRecord` 分開，因為兩者能回答的問題不同：養成期沒有聯盟
+ * 水準、沒有份額、沒有守位登錄，硬塞進同一個型別會讓一半的欄位永遠是空的。
+ * 但生涯年表要把它們接在一起顯示——**養成六年也是這段生涯的一部分**。
+ */
+export interface AmateurSeasonRecord {
+  readonly year: number;
+  readonly age: number;
+  /** 階段代碼，例如 JHS。 */
+  readonly stage: string;
+  /** 階段的中文名，例如國中。 */
+  readonly stageName: string;
+  /** 就讀的學校。年表的「球隊」欄顯示它。 */
+  readonly school: string;
+  readonly batting: BattingLine | null;
+  readonly pitching: PitchingLine | null;
+}
+
 /** 某個聯盟的生涯總結。 */
 export interface LeagueCareer {
   readonly org: string;
@@ -117,6 +137,8 @@ export interface CareerSummary {
    * 同一年會出現兩列，年表的形狀不必改。
    */
   readonly seasons: readonly SeasonRecord[];
+  /** 養成期的逐年紀錄。只給年表顯示用——養成成績不進任何評價分。 */
+  readonly amateurSeasons: readonly AmateurSeasonRecord[];
   /** 各頂級聯盟的總結，依評價分由高到低。 */
   readonly leagues: readonly LeagueCareer[];
   /** 非頂級層級的通算，依層級代碼排序。 */
@@ -308,6 +330,7 @@ export function summarizeCareer(
   records: readonly SeasonRecord[],
   awards: readonly AwardRecord[],
   championships = 0,
+  amateurSeasons: readonly AmateurSeasonRecord[] = [],
 ): CareerSummary {
   // ---- 頂級聯盟：各算一份
   const byTop = new Map<string, SeasonRecord[]>();
@@ -408,6 +431,7 @@ export function summarizeCareer(
 
   return {
     seasons: records,
+    amateurSeasons,
     leagues: leagueCareers,
     minors,
     topTotal: allTop,

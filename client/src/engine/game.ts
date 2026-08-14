@@ -58,6 +58,7 @@ import {
   requiredScore,
   DH,
 } from './defense.ts';
+import type { AmateurSeasonRecord } from './career.ts';
 import {
   buyoutCost,
   isFreeAgentEligible,
@@ -376,6 +377,13 @@ export class Game {
    * 必要的。
    */
   #seasons: SeasonRecord[] = [];
+  /**
+   * 養成期的逐年紀錄。
+   *
+   * 與職業的紀錄分開存——養成期沒有聯盟水準、沒有份額、沒有守位登錄。但生涯
+   * 年表要把兩者接在一起，因為養成六年也是這段生涯的一部分。
+   */
+  #amateurSeasons: AmateurSeasonRecord[] = [];
   /** 結算出來的生涯總結。引退之前為 null。 */
   #summary: CareerSummary | null = null;
   /**
@@ -663,6 +671,15 @@ export class Game {
       this.#seasonBatting = addBatting(this.#seasonBatting, line.batting);
       this.#seasonPitching = addPitching(this.#seasonPitching, line.pitching);
       this.#accumulate(line.batting, line.pitching);
+      // 國際賽併進當年那一列，不另立一列——同一年只該有一行。
+      const current = this.#amateurSeasons.at(-1);
+      if (current !== undefined && current.year === this.#year) {
+        this.#amateurSeasons[this.#amateurSeasons.length - 1] = {
+          ...current,
+          batting: addBatting(current.batting, line.batting),
+          pitching: addPitching(current.pitching, line.pitching),
+        };
+      }
     }
   }
 
@@ -816,6 +833,15 @@ export class Game {
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#accumulate(line.batting, line.pitching);
+    this.#amateurSeasons.push({
+      year: this.#year,
+      age: this.#age,
+      stage: this.#stage,
+      stageName: stageOf(this.#stage).name,
+      school: this.#school,
+      batting: line.batting,
+      pitching: line.pitching,
+    });
 
     const statLines: string[] = [];
     if (line.pitching !== null) {
@@ -1702,7 +1728,12 @@ export class Game {
 
   /** 生涯總結：成績、評價、名人堂、特性、看板、第二人生。 */
   #settle(): void {
-    const summary = summarizeCareer(this.#seasons, this.#awards, this.#counts.domesticTitles);
+    const summary = summarizeCareer(
+      this.#seasons,
+      this.#awards,
+      this.#counts.domesticTitles,
+      this.#amateurSeasons,
+    );
     this.#summary = summary;
 
     this.#careerTables(summary);
