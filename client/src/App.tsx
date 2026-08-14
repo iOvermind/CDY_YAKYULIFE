@@ -719,6 +719,7 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'W', title: '勝', value: (p) => p.wins },
   { key: 'L', title: '敗', value: (p) => p.losses },
   { key: 'SV', title: '救援成功', value: (p) => p.saves },
+  { key: 'HLD', title: '中繼成功', value: (p) => p.holds },
   { key: 'IP', title: '投球局數（小數點後是出局數，.1 為一人出局）', value: (p) => fmtInnings(p.outs) },
   { key: 'H', title: '被安打', value: (p) => p.hits },
   { key: 'R', title: '失分', value: (p) => p.runs },

@@ -83,6 +83,17 @@ export interface Range {
   readonly max: number;
 }
 
+/** 一個投手角色的評價權重。 */
+export interface PitcherRoleWeights {
+  readonly velocity_weight: number;
+  readonly control_weight: number;
+  readonly stamina_weight: number;
+  /** 變化球排序後的遞減權重。 */
+  readonly pitch_weights: readonly number[];
+  /** 角色折扣。責任額由角色決定，能力再高也補不回來。 */
+  readonly discount: number;
+}
+
 export interface AbilitiesData {
   readonly scale: {
     readonly min: number;
@@ -168,8 +179,10 @@ export interface AbilitiesData {
   };
   readonly overall: {
     readonly pitcher: {
-      readonly top_weights: readonly number[];
-      readonly stamina_weight: number;
+      /** 四項變化球。排序後遞減加權，沒有「算不算一種球」的離散判定。 */
+      readonly pitches: readonly AbilityKey[];
+      /** 依角色走兩套權重，與野手依守位走不同的守備權重同構。見 ADR 0005。 */
+      readonly roles: Readonly<Record<string, PitcherRoleWeights>>;
     };
     readonly fielder: {
       /** 純打擊的能力清單。二刀流判定看它——「二刀流」指的是投打，不是投守。 */
@@ -721,7 +734,21 @@ export interface SeasonData {
     readonly noise: Range;
   };
   readonly pitching: {
-    readonly role: { readonly starter: { readonly sta_min_d: number; readonly ctl_min_d: number } };
+    readonly role: {
+      readonly starter: {
+        readonly sta_min_d: number;
+        /** 輪值線。掛在球隊戰力上——強隊難擠、弱隊容易占。 */
+        readonly rotation: { readonly base_d: number; readonly per_win_rate: number };
+      };
+      /** 終結者的當年聯盟線。一隊只有一個關門人，稀缺性由這條線表達。 */
+      readonly closer: { readonly line_d: number; readonly band: number };
+    };
+    /** 牛棚分的權重。決定他是關門人還是中繼。 */
+    readonly bullpen: {
+      readonly velocity_weight: number;
+      readonly control_weight: number;
+      readonly pitch_weights: readonly number[];
+    };
     readonly starter: {
       readonly rotation_divisor: { readonly value: number };
       readonly gs_factor: { readonly base: number; readonly per_point: number } & Range;
@@ -740,8 +767,13 @@ export interface SeasonData {
     readonly era: RateSpec;
     readonly decision: {
       readonly starter_decision_rate: number;
+      /** 後援出賽中有勝敗的比例。後援本來就會掃勝也會背敗。 */
+      readonly relief_decision_rate: number;
+      /** 中繼的出賽中有中繼機會的比例。 */
+      readonly hold_chance: number;
       readonly win_rate: { readonly base: number; readonly per_point: number } & Range;
-      readonly closer_save_rate: number;
+      /** 終結者的出賽中有救援機會的比例。 */
+      readonly closer_save_chance: number;
     };
     readonly noise: Range;
   };

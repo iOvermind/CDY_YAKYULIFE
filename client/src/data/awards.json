@@ -22,7 +22,7 @@
     "_line_note": "率型（avg / obp / era）的線是「聯盟平均 + (門檻 − 聯盟平均) × (1 ± band)」——波動加在**超出聯盟平均的幅度**上，不是加在絕對值上。.380 的打擊率 ±12% 會讓線在 .334–.426 之間跳，那太誇張了；加在超出幅度上則是 ±.014，剛好。",
     "_counting_note": "累積型（so / sv / hr / rbi / sb）的線是「門檻 × 場次比例 × (1 ± band)」。這類數據的自然下限就是 0，因此波動直接加在絕對值上。",
     "_band_note": "band 是那條線的年度波動。低於下緣一定拿不到，高於上緣一定拿得到——這就是「鬼神必得」，不必再另設一道門檻。",
-    "_missing_note": "中繼王沒有實作——它需要中繼成功數（HLD）與中繼投手（MR）的定位，兩者都還沒有。見 ROADMAP 的「投手定位細分」。",
+    "_role_note": "救援王限終結者、中繼王限中繼。舊版所有後援投手都拿救援成功，於是牛棚裡人人都是關門人。見 ADR 0005。",
     "list": [
       {
         "code": "batting_king",
@@ -91,8 +91,9 @@
         "kind": "counting",
         "base": 30,
         "band": 0.2,
-        "requires_role": "RP"
-      }
+        "requires_role": "CL"
+      },
+      { "code": "hold_king", "name": "中繼王", "side": "pitcher", "stat": "hld", "kind": "counting", "base": 25, "band": 0.2, "requires_role": "RP" }
     ]
   },
   "mvp": {

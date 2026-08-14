@@ -143,6 +143,7 @@ export function splitPitching(
   const [w1, w2] = cut(line.wins);
   const [l1, l2] = cut(line.losses);
   const [sv1, sv2] = cut(line.saves);
+  const [hd1, hd2] = cut(line.holds);
   const [o1, o2] = cut(line.outs);
   const [h1, h2] = cut(line.hits);
   const [r1, r2] = cut(line.runs);
@@ -156,6 +157,7 @@ export function splitPitching(
     wins: number,
     losses: number,
     saves: number,
+    holds: number,
     outs: number,
     hits: number,
     runs: number,
@@ -169,6 +171,7 @@ export function splitPitching(
     wins,
     losses,
     saves,
+    holds,
     outs,
     hits,
     runs,
@@ -179,7 +182,7 @@ export function splitPitching(
   });
 
   return [
-    build(g1, s1, w1, l1, sv1, o1, h1, r1, er1, bb1, so1),
-    build(g2, s2, w2, l2, sv2, o2, h2, r2, er2, bb2, so2),
+    build(g1, s1, w1, l1, sv1, hd1, o1, h1, r1, er1, bb1, so1),
+    build(g2, s2, w2, l2, sv2, hd2, o2, h2, r2, er2, bb2, so2),
   ];
 }

@@ -27,7 +27,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 });
 
 const pit = (over: Partial<ProPitchingLine> = {}): ProPitchingLine => ({
-  role: 'SP', games: 26, starts: 26, wins: 12, losses: 8, saves: 0, outs: 480, hits: 150,
+  role: 'SP', games: 26, starts: 26, wins: 12, losses: 8, saves: 0, holds: 0, outs: 480, hits: 150,
   runs: 65, er: 60, bb: 40, so: 120, era: 3.38,
   ...over,
 });
@@ -121,12 +121,21 @@ describe('單項王', () => {
     expect(rate({ batting: bat({ avg: monster, pa: 480 }) }, 'batting_king')).toBe(1);
   });
 
-  it('救援王限後援投手', () => {
+  it('救援王限終結者——中繼投手拿的是中繼王', () => {
     const sv = Math.ceil(winningLine(titleOf('save_king'), 'CPBL1', 'CPBL', 1)!) + 5;
     expect(
-      rate({ pitching: pit({ role: 'RP', saves: sv }), role: 'RP' }, 'save_king'),
+      rate({ pitching: pit({ role: 'CL', saves: sv }), role: 'CL' }, 'save_king'),
     ).toBeGreaterThan(0);
+    expect(rate({ pitching: pit({ role: 'RP', saves: sv }), role: 'RP' }, 'save_king')).toBe(0);
     expect(rate({ pitching: pit({ role: 'SP', saves: sv }), role: 'SP' }, 'save_king')).toBe(0);
+  });
+
+  it('中繼王限中繼投手', () => {
+    const hld = Math.ceil(winningLine(titleOf('hold_king'), 'CPBL1', 'CPBL', 1)!) + 5;
+    expect(
+      rate({ pitching: pit({ role: 'RP', holds: hld }), role: 'RP' }, 'hold_king'),
+    ).toBeGreaterThan(0);
+    expect(rate({ pitching: pit({ role: 'CL', holds: hld }), role: 'CL' }, 'hold_king')).toBe(0);
   });
 
   it('投手不會拿到打擊類的單項王', () => {

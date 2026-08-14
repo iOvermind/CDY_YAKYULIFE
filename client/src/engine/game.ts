@@ -109,7 +109,7 @@ import {
   scoutingOffers,
   type TransferOffer,
 } from './transfer.ts';
-import { levelOf, playSeason, positionName, type ProPitchingLine } from './season.ts';
+import { levelOf, playSeason, positionName, ROLE_NAMES, type ProPitchingLine } from './season.ts';
 import {
   isStar,
   isUntouchable,
@@ -1225,6 +1225,8 @@ export class Game {
       better: this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder'),
       twoWay: this.isTwoWay,
       standards: this.#standards,
+      // 輪值線掛在球隊戰力上——在爛隊當先發、去強隊只能進牛棚。
+      teamWinRate: this.#league?.get(pro.team)?.winRate ?? null,
     });
 
     this.#seasonBatting = line.batting;
@@ -1273,9 +1275,10 @@ export class Game {
     if (line.pitching !== null) {
       const p = line.pitching;
       parts.push(
-        `<b>投手</b>（${p.role === 'SP' ? '先發' : '後援'}）｜${p.games} 場` +
+        `<b>投手</b>（${ROLE_NAMES[p.role]}）｜${p.games} 場` +
           `${p.starts > 0 ? `・先發 ${p.starts}` : ''}・${fmtInnings(p.outs)} 局` +
           `・${p.wins} 勝 ${p.losses} 敗${p.saves > 0 ? ` ${p.saves} 救援` : ''}` +
+          `${p.holds > 0 ? ` ${p.holds} 中繼` : ''}` +
           `・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}`,
       );
     }

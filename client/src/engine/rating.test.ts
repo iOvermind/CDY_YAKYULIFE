@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_ABILITIES, positions } from '../data/index.ts';
+import { abilities, ALL_ABILITIES, positions } from '../data/index.ts';
 import {
   defenseScore,
   fieldingPosition,
@@ -46,10 +46,53 @@ describe('pitcherRating', () => {
     expect(pitcherRating(ace)).toBeGreaterThan(pitcherRating(spread));
   });
 
-  it('只取最好的三項——第四顆球再好也不加分', () => {
-    const three = build(30, { vel: 70, ctl: 70, swp: 70 });
-    const four = build(30, { vel: 70, ctl: 70, swp: 70, drp: 70 });
-    expect(pitcherRating(four)).toBe(pitcherRating(three));
+  it('四項變化球全部採計——多練一顆永遠不會白費', () => {
+    const one = build(30, { vel: 70, ctl: 70, swp: 70 });
+    const two = build(30, { vel: 70, ctl: 70, swp: 70, drp: 70 });
+    const four = build(30, { vel: 70, ctl: 70, swp: 70, drp: 70, chg: 70, gim: 70 });
+    expect(pitcherRating(two)).toBeGreaterThan(pitcherRating(one));
+    expect(pitcherRating(four)).toBeGreaterThan(pitcherRating(two));
+  });
+
+  it('但遞減——第四顆球遠不如第一顆值錢', () => {
+    const base = build(30, { vel: 70, ctl: 70 });
+    const first = pitcherRating(build(30, { vel: 70, ctl: 70, swp: 70 })) - pitcherRating(base);
+    const fourth =
+      pitcherRating(build(30, { vel: 70, ctl: 70, swp: 70, drp: 70, chg: 70, gim: 70 })) -
+      pitcherRating(build(30, { vel: 70, ctl: 70, swp: 70, drp: 70, chg: 70 }));
+    expect(fourth).toBeGreaterThan(0);
+    expect(fourth).toBeLessThan(first / 2);
+  });
+
+  it('球速與控球是基本功，不參與排序——零變化球的火球男不再是最優解', () => {
+    const flame = build(20, { vel: 95, ctl: 95, sta: 60 });
+    const rounded = build(55, { sta: 55 });
+    expect(pitcherRating(flame)).toBeLessThan(pitcherRating(rounded));
+  });
+
+  it('依角色走兩套權重：牛棚那套更看球速、更不看體力', () => {
+    const flame = build(30, { vel: 85, ctl: 55, swp: 60, sta: 25 });
+    const horse = build(30, { vel: 55, ctl: 55, swp: 60, sta: 85 });
+    // 先發那套裡耐操的人贏；換成牛棚那套，火球男追上來。
+    const spGap = pitcherRating(horse, 'SP') - pitcherRating(flame, 'SP');
+    const rpGap = pitcherRating(horse, 'RP') - pitcherRating(flame, 'RP');
+    expect(spGap).toBeGreaterThan(rpGap);
+  });
+
+  it('後援吃角色折扣——責任額由角色決定，能力再高也補不回來', () => {
+    const ability = build(50, { sta: 50 });
+    const w = abilities.overall.pitcher.roles;
+    const undiscounted = pitcherRating(ability, 'RP') + (w['RP']?.discount ?? 0);
+    expect(undiscounted).toBeGreaterThan(pitcherRating(ability, 'RP'));
+    expect(w['RP']?.discount ?? 0).toBeGreaterThan(0);
+    expect(w['SP']?.discount ?? 0).toBe(0);
+  });
+
+  it('省略角色時取兩套較高者', () => {
+    const flame = build(30, { vel: 85, ctl: 55, swp: 60, sta: 25 });
+    expect(pitcherRating(flame)).toBe(
+      Math.max(pitcherRating(flame, 'SP'), pitcherRating(flame, 'RP')),
+    );
   });
 
   it('體力有貢獻但權重最低', () => {

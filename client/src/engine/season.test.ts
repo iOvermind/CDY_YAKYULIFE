@@ -11,7 +11,7 @@ import {
   proPitchingLine,
   trustFactor,
 } from './season.ts';
-import type { Abilities } from './rating.ts';
+import { pitcherRating, type Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
 const KEYS = ['sta','vel','ctl','swp','drp','chg','gim','con','pow','spd','eye','rng','fld','arm','cat'];
@@ -201,16 +201,34 @@ describe('proBattingLine', () => {
 });
 
 describe('pitcherRole', () => {
-  it('體力與控球都夠的人排進輪值', () => {
-    expect(pitcherRole(with_(CPBL1.par, { sta: 60, ctl: 60 }), 'CPBL1')).toBe('SP');
+  const role = (ability: Abilities, teamWinRate = 0.5) =>
+    pitcherRole(new World('role'), ability, 'CPBL1', {
+      teamWinRate,
+      starterRating: pitcherRating(ability, 'SP'),
+    });
+
+  it('體力夠、評價擠得進輪值的人先發', () => {
+    expect(role(with_(CPBL1.par, { sta: 60, ctl: 60, vel: 60, swp: 60, drp: 55 }))).toBe('SP');
   });
 
-  it('體力不足的人進牛棚', () => {
-    expect(pitcherRole(with_(CPBL1.par, { sta: 25, ctl: 60 }), 'CPBL1')).toBe('RP');
+  it('體力不足的人進牛棚——體力是絕對的生理條件', () => {
+    expect(role(with_(CPBL1.par, { sta: 25, ctl: 60, vel: 60, swp: 60 }))).not.toBe('SP');
   });
 
-  it('控球太差的人進牛棚', () => {
-    expect(pitcherRole(with_(CPBL1.par, { sta: 60, ctl: 25 }), 'CPBL1')).toBe('RP');
+  it('控球差不再擋先發——那一關已經拿掉，交給保送與防禦率去罰', () => {
+    expect(role(with_(CPBL1.par, { sta: 60, ctl: 25, vel: 70, swp: 65, drp: 60 }))).toBe('SP');
+  });
+
+  it('同一隻手在爛隊當先發，去強隊只能進牛棚', () => {
+    // 評價剛好卡在輪值線附近的人。強弱隊的差別因此看得出來。
+    const ability = with_(CPBL1.par, { sta: 60, vel: 46, ctl: 46, swp: 46 });
+    expect(role(ability, 0.4)).toBe('SP');
+    expect(role(ability, 0.6)).not.toBe('SP');
+  });
+
+  it('牛棚裡球速高的關門、其餘中繼', () => {
+    expect(role(with_(CPBL1.par, { sta: 20, vel: 85, ctl: 70, swp: 70, drp: 60 }))).toBe('CL');
+    expect(role(with_(CPBL1.par, { sta: 20, vel: 35, ctl: 35, swp: 35 }))).toBe('RP');
   });
 });
 

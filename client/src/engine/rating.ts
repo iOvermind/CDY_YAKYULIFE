@@ -10,7 +10,7 @@
  * 本模組是純函式，不抽任何亂數。
  */
 
-import { abilities, positions, type AbilityKey } from '../data/index.ts';
+import { abilities, positions, season, type AbilityKey } from '../data/index.ts';
 
 /** 一組能力值。 */
 export type Abilities = Readonly<Record<AbilityKey, number>>;
@@ -48,18 +48,56 @@ function weightedSum(values: readonly number[], weights: readonly number[]): num
   return sum;
 }
 
+/** 投手的角色。尚未定位時為 null。 */
+export type PitcherRole = 'SP' | 'RP';
+
 /**
- * 投手側評價：投球能力中最好的三項加權，再加上體力。
+ * 投手側評價：**依角色走兩套權重**，與野手依守位走不同的守備權重同構。
+ * 見 ADR 0005。
  *
- * 舊版取球速／控球／變化球三項；球系拆開後改為六項取前三，讓「一顆決勝球
- * 加上基本功」自然勝出，而不必寫死哪三項。
+ * 球速與控球固定採計，不參與排序——那是每個投手都要的基本功，不是可以拿去
+ * 交換的選項。四項變化球排序後遞減加權，**沒有「算不算一種球」的離散判定**，
+ * 與打擊四項同一套辦法。
+ *
+ * 後援還要再減一道角色折扣：責任額由角色決定，能力再高也補不回來。不折扣的話
+ * 低體力的火球男一掉進牛棚綜合能力反而上升。
+ *
+ * `role` 省略時取兩套較高者——與二刀流取投打較高者同一個邏輯，球探本來就是照
+ * 你最適合的角色估價。
  */
-export function pitcherRating(ability: Abilities): number {
+export function pitcherRating(ability: Abilities, role: PitcherRole | null = null): number {
+  if (role === null) {
+    return Math.max(pitcherRating(ability, 'SP'), pitcherRating(ability, 'RP'));
+  }
+
   const cfg = abilities.overall.pitcher;
-  const pitching = abilities.ability_groups.pitcher;
-  const top = topValues(ability, pitching, cfg.top_weights.length);
-  const sta = ability['sta'] ?? 0;
-  return weightedSum(top, cfg.top_weights) + sta * cfg.stamina_weight;
+  const w = cfg.roles[role];
+  if (w === undefined) return 0;
+
+  const pitches = topValues(ability, cfg.pitches, w.pitch_weights.length);
+  return (
+    (ability['vel'] ?? 0) * w.velocity_weight +
+    (ability['ctl'] ?? 0) * w.control_weight +
+    (ability['sta'] ?? 0) * w.stamina_weight +
+    weightedSum(pitches, w.pitch_weights) -
+    w.discount
+  );
+}
+
+/**
+ * 牛棚分：掉進牛棚之後，決定他是關門人還是中繼。
+ *
+ * 以球速為主——**一局的工作，用力塞進去就對了**。與評價分開一條公式，因為問的
+ * 是不同的問題：評價問「他有多好」，牛棚分問「他適不適合關門」。
+ */
+export function bullpenScore(ability: Abilities): number {
+  const cfg = season.pitching.bullpen;
+  const pitches = topValues(ability, abilities.overall.pitcher.pitches, cfg.pitch_weights.length);
+  return (
+    (ability['vel'] ?? 0) * cfg.velocity_weight +
+    (ability['ctl'] ?? 0) * cfg.control_weight +
+    weightedSum(pitches, cfg.pitch_weights)
+  );
 }
 
 /**
@@ -163,10 +201,15 @@ export interface Rating {
  */
 export function rate(
   ability: Abilities,
-  options: { readonly position?: string; readonly traits?: ReadonlySet<string> } = {},
+  options: {
+    readonly position?: string;
+    readonly traits?: ReadonlySet<string>;
+    /** 這一季的投手角色。省略時取兩套權重較高者。 */
+    readonly role?: PitcherRole | null;
+  } = {},
 ): Rating {
   const position = options.position ?? 'SS';
-  const pitcher = pitcherRating(ability);
+  const pitcher = pitcherRating(ability, options.role ?? null);
   const fielder = fielderRating(ability, position);
 
   let overall = Math.max(pitcher, fielder);

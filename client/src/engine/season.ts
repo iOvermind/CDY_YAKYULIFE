@@ -12,7 +12,7 @@
 import { leagues, positions, season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
-import type { Abilities } from './rating.ts';
+import { bullpenScore, pitcherRating, type Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
 /** 一條率的設定：與聯盟 par 同水準時是 base，每高一點加 per_point。 */
@@ -28,9 +28,16 @@ interface RateSpec {
 /** 職業打擊成績。與養成期共用同一組欄位，生涯累計才不會在升上職業時斷掉。 */
 export type ProBattingLine = BattingLine;
 
-/** 職業投球成績。只多一個角色標記——先發與後援的敘述不同。 */
+/** 投手定位的中文名。 */
+export const ROLE_NAMES: Readonly<Record<PitcherRole, string>> = {
+  SP: '先發',
+  RP: '中繼',
+  CL: '終結者',
+};
+
+/** 職業投球成績。只多一個角色標記——三種角色的敘述與獎項都不同。 */
 export interface ProPitchingLine extends PitchingLine {
-  readonly role: 'SP' | 'RP';
+  readonly role: PitcherRole;
 }
 
 export interface SeasonLine {
@@ -49,6 +56,8 @@ export interface SeasonContext {
   readonly twoWay: boolean;
   /** 當年的聯盟水準。null 表示用 leagues.json 的基準值。 */
   readonly standards?: LeagueStandards | null;
+  /** 球隊勝率。輪值線掛在它上面——強隊難擠、弱隊容易占。二軍沒有戰力表，未知時視為 .500。 */
+  readonly teamWinRate?: number | null;
 }
 
 /**
@@ -234,17 +243,51 @@ export function proBattingLine(
   };
 }
 
-/** 投手角色：體力夠且控球好的排進輪值，否則進牛棚。 */
+/** 場上的三種投手角色。中繼與終結者在出賽結構上相同，差別在拿到的是中繼還是救援。 */
+export type PitcherRole = 'SP' | 'RP' | 'CL';
+
+/**
+ * 這一季的投手角色。見 ADR 0005。
+ *
+ * **先發與牛棚的分界是體力**——體力是絕對的生理條件，撐不了一百五十局就是撐
+ * 不了，跟同年度有沒有別人更強無關，因此用固定的 d 值門檻。
+ *
+ * 體力過關之後還要擠得進輪值，而**輪值線掛在球隊戰力上**：強隊難擠、弱隊容易
+ * 占。引擎沒有隊友名單，球隊戰力表就是同隊水準的代理。「在爛隊當先發、去強隊
+ * 只能進牛棚」因此不必另外寫。
+ *
+ * 掉進牛棚之後由牛棚分決定關門還是中繼，用的是**當年的聯盟線**——一隊只有一個
+ * 關門人，稀缺性得有地方表達，與單項王同一套模型。
+ */
 export function pitcherRole(
+  world: World,
   ability: Abilities,
   level: string,
-  standards: LeagueStandards | null = null,
-): 'SP' | 'RP' {
-  const par = standardOf(standards, level).par;
+  options: {
+    readonly standards?: LeagueStandards | null;
+    /** 球隊勝率。二軍沒有戰力表，未知時視為 .500。 */
+    readonly teamWinRate?: number | null;
+    /** 先發評價。輪值線比的是它，不是綜合能力。 */
+    readonly starterRating: number;
+  },
+): PitcherRole {
+  const par = standardOf(options.standards ?? null, level).par;
   const r = cfg.pitching.role.starter;
+  const rng = world.stream('season');
+
+  // 抽取次數必須與資格無關，否則同一個種子會因為某年差一分而讓後面所有判定
+  // 整串偏移。終結者的線每年都要抽，不管他有沒有掉進牛棚。
+  const wobble = 1 + (rng.next() * 2 - 1) * cfg.pitching.role.closer.band;
+
   const sta = (ability['sta'] ?? par) - par;
-  const ctl = (ability['ctl'] ?? par) - par;
-  return sta >= r.sta_min_d && ctl >= r.ctl_min_d ? 'SP' : 'RP';
+  if (sta >= r.sta_min_d) {
+    const winRate = options.teamWinRate ?? 0.5;
+    const line = par + r.rotation.base_d + (winRate - 0.5) * r.rotation.per_win_rate;
+    if (options.starterRating >= line) return 'SP';
+  }
+
+  const closerLine = par + cfg.pitching.role.closer.line_d * wobble;
+  return bullpenScore(ability) >= closerLine ? 'CL' : 'RP';
 }
 
 /** 投出一季職業投球成績。先發與後援的出賽結構完全不同，因此分開算。 */
@@ -254,13 +297,18 @@ export function proPitchingLine(
   level: string,
   overall: number,
   standards: LeagueStandards | null = null,
+  teamWinRate: number | null = null,
 ): ProPitchingLine {
   const rng = world.stream('season');
   const p = cfg.pitching;
   const info = levelOf(level);
   const par = standardOf(standards, level).par;
   const d = overall - par;
-  const role = pitcherRole(ability, level, standards);
+  const role = pitcherRole(world, ability, level, {
+    standards,
+    teamWinRate,
+    starterRating: pitcherRating(ability, 'SP'),
+  });
 
   let games: number;
   let starts: number;
@@ -299,13 +347,18 @@ export function proPitchingLine(
   const bbPerInning = rateOf(p.walk_rate, ability, par) * noise();
   const era = clamp(rateOf(p.era, ability, par) * noise(), p.era.min, p.era.max);
 
-  // 勝敗只給先發，救援成功只給後援——這是角色的直接後果，不另外擲。
+  // 勝敗、救援成功與中繼成功**全部掛在主數據上**——先發乘先發場次，後援乘後援
+  // 出賽數，沒有任何欄位自己擲點數。後援本來就會掃勝也會背敗，舊版讓後援永遠
+  // 0 勝 0 敗是錯的。
   const winRate = clamp(
     p.decision.win_rate.base + d * p.decision.win_rate.per_point,
     p.decision.win_rate.min,
     p.decision.win_rate.max,
   );
-  const decisions = role === 'SP' ? Math.round(starts * p.decision.starter_decision_rate) : 0;
+  const decisions =
+    role === 'SP'
+      ? Math.round(starts * p.decision.starter_decision_rate)
+      : Math.round(games * p.decision.relief_decision_rate);
   const wins = Math.round(decisions * winRate);
 
   const er = Math.round((ip * era) / 9);
@@ -323,7 +376,10 @@ export function proPitchingLine(
     era,
     wins,
     losses: decisions - wins,
-    saves: role === 'RP' ? Math.round(games * p.decision.closer_save_rate * winRate) : 0,
+    // 救援成功只給關門人，中繼成功只給中繼——舊版是「只要是後援就發救援成功」，
+    // 於是牛棚裡人人都是終結者。
+    saves: role === 'CL' ? Math.round(games * p.decision.closer_save_chance * winRate) : 0,
+    holds: role === 'RP' ? Math.round(games * p.decision.hold_chance * winRate) : 0,
   };
 }
 
@@ -341,7 +397,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
   return {
     level: ctx.level,
     pitching: asPitcher
-      ? proPitchingLine(world, ctx.ability, ctx.level, ctx.overall, standards)
+      ? proPitchingLine(world, ctx.ability, ctx.level, ctx.overall, standards, ctx.teamWinRate ?? null)
       : null,
     batting: asBatter
       ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, ctx.overall, standards)

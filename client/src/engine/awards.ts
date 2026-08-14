@@ -25,6 +25,7 @@ import { awards as cfg, type FieldingAward, type LeaderAward } from '../data/ind
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { proBaseline, proBaselineAt, type Baseline } from './metrics.ts';
 import type { World } from './rng.ts';
+import type { PitcherRole } from './season.ts';
 
 /**
  * 一座獎。
@@ -56,8 +57,8 @@ export interface AwardContext {
   readonly rookie: boolean;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
-  /** 投手定位。沒投球時為 null。 */
-  readonly role: 'SP' | 'RP' | null;
+  /** 投手定位。沒投球時為 null。救援王限終結者、中繼王限中繼。 */
+  readonly role: PitcherRole | null;
   /** 登錄的守備位置；沒登錄或不守備時為 null。 */
   readonly position: string | null;
   /** 守備勝率。沒有守位時為 null。 */
@@ -138,6 +139,8 @@ function statValue(ctx: AwardContext, stat: string): number | null {
       return p?.so ?? null;
     case 'sv':
       return p?.saves ?? null;
+    case 'hld':
+      return p?.holds ?? null;
     case 'era':
       return p?.era ?? null;
     case 'avg':

@@ -62,6 +62,12 @@ export interface PitchingLine {
   readonly losses: number;
   readonly saves: number;
   /**
+   * 中繼成功。中繼投手的主數據，與救援成功並列。
+   *
+   * 養成期一律 0——單淘汰的比賽沒有中繼這個角色。
+   */
+  readonly holds: number;
+  /**
    * 投球出局數。
    *
    * **棒球的原子單位是出局，不是局。** 存成小數會生出 29.5 這種不存在的
@@ -280,6 +286,8 @@ export function pitchingLine(
     wins,
     losses,
     saves,
+    // 養成期沒有中繼這個角色——單淘汰的比賽只有先發與救火。
+    holds: 0,
     hits: Math.round((ip * h9) / 9),
     runs: Math.round(er * cfg.runs_per_earned_run.value),
     er,
@@ -359,6 +367,7 @@ export function addPitching(a: PitchingLine | null, b: PitchingLine | null): Pit
     wins: a.wins + b.wins,
     losses: a.losses + b.losses,
     saves: a.saves + b.saves,
+    holds: a.holds + b.holds,
     hits: a.hits + b.hits,
     runs: a.runs + b.runs,
     er,

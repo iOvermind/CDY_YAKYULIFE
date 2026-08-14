@@ -218,6 +218,8 @@ function statOf(
       return pitching.so;
     case 'saves':
       return pitching.saves;
+    case 'holds':
+      return pitching.holds;
     default:
       return null;
   }
