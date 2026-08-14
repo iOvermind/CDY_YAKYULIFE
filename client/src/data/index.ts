@@ -10,6 +10,7 @@
  * JSON 檔中所有 `_` 開頭的鍵都是給人看的註解，不參與運算，因此不出現在型別裡。
  */
 
+import achievementsJson from './achievements.json';
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
 import awardsJson from './awards.json';
@@ -303,6 +304,52 @@ export interface LoveData {
   readonly names: { readonly school: readonly string[]; readonly pro: readonly string[] };
 }
 
+/** 成就與成就點數（AP）。跨局的 Meta-progression，見 CONTEXT.md。 */
+export interface AchievementsData {
+  readonly categories: {
+    readonly trait: {
+      readonly name: string;
+      readonly default: number;
+      readonly by_tone: Readonly<Record<string, number>>;
+      readonly by_id: Readonly<Record<string, number>>;
+    };
+    readonly amateur_cup: {
+      readonly name: string;
+      readonly default: number;
+      readonly by_rank: Readonly<Record<string, number>>;
+    };
+    readonly international: {
+      readonly name: string;
+      readonly default: number;
+      readonly by_rank: Readonly<Record<string, number>>;
+      readonly mvp: number;
+    };
+    readonly award: {
+      readonly name: string;
+      readonly default: number;
+      readonly by_code: Readonly<Record<string, number>>;
+    };
+    readonly tier: { readonly name: string; readonly by_tier: readonly number[] };
+    readonly hall: { readonly name: string; readonly default: number };
+    readonly cumulative: {
+      readonly name: string;
+      readonly points_per_rung: number;
+      readonly rungs: Readonly<
+        Record<
+          string,
+          {
+            readonly name: string;
+            readonly side: 'batter' | 'pitcher';
+            readonly values: readonly number[];
+            readonly display_divisor?: number;
+          }
+        >
+      >;
+    };
+  };
+  readonly first_career_bonus: { readonly points: number; readonly name: string; readonly desc: string };
+}
+
 export interface FlavorData {
   readonly placeholders: Readonly<Record<string, string>>;
   /** 引退時的鄉民留言，鍵是分級（0 最高）。 */
@@ -433,6 +480,10 @@ export interface AwardsData {
   };
   readonly titles: { readonly list: readonly LeaderAward[] };
   readonly pitcher_of_year: LeaderAward;
+  /** 年度最佳打者。與最佳投手對稱——漢克阿倫獎掛在這裡。 */
+  readonly batter_of_year: LeaderAward;
+  /** 聯盟獨有的獎項名稱。鍵是體系代碼，值是獎項代碼到名稱的對照。 */
+  readonly aliases: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /**
    * 年度 MVP。判定看那一季的勝利份額，不看 d 值——d 值是「他多強」，不是
    * 「他今年打得多好」。因此它與單項王共用同一套「當年門檻線 ± 波動」。
@@ -1114,6 +1165,7 @@ export const flavor = flavorJson as unknown as FlavorData;
 export const hallOfFame = hallOfFameJson as unknown as HallOfFameData;
 export const injury = injuryJson as unknown as InjuryData;
 export const love = loveJson as unknown as LoveData;
+export const achievements = achievementsJson as unknown as AchievementsData;
 export const positions = positionsJson as unknown as PositionsData;
 export const traits = traitsJson as unknown as TraitsData;
 

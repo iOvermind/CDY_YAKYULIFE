@@ -1358,9 +1358,14 @@ describe('跨聯盟轉會', () => {
 });
 
 describe('季中交易', () => {
-  /** 找出第一個出現季中交易的生涯。找不到就回傳 null。 */
+  /**
+   * 找出第一個出現季中交易的生涯。找不到就回傳 null。
+   *
+   * 掃的範圍要寬：任何一個系統新增一次亂數抽取都會讓整條子序列位移，掃太窄的
+   * 話這條測試會在無關的改動下無故失敗。
+   */
   function playToTrade(): Game | null {
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 200; i++) {
       const game = playWell(started({ seed: `trade-${i}` }));
       const seasons = game.summary?.seasons ?? [];
       const years = new Map<number, number>();

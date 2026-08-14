@@ -46,6 +46,7 @@ const ctx = (over: Partial<AwardContext> = {}): AwardContext => ({
   position: 'SS',
   fieldingWinPct: 0.5,
   winShares: 8,
+  battingWinShares: 5,
   ...over,
 });
 

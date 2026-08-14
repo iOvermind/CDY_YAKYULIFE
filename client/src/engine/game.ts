@@ -79,6 +79,11 @@ import {
 } from './career.ts';
 import { runBallots, type BallotResult } from './hall.ts';
 import {
+  evaluateAchievements,
+  type Achievement,
+  type AchievementResult,
+} from './achievements.ts';
+import {
   battingShares,
   fieldingReplacementWinPct,
   fieldingShares,
@@ -436,6 +441,8 @@ export class Game {
   #intlPodiums = 0;
   /** 國際賽累積的總評價分。與生涯里程碑同一個桶。 */
   #intlScore = 0;
+  /** 這一局的成就結算。引退後才有值。 */
+  #achievements: AchievementResult | null = null;
   /** 國際賽的生涯成績。與聯盟成績分開——它不屬於任何聯盟。 */
   #intlBatting: BattingLine | null = null;
   #intlPitching: PitchingLine | null = null;
@@ -575,6 +582,11 @@ export class Game {
    */
   get summary(): CareerSummary | null {
     return this.#summary;
+  }
+
+  /** 這一局的成就結算。引退後才有值。 */
+  get achievements(): AchievementResult | null {
+    return this.#achievements;
   }
 
   /** 目前的球員狀態。流程開始前為 null。 */
@@ -2770,6 +2782,8 @@ export class Game {
         if (last === undefined) return 0;
         return last.shares.batting.win + last.shares.pitching.win + last.shares.fielding.win;
       })(),
+      // 年度最佳打者只看打擊那一段——守備有金手套，投球有最佳投手。
+      battingWinShares: this.#seasons.at(-1)?.shares.batting.win ?? 0,
     });
     if (won.length === 0) return;
 
@@ -3656,6 +3670,7 @@ export class Game {
     this.#retireScene(summary);
     this.#hallOfFame(ballots);
     this.#settlementTraits(summary, ballots);
+    this.#achievementCard(summary, ballots);
     this.#fanBoard(summary);
     this.#secondLife();
   }
@@ -3908,6 +3923,52 @@ export class Game {
     if (this.#traits.has(id)) return;
     this.#traits.add(id);
     this.flow.card(tone, `隱藏特性：${name}`, text);
+  }
+
+  /**
+   * 成就結算。
+   *
+   * **成就是推導出來的**：每一個取得過的特性、每一座獎項、每一次前三名、每一階
+   * 累積都自動成為一項成就，不必另外維護一份清單。
+   *
+   * **同一項成就只給一次 AP**——在中職打滿 500 安兩次不會拿兩次點數。AP 買到的
+   * 天賦是永久啟用的，因此成就是一棵解鎖樹，不是每局重刷的獎金。跨局的已解鎖
+   * 清單要等存檔層做好才接得上，目前一律視為全新。
+   */
+  #achievementCard(summary: CareerSummary, ballots: readonly BallotResult[]): void {
+    const result = evaluateAchievements({
+      summary,
+      awards: this.#awards,
+      traits: this.#traits,
+      honors: this.#honors,
+      halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
+      // 存檔層還沒做，因此每一局都是「第一段人生」、每一項都算新解鎖。
+      firstCareer: true,
+      unlocked: new Set<string>(),
+    });
+    this.#achievements = result;
+    if (result.list.length === 0) return;
+
+    const byCategory = new Map<string, Achievement[]>();
+    for (const a of result.list) {
+      const list = byCategory.get(a.category);
+      if (list === undefined) byCategory.set(a.category, [a]);
+      else list.push(a);
+    }
+
+    const rows = [...byCategory.entries()].map(
+      ([category, items]) =>
+        `<b>${esc(category)}</b>　` +
+        items.map((a) => `${esc(a.name)} <span class="sub">+${a.points}</span>`).join('、'),
+    );
+
+    this.flow.card(
+      'gold',
+      `成就結算 · ${result.points} AP`,
+      `${rows.join('<br>')}` +
+        `<br><span class="sub">成就點數可在下一段生涯開場的天賦商店消耗，買到的天賦永久啟用。` +
+        `同一項成就只給一次點數。</span>`,
+    );
   }
 
   /**

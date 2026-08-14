@@ -70,6 +70,8 @@ export interface AwardContext {
    * 份額會自動把出賽時間、守位價值、投打合計與球隊戰績一起算進去。
    */
   readonly winShares: number;
+  /** 只有打擊那一段的勝利份額。年度最佳打者看它。 */
+  readonly battingWinShares: number;
 }
 
 /** 該體系的球季場次。累積型門檻依它等比放大。 */
@@ -155,6 +157,8 @@ function statValue(ctx: AwardContext, stat: string): number | null {
       return b?.sb ?? null;
     case 'win_shares':
       return ctx.winShares;
+    case 'batting_win_shares':
+      return ctx.battingWinShares;
     default:
       return null;
   }
@@ -231,8 +235,10 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
   const rng = world.stream('career');
   const out: AwardRecord[] = [];
 
+  // 名稱查聯盟的別名表：同一個獎在不同聯盟有不同的名字——澤村賞、崔東源獎、
+  // 賽揚獎講的是同一件事，但那不只是換皮，那是這個獎在那個聯盟的歷史。
   const add = (code: string, name: string, side: AwardRecord['side']) => {
-    out.push({ year: ctx.year, org: ctx.org, level: ctx.level, code, name, side });
+    out.push({ year: ctx.year, org: ctx.org, level: ctx.level, code, name: awardName(ctx.org, code, name), side });
   };
 
   // ---- 明星賽
@@ -270,6 +276,13 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
     if (winsLeaderAward(ctx, a, roll)) add(a.code, a.name, a.side);
   }
 
+  // ---- 年度最佳打者
+  {
+    const a = cfg.batter_of_year;
+    const roll = rng.next();
+    if (winsLeaderAward(ctx, a, roll)) add(a.code, a.name, a.side);
+  }
+
   // ---- 單項王
   for (const title of cfg.titles.list) {
     const roll = rng.next();
@@ -292,6 +305,17 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
   }
 
   return out;
+}
+
+/**
+ * 這個獎在這個聯盟叫什麼。
+ *
+ * **只改顯示名稱，判定與計分完全共用同一套規則。** 查不到就用預設名——新增
+ * 聯盟時不寫別名表也不會壞。
+ */
+export function awardName(org: string, code: string, fallback: string): string {
+  const table = cfg.aliases[org];
+  return table?.[code] ?? fallback;
 }
 
 /**
