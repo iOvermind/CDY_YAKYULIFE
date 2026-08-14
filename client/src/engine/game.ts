@@ -96,7 +96,14 @@ import {
 } from './league.ts';
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
-import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
+import {
+  applyAging,
+  asksRetirement,
+  evaluateMovement,
+  pathOf,
+  proDiceCount,
+  shouldRetire,
+} from './pro.ts';
 import { fmtMoney, postingFee, salaryFor } from './salary.ts';
 import {
   canRequestPosting,
@@ -1744,7 +1751,9 @@ export class Game {
     pro.yearsAtBottom = pathOf(levelOf(pro.level).org)[0] === pro.level ? pro.yearsAtBottom + 1 : 0;
 
     // ---- 引退
-    const retire = shouldRetire(this.world, { age: this.#age, released });
+    // 只剩年齡上限會不由分說地結束生涯。被釋出的人先跑尋路——真的沒有任何
+    // 球隊邀請，才是終點。
+    const retire = shouldRetire({ age: this.#age });
     if (retire.retire) {
       this.#payBuyout('player');
       this.flow.push(() => this.#retire(retire.reason));
@@ -2398,6 +2407,10 @@ export class Game {
     // 被下放的老將可以選擇不接受。年輕人不給這個選項——他們還有再拚一次的
     // 餘地，讓他們在二十出頭就能一鍵結束生涯只會製造後悔。
     const cfg = seasonCfg.retirement;
+    // 抽取一律先做，與年齡和下放與否都無關——否則同一個種子會在生日前後讓
+    // 後面所有判定整串偏移。
+    const bodyAsks = asksRetirement(this.world, this.#age);
+
     // 讀的是**現在**的狀態：中途換了體系的人已經不算被下放。
     const demotedTo = this.#demotedTo;
     if (demotedTo !== null && this.#age >= cfg.refuse_demotion_from_age) {
@@ -2411,11 +2424,18 @@ export class Game {
 
     // 高齡的每季自主引退。這是玩家自己按下的那個鍵——與被系統告知「你老了」
     // 是兩種完全不同的情緒，而引退場景要承接的正是這個差別。
-    if (this.#age >= cfg.voluntary_from_age) {
+    //
+    // 身體發出訊號的那一年換一種問法。**那條機率原本是直接結束生涯**，現在
+    // 只改變語氣：它是一個很重的暗示，但按下去的仍然是玩家。年紀還不到自主
+    // 引退時，也只有身體開口的那一年才會被問。
+    if (bodyAsks || this.#age >= cfg.voluntary_from_age) {
       this.#askRetire(
-        `${this.#age} 歲了。再拚一年，還是在這裡畫下句點？`,
+        bodyAsks
+          ? '身體開始抱怨了。再拚一年，還是在這裡畫下句點？'
+          : `${this.#age} 歲了。再拚一年，還是在這裡畫下句點？`,
         '再拚一年',
-        `功成身退，${this.#year} 年宣布引退`,
+        bodyAsks ? `${this.#year} 年宣布引退` : `功成身退，${this.#year} 年宣布引退`,
+        bodyAsks,
       );
       return;
     }
@@ -2443,12 +2463,15 @@ export class Game {
   }
 
   /** 問玩家要不要就此引退。選擇本身會寫進重播日誌。 */
-  #askRetire(question: string, stay: string, quit: string): void {
+  #askRetire(question: string, stay: string, quit: string, bodyAsks = false): void {
     this.flow.ask(
       {
         title: question,
         options: [
-          { id: 'retire:stay', label: stay, role: 'main' },
+          // 身體開口的那一年給不同的 id。玩家看不出差別，但校準腳本要分得出
+          // 「他自己想退」與「身體叫他退」——舊版那條機率是強制的，基準線的
+          // 代理要能重現同樣的生涯長度。
+          { id: bodyAsks ? 'retire:push' : 'retire:stay', label: stay, role: 'main' },
           { id: 'retire:quit', label: quit, role: 'warn' },
         ],
       },

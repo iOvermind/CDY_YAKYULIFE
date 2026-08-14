@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { abilities, leagues, season as cfg } from '../data/index.ts';
-import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
+import {
+  applyAging,
+  asksRetirement,
+  evaluateMovement,
+  pathOf,
+  proDiceCount,
+  shouldRetire,
+} from './pro.ts';
 import type { Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -173,42 +180,42 @@ describe('applyAging', () => {
 });
 
 describe('shouldRetire', () => {
-  const retire = (seed: string, age: number, released = false) =>
-    shouldRetire(new World(seed), { age, released });
+  it('只剩年齡上限會不由分說地結束生涯', () => {
+    expect(shouldRetire({ age: cfg.retirement.max_age }).retire).toBe(true);
+    expect(shouldRetire({ age: cfg.retirement.max_age - 1 }).retire).toBe(false);
+  });
 
-  it('年輕球員不會引退', () => {
-    for (let i = 0; i < 200; i++) {
-      expect(retire(`s${i}`, cfg.retirement.min_age - 1).retire).toBe(false);
+  // 被釋出不再是死刑。33 歲被日職釋出的人得先跑尋路——墨聯與澳職的存在理由
+  // 正是「當所有頂級聯盟都關門時，還有地方打球」，它們連年齡窗口都沒有。
+  it('被釋出不會直接結束生涯，不管幾歲', () => {
+    for (let age = 20; age < cfg.retirement.max_age; age++) {
+      expect(shouldRetire({ age }).retire).toBe(false);
     }
   });
+});
 
-  it('到了年齡極限一定引退', () => {
-    expect(retire('a', cfg.retirement.max_age).retire).toBe(true);
+describe('asksRetirement', () => {
+  const rate = (age: number) => {
+    let hit = 0;
+    for (let i = 0; i < 400; i++) if (asksRetirement(new World(`s${i}`), age)) hit++;
+    return hit / 400;
+  };
+
+  it('年輕球員不會被問', () => {
+    expect(rate(cfg.retirement.min_age - 1)).toBe(0);
   });
 
-  it('年紀越大越可能引退', () => {
-    const rate = (age: number) => {
-      let hit = 0;
-      for (let i = 0; i < 300; i++) if (retire(`s${i}`, age).retire) hit++;
-      return hit / 300;
-    };
+  it('年紀越大問得越頻繁', () => {
     expect(rate(38)).toBeGreaterThan(rate(31));
   });
 
-  it('年輕的落選者還有機會，不會被迫引退', () => {
-    for (let i = 0; i < 100; i++) {
-      const age = cfg.retirement.released_forces_retirement_age - 5;
-      // 這個年紀低於 min_age，年齡擲骰不會啟動，被釋出也不強制引退
-      expect(retire(`s${i}`, age, true).retire).toBe(false);
-    }
-  });
-
-  it('這個年紀被釋出就是終點', () => {
-    expect(retire('a', cfg.retirement.released_forces_retirement_age, true).retire).toBe(true);
-  });
-
-  it('引退時一定給得出理由', () => {
-    expect(retire('a', cfg.retirement.max_age).reason).not.toBe('');
+  // 抽取次數必須與年齡無關，否則同一個種子會在生日前後讓後面所有判定整串偏移。
+  it('年紀不夠時也照抽', () => {
+    const young = new World('drift');
+    const old = new World('drift');
+    asksRetirement(young, cfg.retirement.min_age - 5);
+    asksRetirement(old, cfg.retirement.min_age + 5);
+    expect(young.stream('career').next()).toBe(old.stream('career').next());
   });
 });
 

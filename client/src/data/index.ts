@@ -809,7 +809,6 @@ export interface SeasonData {
   readonly retirement: {
     readonly min_age: number;
     readonly age_chance: { readonly base: number; readonly per_year: number; readonly max: number };
-    readonly released_forces_retirement_age: number;
     readonly max_age: number;
     /** 幾歲之後每季提供「宣布引退」的選項。 */
     readonly voluntary_from_age: number;

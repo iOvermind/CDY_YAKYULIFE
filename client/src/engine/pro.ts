@@ -184,28 +184,38 @@ export function applyAging(world: World, ability: Abilities, age: number): Aging
 }
 
 /**
- * 是否引退。
+ * 不由分說的引退。**只剩年齡上限一條。**
  *
- * 年齡與能力雙軌：老了會退，被釋出又過了某個年紀也會退——年輕的落選者還有
- * 重新找球隊的餘地，三十幾歲的沒有。
+ * 原本還有兩條：被釋出又過了某個年紀、以及三十歲起的年齡機率。兩條都拿掉了，
+ * 理由是它們**跑在尋路與提問之前**——33 歲被日職釋出的人因此永遠走不到墨聯與
+ * 澳職，而那兩個聯盟的存在理由正是「當所有頂級聯盟都關門時，還有地方打球」，
+ * 連 `age_window` 都刻意為它們留空。回中職的路也走同一條尋路，一併被吃掉。
+ *
+ * 現在被釋出一律先跑尋路：**真的沒有任何球隊邀請，才是生涯的終點**。
  */
-export function shouldRetire(
-  world: World,
-  options: { readonly age: number; readonly released: boolean },
-): { readonly retire: boolean; readonly reason: string } {
+export function shouldRetire(options: {
+  readonly age: number;
+}): { readonly retire: boolean; readonly reason: string } {
   const r = cfg.retirement;
-
   if (options.age >= r.max_age) return { retire: true, reason: '年齡到了極限' };
-  if (options.released && options.age >= r.released_forces_retirement_age) {
-    return { retire: true, reason: '這個年紀被釋出，已經沒有球隊願意給機會' };
-  }
-  if (options.age < r.min_age) return { retire: false, reason: '' };
-
-  const chance = Math.min(r.age_chance.max, r.age_chance.base + (options.age - r.min_age) * r.age_chance.per_year);
-  if (world.stream('career').chance(chance)) {
-    return { retire: true, reason: '身體告訴你，是時候了' };
-  }
   return { retire: false, reason: '' };
+}
+
+/**
+ * 這一季身體有沒有發出訊號。
+ *
+ * 命中時**跳出引退提問**，而不是直接結束生涯——年紀到了是「該考慮了」，不是
+ * 「你被開除了」。機率隨年齡上升，因此問得越來越頻繁。
+ *
+ * 一律先抽，年紀不夠時也抽：抽取次數必須與年齡無關，否則同一個種子會在生日
+ * 前後讓後面所有判定整串偏移。
+ */
+export function asksRetirement(world: World, age: number): boolean {
+  const r = cfg.retirement;
+  const hit = world.stream('career').chance(
+    Math.min(r.age_chance.max, r.age_chance.base + (age - r.min_age) * r.age_chance.per_year),
+  );
+  return age >= r.min_age && hit;
 }
 
 /** 職業階段的季初訓練骰數。比養成期少——球季佔滿了時間。 */

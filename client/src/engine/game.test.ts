@@ -1457,3 +1457,61 @@ describe('下放與換體系', () => {
     expect(sawDemotionPrompt).toBe(true);
   });
 });
+
+describe('戰力外之後的去路', () => {
+  /**
+   * 被釋出的老將要先看到尋路的邀請，不能直接被結束生涯。
+   *
+   * 舊版有一條「33 歲以後被釋出就沒有球隊願意給機會」，而且跑在尋路之前——
+   * 於是墨聯與澳職對高齡旅外失意者等於不存在，回中職的路也走同一條尋路，
+   * 一併被吃掉。
+   */
+  it('高齡被釋出仍會收到新東家的邀請', () => {
+    let veteranReleases = 0;
+    let veteranOffers = 0;
+    for (let i = 0; i < 60; i++) {
+      const game = started({ seed: `release-${i}` });
+      let guard = 0;
+      let cursor = 0;
+      let released = false;
+      let ageAtRelease = 0;
+      let scanned = 0;
+      while (game.flow.prompt !== null && guard++ < 8000) {
+        const log = game.flow.log;
+        for (let k = scanned; k < log.length; k++) {
+          const entry = log[k];
+          if (entry?.kind === 'card' && entry.title === '戰力外') {
+            released = true;
+            ageAtRelease = game.state?.age ?? 0;
+            if (ageAtRelease >= 33) veteranReleases++;
+          }
+        }
+        scanned = log.length;
+
+        const prompt = game.flow.prompt;
+        if (released && prompt.title === '新東家的邀請') {
+          if (ageAtRelease >= 33) veteranOffers++;
+          released = false;
+        }
+
+        const options = prompt.options;
+        const rotated = [...EFFECTIVE.slice(cursor % EFFECTIVE.length), ...EFFECTIVE];
+        const pick =
+          options.find((o) => o.id === 'retire:stay') ??
+          rotated
+            .map((k) => options.find((o) => o.id === `alloc:${k}` && o.disabled !== true))
+            .find((o) => o !== undefined) ??
+          options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+          options[0];
+        if (pick === undefined) break;
+        if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;
+        game.choose(pick.id);
+      }
+    }
+    // 樣本裡真的要出現過高齡戰力外，否則這條測試什麼都沒驗到。
+    expect(veteranReleases).toBeGreaterThan(0);
+    expect(veteranOffers).toBe(veteranReleases);
+  });
+});

@@ -89,7 +89,13 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
       : (options.find((o) => o.id === 'transfer:stay') ??
         options.find((o) => o.id === 'posting:wait'));
     const pick =
-      // 被下放或高齡時一律續戰——「合理但不極致」的玩家不會主動掛靴。
+      // **身體開口的那一年就掛靴。** 那條機率原本是強制引退，代理若一律硬撐，
+      // 每個人都會打到年齡上限，生涯長度與門檻一起漂掉。這一條必須排在下面
+      // 那條「一律續戰」之前。
+      (options.some((o) => o.id === 'retire:push')
+        ? options.find((o) => o.id === 'retire:quit')
+        : undefined) ??
+      // 其餘時候一律續戰——「合理但不極致」的玩家不會主動掛靴。
       options.find((o) => o.id === 'retire:stay') ??
       // 旅外與否是校準的第二個維度。
       //
