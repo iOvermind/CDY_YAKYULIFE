@@ -15,6 +15,7 @@ import {
   flavor,
   hallOfFame,
   leagues,
+  amateur as amateurCfg,
   injury as injuryCfg,
   love as loveCfg,
   season as seasonCfg,
@@ -100,6 +101,21 @@ import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './gene
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
 import {
+  isConscripted,
+  isEligible,
+  isHonorRank,
+  isPodium,
+  lockYearsLeft,
+  playTournament,
+  tournamentGames,
+  tournamentOf,
+  tournamentPar,
+  tournamentScore,
+  unlocksAce,
+  unlocksTaiwan,
+  type Tournament,
+} from './national.ts';
+import {
   afterBreakup,
   cadenceChance,
   canPropose,
@@ -139,7 +155,15 @@ import {
   scoutingOffers,
   type TransferOffer,
 } from './transfer.ts';
-import { levelOf, playSeason, positionName, ROLE_NAMES, type ProPitchingLine } from './season.ts';
+import {
+  levelOf,
+  playSeason,
+  positionName,
+  proBattingLine,
+  proPitchingLine,
+  ROLE_NAMES,
+  type ProPitchingLine,
+} from './season.ts';
 import {
   isStar,
   isUntouchable,
@@ -406,6 +430,15 @@ export class Game {
   #love: LoveState = newLoveState();
   /** 結婚的年份。結算的【人生】區塊要寫它。 */
   #weddingYear: number | null = null;
+  /** 第一次被徵召的年份。列管期從這裡算。 */
+  #intlLockedSince: number | null = null;
+  /** 打進國際賽冠亞軍的次數。國際賽之鬼的解鎖條件看它。 */
+  #intlPodiums = 0;
+  /** 國際賽累積的總評價分。與生涯里程碑同一個桶。 */
+  #intlScore = 0;
+  /** 國際賽的生涯成績。與聯盟成績分開——它不屬於任何聯盟。 */
+  #intlBatting: BattingLine | null = null;
+  #intlPitching: PitchingLine | null = null;
   /** 今年最好的大賽名次。校園告白的成功率看它——打進四強的王牌與坐板凳的人不一樣。 */
   get #bestRankThisYear(): string | null {
     const ranks = this.#lastCupSeason?.honors ?? [];
@@ -1317,7 +1350,7 @@ export class Game {
       () => this.#healthCheck(),
       () => this.#tradeDeadline(),
       () => this.#proSeason(),
-      () => this.#proEndYear(),
+      () => this.#nationalTeam(() => this.#proEndYear()),
     );
   }
 
@@ -2255,6 +2288,178 @@ export class Game {
         next();
       },
     );
+  }
+
+  /**
+   * 職業期的國家隊徵召。排在球季之後——一屆賽會的代價落在**下一季**的受傷風險上。
+   *
+   * **體育署公文**：第一次徵召起列管五年，期間強制、沒有選項。期滿之後「婉拒」
+   * 才變成一個真的選擇，而那時你已經三十幾歲、身上有傷。
+   */
+  #nationalTeam(next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null) {
+      next();
+      return;
+    }
+
+    const tournament = tournamentOf(this.#year, pro.level);
+    const eligible =
+      tournament !== null &&
+      isEligible({
+        overall: this.rating?.overall ?? 0,
+        standards: this.#standards,
+        seasonFactor: this.#seasonFactor,
+      });
+    if (tournament === null || !eligible) {
+      next();
+      return;
+    }
+
+    const forced = isConscripted(this.#intlLockedSince, this.#year);
+    const first = this.#intlLockedSince === null;
+    if (forced) {
+      if (first) this.#intlLockedSince = this.#year;
+      this.flow.card(
+        'info',
+        '體育署公文',
+        first
+          ? '「查 台端符合國家代表隊遴選資格，依規定<b class="hl">強制徵召</b>，並自即日起' +
+            `<b class="hl">列管 ${amateurCfg.international.conscription.lock_years} 年</b>，` +
+            '列管期間各國際賽事皆須配合徵召，不得以任何理由推辭。」' +
+            '<br>——你甚至還沒拆完信封，行李箱已經被球團打包好了。'
+          : `列管期間（剩 ${lockYearsLeft(this.#intlLockedSince, this.#year)} 年），` +
+            '依規定<b class="hl">強制徵召</b>。你沒有選擇。',
+      );
+    }
+
+    const options: Option[] = [
+      {
+        id: 'intl:go',
+        label: forced ? '⋯⋯只能報到（強制徵召）' : '披上國家隊戰袍',
+        note: '依成績獲得能力點｜下季受傷機率上升',
+        role: 'main',
+      },
+    ];
+    if (!forced) {
+      options.push({ id: 'intl:decline', label: '以調整為由婉拒', note: '列管期已過，終於能說不' });
+    }
+
+    this.flow.ask({ title: `中華隊徵召 · ${tournament.name}`, options }, (choice) => {
+      if (choice !== 'intl:go') {
+        this.flow.card('info', '婉拒徵召', '你在記者會上說要調整身體。沒有人多問，但你知道自己在說謊。');
+        next();
+        return;
+      }
+      this.#playNationalTournament(tournament);
+      next();
+    });
+  }
+
+  /** 打一屆國際賽：名次、成績、榮譽、能力點、下季的代價。 */
+  #playNationalTournament(tournament: Tournament): void {
+    const intl = amateurCfg.international;
+    const result = playTournament(this.world, {
+      overall: this.rating?.overall ?? 0,
+      traits: this.#traits,
+    });
+
+    this.#counts.internationalCaps++;
+    if (result.rankIndex === 0) this.#counts.internationalTitles++;
+    if (isHonorRank(result.rank)) this.#counts.internationalPodiums++;
+    if (isPodium(result.rankIndex)) this.#intlPodiums++;
+
+    this.#accumulateNationalStats();
+    this.#pool += result.points;
+    // 一屆賽會打完，下季的受傷風險上升。國家隊不是免費的榮耀。
+    this.#injuryRisk += result.injuryNextSeason;
+    // 奪冠的隔年多擲訓練骰，與養成期的大賽同一套。
+    if (result.rankIndex === 0) this.#lastChampionships.push('PRO');
+
+    const label = `${this.#year} ${tournament.name}${result.rank}`;
+    if (isHonorRank(result.rank)) this.#addHonor(label);
+    let mvpLine = '';
+    if (result.mvp) {
+      this.#addHonor(`${this.#year} ${tournament.name}${intl.mvp.suffix}`);
+      mvpLine = `你被選為<b class="hl">賽會 ${intl.mvp.suffix}</b>！`;
+    }
+    this.#intlScore += tournamentScore(result.rank, result.mvp);
+
+    this.flow.card(
+      result.rankIndex <= 1 ? 'gold' : 'info',
+      tournament.name,
+      `中華隊最終成績：<b class="hl">${esc(result.rank)}</b>。${mvpLine}` +
+        `<br>獲得能力點 <b class="hl">${result.points}</b> 點。` +
+        (result.injuryNextSeason > 0
+          ? '國際賽的高強度消耗，讓下季受傷風險上升。'
+          : '國家英雄不知何謂疲憊。'),
+    );
+
+    if (unlocksAce({ caps: this.#counts.internationalCaps, podiums: this.#intlPodiums, traits: this.#traits })) {
+      this.#unlockTrait(
+        intl.intlace_effect.trait,
+        '國際賽之鬼',
+        '只要穿上那件球衣，你的痛覺就會消失——你是為大場面而生的男人。' +
+          '<b class="hl">國際賽不再增加受傷風險，而且每次徵召的能力點有保底</b>。',
+      );
+    }
+    if (unlocksTaiwan({ caps: this.#counts.internationalCaps, traits: this.#traits })) {
+      this.#unlockTrait(
+        intl.taiwan_trigger.trait,
+        'Team Taiwan',
+        '永遠把國家榮耀放在比職涯更高的位子。台灣球迷心中永遠有一幅畫：你在球場上向全場比劃著胸口，那是你心中最榮耀的地方。',
+      );
+    }
+  }
+
+  /**
+   * 累積國際賽的個人成績。
+   *
+   * **復用球季模型**：把國際賽的 par 與場次直接傳進去，不在 `leagues.json` 建一個
+   * 假層級——那會污染階梯、落地與升降級的邏輯。欄位因此與職業完全一致。
+   */
+  #accumulateNationalStats(): void {
+    const pro = this.#pro;
+    const player = this.#player;
+    const r = this.rating;
+    if (pro === null || player === null || r === null) return;
+
+    const position = pro.position ?? ratingPosition(player.startPosition);
+    // 用一個 par 相當於國際賽水準的層級當尺——場次另外指定，因此層級只借它的
+    // 「一季有幾場」來換算比例。
+    const level = pro.level;
+    const leagueGames = levelOf(level).games;
+    const side = this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder');
+    const par = tournamentPar();
+    const overall = (r.overall ?? 0) - par + standardOf(this.#standards, level).par;
+
+    if (side === 'pitcher' || this.isTwoWay) {
+      const role = (this.#seasonPitching as ProPitchingLine | null)?.role ?? 'SP';
+      const games = tournamentGames(this.world, role === 'SP' ? 'starter' : 'reliever');
+      const line = proPitchingLine(
+        this.world,
+        this.#seasonAbility,
+        level,
+        overall,
+        this.#standards,
+        null,
+        games / leagueGames,
+      );
+      this.#intlPitching = addPitching(this.#intlPitching, line);
+    }
+    if (side === 'fielder' || this.isTwoWay) {
+      const games = tournamentGames(this.world, 'batter');
+      const line = proBattingLine(
+        this.world,
+        this.#seasonAbility,
+        position,
+        level,
+        overall,
+        this.#standards,
+        games / leagueGames,
+      );
+      this.#intlBatting = addBatting(this.#intlBatting, line);
+    }
   }
 
   /**
@@ -3440,6 +3645,7 @@ export class Game {
       this.#awards,
       this.#counts.domesticTitles,
       this.#amateurSeasons,
+      this.#intlScore,
     );
     this.#summary = summary;
 
@@ -3528,6 +3734,21 @@ export class Game {
       );
     });
 
+    // 總評價分要看得到。**生涯里程碑與國際賽都只加在這裡**，不進任何單一
+    // 聯盟的評價分——不顯示的話那兩個系統的貢獻等於憑空消失。
+    const extras: string[] = [];
+    const milestonePoints = summary.totalScore
+      - summary.leagues.reduce((sum, l) => sum + l.sharePoints + l.awardPoints, 0)
+      - summary.internationalScore;
+    if (milestonePoints > 0.05) extras.push(`生涯里程碑 ${milestonePoints.toFixed(1)}`);
+    if (summary.internationalScore > 0) extras.push(`國際賽 ${summary.internationalScore.toFixed(0)}`);
+    rows.push(
+      `<b class="hl">總評價分 ${summary.totalScore.toFixed(1)}</b>` +
+        (extras.length > 0
+          ? `<br><span class="sub">各聯盟合計＋${extras.join('＋')}——這兩項不屬於任何聯盟，只進總分。</span>`
+          : ''),
+    );
+
     this.flow.card('gold', '生涯評價', rows.join('<br><br>'));
 
     this.flow.card(
@@ -3545,6 +3766,42 @@ export class Game {
           `<br><span class="sub">跨聯盟通算的成就，不計入單一聯盟的評價分。</span>`,
       );
     }
+
+    this.#nationalCareerCard(summary);
+  }
+
+  /**
+   * 國際賽的生涯。
+   *
+   * 獨立一張表——**它不屬於任何聯盟**，因此不混進聯盟通算，評價分也只進總分。
+   */
+  #nationalCareerCard(summary: CareerSummary): void {
+    const caps = this.#counts.internationalCaps;
+    if (caps === 0) return;
+
+    const parts: string[] = [];
+    if (this.#intlPitching !== null) {
+      const p = this.#intlPitching;
+      parts.push(
+        `<b>投手</b>｜${p.games} 場・${fmtInnings(p.outs)} 局・${p.wins} 勝 ${p.losses} 敗` +
+          `${p.saves > 0 ? ` ${p.saves} 救援` : ''}・防禦率 <b class="hl">${p.era.toFixed(2)}</b>` +
+          `・奪三振 ${p.so}`,
+      );
+    }
+    if (this.#intlBatting !== null) {
+      const b = this.#intlBatting;
+      parts.push(
+        `<b>打者</b>｜${b.games} 場・${b.pa} 打席・打擊率 <b class="hl">${fmtAvg(b.avg)}</b>` +
+          `・${b.hits} 安 ${b.hr} 轟 ${b.rbi} 打點`,
+      );
+    }
+    parts.push(
+      `<span class="sub">中華隊 ${caps} 屆` +
+        `${this.#counts.internationalTitles > 0 ? `・冠軍 ${this.#counts.internationalTitles} 次` : ''}` +
+        `　·　貢獻總評價分 ${summary.internationalScore.toFixed(0)}（不計入任何單一聯盟）</span>`,
+    );
+
+    this.flow.card('gold', '國際賽生涯', parts.join('<br>'));
   }
 
   /**

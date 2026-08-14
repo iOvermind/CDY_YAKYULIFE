@@ -123,6 +123,9 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
       // 合約到期先與母隊談，不跳市場。
       options.find((o) => o.id === 'fa:stay') ??
       options.find((o) => o.id === 'fa:crawl') ??
+      // 國家隊徵召：一律報到。列管期內本來就沒有選項，期滿之後婉拒是「保養
+      // 身體」的極致玩法，不屬於基準線。
+      options.find((o) => o.id === 'intl:go') ??
       // 感情：一律走「穩定」那條路——告白、公開、求婚、拒絕誘惑、風波吞下去。
       // 基準線是一個認真經營關係的人，不是浪子；外遇與分手的分佈要另外量。
       options.find((o) => o.id === 'love:confess') ??

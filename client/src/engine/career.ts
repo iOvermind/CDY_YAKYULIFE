@@ -162,6 +162,8 @@ export interface CareerSummary {
   readonly totalScore: number;
   /** 生涯里程碑（跨聯盟通算），只進總評價分。 */
   readonly careerMilestones: readonly string[];
+  /** 國際賽貢獻的總評價分。與生涯里程碑同一個桶，不進任何單一聯盟。 */
+  readonly internationalScore: number;
   /** 生涯代表聯盟。沒打過頂級聯盟時為 null。 */
   readonly representative: LeagueCareer | null;
   /** 生涯最佳分級。沒打過頂級聯盟時為最低帶。 */
@@ -355,6 +357,7 @@ export function summarizeCareer(
   awards: readonly AwardRecord[],
   championships = 0,
   amateurSeasons: readonly AmateurSeasonRecord[] = [],
+  internationalScore = 0,
 ): CareerSummary {
   // ---- 頂級聯盟：各算一份
   const byTop = new Map<string, SeasonRecord[]>();
@@ -447,10 +450,15 @@ export function summarizeCareer(
     null,
   );
 
-  // ---- 總評價分：各聯盟的份額與榮譽加總，再加生涯里程碑
+  // ---- 總評價分：各聯盟的份額與榮譽加總，再加生涯里程碑與國際賽
+  //
+  // 國際賽與生涯里程碑同一個桶：**它不屬於任何聯盟**，因此不進任何單一聯盟的
+  // 評價分，只進總分。一個帶中華隊拿下經典賽冠軍的人，歷史地位就是跟沒入選過
+  // 的人不一樣。
   const totalScore =
     leagueCareers.reduce((sum, l) => sum + l.sharePoints + l.awardPoints, 0) +
-    careerMilestones.points;
+    careerMilestones.points +
+    internationalScore;
 
   const representative = pickRepresentative(leagueCareers, records);
 
@@ -463,6 +471,7 @@ export function summarizeCareer(
     minorTotal: totalLines(minorRecords),
     totalScore,
     careerMilestones: careerMilestones.reached,
+    internationalScore,
     representative,
     bestTier: representative?.tier ?? cfg.tier_thresholds.values.length,
   };

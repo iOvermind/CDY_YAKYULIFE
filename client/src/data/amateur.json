@@ -648,43 +648,78 @@
     "honor_prefix": "中華隊"
   },
   "international": {
-    "_note": "職業期的國家隊徵召。名次由整體興衰決定，個人能力只佔一小部分：亂數 = 隨機 0~100 + 能力加成，能力加成 = (綜合能力 − 52) × 0.35，上限 8。",
+    "_note": "職業期的國家隊徵召。名次由整體興衰決定，個人能力只佔一小部分：亂數 = 隨機 0~100 + 能力加成。",
+    "_gate_note": "**門檻以中職為基準，旅外的人也用同一把尺**——國籍不會因為旅外而改變，中華隊的遴選標準不會因為你在日職打球就變嚴。這也順帶解決了「日職 par 高、旅外的人反而選不上」這個荒謬。",
+    "tournaments": {
+      "_note": "賽事的年份週期。經典賽與 12 強錯開兩年，因此每兩年有一次國際賽。",
+      "WBC": { "name": "世界棒球經典賽", "short": "經典賽", "from_year": 2026, "every": 4, "exclude_levels": [] },
+      "P12": {
+        "name": "世界 12 強賽",
+        "short": "12強",
+        "from_year": 2028,
+        "every": 4,
+        "_exclude_note": "大聯盟球員不打 12 強——那個時間點他們在春訓，球團不會放人。",
+        "exclude_levels": ["MLB"]
+      }
+    },
+    "eligibility": {
+      "_note": "徵召資格。門檻相對**中職一軍**當年的 par，不是自己所屬聯盟的 par。",
+      "reference_level": "CPBL1",
+      "min_d": 8,
+      "_season_note": "傷缺大半季的人不會被徵召，復健年更不會——那不是取捨，是他根本上不了場。",
+      "min_season_factor": 0.5
+    },
+    "conscription": {
+      "_note": "**體育署公文。** 第一次徵召起列管，期間強制徵召、沒有選項；期滿之後「婉拒」才變成一個真的選擇——而那時你已經三十幾歲、身上有傷。",
+      "lock_years": 5
+    },
     "power_bonus": {
       "base_overall": 52,
       "factor": 0.35,
       "max": 8
     },
-    "thresholds": [
-      96,
-      88,
-      79,
-      46
-    ],
-    "ranks": [
-      "冠軍",
-      "亞軍",
-      "季軍",
-      "複賽止步",
-      "預賽出局"
-    ],
-    "points": [
-      6,
-      5,
-      4,
-      2,
-      1
-    ],
+    "thresholds": [96, 88, 79, 46],
+    "ranks": ["冠軍", "亞軍", "季軍", "複賽止步", "預賽出局"],
+    "points": [6, 5, 4, 2, 1],
+    "_points_note": "能力點**進蓄力槽**，不是當季暫時能力——集訓與大場面的磨練是真的讓人變強，那是成長性的獎勵，與感情不同類（見 ADR 0006）。",
+    "honor_ranks": {
+      "_note": "進榮譽榜的名次。前三名才記，複賽止步與預賽出局只給點數。",
+      "values": ["冠軍", "亞軍", "季軍"]
+    },
+    "mvp": {
+      "_note": "賽會 MVP。只有打進冠亞軍才有機會，冠軍隊的機率高得多。大心臟加倍——那個特性的效果就是「大場面」。",
+      "by_rank": { "冠軍": 30, "亞軍": 8 },
+      "clutch_multiplier": 2,
+      "clutch_trait": "clutch",
+      "suffix": "MVP"
+    },
+    "stats": {
+      "_note": "個人成績**復用球季模型**：把國際賽的 par 與場次直接傳進去，不在 leagues.json 建假層級。欄位因此與職業完全一致。",
+      "_par_note": "國際賽的水準：一屆賽會的對手是各國的一線球員，因此 par 明顯高於中職一軍。",
+      "par": 52,
+      "batter_games": { "min": 5, "max": 8 },
+      "starter_games": { "min": 1, "max": 2 },
+      "reliever_games": { "min": 3, "max": 6 }
+    },
     "injury_next_season": 10,
     "intlace_effect": {
       "_note": "「國際賽之鬼」的效果：不增加下季受傷機率，且能力點保底。",
       "trait": "intlace",
       "injury_next_season": 0,
-      "min_points": 2
+      "min_points": 2,
+      "_unlock_note": "解鎖條件：徵召滿 min_caps 次，且其中至少 min_podiums 次打進冠亞軍。",
+      "min_caps": 3,
+      "min_podiums": 2
     },
     "taiwan_trigger": {
       "_note": "國際賽出賽超過 5 次解鎖「Team Taiwan」。",
       "min_count": 5,
       "trait": "taiwan"
+    },
+    "score": {
+      "_note": "國際賽的榮譽進**總評價分**，與生涯里程碑同一個桶，不進任何單一聯盟的評價分——理由一樣：它不屬於任何聯盟。",
+      "by_rank": { "冠軍": 12, "亞軍": 6, "季軍": 3 },
+      "mvp": 8
     }
   }
 }

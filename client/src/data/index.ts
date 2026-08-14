@@ -549,6 +549,58 @@ export interface AmateurData {
     };
     readonly honor_prefix: string;
   };
+  /** 職業期的國家隊徵召。門檻以中職為基準——旅外不會改變國籍。 */
+  readonly international: {
+    readonly tournaments: Readonly<
+      Record<
+        string,
+        {
+          readonly name: string;
+          readonly short: string;
+          readonly from_year: number;
+          readonly every: number;
+          readonly exclude_levels: readonly string[];
+        }
+      >
+    >;
+    readonly eligibility: {
+      readonly reference_level: string;
+      readonly min_d: number;
+      readonly min_season_factor: number;
+    };
+    readonly conscription: { readonly lock_years: number };
+    readonly power_bonus: {
+      readonly base_overall: number;
+      readonly factor: number;
+      readonly max: number;
+    };
+    readonly thresholds: readonly number[];
+    readonly ranks: readonly string[];
+    readonly points: readonly number[];
+    readonly honor_ranks: { readonly values: readonly string[] };
+    readonly mvp: {
+      readonly by_rank: Readonly<Record<string, number>>;
+      readonly clutch_multiplier: number;
+      readonly clutch_trait: string;
+      readonly suffix: string;
+    };
+    readonly stats: {
+      readonly par: number;
+      readonly batter_games: Range;
+      readonly starter_games: Range;
+      readonly reliever_games: Range;
+    };
+    readonly injury_next_season: number;
+    readonly intlace_effect: {
+      readonly trait: string;
+      readonly injury_next_season: number;
+      readonly min_points: number;
+      readonly min_caps: number;
+      readonly min_podiums: number;
+    };
+    readonly taiwan_trigger: { readonly min_count: number; readonly trait: string };
+    readonly score: { readonly by_rank: Readonly<Record<string, number>>; readonly mvp: number };
+  };
   /** 高中畢業時的旅外簽約。選秀之外的另一個出口，見 amateur.json。 */
   readonly amateur_overseas: {
     readonly offers: Range;
