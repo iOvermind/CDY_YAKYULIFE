@@ -177,12 +177,8 @@ export interface PositionsData {
     readonly tiers: readonly { readonly max_age: number; readonly adjust: number }[];
     readonly default: number;
   };
-  /** 捕手的獨立基準線——蹲捕的容忍度比其他守位高。 */
-  readonly catcher_bar: {
-    readonly base: Readonly<Record<string, number>>;
-    readonly age_discount: readonly { readonly max_age: number; readonly discount: number }[];
-    readonly default_discount: number;
-  };
+  /** 該守位的平均守備水準：門檻加上 margin。守備分的比較基準。 */
+  readonly defense_average: { readonly margin: number };
   /** 薪資議價力。與守備價值是兩個不同的量——捕手的年薪不是一壘手的八倍。 */
   readonly salary_multiplier: Readonly<Record<string, number>>;
   /**

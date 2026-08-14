@@ -16,7 +16,7 @@
  * 後果，擲骰決定守哪裡會讓玩家練了守備卻看不到效果。
  */
 
-import { positions } from '../data/index.ts';
+import { leagues, positions } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
 import { defenseScore, type Abilities } from './rating.ts';
 
@@ -63,17 +63,41 @@ function youthAdjust(age: number): number {
   return positions.youth_adjust.default;
 }
 
-/** 捕手走自己的一套基準線——蹲捕的容忍度比其他守位高得多。 */
-function catcherBar(level: string, age: number): number | null {
-  const base = positions.catcher_bar.base[level];
+/**
+ * 這個守位在這個層級的**平均**守備水準，也就是守備分的比較基準。
+ *
+ * 定義為「守得住的門檻再加一段」——門檻是守得動的最低標準，實際佔著位置的人
+ * 平均會高過它一些。
+ *
+ * 基準必須是同守位的平均，不能用聯盟的一般 par：守備分是 fld／cat／arm 的
+ * 加權，各守位的量級本來就不同。用聯盟 par 時，勉強守得住游擊的人拿 +6、
+ * 勉強守得住一壘的人拿 −8，但這兩個人本質上是同一件事，都該是 0。
+ *
+ * **不套年齡折扣**：折扣是給資格判定用的，同守位的平均水準不會因為某個球員
+ * 年輕就下降。
+ *
+ * 平均線跟著聯盟一起浮動——聯盟整體變強，該守位的平均守備也會變強。用當年
+ * par 與基準 par 的差額平移，不必為每個守位另外設一組浮動。
+ *
+ * 回傳 null 表示這個層級不設門檻（非頂級聯盟），因此也沒有平均線可比。
+ */
+export function positionAverage(
+  position: string,
+  level: string,
+  standards: LeagueStandards | null = null,
+): number | null {
+  const base = positions.defense_thresholds[position]?.[level];
   if (base === undefined) return null;
-  for (const tier of positions.catcher_bar.age_discount) {
-    if (age <= tier.max_age) return base - tier.discount;
-  }
-  return base - positions.catcher_bar.default_discount;
+  const drift = standardOf(standards, level).par - (leagues.levels[level]?.par ?? 0);
+  return base + positions.defense_average.margin + drift;
 }
 
-/** 守不守得動這個守位。門檻不存在時視為守得動——非頂級聯盟不挑。 */
+/**
+ * 守不守得動這個守位。門檻不存在時視為守得動——非頂級聯盟不挑。
+ *
+ * 捕手沒有另一套基準線。「蹲捕的容忍度高」已經由門檻數字本身表達——捕手的
+ * 門檻低於游擊，那就是容忍度。
+ */
 export function canPlay(
   ability: Abilities,
   position: string,
@@ -81,10 +105,6 @@ export function canPlay(
   age: number,
 ): boolean {
   if (position === DH) return true;
-  if (position === 'C') {
-    const bar = catcherBar(level, age);
-    return bar === null || defenseScore(ability, 'C') >= bar;
-  }
   const required = requiredScore(position, level, age);
   return required === null || defenseScore(ability, position) >= required;
 }
@@ -212,17 +232,19 @@ export function defenseResponsibility(position: string, gamesShare: number): num
 /**
  * 這一季的守備分。
  *
- * `DEF = (守備分 − 當年 par) × 守位責任占比 × scale × 出賽比重`
+ * `DEF = (守備分 − 該守位當年平均) × 守位責任占比 × scale × 出賽比重`
  *
- * 用**當年的 par**：聯盟水準逐年浮動，用基準值會讓弱年的守備分虛胖。
+ * 這是 Bill James 的 Win Shares 守備段：份額先依守位切開（責任占比），品質
+ * 比較則在**守位內部**進行（相對同守位平均）。兩件事分工明確——守位價值由
+ * 份額大小承擔，守得好不好由守位內的比較承擔。
+ *
+ * 因此捕手守備分超出捕手平均 8 分，乘上占比 24；一壘手同樣超出 8 分，只乘 3。
+ * 蹲捕的重量在數據上真的看得出來。
+ *
  * 指定打擊不產生守備分——他不守備。
  *
- * 守位的價值用**責任占比**表達，不另外乘一個品質倍率——兩邊都乘會讓游擊與
- * 捕手的守位優勢被算兩次。因此這個數字與守備側的 `WS − LS` 只差一個常數，
- * 兩者必然一致。
- *
- * 可以是負的：守備分低於聯盟平均就是負貢獻。**逐年的數據該誠實**——一個 −8
- * 的球季就是 −8。
+ * 可以是負的：守得比同守位平均差就是負貢獻。**逐年的數據該誠實**——一個 −8
+ * 的球季就是 −8。結算時換算成勝利份額與敗戰份額，見 ADR 0003。
  */
 export function defenseRuns(options: {
   readonly ability: Abilities;
@@ -236,9 +258,11 @@ export function defenseRuns(options: {
   const responsibility = defenseResponsibility(options.position, options.gamesShare);
   if (responsibility === 0) return 0;
 
-  const par = standardOf(options.standards, options.level).par;
+  const average = positionAverage(options.position, options.level, options.standards);
+  if (average === null) return 0;
+
   const raw =
-    (defenseScore(options.ability, options.position) - par) *
+    (defenseScore(options.ability, options.position) - average) *
     responsibility *
     positions.defense_score_scale.scale;
   return Math.round(raw);

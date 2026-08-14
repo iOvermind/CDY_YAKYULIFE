@@ -56,15 +56,14 @@
     "default": 0
   },
 
-  "catcher_bar": {
-    "_note": "捕手容忍度較高，另走一套基準線（舊版 DP_BAR + dpBar() 的年齡折扣）。爛到底仍會被移去一壘或 DH。",
-    "base": { "CPBL1": 45, "NPB1": 54, "MLB": 60 },
-    "age_discount": [
-      { "max_age": 21, "discount": 7 },
-      { "max_age": 24, "discount": 5 },
-      { "max_age": 26, "discount": 2 }
-    ],
-    "default_discount": 0
+  "_catcher_bar_removed": "舊版的捕手另走一套基準線（DP_BAR + dpBar 的年齡折扣），與 defense_thresholds.C 並存且數值互相矛盾（45 vs 46），而後者從來沒被讀過。捕手的「容忍度高」已經由門檻數字本身表達——捕手的門檻低於游擊，那就是容忍度。同一件事說兩次，兩份數字遲早會對不起來。年齡折扣統一走 youth_adjust。",
+
+  "defense_average": {
+    "_note": "該守位的平均守備水準，也就是守備分的比較基準。定義為「守得住的門檻再加一段」——門檻是守得動的最低標準，實際佔著位置的人平均會高過它一些。門檻已逐層級設定，平均線因此自動有 CPBL／NPB／MLB 三級。",
+    "_why_note": "基準必須是**同守位的平均**，不能用聯盟的一般 par。守備分是 fld／cat／arm 的加權，各守位的量級本來就不同：用聯盟 par 當基準時，勉強守得住游擊的人（門檻 50）拿 +6、勉強守得住一壘的人（門檻 36）拿 −8，但這兩個人本質上是同一件事。Bill James 的 Win Shares 也是這樣做的——守備份額先依守位切開，品質比較在守位內部進行。",
+    "_youth_note": "不套年齡折扣。折扣是給資格判定用的（球團願意為年輕人多等兩年），但同守位的平均水準不會因為某個球員年輕就下降。",
+    "_calibration_note": "margin 為暫定值。正式值由校準腳本決定——跑模擬看實際佔著各守位的球員守備分分布，把平均線設在同一個分位數上。這樣捕手的 cat 難不難練會自動被吸收，不必手動補償門檻。",
+    "margin": 4
   },
 
   "salary_multiplier": {
@@ -90,9 +89,9 @@
   },
 
   "defense_score_scale": {
-    "_note": "守備分最終係數：DEF = (守備分 − 當年 par) × fielding_responsibility × scale × 出賽比重。用當年的 par，不是 leagues.json 的基準值——聯盟水準逐年浮動。",
-    "_calibration_note": "暫定值，讓游擊手的 DEF 量級與改用責任占比之前相當。正式的值由校準腳本連同守備占全體勝利份額的比重（靶 16–17%）一起定，見 ADR 0003。",
-    "scale": 0.04
+    "_note": "守備分最終係數：DEF = (守備分 − 該守位當年平均) × fielding_responsibility × scale × 出賽比重。",
+    "_calibration_note": "暫定值。正式值由校準腳本連同守備占全體勝利份額的比重（靶 16–17%）一起定，見 ADR 0003。",
+    "scale": 0.06
   },
 
   "scan_order": {
