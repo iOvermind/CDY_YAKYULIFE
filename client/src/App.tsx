@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './app.css';
 import {
   abilities,
   amateur,
+  leagues,
   traits as traitsData,
   traitOf,
   START_POSITION_ROWS,
@@ -311,9 +312,8 @@ function GameScreen({
       </div>
 
       <div id="col-right">
-        {state && <StatsPanel state={state} rating={game.rating} />}
+        {state && <StatsPanel state={state} rating={game.rating} summary={game.summary} />}
         <EventLog entries={game.flow.log} />
-        {game.summary !== null && <CareerTable summary={game.summary} />}
         <div id="panel-act">
           {prompt !== null ? (
             <>
@@ -380,15 +380,41 @@ function GameScreen({
  * 只在使用者原本就貼著底部時才自動捲——如果他正往回翻舊紀錄，把畫面拉走是
  * 很煩人的事。門檻抓 40px，容許一點捲動慣性造成的誤差。
  */
+/**
+ * 事件流。新內容出現時自動捲到底，除非玩家自己往上捲去看舊的。
+ *
+ * 三件事必須一起做，少一件就會出現「有時候沒捲到底」：
+ *
+ * 1. **useLayoutEffect 而不是 useEffect**——要在瀏覽器繪製之前捲，否則會先
+ *    閃一下舊位置。
+ * 2. **監看容器與內容的尺寸變化**。這一欄是彈性版面：下方的動作區在選項出現
+ *    或消失時會變高變矮，容器的可視高度跟著變，而那**不會觸發捲動事件**——
+ *    只靠 onScroll 維護「是否貼底」就會漏掉這一種，畫面於是停在半空中。
+ * 3. **捲到 scrollHeight − clientHeight**，不是 scrollHeight。瀏覽器雖然會
+ *    夾住，但明確寫出來才不會在計算貼底距離時差一個 clientHeight。
+ */
 function EventLog({ entries }: { entries: readonly LogEntry[] }) {
   const ref = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const stuckToBottom = useRef(true);
+
+  const pin = () => {
+    const el = ref.current;
+    if (el === null || !stuckToBottom.current) return;
+    el.scrollTop = el.scrollHeight - el.clientHeight;
+  };
+
+  useLayoutEffect(pin, [entries.length]);
 
   useEffect(() => {
     const el = ref.current;
-    if (el === null || !stuckToBottom.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [entries.length]);
+    const inner = innerRef.current;
+    if (el === null || inner === null) return;
+    const observer = new ResizeObserver(pin);
+    observer.observe(el);
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div
@@ -399,7 +425,9 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
         stuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
     >
-      <LogView entries={entries} />
+      <div ref={innerRef}>
+        <LogView entries={entries} />
+      </div>
     </div>
   );
 }
@@ -428,7 +456,15 @@ function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } 
 }
 
 /** 當年數據與生涯數據。 */
-function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | null }) {
+function StatsPanel({
+  state,
+  rating,
+  summary,
+}: {
+  state: PlayerState;
+  rating: Rating | null;
+  summary: CareerSummary | null;
+}) {
   const def = stageOf(state.stage);
   // 進職業之後 stage 仍停在 HS、stageYear 繼續累加，直接沿用會顯示「高中4」。
   // 職業改用體系名加年資，與養成期的「國中1」是同一種寫法。
@@ -515,47 +551,68 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
         )}
       </div>
 
-      {/* 只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡放的還是去年
-          的成績，寫當年是騙人的。生涯累計與榮譽都移到結算時才呈現，右欄留給
-          玩家當下真正在看的東西。 */}
-      <StatLines
-        label="最近一季"
-        batting={state.seasonBatting}
-        pitching={state.seasonPitching}
-        base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
-      />
+      {/* 生涯進行中只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡
+          放的還是去年的成績，寫當年是騙人的。
+          引退之後換成生涯表：都結束了，右欄還停在最後一季沒有意義。 */}
+      {summary === null && (
+        <StatLines
+          label="最近一季"
+          batting={state.seasonBatting}
+          pitching={state.seasonPitching}
+          base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
+        />
+      )}
 
-      <AwardList awards={state.awards} />
+      {summary !== null && <CareerTable summary={summary} />}
+      <AwardList awards={state.awards} showYears={summary !== null} />
       <TraitList traits={state.traits} />
     </div>
   );
 }
 
 /**
- * 生涯獎項櫃。
+ * 成就櫃。
  *
  * 顯示「拿過幾座」而不只是「拿過」——榮譽清單刻意去重，但七座 MVP 與一座
- * MVP 在球員的歷史地位上完全不是同一件事。依座數排序，多的在前。
+ * MVP 在球員的歷史地位上完全不是同一件事。
+ *
+ * **獎項冠上聯盟名**：「中職年度MVP」與「日職年度MVP」是兩件事，拆開才看得
+ * 出一個旅外球員在哪裡拿的獎。
+ *
+ * 年份只在**引退之後**列出。生涯進行中玩家關心的是「我拿過幾座」，那時列一
+ * 串年份只是雜訊；結算時則相反——那串年份就是他的生涯軌跡。
  */
-function AwardList({ awards }: { awards: readonly AwardRecord[] }) {
+function AwardList({
+  awards,
+  showYears,
+}: {
+  awards: readonly AwardRecord[];
+  showYears: boolean;
+}) {
   if (awards.length === 0) return null;
 
-  const tally = new Map<string, { name: string; count: number }>();
+  const tally = new Map<string, { label: string; years: number[] }>();
   for (const a of awards) {
-    const hit = tally.get(a.code);
-    if (hit === undefined) tally.set(a.code, { name: a.name, count: 1 });
-    else hit.count++;
+    const league = leagues.top_league_names[a.org] ?? a.org;
+    const key = `${a.org}:${a.code}`;
+    const hit = tally.get(key);
+    if (hit === undefined) tally.set(key, { label: `${league}${a.name}`, years: [a.year] });
+    else hit.years.push(a.year);
   }
-  const shown = [...tally.values()].sort((a, b) => b.count - a.count);
+  const shown = [...tally.values()].sort((a, b) => b.years.length - a.years.length);
 
   return (
     <>
-      <h4 style={{ marginTop: 12 }}>獎項櫃</h4>
+      <h4 style={{ marginTop: 12 }}>成就櫃</h4>
       <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
         {shown.map((a) => (
-          <span className="tag" key={a.name} style={{ marginRight: 4 }}>
-            {a.name}
-            {a.count > 1 ? ` ×${a.count}` : ''}
+          <span className="tag" key={a.label} style={{ marginRight: 4 }}>
+            {a.label}
+            {showYears
+              ? `（${[...a.years].sort((x, y) => x - y).join('、')}）`
+              : a.years.length > 1
+                ? ` ×${a.years.length}`
+                : ''}
           </span>
         ))}
       </p>
@@ -563,13 +620,6 @@ function AwardList({ awards }: { awards: readonly AwardRecord[] }) {
   );
 }
 
-/**
- * 目前的狀態：已取得的隱藏特性。
- *
- * 正向在前、負向在後，同一組內依 traits.json 的宣告順序——那個順序就是設計
- * 上的重要性排序。名稱要靠生涯內容組出來的特性（如「◯◯先生」）目前無法解析，
- * 直接跳過而不是顯示 id：顯示一個看不懂的英文代號比不顯示更糟。
- */
 function TraitList({ traits: owned }: { traits: ReadonlySet<string> }) {
   const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
   const shown = order
@@ -669,12 +719,128 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base) => fmtAvg(winPct(pitchingShares(p, base))) },
 ];
 
+/** 一列通算成績。第一欄是列名（聯盟或「通算」），其餘欄位與生涯年表一致。 */
+interface TotalRow {
+  readonly label: string;
+  readonly seasons: number;
+  readonly batting: BattingLine | null;
+  readonly pitching: PitchingLine | null;
+  readonly defenseRuns: number;
+}
+
+/**
+ * 通算表。
+ *
+ * 與生涯年表分開是刻意的：年表回答「他哪一年打得怎麼樣」，通算回答「他這輩子
+ * 累積了什麼」。兩者的閱讀方式不同，混在同一張表會兩邊都難讀。
+ */
+function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[] }) {
+  const batting = rows.filter((r) => r.batting !== null);
+  const pitching = rows.filter((r) => r.pitching !== null);
+  if (batting.length === 0 && pitching.length === 0) return null;
+
+  return (
+    <>
+      <h4 style={{ marginTop: 14 }}>{title}</h4>
+      {batting.length > 0 && (
+        <div className="fin-scroll">
+          <table className="fin">
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>聯盟</th>
+                <th>季</th>
+                <th>G</th>
+                <th>PA</th>
+                <th>AVG</th>
+                <th>OBP</th>
+                <th>SLG</th>
+                <th>H</th>
+                <th>HR</th>
+                <th>RBI</th>
+                <th>SB</th>
+                <th>DEF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batting.map((r) => {
+                const b = r.batting!;
+                return (
+                  <tr key={r.label}>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
+                    <td>{r.seasons}</td>
+                    <td>{b.games}</td>
+                    <td>{b.pa}</td>
+                    <td>{fmtAvg(b.avg)}</td>
+                    <td>{fmtAvg(b.obp)}</td>
+                    <td>{fmtAvg(b.slg)}</td>
+                    <td>{b.hits}</td>
+                    <td>{b.hr}</td>
+                    <td>{b.rbi}</td>
+                    <td>{b.sb}</td>
+                    <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {pitching.length > 0 && (
+        <div className="fin-scroll">
+          <table className="fin">
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>聯盟</th>
+                <th>季</th>
+                <th>G</th>
+                <th>GS</th>
+                <th>IP</th>
+                <th>W</th>
+                <th>L</th>
+                <th>SV</th>
+                <th>SO</th>
+                <th>BB</th>
+                <th>ERA</th>
+                <th>WHIP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pitching.map((r) => {
+                const p = r.pitching!;
+                return (
+                  <tr key={r.label}>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
+                    <td>{r.seasons}</td>
+                    <td>{p.games}</td>
+                    <td>{p.starts}</td>
+                    <td>{fmtInnings(p.outs)}</td>
+                    <td>{p.wins}</td>
+                    <td>{p.losses}</td>
+                    <td>{p.saves}</td>
+                    <td>{p.so}</td>
+                    <td>{p.bb}</td>
+                    <td>{p.era.toFixed(2)}</td>
+                    <td>{whip(p).toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 /**
  * 生涯年表。
  *
  * 一段效力一列——目前一年就是一段，將來接上季中交易之後同一年會出現兩列，
  * 表格的形狀不必改。投打分兩張表：單位不同，硬湊在同一列會讓兩邊的欄位都
  * 看不懂（見 `hall_of_fame.json` 的 `two_way`）。
+ *
+ * 年表下面接兩張通算表：**各頂級聯盟各一列**，以及**所有一軍加起來的一列**。
+ * 前者回答「他在日職打成什麼樣」，後者回答「他這輩子在一軍累積了什麼」。
  */
 function CareerTable({ summary }: { summary: CareerSummary }) {
   const seasons = summary.seasons;
@@ -785,8 +951,35 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
           </table>
         </div>
       )}
+
+      <TotalsTable title="各聯盟通算" rows={leagueTotals(summary)} />
+      {summary.leagues.length > 1 && (
+        <TotalsTable title="一軍通算" rows={[topTotalRow(summary)]} />
+      )}
     </div>
   );
+}
+
+/** 各頂級聯盟各一列。二軍不列——那不是這張表在回答的問題。 */
+function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
+  return summary.leagues.map((l) => ({
+    label: l.orgName,
+    seasons: l.seasons,
+    batting: l.batting,
+    pitching: l.pitching,
+    defenseRuns: l.defenseRuns,
+  }));
+}
+
+/** 所有一軍加起來的一列。只有跨過聯盟的人才需要它——單一聯盟的話它等於上一張表。 */
+function topTotalRow(summary: CareerSummary): TotalRow {
+  return {
+    label: '通算',
+    seasons: summary.leagues.reduce((n, l) => n + l.seasons, 0),
+    batting: summary.topTotal.batting,
+    pitching: summary.topTotal.pitching,
+    defenseRuns: summary.leagues.reduce((n, l) => n + l.defenseRuns, 0),
+  };
 }
 
 function StatLines({

@@ -302,9 +302,14 @@ body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content
 
 /* 右欄：數據（上）＋ 事件（下）＋ 操作（底） */
 #col-right{display:flex;flex-direction:column;min-width:0}
-#panel-stats{padding:12px 14px;border-bottom:1px solid var(--edge);background:var(--panel)}
-/* 生涯年表：引退之後才出現，欄位比狀態欄多得多，因此獨立一塊並允許橫向捲動。 */
-#panel-career{padding:12px 14px;border-bottom:1px solid var(--edge);background:var(--panel)}
+/* 引退之後這一塊會塞進整張生涯表，可能比整欄還高——而 #col-right 是
+   overflow:hidden，不給它自己的捲軸就會被裁掉而不是捲動。 */
+#panel-stats{padding:12px 14px;border-bottom:1px solid var(--edge);background:var(--panel);
+  min-height:0;overflow-y:auto;overscroll-behavior:contain}
+/* 生涯年表：引退之後才出現，欄位比狀態欄多得多，因此獨立一塊並允許橫向捲動。
+   高度上限是右欄的一半——一段十五年的生涯有十五列，不設限會把事件流整個擠掉。 */
+#panel-career{padding:12px 14px 4px;background:var(--panel);
+  max-height:50vh;overflow-y:auto;overscroll-behavior:contain}
 #panel-career h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;
   display:flex;align-items:center;gap:6px;margin:0 0 4px;color:var(--dim)}
 #panel-career h4::before{content:'■';font-size:9px;line-height:1;flex:none}
