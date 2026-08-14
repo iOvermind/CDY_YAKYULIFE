@@ -183,10 +183,14 @@ export interface PositionsData {
     readonly age_discount: readonly { readonly max_age: number; readonly discount: number }[];
     readonly default_discount: number;
   };
+  /** 薪資議價力。與守備價值是兩個不同的量——捕手的年薪不是一壘手的八倍。 */
   readonly salary_multiplier: Readonly<Record<string, number>>;
-  readonly defense_score_weight: Readonly<Record<string, number>>;
+  /**
+   * 各守位的守備責任占比。守備分的權重、守備側勝利份額的責任額、守位的身價
+   * 次序，三者共用這一份。DH 不在表內。
+   */
+  readonly fielding_responsibility: Readonly<Record<string, number>>;
   readonly defense_score_scale: { readonly scale: number };
-  readonly rank: Readonly<Record<string, number>>;
   /**
    * 移防掃描順序。IF／OF 是各自的守位光譜，fallback 是掃不到時的保底。
    * 型別分開寫，呼叫端才不必為了取一個字串去做 union 收窄。

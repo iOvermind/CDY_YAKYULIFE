@@ -3,7 +3,9 @@ import { ALL_ABILITIES, positions } from '../data/index.ts';
 import {
   assignPosition,
   canPlay,
+  defenseResponsibility,
   defenseRuns,
+  fieldingResponsibility,
   positionLabel,
   requiredScore,
   DH,
@@ -189,7 +191,50 @@ describe('assignPosition', () => {
     const ability = glove(48, 48, 48);
     const young = assignPosition({ ...base, age: 22, ability, current: null, startPosition: 'SS' });
     const old = assignPosition({ ...base, age: 32, ability, current: null, startPosition: 'SS' });
-    expect(positions.rank[young.position]!).toBeLessThanOrEqual(positions.rank[old.position]!);
+    expect(fieldingResponsibility(young.position)).toBeGreaterThanOrEqual(
+      fieldingResponsibility(old.position),
+    );
+  });
+});
+
+describe('fieldingResponsibility', () => {
+  it('捕手最重，一壘最輕——中線守位吃掉大半的守備責任', () => {
+    const order = ['C', 'SS', '2B', 'CF', '3B', 'LF', '1B'];
+    for (let i = 1; i < order.length; i++) {
+      expect(fieldingResponsibility(order[i - 1]!)).toBeGreaterThanOrEqual(
+        fieldingResponsibility(order[i]!),
+      );
+    }
+    expect(fieldingResponsibility('C')).toBeGreaterThan(fieldingResponsibility('1B'));
+  });
+
+  it('左外野與右外野的責任相同——兩者的難度差由門檻表達，不由身價表達', () => {
+    expect(fieldingResponsibility('LF')).toBe(fieldingResponsibility('RF'));
+    expect(requiredScore('RF', 'CPBL1', 30)!).toBeGreaterThan(requiredScore('LF', 'CPBL1', 30)!);
+  });
+
+  it('指定打擊的責任是 0——不守備的人既無貢獻也無過失', () => {
+    expect(fieldingResponsibility(DH)).toBe(0);
+  });
+
+  it('投手不分守備責任', () => {
+    expect(fieldingResponsibility('P')).toBe(0);
+  });
+});
+
+describe('defenseResponsibility', () => {
+  it('責任額同時吃守位與出賽時間', () => {
+    const full = defenseResponsibility('SS', 1);
+    const half = defenseResponsibility('SS', 0.5);
+    expect(half).toBeCloseTo(full / 2, 10);
+  });
+
+  it('傷缺全季就不承擔守備責任', () => {
+    expect(defenseResponsibility('SS', 0)).toBe(0);
+  });
+
+  it('打滿的一壘手責任仍遠低於打滿的捕手', () => {
+    expect(defenseResponsibility('1B', 1)).toBeLessThan(defenseResponsibility('C', 1));
   });
 });
 

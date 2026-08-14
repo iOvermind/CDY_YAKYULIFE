@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "_source": "抽取自 index_legacy.html DPN / dpScore() / DP_TH / DP_BAR / DP_MULT / DP_RANK / defScore() 的 posW",
-  "_note": "守位系統。ability_weights 是每個守位的能力權重，資格判定與守備分共用同一組——見下方 _deviation。",
+  "_note": "守位系統。ability_weights 是每個守位的能力權重，資格判定與守備分共用同一組——見下方 _deviation。守位的價值則統一由 fielding_responsibility 表達。",
 
   "_deviation": {
     "from": "index_legacy.html",
@@ -74,25 +74,25 @@
     "1B": 1.0, "LF": 1.0, "DH": 0.92
   },
 
-  "defense_score_weight": {
-    "_note": "守備分權重，乘在 (守備分 − 聯盟 par) 上。與 salary_multiplier 是兩個不同的量：前者是守備貢獻的放大倍率，後者是薪資議價力。DH 不產生守備分。",
-    "SS": 1.25, "CF": 1.2, "C": 1.15,
-    "2B": 1.05, "3B": 1.0, "RF": 0.95,
-    "1B": 0.75, "LF": 0.8
+  "fielding_responsibility": {
+    "_note": "各守位在全隊守備中承擔的責任占比，取自 Bill James 的 Win Shares 守備份額分配。它同時是三件事的唯一依據：守備分的權重、守備側勝利份額的責任額、以及守位的身價次序（rank 由它推導，不另外維護一份）。",
+    "_scale_note": "刻意維持原始比例、不正規化成 100——任何等比縮放都會被 defense_score_scale 與勝利份額的換算係數吸收，正規化只是化妝。八個守位相加為 91，缺的 9 是 James 分給投手的守備份額。",
+    "_pitcher_note": "投手的那 9 不做。我們沒有模擬投手的守備機會，硬給一份份額只是把 fld 換個名字加進去；而投手真正的價值在投球內容，已經由投球側的份額涵蓋。",
+    "_responsibility_note": "它是責任額而非品質倍率，這個區別很重要：責任額決定「有多少份額經過這個守位」，因此爛捕手累積的敗戰份額遠多於爛一壘手。DH 不在表內——不守備的人在守備上既無貢獻也無過失，不是守備零分。",
+    "C": 24,
+    "SS": 18,
+    "2B": 14,
+    "CF": 12,
+    "3B": 10,
+    "LF": 5,
+    "RF": 5,
+    "1B": 3
   },
 
   "defense_score_scale": {
-    "_note": "守備分最終係數：DEF = (加權守備分 − par) × defense_score_weight × scale × 出賽比重。",
-    "scale": 0.55
-  },
-
-  "rank": {
-    "_note": "守位身價階層，數字越小越高階。用於判斷是否升遷到更高身價的守位。",
-    "SS": 0, "CF": 0, "C": 0,
-    "2B": 1,
-    "3B": 2, "RF": 2,
-    "1B": 3, "LF": 3,
-    "DH": 4
+    "_note": "守備分最終係數：DEF = (守備分 − 當年 par) × fielding_responsibility × scale × 出賽比重。用當年的 par，不是 leagues.json 的基準值——聯盟水準逐年浮動。",
+    "_calibration_note": "暫定值，讓游擊手的 DEF 量級與改用責任占比之前相當。正式的值由校準腳本連同守備占全體勝利份額的比重（靶 16–17%）一起定，見 ADR 0003。",
+    "scale": 0.04
   },
 
   "scan_order": {

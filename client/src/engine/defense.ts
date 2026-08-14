@@ -100,9 +100,28 @@ function scanListFor(position: string): readonly string[] {
   return [...order.IF, ...order.OF];
 }
 
-/** 守位的身價階層，數字越小越高階。未知守位視為最低階。 */
+/**
+ * 這個守位承擔的守備責任占比。
+ *
+ * 取自 Bill James 的 Win Shares 守備份額分配。它是**責任額**而非品質倍率——
+ * 決定的是「有多少份額經過這個守位」，因此爛捕手累積的敗戰份額遠多於爛一壘
+ * 手，而再神的一壘手也賺不了多少。
+ *
+ * DH 是 0：不守備的人在守備上既無貢獻也無過失，這與「守備零分」是兩件事。
+ */
+export function fieldingResponsibility(position: string): number {
+  return positions.fielding_responsibility[position] ?? 0;
+}
+
+/**
+ * 守位的身價次序，數字越小越高階。
+ *
+ * 直接由責任占比推導，不另外維護一份表——同一件事有兩份資料，遲早會對不起來。
+ * 左外野與右外野的占比相同，因此身價相同；兩者的難度差由門檻表達（右外野的
+ * 門檻本來就比左外野高），不由身價表達。
+ */
 function rankOf(position: string): number {
-  return positions.rank[position] ?? Number.MAX_SAFE_INTEGER;
+  return -fieldingResponsibility(position);
 }
 
 /**
@@ -179,15 +198,31 @@ export function positionLabel(position: string): string {
 }
 
 /**
+ * 這一季的守備責任額。
+ *
+ * `責任額 = 守位責任占比 × 出賽比重`
+ *
+ * 同時吃守位與出賽時間：傷缺半季的游擊手不該被當成打滿的游擊手評價。這是
+ * 守備側勝利份額與敗戰份額的共同基數（ADR 0003）。
+ */
+export function defenseResponsibility(position: string, gamesShare: number): number {
+  return fieldingResponsibility(position) * gamesShare;
+}
+
+/**
  * 這一季的守備分。
  *
- * `DEF = (加權守備分 − 當年 par) × 守位權重 × scale × 出賽比重`
+ * `DEF = (守備分 − 當年 par) × 守位責任占比 × scale × 出賽比重`
  *
  * 用**當年的 par**：聯盟水準逐年浮動，用基準值會讓弱年的守備分虛胖。
  * 指定打擊不產生守備分——他不守備。
  *
- * 可以是負的：守備分低於聯盟平均就是負貢獻。結算時換算成勝利份額才夾在 0 以上
- * （見 ADR 0003），但**逐年的數據該誠實**——一個 −8 的球季就是 −8。
+ * 守位的價值用**責任占比**表達，不另外乘一個品質倍率——兩邊都乘會讓游擊與
+ * 捕手的守位優勢被算兩次。因此這個數字與守備側的 `WS − LS` 只差一個常數，
+ * 兩者必然一致。
+ *
+ * 可以是負的：守備分低於聯盟平均就是負貢獻。**逐年的數據該誠實**——一個 −8
+ * 的球季就是 −8。
  */
 export function defenseRuns(options: {
   readonly ability: Abilities;
@@ -198,14 +233,13 @@ export function defenseRuns(options: {
   readonly gamesShare: number;
 }): number {
   if (options.position === DH) return 0;
-  const weight = positions.defense_score_weight[options.position];
-  if (weight === undefined) return 0;
+  const responsibility = defenseResponsibility(options.position, options.gamesShare);
+  if (responsibility === 0) return 0;
 
   const par = standardOf(options.standards, options.level).par;
   const raw =
     (defenseScore(options.ability, options.position) - par) *
-    weight *
-    positions.defense_score_scale.scale *
-    options.gamesShare;
+    responsibility *
+    positions.defense_score_scale.scale;
   return Math.round(raw);
 }
