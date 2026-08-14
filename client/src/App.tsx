@@ -20,6 +20,7 @@ import {
   type PitchingLine,
 } from './engine/amateurStats.ts';
 import type { AwardRecord } from './engine/awards.ts';
+import type { CareerSummary } from './engine/career.ts';
 import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
 import {
@@ -310,6 +311,7 @@ function GameScreen({
       <div id="col-right">
         {state && <StatsPanel state={state} rating={game.rating} />}
         <EventLog entries={game.flow.log} />
+        {game.summary !== null && <CareerTable summary={game.summary} />}
         <div id="panel-act">
           {prompt !== null ? (
             <>
@@ -358,7 +360,7 @@ function GameScreen({
             </>
           ) : (
             <>
-              <div className="title">流程已到目前實作的盡頭</div>
+              <div className="title">{game.summary === null ? '流程已到目前實作的盡頭' : '生涯結束'}</div>
               <button type="button" className="btn main" onClick={onRestart}>
                 重新開局
               </button>
@@ -644,6 +646,126 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分', value: (p, base) => pitchingShares(p, base).loss.toFixed(1) },
   { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base) => fmtAvg(winPct(pitchingShares(p, base))) },
 ];
+
+/**
+ * 生涯年表。
+ *
+ * 一段效力一列——目前一年就是一段，將來接上季中交易之後同一年會出現兩列，
+ * 表格的形狀不必改。投打分兩張表：單位不同，硬湊在同一列會讓兩邊的欄位都
+ * 看不懂（見 `hall_of_fame.json` 的 `two_way`）。
+ */
+function CareerTable({ summary }: { summary: CareerSummary }) {
+  const seasons = summary.seasons;
+  if (seasons.length === 0) return null;
+
+  const batting = seasons.filter((s) => s.batting !== null);
+  const pitching = seasons.filter((s) => s.pitching !== null);
+
+  return (
+    <div id="panel-career">
+      <h4>生涯年表</h4>
+      {batting.length > 0 && (
+        <div className="fin-scroll">
+          <table className="fin">
+            <thead>
+              <tr>
+                <th>年</th>
+                <th>齡</th>
+                <th style={{ textAlign: 'left' }}>球隊</th>
+                <th>守位</th>
+                <th>G</th>
+                <th>PA</th>
+                <th>AVG</th>
+                <th>OBP</th>
+                <th>SLG</th>
+                <th>H</th>
+                <th>HR</th>
+                <th>RBI</th>
+                <th>SB</th>
+                <th>DEF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batting.map((s, i) => {
+                const b = s.batting!;
+                return (
+                  <tr key={`${s.year}-${s.level}-${i}`}>
+                    <td>{s.year}</td>
+                    <td>{s.age}</td>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      {s.team}
+                      {s.top === null && <span className="sub">・{s.levelName}</span>}
+                    </td>
+                    <td>{s.position === null ? '—' : positionName(s.position)}</td>
+                    <td>{b.games}</td>
+                    <td>{b.pa}</td>
+                    <td>{fmtAvg(b.avg)}</td>
+                    <td>{fmtAvg(b.obp)}</td>
+                    <td>{fmtAvg(b.slg)}</td>
+                    <td>{b.hits}</td>
+                    <td>{b.hr}</td>
+                    <td>{b.rbi}</td>
+                    <td>{b.sb}</td>
+                    <td>{s.defenseRuns > 0 ? `+${s.defenseRuns}` : s.defenseRuns}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pitching.length > 0 && (
+        <div className="fin-scroll">
+          <table className="fin">
+            <thead>
+              <tr>
+                <th>年</th>
+                <th>齡</th>
+                <th style={{ textAlign: 'left' }}>球隊</th>
+                <th>G</th>
+                <th>GS</th>
+                <th>IP</th>
+                <th>W</th>
+                <th>L</th>
+                <th>SV</th>
+                <th>SO</th>
+                <th>BB</th>
+                <th>ERA</th>
+                <th>WHIP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pitching.map((s, i) => {
+                const p = s.pitching!;
+                return (
+                  <tr key={`${s.year}-${s.level}-${i}`}>
+                    <td>{s.year}</td>
+                    <td>{s.age}</td>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      {s.team}
+                      {s.top === null && <span className="sub">・{s.levelName}</span>}
+                    </td>
+                    <td>{p.games}</td>
+                    <td>{p.starts}</td>
+                    <td>{p.ip.toFixed(1)}</td>
+                    <td>{p.wins}</td>
+                    <td>{p.losses}</td>
+                    <td>{p.saves}</td>
+                    <td>{p.so}</td>
+                    <td>{p.bb}</td>
+                    <td>{p.era.toFixed(2)}</td>
+                    <td>{whip(p).toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatLines({
   label,

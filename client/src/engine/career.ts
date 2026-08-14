@@ -72,7 +72,19 @@ export interface LeagueCareer {
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
   readonly defenseRuns: number;
+  /** 三分量加總的雙帳。 */
   readonly shares: Shares;
+  /**
+   * 三分量各自的雙帳。
+   *
+   * 校準要看的靶是「守備約佔全體份額的 16–17%」，那個比例只有拆開才量得出來；
+   * 介面上把三段分開列，玩家也才看得懂自己的價值來自哪裡。
+   */
+  readonly sharesByPart: {
+    readonly batting: Shares;
+    readonly pitching: Shares;
+    readonly fielding: Shares;
+  };
   /** 份額換算出來的分數（已含難度係數與 k 的扣分）。 */
   readonly sharePoints: number;
   readonly awardPoints: number;
@@ -98,6 +110,13 @@ export interface MinorCareer {
 }
 
 export interface CareerSummary {
+  /**
+   * 逐段紀錄的原件，依時間排序。
+   *
+   * 生涯年表直接畫它——一段一列。目前一年就是一段，將來接上季中交易之後
+   * 同一年會出現兩列，年表的形狀不必改。
+   */
+  readonly seasons: readonly SeasonRecord[];
   /** 各頂級聯盟的總結，依評價分由高到低。 */
   readonly leagues: readonly LeagueCareer[];
   /** 非頂級層級的通算，依層級代碼排序。 */
@@ -306,9 +325,12 @@ export function summarizeCareer(
   const leagueCareers: LeagueCareer[] = [];
   for (const [org, list] of byTop) {
     const lines = totalLines(list);
-    const shares = sumShares(
-      ...list.flatMap((r) => [r.shares.batting, r.shares.pitching, r.shares.fielding]),
-    );
+    const sharesByPart = {
+      batting: sumShares(...list.map((r) => r.shares.batting)),
+      pitching: sumShares(...list.map((r) => r.shares.pitching)),
+      fielding: sumShares(...list.map((r) => r.shares.fielding)),
+    };
+    const shares = sumShares(sharesByPart.batting, sharesByPart.pitching, sharesByPart.fielding);
     const sharePoints = list.reduce((sum, r) => sum + seasonPoints(r), 0);
 
     const own = awards.filter((a) => a.org === org);
@@ -335,6 +357,7 @@ export function summarizeCareer(
       pitching: lines.pitching,
       defenseRuns: list.reduce((sum, r) => sum + r.defenseRuns, 0),
       shares,
+      sharesByPart,
       sharePoints,
       awardPoints: awardTotal,
       milestonePoints: milestones.points,
@@ -384,6 +407,7 @@ export function summarizeCareer(
   const representative = pickRepresentative(leagueCareers, records);
 
   return {
+    seasons: records,
     leagues: leagueCareers,
     minors,
     topTotal: allTop,

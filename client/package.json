@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "calibrate": "vitest run --config vitest.calibrate.config.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
