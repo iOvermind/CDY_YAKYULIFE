@@ -123,6 +123,14 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
       // 合約到期先與母隊談，不跳市場。
       options.find((o) => o.id === 'fa:stay') ??
       options.find((o) => o.id === 'fa:crawl') ??
+      // 感情：一律走「穩定」那條路——告白、公開、求婚、拒絕誘惑、風波吞下去。
+      // 基準線是一個認真經營關係的人，不是浪子；外遇與分手的分佈要另外量。
+      options.find((o) => o.id === 'love:confess') ??
+      options.find((o) => o.id === 'love:admit') ??
+      options.find((o) => o.id === 'love:propose') ??
+      options.find((o) => o.id === 'love:decline') ??
+      options.find((o) => o.id === 'love:swallow') ??
+      options.find((o) => o.id === 'love:bring') ??
       // 事件卡一律照常執行。**不能讓代理每張都選全力一搏**——那是第一個選項，
       // 照順序挑就會挑到它，而「一年賭三次」不是「認真玩但沒查攻略」的樣子。
       options.find((o) => o.id === 'event:normal') ??

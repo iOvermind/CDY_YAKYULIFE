@@ -15,6 +15,8 @@ import {
   flavor,
   hallOfFame,
   leagues,
+  injury as injuryCfg,
+  love as loveCfg,
   season as seasonCfg,
   PITCH_FAMILIES,
   type AbilityKey,
@@ -98,6 +100,24 @@ import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './gene
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
 import {
+  afterBreakup,
+  cadenceChance,
+  canPropose,
+  childbirthChance,
+  confessionChance,
+  divorceCost,
+  hasPartner,
+  isChildhoodSweetheart,
+  newLoveState,
+  pickPartner,
+  rehabChance,
+  rewardMultiplier,
+  turmoilChance,
+  breakupChance,
+  injuryRiskModifier,
+  type LoveState,
+} from './love.ts';
+import {
   applyAging,
   asksRetirement,
   evaluateMovement,
@@ -136,7 +156,13 @@ import {
   playerEffect,
   type LeagueTable,
 } from './teams.ts';
-import { defenseScore, isSideVisible, rate, ratingPosition } from './rating.ts';
+import {
+  defenseScore,
+  isSideVisible,
+  rate,
+  ratingPosition,
+  type Abilities,
+} from './rating.ts';
 import { World } from './rng.ts';
 
 
@@ -204,6 +230,15 @@ export interface PlayerState {
    * 七座 MVP 在清單上只有一行，在這裡是七筆。
    */
   readonly awards: readonly AwardRecord[];
+  /** 感情。結算的【人生】區塊與球迷看板的語氣看它。 */
+  readonly love: {
+    readonly status: string;
+    readonly partner: string | null;
+    readonly marriedYear: number | null;
+    readonly kids: number;
+    readonly divorces: number;
+    readonly caught: number;
+  };
   /** 生涯累積收入，單位萬元。含簽約金與逐季年薪。 */
   readonly earnings: number;
   /** 尚未分配的能力點。 */
@@ -367,6 +402,20 @@ export class Game {
   #majorInjuries = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
   #rehabYear = false;
+  /** 感情狀態。 */
+  #love: LoveState = newLoveState();
+  /** 結婚的年份。結算的【人生】區塊要寫它。 */
+  #weddingYear: number | null = null;
+  /** 今年最好的大賽名次。校園告白的成功率看它——打進四強的王牌與坐板凳的人不一樣。 */
+  get #bestRankThisYear(): string | null {
+    const ranks = this.#lastCupSeason?.honors ?? [];
+    return ranks[0]?.rank ?? null;
+  }
+  /**
+   * 當季暫時能力。見 ADR 0006：非成長性的獎勵只抬高這一季，不寫回能力表。
+   * 球季結束歸零。
+   */
+  #seasonBonus: Record<AbilityKey, number> = {};
   #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
     {};
   /**
@@ -512,6 +561,14 @@ export class Game {
       honors: this.#honors,
       counts: this.#counts,
       awards: this.#awards,
+      love: {
+        status: this.#love.status,
+        partner: this.#love.partner,
+        marriedYear: this.#weddingYear,
+        kids: this.#love.kids,
+        divorces: this.#love.divorces,
+        caught: this.#love.caught,
+      },
       earnings: this.#earnings,
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
@@ -688,7 +745,7 @@ export class Game {
     );
     this.flow.push(
       () => this.#springTraining(),
-      () => this.#drawEventCards(),
+      () => this.#loveEvent(() => this.#drawEventCards()),
       () => this.#cups(),
       () => this.#youthTournament(),
       () => this.#endYear(),
@@ -919,6 +976,8 @@ export class Game {
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#seasonDefenseRuns = 0;
+    // 當季暫時能力用完就歸零——它只屬於這一年。
+    this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
     this.#amateurSeasons.push({
       year: this.#year,
@@ -986,9 +1045,11 @@ export class Game {
 
     const next = nextStageOf(this.#stage);
     if (next === null) {
+      this.#loveCheckpoint('高中畢業');
       this.flow.push(() => this.#graduate());
       return;
     }
+    this.#loveCheckpoint(`${stageOf(this.#stage).name}畢業`);
     this.flow.push(() => this.#advanceStage(next));
   }
 
@@ -1252,7 +1313,7 @@ export class Game {
     this.flow.push(
       () => this.#proSpringTraining(),
       () => this.#positionReview(),
-      () => this.#drawEventCards(),
+      () => this.#loveEvent(() => this.#drawEventCards()),
       () => this.#healthCheck(),
       () => this.#tradeDeadline(),
       () => this.#proSeason(),
@@ -1352,7 +1413,8 @@ export class Game {
     const position = pro.position ?? ratingPosition(player.startPosition);
     const line = playSeason(this.world, {
       level: pro.level,
-      ability: this.#ability,
+      // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。
+      ability: this.#seasonAbility,
       position,
       overall: r.overall,
       // 定位鎖定之後就照鎖定的那一側打，不再每季比較評價高低——職業球員的
@@ -1369,6 +1431,8 @@ export class Game {
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#seasonDefenseRuns = 0;
+    // 當季暫時能力用完就歸零——它只屬於這一年。
+    this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
 
     // 守備分只在登錄了守位時才算——沒登錄就沒有守位權重可乘。
@@ -1467,16 +1531,15 @@ export class Game {
       return;
     }
 
+    // 感情狀態雙向回饋到傷病：穩定降風險、風波升風險。與事件卡的自找風險同性質，
+    // 不受鐵人上限保護。
+    const extraRisk = this.#injuryRisk + injuryRiskModifier(this.#love);
     const result = rollInjury(this.world, {
       age: this.#age,
       traits: this.#traits,
-      extraRisk: this.#injuryRisk,
+      extraRisk,
     });
-    const chance = injuryChance({
-      age: this.#age,
-      traits: this.#traits,
-      extraRisk: this.#injuryRisk,
-    });
+    const chance = injuryChance({ age: this.#age, traits: this.#traits, extraRisk });
     this.#injuryRisk = 0;
     this.#seasonFactor = result.seasonFactor;
 
@@ -1490,7 +1553,13 @@ export class Game {
 
     if (result.kind === 'major') {
       this.#majorInjuries++;
-      if (result.rehabNextYear) {
+      // 有人陪的話熬得住——不是治好，是熬得住。
+      const rehabHit =
+        result.rehabNextYear &&
+        this.world
+          .stream('health')
+          .chance(rehabChance(this.#love, injuryCfg.severity.major.rehab_next_year.chance));
+      if (rehabHit) {
         this.#rehabYear = true;
         lines.push('醫生搖搖頭：<b class="dn">明年也很難趕上開季</b>。');
       }
@@ -1545,6 +1614,647 @@ export class Game {
     this.#settleCarry();
     const name = abilities.abilities[key] ?? key;
     return `傷勢留下後遺症：<b class="dn">${esc(name)} −${before - (this.#ability[key] ?? 0)}</b>。`;
+  }
+
+  /**
+   * 當季暫時能力：非成長性的獎勵走這裡，不進蓄力槽。見 ADR 0006。
+   *
+   * 一個 34 歲的老將結婚，說他因此變強是不合理的，但說那一年他狀態特別好是合理
+   * 的。因此感情給的點數只抬高這一季的能力，球季結束就歸零，也不寫進能力表。
+   */
+  #grantSeasonBonus(key: AbilityKey, points: number): string {
+    const scaled = Math.round(points * rewardMultiplier(this.#love));
+    if (scaled <= 0) {
+      return `${esc(abilities.abilities[key] ?? key)}沒有起色——<span class="sub">心裡有事的人，安定不下來</span>`;
+    }
+    this.#seasonBonus[key] = (this.#seasonBonus[key] ?? 0) + scaled;
+    return `<b class="up">${esc(abilities.abilities[key] ?? key)} +${scaled}</b><span class="sub">（本季狀態，不計入能力表）</span>`;
+  }
+
+  /** 這一季實際上場用的能力：真實能力加上當季暫時能力。 */
+  get #seasonAbility(): Abilities {
+    if (Object.keys(this.#seasonBonus).length === 0) return this.#ability;
+    const out: Record<string, number> = { ...this.#ability };
+    for (const [key, delta] of Object.entries(this.#seasonBonus)) {
+      out[key] = (out[key] ?? 0) + delta;
+    }
+    return out as Abilities;
+  }
+
+  /**
+   * 感情。每年一次，排在事件卡之前。
+   *
+   * **獨立於事件卡**——事件卡是球場上的事，感情是場外的事，混在同一個牌庫裡會
+   * 互相稀釋。
+   */
+  #loveEvent(next: () => void): void {
+    const love = this.#love;
+    love.turmoilThisYear = false;
+    if (this.#age < loveCfg.gate.min_age) {
+      next();
+      return;
+    }
+
+    const rng = this.world.stream('career');
+    // 抽取一律先做，與狀態無關——否則某一年的狀態差異會讓後面所有判定整串偏移。
+    const runs = rng.chance(cadenceChance(love));
+    if (love.cheatPenaltyYears > 0) love.cheatPenaltyYears--;
+    if (love.overseas !== 'none') love.overseasYears++;
+    if (!runs) {
+      next();
+      return;
+    }
+
+    switch (love.status) {
+      case 'dating':
+        this.#datingYear(next);
+        return;
+      case 'married':
+        this.#marriedYear(next);
+        return;
+      default:
+        this.#singleYear(next);
+    }
+  }
+
+  /** 單身或離婚：認識一個人。校園看球場上的表現，職業看緋聞。 */
+  #singleYear(next: () => void): void {
+    const pro = this.#pro !== null;
+    const partner = pickPartner(this.world, pro ? 'pro' : 'school', null);
+
+    if (!pro) {
+      const rank = this.#bestRankThisYear;
+      const chance = confessionChance(rank);
+      this.flow.ask(
+        {
+          title: `${partner}最近常常在球場邊等你`,
+          options: [
+            {
+              id: 'love:confess',
+              label: '找個機會告白',
+              note: `成功率 ${chance}%｜${rank === null ? '今年沒有大賽成績' : `今年打到${rank}`}`,
+              role: 'main',
+            },
+            { id: 'love:wait', label: '再說吧，先專心打球' },
+          ],
+        },
+        (choice) => {
+          if (choice !== 'love:confess') {
+            this.flow.card('info', '再說吧', '你把話吞回去，走進打擊籠。');
+            next();
+            return;
+          }
+          if (!this.world.stream('career').chance(chance)) {
+            this.flow.card(
+              'info',
+              '被拒絕了',
+              `${esc(partner)}低著頭說「對不起」。接下來那一週，你在走廊上都繞路。`,
+            );
+            next();
+            return;
+          }
+          this.#startDating(partner, true);
+          next();
+        },
+      );
+      return;
+    }
+
+    this.flow.card(
+      'info',
+      '場外話題',
+      `你和啦啦隊的 <b class="hl">${esc(partner)}</b> 被拍到球場外同框，緋聞登上娛樂版頭條。` +
+        (this.#love.divorces > 0 ? '<br><span class="sub">（評論區：「離過婚還這麼搶手」）</span>' : ''),
+    );
+    this.flow.ask(
+      {
+        title: '記者把麥克風遞到你面前：「兩位是在交往嗎？」',
+        options: [
+          {
+            id: 'love:admit',
+            label: '大方承認：「請大家祝福我們」',
+            note: '還要看她那邊敢不敢承認——啦啦隊的禁愛令壓力不小',
+          },
+          { id: 'love:dodge', label: '笑而不答，快步走過', note: '不承認就沒有下文', role: 'main' },
+        ],
+      },
+      (choice) => {
+        if (choice !== 'love:admit') {
+          this.flow.card('info', '未完待續', '緋聞燒了三天就退燒。也許時機還沒到。');
+          next();
+          return;
+        }
+        if (!this.world.stream('career').chance(loveCfg.dating.public_confirm.chance)) {
+          this.flow.card(
+            'bad',
+            '單方面承認',
+            `她隔天透過經紀公司否認：「只是普通朋友。」據傳<b class="dn">禁愛令</b>壓力不小。你一個人站在風裡。`,
+          );
+          next();
+          return;
+        }
+        this.#startDating(partner, false);
+        next();
+      },
+    );
+  }
+
+  /** 開始交往。 */
+  #startDating(partner: string, fromSchool: boolean): void {
+    const love = this.#love;
+    love.status = 'dating';
+    love.partner = partner;
+    love.fromSchool = fromSchool;
+    love.datingYears = 0;
+    love.datedTimes++;
+
+    const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 1);
+    this.flow.card(
+      'gold',
+      fromSchool ? '在一起了' : '戀情公開',
+      fromSchool
+        ? `放學後的河堤，你們並肩走了很久。${esc(partner)}說：「我一直都有在看你比賽。」——${gain}`
+        : `<b class="hl">${esc(partner)}</b> 在社群發出十指緊扣的照片：「謝謝大家的祝福。」——${gain}`,
+    );
+
+    // 第三段戀情仍未走到婚姻、且沒有孩子。
+    if (love.datedTimes >= loveCfg.dating.confidante.dated_times && love.kids === 0) {
+      this.#unlockTrait(
+        loveCfg.dating.confidante.trait,
+        '閨中密友',
+        '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
+      );
+    }
+  }
+
+  /** 交往中的一年：風波 → 分手判定 → 插曲 → 求婚。 */
+  #datingYear(next: () => void): void {
+    const love = this.#love;
+    const propose = canPropose({ pro: this.#pro !== null, age: this.#age });
+    if (propose) love.datingYears++;
+
+    this.#turmoil(() => {
+      if (love.status !== 'dating') {
+        next();
+        return;
+      }
+      if (this.world.stream('career').chance(breakupChance(love, { canPropose: propose }))) {
+        this.#breakup(
+          `交往 ${love.datingYears} 年，婚期一延再延。<b class="hl">${esc(love.partner ?? '')}</b> 最後留下一句：「我等不到了。」`,
+        );
+        next();
+        return;
+      }
+      if (!propose) {
+        this.#datingFlavour();
+        next();
+        return;
+      }
+      this.#affairOrFlavour(() => this.#proposalAsk(next));
+    });
+  }
+
+  /** 求婚。**十五歲的人不會在主場本壘板後方跪下來**，因此它有職業與年齡的門檻。 */
+  #proposalAsk(next: () => void): void {
+    const love = this.#love;
+    this.flow.ask(
+      {
+        title: `交往第 ${love.datingYears} 年——${love.partner} 看著別人的婚禮影片看了很久`,
+        options: [
+          {
+            id: 'love:propose',
+            label: '就是現在——求婚',
+            note: '本季狀態提升，而且往後的受傷率下降',
+            role: 'main',
+          },
+          { id: 'love:later', label: '再存一點錢吧', note: '她沒說什麼，但交往越久分手風險越高' },
+        ],
+      },
+      (choice) => {
+        if (choice !== 'love:propose') {
+          this.flow.card('info', '再等等', '她關掉影片，笑著說沒事。你假裝沒看到她眼裡的東西。');
+          next();
+          return;
+        }
+        love.status = 'married';
+        love.kids = 0;
+        love.datingYears = 0;
+        this.#weddingYear = this.#year;
+        const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 2);
+        this.flow.card(
+          'gold',
+          '婚禮',
+          `你在主場本壘板後方單膝跪地，大螢幕打出「Marry Me」。<b class="hl">${esc(love.partner ?? '')}</b> 哭著點頭。` +
+            `休賽季完婚，紅毯用壘包排成——${gain}`,
+        );
+        if (isChildhoodSweetheart(love)) {
+          this.#unlockTrait(
+            loveCfg.childhood_sweetheart.trait,
+            loveCfg.childhood_sweetheart.name,
+            '十五歲那年放學後的河堤，一路走到了主場的本壘板。中間有幾次差點走散，但你們都熬過來了。',
+          );
+        }
+        next();
+      },
+    );
+  }
+
+  /** 已婚的一年：風波 → 生子 → 外遇或日常。 */
+  #marriedYear(next: () => void): void {
+    const love = this.#love;
+    this.#turmoil(() => {
+      if (love.status !== 'married') {
+        next();
+        return;
+      }
+      if (
+        love.kids < loveCfg.marriage.max_kids &&
+        this.world.stream('career').chance(childbirthChance(love.kids))
+      ) {
+        love.kids++;
+        const key = this.#randomVisibleAbility();
+        const gain = this.#grantSeasonBonus(key, 2);
+        this.flow.card(
+          'gold',
+          '新生命',
+          `${esc(love.partner ?? '')} 平安生下你們的第 <b class="hl">${love.kids}</b> 個孩子。` +
+            `當了${love.kids > 1 ? '幾次' : ''}爸爸的男人，眼神都不一樣了——${gain}`,
+        );
+        next();
+        return;
+      }
+      this.#affairOrFlavour(next);
+    });
+  }
+
+  /**
+   * 感情風波。
+   *
+   * **這是整條感情線唯一沒有正確答案的地方**——外遇算得出來該拒絕，這條算不出來。
+   * 吞下去是慢性、分手是重擊：斷乾淨的人痛一次，忍下來的人被慢慢消耗。
+   */
+  #turmoil(next: () => void): void {
+    const love = this.#love;
+    const rng = this.world.stream('career');
+    const hit = rng.chance(turmoilChance(love));
+    const kinds = loveCfg.turmoil.kinds;
+    const kind = kinds[rng.int(0, kinds.length - 1)];
+    if (!hit || kind === undefined || !hasPartner(love)) {
+      next();
+      return;
+    }
+
+    love.turmoilThisYear = true;
+    this.flow.ask(
+      {
+        title: kind.text,
+        options: [
+          {
+            id: 'love:swallow',
+            label: '不問，當作沒看見',
+            note: '關係還在，但裂痕會累積——往後越來越不平靜，感情帶來的狀態也越來越少',
+            role: 'main',
+          },
+          {
+            id: 'love:leave',
+            label: '問清楚，然後結束',
+            note: '當年重挫，但明年歸零，可以重新開始',
+            role: 'warn',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'love:swallow') {
+          love.cracks++;
+          this.flow.card(
+            'bad',
+            '沒有問出口',
+            `你把話吞了回去。那天之後你們還是一起吃飯、一起睡覺，只是有些話再也沒有提起。` +
+              `<br><span class="sub">裂痕 ${love.cracks} 道——往後的日子會越來越不平靜。</span>`,
+          );
+          next();
+          return;
+        }
+        this.#loseAbility(loveCfg.turmoil.leave.ability_loss, (line) => {
+          this.#breakup(`你問了，她也答了。然後你們都知道結束了。${line}`);
+        });
+        next();
+      },
+    );
+  }
+
+  /** 外遇的誘惑，或平淡的一年。 */
+  #affairOrFlavour(next: () => void): void {
+    const love = this.#love;
+    const rng = this.world.stream('career');
+    if (!rng.chance(loveCfg.affair.chance)) {
+      this.#datingFlavour();
+      next();
+      return;
+    }
+
+    const other = pickPartner(this.world, this.#pro !== null ? 'pro' : 'school', love.partner);
+    const married = love.status === 'married';
+    this.flow.ask(
+      {
+        title: married
+          ? `客場飯店酒吧，${other} 傳來訊息：「睡了嗎？」`
+          : `聚餐散場，${other} 說順路想搭你的車`,
+        options: [
+          {
+            id: 'love:affair',
+            label: married ? '赴約' : '讓她上車',
+            note: '沒被抓到＝本季狀態提升｜被抓到＝能力重挫、感情危機',
+            role: 'warn',
+          },
+          {
+            id: 'love:decline',
+            label: married ? '回訊息：「陪小孩讀完故事書了，晚安」' : `「不順路。」直接載 ${love.partner} 回家`,
+            note: '穩定，絕對不虧',
+            role: 'main',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice !== 'love:affair') {
+          const gain = this.#grantSeasonBonus(
+            loveCfg.affair.reward.ability,
+            loveCfg.affair.reward.refused,
+          );
+          this.flow.card('good', '正確答案', `心定了，身體就穩了——${gain}`);
+          next();
+          return;
+        }
+        love.affairs++;
+        if (this.world.stream('career').chance(loveCfg.affair.escape_chance)) {
+          const gain = this.#grantSeasonBonus(
+            loveCfg.affair.reward.ability,
+            loveCfg.affair.reward.escaped,
+          );
+          this.flow.card(
+            'bad',
+            married ? '深夜行程' : '深夜兜風',
+            `沒有人拍到。不知為何，罪惡感反而讓你精神亢奮——${gain}` +
+              '<br><span class="sub">（你知道這不會有好下場）</span>',
+          );
+          next();
+          return;
+        }
+        this.#affairCaught(next);
+      },
+    );
+  }
+
+  /** 被抓到。第二次起解鎖渣男，而那個量級與一次大傷相同——是刻意的。 */
+  #affairCaught(next: () => void): void {
+    const love = this.#love;
+    const c = loveCfg.affair.caught;
+    love.caught++;
+    love.turmoilThisYear = true;
+    love.cheatPenaltyYears = loveCfg.affair.dating_breakup_penalty.years;
+
+    this.#loseAbility(c.single_ability_loss, (line) => {
+      let extra = '';
+      if (love.caught >= c.scum.caught_times) {
+        this.#unlockTrait(
+          c.scum.trait,
+          '渣男',
+          `第二次被逮個正著。從今以後你在球迷心中的形象定型了——<b class="dn">每次被抓到，全能力 −${c.scum.all_ability_loss}</b>。`,
+          'bad',
+        );
+        for (const key of ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide))) {
+          this.#ability[key] = Math.max(
+            abilities.scale.hard_floor,
+            (this.#ability[key] ?? 0) - c.scum.all_ability_loss,
+          );
+        }
+        this.#settleCarry();
+        extra = `<br><b class="dn">全能力 −${c.scum.all_ability_loss}</b>（渣男的代價）。`;
+      }
+      this.flow.card(
+        'bad',
+        love.status === 'married' ? '頭版醜聞' : '劈腿曝光',
+        `狗仔的鏡頭比你想的更快，照片鋪滿版面。贊助商緊急撤圖。${line}${extra}`,
+      );
+    });
+
+    const married = love.status === 'married';
+    this.flow.ask(
+      {
+        title: married
+          ? `${love.partner} 把離婚協議書放在餐桌上`
+          : `${love.partner} 已讀不回三天後，終於答應見面`,
+        options: [
+          {
+            id: 'love:apologise',
+            label: '道歉，求她再給一次機會',
+            note: `成功率 ${c.apology_success}%｜失敗要再扣能力並${married ? '離婚' : '分手'}`,
+            role: 'main',
+          },
+          { id: 'love:accept', label: married ? '簽字離婚' : '坦然分手', role: 'warn' },
+        ],
+      },
+      (choice) => {
+        if (choice === 'love:apologise') {
+          if (this.world.stream('career').chance(c.apology_success)) {
+            this.flow.card(
+              'info',
+              '低谷之後',
+              `長談了一整夜。<b class="hl">${esc(love.partner ?? '')}</b> 最後說：「最後一次。」` +
+                '關係保住了，但有些東西回不去了。',
+            );
+            love.cracks++;
+            next();
+            return;
+          }
+          this.#loseAbility(c.apology_failed_loss, (line) => {
+            this.#breakup(`她聽完只是搖頭，隔天律師的存證信函就到了。${line}`);
+          });
+          next();
+          return;
+        }
+        this.#breakup(married ? '你在協議書上簽了名。' : '她把你送的東西整箱寄回。');
+        next();
+      },
+    );
+  }
+
+  /** 分手或離婚。離婚要分財產——**一個只會增加的數字不是資產，是計分板**。 */
+  #breakup(reason: string): void {
+    const love = this.#love;
+    const ex = love.partner ?? '';
+    const wasMarried = love.status === 'married';
+
+    let money = '';
+    if (wasMarried) {
+      const cost = divorceCost(this.#earnings, love.kids);
+      this.#earnings = Math.max(0, this.#earnings - cost);
+      love.divorces++;
+      money = `<br>財產分配：<b class="dn">−${fmtMoney(cost)}</b>${love.kids > 0 ? '（含扶養費）' : ''}。`;
+    }
+
+    love.status = afterBreakup(love);
+    love.partner = null;
+    love.datingYears = 0;
+    love.kids = 0;
+    love.fromSchool = false;
+    love.cracks = 0;
+    love.overseas = 'none';
+    love.overseasYears = 0;
+    love.turmoilThisYear = true;
+
+    this.flow.card(
+      'bad',
+      wasMarried ? '離婚' : '分手',
+      `${reason}<br><b class="hl">${esc(ex)}</b> 從此不在你的生活裡了。${money}`,
+    );
+  }
+
+  /** 平淡但溫暖的一年。感情線多數的年份都是這種。 */
+  #datingFlavour(): void {
+    const love = this.#love;
+    const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 1);
+    const partner = esc(love.partner ?? '');
+    if (love.status === 'married' && love.kids > 0) {
+      this.flow.card(
+        'good',
+        '球場邊的父親',
+        `你被拍到賽前隔著護網教孩子怎麼戴手套，影片配文「最強棒球教室」瘋傳——${gain}`,
+      );
+      return;
+    }
+    if (love.status === 'married') {
+      this.flow.card(
+        'good',
+        '結婚紀念日',
+        `你推掉了自主訓練，陪 <b class="hl">${partner}</b> 回到當年辦婚禮的場地。她說：「明年也要來喔。」——${gain}`,
+      );
+      return;
+    }
+    if (this.#pro === null) {
+      this.flow.card(
+        'good',
+        '放學後',
+        `練習結束天已經黑了，${partner}還在看台上寫作業等你。回家的路上你們什麼都聊——${gain}`,
+      );
+      return;
+    }
+    this.flow.card(
+      'good',
+      '愛情長跑',
+      `沒有大新聞，只有每個客場系列賽結束後，機場出口那杯 <b class="hl">${partner}</b> 替你買好的熱美式——${gain}`,
+    );
+  }
+
+  /** 扣一項隨機能力，把敘述交給呼叫端。 */
+  #loseAbility(points: number, then: (line: string) => void): void {
+    const key = this.#randomVisibleAbility();
+    const before = this.#ability[key] ?? 0;
+    this.#ability[key] = Math.max(abilities.scale.hard_floor, before - points);
+    this.#settleCarry();
+    const lost = before - (this.#ability[key] ?? 0);
+    then(
+      lost > 0
+        ? `<br><b class="dn">${esc(abilities.abilities[key] ?? key)} −${lost}</b>。`
+        : '',
+    );
+  }
+
+  /** 隨機挑一項這一側實際在用的能力。 */
+  #randomVisibleAbility(): AbilityKey {
+    const keys = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide));
+    const pool = keys.length > 0 ? keys : ALL_ABILITIES;
+    return pool[this.world.stream('career').int(0, pool.length - 1)] ?? 'sta';
+  }
+
+  /**
+   * 升學或進職業時的關卡。
+   *
+   * **還不能求婚的人不該因為沒結婚而被拆散**，因此學生時期不累計「婚期一延再延」
+   * 的風險，改成身分轉換各擲一次。撐過去的對象會延續到職業生涯——那個在國中認識
+   * 的人，可能就是日後在本壘板後方跪下來求婚的對象。
+   */
+  #loveCheckpoint(label: string): void {
+    const love = this.#love;
+    const rng = this.world.stream('career');
+    const broke = rng.chance(loveCfg.amateur.checkpoint.break_chance);
+    if (love.status !== 'dating' || !broke) return;
+
+    const ex = love.partner ?? '';
+    love.status = afterBreakup(love);
+    love.partner = null;
+    love.datingYears = 0;
+    love.fromSchool = false;
+    this.flow.card(
+      'bad',
+      '各奔東西',
+      `${esc(label)}的那個夏天，<b class="hl">${esc(ex)}</b> 說：「我們可能不會再見面了吧。」` +
+        '<br><span class="sub">沒有人做錯什麼，只是路不同了。</span>',
+    );
+  }
+
+  /**
+   * 旅外時的安排。
+   *
+   * **帶她走與遠距離都會壞，只是壞的形狀不同**——沒有代價的選項不是選擇，是儀式。
+   * 帶她走是駝峰（適應期會過去），遠距離是一條平穩的高線（她的人生還在，只是
+   * 時差對不上）。
+   */
+  #loveOverseas(orgName: string, next: () => void): void {
+    const love = this.#love;
+    if (!hasPartner(love)) {
+      next();
+      return;
+    }
+
+    const cost = Math.round(this.#earnings * loveCfg.overseas.bring.cost_ratio);
+    this.flow.ask(
+      {
+        title: `要去${orgName}了。${love.partner} 站在還沒收的行李旁邊`,
+        options: [
+          {
+            id: 'love:bring',
+            label: '帶她一起走',
+            note: `養家要花 ${fmtMoney(cost)}｜前兩年新鮮，第三四年最難熬，之後會回穩`,
+            role: 'main',
+          },
+          {
+            id: 'love:apart',
+            label: '先遠距離看看',
+            note: '她的人生還在，只是你們的時差對不上——一直都不會太穩',
+          },
+          { id: 'love:end', label: '分手，不拖累她', role: 'warn' },
+        ],
+      },
+      (choice) => {
+        if (choice === 'love:end') {
+          this.#breakup('你說了那句「不要等我」。她沒有哭，只是點頭。');
+          next();
+          return;
+        }
+        love.overseasYears = 0;
+        if (choice === 'love:bring') {
+          love.overseas = 'bring';
+          this.#earnings = Math.max(0, this.#earnings - cost);
+          this.#addHonor(loveCfg.overseas.bring.achievement);
+          this.flow.card(
+            'gold',
+            '舉家旅外',
+            `兩張單程機票。她辭掉了工作，說「反正我本來也想換個環境」。` +
+              `<br>安家費 <b class="dn">−${fmtMoney(cost)}</b>。`,
+          );
+          next();
+          return;
+        }
+        love.overseas = 'apart';
+        this.flow.card(
+          'info',
+          '遠距離',
+          '登機前她抱了你很久，然後推你進安檢。往後的日子靠時差對不上的視訊撐著。',
+        );
+        next();
+      },
+    );
   }
 
   /**
@@ -2319,7 +3029,7 @@ export class Game {
         }
         this.#payBuyout('player');
         this.#moveTo(picked, '旅外');
-        next();
+        this.#loveOverseas(picked.orgName, next);
       },
     );
   }

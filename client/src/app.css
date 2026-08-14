@@ -325,6 +325,8 @@ body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content
 .tag.milestone{border-style:dashed;opacity:.85}
 /* 養成期與國際賽的榮譽：沒有結構化紀錄，也沒有年份，再淡一階區隔開。 */
 .tag.amateur{opacity:.7}
+/* 【人生】：婚姻與孩子不是獎項，但它是這段生涯的一部分。 */
+.tag.life{border-style:dotted;opacity:.8}
 /* 榮譽榜只在生涯結束後出現，接在能力表底下，跟著左欄一起捲。 */
 #panel-honors{margin-top:16px}
 #panel-honors h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;

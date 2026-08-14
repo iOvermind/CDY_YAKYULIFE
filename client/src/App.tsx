@@ -307,7 +307,12 @@ function GameScreen({
           <div id="panel-abilities">
             <h4>能力</h4>
             <AbilityPanel state={state} allocatable={allocatable} onChoose={onChoose} />
-            <HonorBoard awards={state.awards} honors={state.honors} summary={game.summary} />
+            <HonorBoard
+              awards={state.awards}
+              honors={state.honors}
+              summary={game.summary}
+              love={state.love}
+            />
           </div>
         )}
       </div>
@@ -607,10 +612,12 @@ function HonorBoard({
   awards,
   honors,
   summary,
+  love,
 }: {
   awards: readonly AwardRecord[];
   honors: readonly string[];
   summary: CareerSummary | null;
+  love: PlayerState['love'];
 }) {
   if (summary === null) return null;
 
@@ -653,6 +660,13 @@ function HonorBoard({
         {rest.map((h) => (
           <span className="tag amateur" key={h} style={{ marginRight: 4 }}>
             {h}
+          </span>
+        ))}
+        {/* 【人生】不是獎項，但它是這個人的生涯的一部分——一個拿過五座 MVP 卻離了
+            三次婚的人，與一個拿五座 MVP 且孩子坐滿看台的人，不是同一個故事。 */}
+        {lifeTags(love).map((t) => (
+          <span className="tag life" key={t} style={{ marginRight: 4 }}>
+            {t}
           </span>
         ))}
       </p>
@@ -782,6 +796,17 @@ function shortLevelName(levelName: string, org: string): string {
   return prefix !== '' && levelName.startsWith(prefix)
     ? levelName.slice(prefix.length)
     : levelName;
+}
+
+/** 結算時的【人生】標籤。婚姻、孩子與離婚各記一筆。 */
+function lifeTags(love: PlayerState['love']): string[] {
+  const out: string[] = [];
+  if (love.status === 'married' && love.partner !== null) {
+    out.push(love.marriedYear === null ? `與${love.partner}結婚` : `與${love.partner}結婚（${love.marriedYear}）`);
+  }
+  if (love.kids > 0) out.push(`${love.kids} 個孩子`);
+  if (love.divorces > 0) out.push(`離婚 ${love.divorces} 次`);
+  return out;
 }
 
 /** 生涯年表的一列。養成期與職業共用同一個形狀，年表才接得起來。 */

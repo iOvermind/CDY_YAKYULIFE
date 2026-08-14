@@ -17,6 +17,7 @@ import flavorJson from './flavor.json';
 import hallOfFameJson from './hall_of_fame.json';
 import injuryJson from './injury.json';
 import leaguesJson from './leagues.json';
+import loveJson from './love.json';
 import positionsJson from './positions.json';
 import traitsJson from './traits.json';
 import seasonJson from './season.json';
@@ -235,6 +236,71 @@ export interface InjuryData {
     readonly trait: string;
   };
   readonly amateur: { readonly chance: number; readonly games_lost_percent: Range };
+}
+
+/** 感情。獨立於事件卡的年度場外事件，見 love.json 與 ADR 0006。 */
+export interface LoveData {
+  readonly gate: {
+    readonly min_age: number;
+    readonly propose: { readonly requires_pro: boolean; readonly min_age: number };
+  };
+  readonly cadence: Readonly<Record<string, number>>;
+  readonly amateur: {
+    readonly confession: {
+      readonly base: number;
+      readonly per_rank: Readonly<Record<string, number>>;
+      readonly clamp: Range;
+    };
+    readonly checkpoint: { readonly break_chance: number };
+  };
+  readonly dating: {
+    readonly breakup: { readonly from_years: number; readonly base: number; readonly per_year: number };
+    readonly public_confirm: { readonly chance: number };
+    readonly confidante: { readonly dated_times: number; readonly trait: string };
+  };
+  readonly marriage: {
+    readonly childbirth_chance: { readonly by_kids: readonly number[] };
+    readonly max_kids: number;
+  };
+  readonly affair: {
+    readonly chance: number;
+    readonly escape_chance: number;
+    readonly reward: { readonly ability: string; readonly escaped: number; readonly refused: number };
+    readonly caught: {
+      readonly single_ability_loss: number;
+      readonly apology_success: number;
+      readonly apology_failed_loss: number;
+      readonly scum: {
+        readonly caught_times: number;
+        readonly trait: string;
+        readonly all_ability_loss: number;
+      };
+    };
+    readonly dating_breakup_penalty: { readonly add: number; readonly years: number };
+  };
+  readonly turmoil: {
+    readonly base_chance: number;
+    readonly swallow: { readonly crack_adds_chance: number; readonly reward_penalty_per_crack: number };
+    readonly leave: { readonly ability_loss: number };
+    readonly kinds: readonly { readonly id: string; readonly text: string }[];
+  };
+  readonly overseas: {
+    readonly bring: {
+      readonly turmoil_curve: readonly number[];
+      readonly cost_ratio: number;
+      readonly achievement: string;
+    };
+    readonly apart: { readonly turmoil_add: number };
+  };
+  readonly injury_support: { readonly rehab_chance: number };
+  readonly injury_risk: {
+    readonly married: number;
+    readonly with_kids: number;
+    readonly turmoil_year: number;
+  };
+  readonly divorce: { readonly base_ratio: number; readonly per_kid_ratio: number };
+  readonly childhood_sweetheart: { readonly trait: string; readonly name: string };
+  readonly names: { readonly school: readonly string[]; readonly pro: readonly string[] };
 }
 
 export interface FlavorData {
@@ -995,6 +1061,7 @@ export const awards = awardsJson as unknown as AwardsData;
 export const flavor = flavorJson as unknown as FlavorData;
 export const hallOfFame = hallOfFameJson as unknown as HallOfFameData;
 export const injury = injuryJson as unknown as InjuryData;
+export const love = loveJson as unknown as LoveData;
 export const positions = positionsJson as unknown as PositionsData;
 export const traits = traitsJson as unknown as TraitsData;
 
