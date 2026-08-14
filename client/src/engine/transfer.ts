@@ -18,6 +18,7 @@ import { dataKeys, leagues, teams as teamsData } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
 import { pathOf } from './pro.ts';
 import type { World } from './rng.ts';
+import { salaryFor } from './salary.ts';
 
 const cfg = leagues.transfer;
 
@@ -103,6 +104,33 @@ function pickTeam(world: World, org: string, exclude: string | null): string | n
   return pool[world.stream('career').int(0, pool.length - 1)]?.name ?? null;
 }
 
+/** 這個體系頂級聯盟的當年水準。比較兩個體系誰強看它。 */
+function orgPar(org: string, standards: LeagueStandards | null): number {
+  const path = pathOf(org);
+  return standardOf(standards, path[path.length - 1] ?? '').par;
+}
+
+/**
+ * 值不值得為這份報價動身。
+ *
+ * **只有平移與下降需要加薪。** 往更強的聯盟去本來就可能先減薪換舞台——中職
+ * 球員被大聯盟看上、落地 3A 領小聯盟薪水，那是真實會發生也應該發生的事。
+ * 但韓職來挖一個正在日職打球的人卻不加薪，那在現實裡不會發生。
+ *
+ * 目前年薪是 0（還沒領過薪水的年份）時一律放行——那不是加薪不足，是沒有
+ * 東西可以比。
+ */
+function worthMoving(
+  org: string,
+  level: string,
+  ctx: ScoutContext,
+): boolean {
+  if (ctx.salary <= 0) return true;
+  if (orgPar(org, ctx.standards) > orgPar(ctx.currentOrg, ctx.standards)) return true;
+  const projected = salaryFor(level, ctx.overall - standardOf(ctx.standards, level).par);
+  return projected >= ctx.salary * cfg.scouting.min_raise;
+}
+
 /** 簽約金：體系的基礎金額加上 d 值的加給。 */
 function signingBonus(org: string, d: number): number {
   const spec = orgConfig(org)?.signing_bonus;
@@ -120,6 +148,8 @@ export interface ScoutContext {
   /** 待過的體系。回到其中之一算落葉歸根。 */
   readonly playedOrgs: ReadonlySet<string>;
   readonly standards: LeagueStandards | null;
+  /** 目前的年薪。挖角要加薪才提得出口，見 scouting.min_raise。 */
+  readonly salary: number;
 }
 
 /**
@@ -152,6 +182,9 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
     if (ctx.overall < minOverall) continue;
     if (ctx.lastWinPct < cfg.scouting.min_win_pct.value) continue;
     if (roll >= chance) continue;
+    // **挖角必須加薪。** 沒有這一關，韓職會來挖一個正在日職打球的人——跨聯盟
+    // 移動本來就伴隨語言、家庭與適應成本，薪水只是打平的話沒有人會走。
+    if (!worthMoving(org, level, ctx)) continue;
 
     const count = rng.int(cfg.scouting.offers_per_org.min, cfg.scouting.offers_per_org.max);
     const used = new Set<string>();

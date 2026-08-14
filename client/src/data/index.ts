@@ -651,6 +651,8 @@ export interface TransferData {
   readonly scouting: {
     readonly offers_per_org: Range;
     readonly min_win_pct: { readonly value: number };
+    /** 挖角的加薪門檻：落地層級的預估年薪至少要是目前年薪的這個倍數。 */
+    readonly min_raise: number;
   };
   readonly fallback: { readonly max_offers: number };
   readonly orgs: Readonly<Record<string, TransferOrg>>;

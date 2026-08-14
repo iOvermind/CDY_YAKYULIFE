@@ -397,10 +397,22 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const stuckToBottom = useRef(true);
+  /**
+   * 版面變動引發的捲動事件要略過。
+   *
+   * **這是「事件卡有時不會捲到底」的真正原因。** 抽到事件卡時下方動作區長出
+   * 三個選項，事件流被壓矮——瀏覽器會為此送出一個捲動事件，而那一瞬間
+   * `scrollHeight − scrollTop − clientHeight` 因為 clientHeight 剛變小而超過
+   * 門檻，「貼底」旗標於是被關掉，接下來的 pin() 就什麼都不做了。
+   *
+   * 旗標只該由**玩家自己的捲動**改變，不該由版面改變。
+   */
+  const ignoreScroll = useRef(false);
 
   const pin = () => {
     const el = ref.current;
     if (el === null || !stuckToBottom.current) return;
+    ignoreScroll.current = true;
     el.scrollTop = el.scrollHeight - el.clientHeight;
   };
 
@@ -410,7 +422,14 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
     const el = ref.current;
     const inner = innerRef.current;
     if (el === null || inner === null) return;
-    const observer = new ResizeObserver(pin);
+    const observer = new ResizeObserver(() => {
+      // 尺寸變動當下送出的捲動事件不算數，等這一輪畫面更新完再恢復。
+      ignoreScroll.current = true;
+      pin();
+      requestAnimationFrame(() => {
+        ignoreScroll.current = false;
+      });
+    });
     observer.observe(el);
     observer.observe(inner);
     return () => observer.disconnect();
@@ -421,6 +440,10 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
       id="panel-log"
       ref={ref}
       onScroll={(e) => {
+        if (ignoreScroll.current) {
+          ignoreScroll.current = false;
+          return;
+        }
         const el = e.currentTarget;
         stuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
@@ -468,8 +491,11 @@ function StatsPanel({
   const def = stageOf(state.stage);
   // 進職業之後 stage 仍停在 HS、stageYear 繼續累加，直接沿用會顯示「高中4」。
   // 職業改用體系名加年資，與養成期的「國中1」是同一種寫法。
-  const yearLabel =
-    state.pro === null
+  // 生涯結束之後不寫學年也不寫職涯年——沒打上職業的人會一路數到「高中4」，
+  // 那個數字在他離開棒球之後不代表任何東西。
+  const yearLabel = summary !== null
+    ? '退休'
+    : state.pro === null
       ? (def.year_labels[state.stageYear - 1] ?? `${def.name}${state.stageYear}`)
       : `${state.pro.orgName}${state.pro.year}`;
 
@@ -488,7 +514,7 @@ function StatsPanel({
         </div>
         <div className="stat-cell">
           <b>{yearLabel}</b>
-          <span>{state.pro === null ? '學年' : '職涯'}</span>
+          <span>{summary !== null ? '生涯' : state.pro === null ? '學年' : '職涯'}</span>
         </div>
         {/* 可分配點只寫在左側記分板。同一個數字寫兩次，玩家會以為是兩件事。 */}
         {state.lockedSide !== 'fielder' && (

@@ -10,6 +10,7 @@ import {
   postingBids,
   postingConsentChance,
   postingTarget,
+  scoutingOffers,
 } from './transfer.ts';
 
 const cfg = leagues.transfer.posting;
@@ -145,6 +146,61 @@ describe('海外自由球員', () => {
       if (offers.length === 0) continue;
       seen++;
       for (const o of offers) expect(o.org).toBe('MiLB');
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+});
+
+describe('挖角的加薪門檻', () => {
+  const scout = (currentOrg: string, salary: number, overall = topBar('KBO') + 10) =>
+    scoutingOffers(new World('raise'), {
+      overall,
+      age: 26,
+      lastWinPct: 0.7,
+      currentOrg,
+      currentTeam: '',
+      playedOrgs: new Set<string>([currentOrg]),
+      standards: null,
+      salary,
+    });
+
+  it('平移或下降時要加薪兩成才提得出口', () => {
+    // 日職球員（par 53）遇到韓職（par 50）——那是下降，必須加薪。
+    const rich = scout('NPB', 100_000_000).filter((o) => o.org === 'KBO');
+    expect(rich).toHaveLength(0);
+
+    // 同一個人薪水很低時，韓職開得起價，報價就出得來。
+    let seen = 0;
+    for (let i = 0; i < 40; i++) {
+      const world = new World(`poor-${i}`);
+      seen += scoutingOffers(world, {
+        overall: topBar('KBO') + 10,
+        age: 26,
+        lastWinPct: 0.7,
+        currentOrg: 'NPB',
+        currentTeam: '',
+        playedOrgs: new Set<string>(['NPB']),
+        standards: null,
+        salary: 1,
+      }).filter((o) => o.org === 'KBO').length;
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('往更強的體系去不受限制——他買的是舞台，不是薪水', () => {
+    // 中職球員（par 44）被日職（par 53）看上，即使落地在二軍也照樣提得出口。
+    let seen = 0;
+    for (let i = 0; i < 60; i++) {
+      seen += scoutingOffers(new World(`up-${i}`), {
+        overall: topBar('NPB') + 6,
+        age: 24,
+        lastWinPct: 0.7,
+        currentOrg: 'CPBL',
+        currentTeam: '',
+        playedOrgs: new Set<string>(['CPBL']),
+        standards: null,
+        salary: 100_000_000,
+      }).filter((o) => o.org === 'NPB').length;
     }
     expect(seen).toBeGreaterThan(0);
   });

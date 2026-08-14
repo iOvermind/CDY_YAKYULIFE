@@ -319,3 +319,36 @@ describe('championshipDice', () => {
     }
   });
 });
+
+describe('蓄力槽的結算', () => {
+  /**
+   * 成本變便宜之後，存著的點數要花得出去。
+   *
+   * 蓄力槽只在加點的當下結算，但那一級的成本會被年齡衰退、天花板提升與二刀流
+   * 三件事往下拉。舊版沒有在那三處重新結算，於是畫面顯示「2/2」卻不進位，
+   * 看起來像壞掉。這裡釘住 train() 這一端：只要餵 0 點進去，滿了的槽就該升級。
+   */
+  it('餵 0 點也會把滿了的槽兌現', () => {
+    const ctx = growthCurve(false);
+    const ceiling = 70;
+    const value = 54;
+    const cost = abilityCost(value, ceiling, ctx);
+
+    // 槽裡剛好放著這一級的成本——那正是「2/2 卻不進位」的狀態。
+    const settled = train(value, 0, ceiling, cost, ctx);
+    expect(settled.value).toBe(value + 1);
+    expect(settled.carry).toBe(0);
+  });
+
+  it('槽沒滿就原封不動', () => {
+    const ctx = growthCurve(false);
+    const ceiling = 70;
+    const value = 54;
+    const cost = abilityCost(value, ceiling, ctx);
+    if (cost <= 1) return; // 成本 1 的區間沒有「差一點」可言
+
+    const settled = train(value, 0, ceiling, cost - 1, ctx);
+    expect(settled.value).toBe(value);
+    expect(settled.carry).toBe(cost - 1);
+  });
+});

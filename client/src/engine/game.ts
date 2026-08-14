@@ -815,6 +815,8 @@ export class Game {
       const name = abilities.abilities[raise.key] ?? raise.key;
       const before = this.#ceilingBonus[raise.key] ?? 0;
       this.#ceilingBonus[raise.key] = raiseCeiling(before, raise.points);
+      // 天花板往上移，離頂的距離變遠，這一級因此變便宜。
+      this.#settleCarry();
       const gained = (this.#ceilingBonus[raise.key] ?? 0) - before;
       lines.push(
         gained > 0
@@ -1028,6 +1030,8 @@ export class Game {
 
     if (r !== null && qualifiesAsTwoWay(r)) {
       this.#traits.add(TWO_WAY_TRAIT);
+      // 二刀流換到另一條成長曲線，成本結構整個變了。
+      this.#settleCarry();
       this.flow.card(
         'gold',
         '隱藏天賦：二刀流',
@@ -1687,6 +1691,8 @@ export class Game {
     // ---- 老化
     const aging = applyAging(this.world, this.#ability, this.#age);
     this.#ability = { ...aging.ability };
+    // 能力值降下來之後，那一級的成本跟著變便宜——存著的點數可能已經夠用了。
+    this.#settleCarry();
     // 只列還在用的能力。定位鎖定之後另一側早就不顯示了，卻仍在衰退卡上刷出
     // 一整排數字，等於在提醒玩家一堆他已經動不了的東西。
     const visible = [...aging.changes.entries()].filter(([k]) =>
@@ -2048,6 +2054,7 @@ export class Game {
       currentTeam: pro?.team ?? '',
       playedOrgs: this.#playedOrgs,
       standards: this.#standards,
+      salary: this.#seasonSalary,
     };
   }
 
@@ -2947,6 +2954,23 @@ export class Game {
         undefined,
         `<b class="hl">${esc(name)}</b> 還沒突破，${points} 點存進蓄力槽（目前 ${result.carry} 點）。`,
       );
+    }
+  }
+
+  /**
+   * 結算蓄力槽。
+   *
+   * 蓄力槽只在**加點的當下**結算，但那一級的成本會被三件事往下拉：年齡衰退
+   * 讓能力值降下來、事件提升天花板、取得二刀流換到較便宜的成長曲線。這三件
+   * 事發生之後，原本存著的點數可能已經足夠升一級，卻沒有人去花它——畫面於是
+   * 顯示「2/2」卻不進位，看起來像壞掉。
+   *
+   * 因此凡是會改變成本的地方，事後都要把槽清一次。
+   */
+  #settleCarry(): void {
+    for (const key of Object.keys(this.#carry)) {
+      if ((this.#carry[key] ?? 0) <= 0) continue;
+      this.#applyPoints(key, 0, { silent: true });
     }
   }
 
