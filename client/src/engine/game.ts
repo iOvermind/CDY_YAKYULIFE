@@ -96,6 +96,7 @@ import {
 } from './league.ts';
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
+import { injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
 import {
   applyAging,
   asksRetirement,
@@ -360,6 +361,12 @@ export class Game {
   #seasonPitching: PitchingLine | null = null;
   /** 這一季的守備分。與 #defenseRuns 的層級累計值不同，最近一季那張表看它。 */
   #seasonDefenseRuns = 0;
+  /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
+  #seasonFactor = 1;
+  /** 生涯大傷次數。玻璃人的解鎖條件與合約年限都看它。 */
+  #majorInjuries = 0;
+  /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
+  #rehabYear = false;
   #statsByStage: Record<string, { batting: BattingLine | null; pitching: PitchingLine | null }> =
     {};
   /**
@@ -1246,6 +1253,7 @@ export class Game {
       () => this.#proSpringTraining(),
       () => this.#positionReview(),
       () => this.#drawEventCards(),
+      () => this.#healthCheck(),
       () => this.#tradeDeadline(),
       () => this.#proSeason(),
       () => this.#proEndYear(),
@@ -1354,6 +1362,8 @@ export class Game {
       standards: this.#standards,
       // 輪值線掛在球隊戰力上——在爛隊當先發、去強隊只能進牛棚。
       teamWinRate: this.#league?.get(pro.team)?.winRate ?? null,
+      // 傷病的結果。乘的是出賽量，不是事後把數據打折。
+      seasonFactor: this.#seasonFactor,
     });
 
     this.#seasonBatting = line.batting;
@@ -1426,8 +1436,115 @@ export class Game {
       `<span class="sub">年薪 ${fmtMoney(salary)}　·　生涯累積 ${fmtMoney(this.#earnings)}</span>`,
     );
 
-    this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
+    // 整季報銷時不印成績列——一整排 0 不是成績，那一年他不在場上。
+    if (this.#seasonFactor <= 0) {
+      this.flow.card('bad', `${levelOf(pro.level).name} 球季成績`, '傷缺全季，沒有出賽紀錄。');
+    } else {
+      this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
+    }
     this.#annualAwards(line.batting, line.pitching);
+  }
+
+  /**
+   * 球季前的健康檢查。
+   *
+   * 排在球季之前，因為結果決定的是**這一季能上場多久**——它不是事後把數據打折，
+   * 而是他真的只上場了那麼多。
+   *
+   * 事件卡自找的額外風險在這裡兌現並歸零：那是「今年」的帳，不該累積到明年。
+   */
+  #healthCheck(): void {
+    // 隔年報廢的傷勢優先——去年的醫生已經說過了，今年不必再擲一次。
+    if (this.#rehabYear) {
+      this.#rehabYear = false;
+      this.#seasonFactor = 0;
+      this.#injuryRisk = 0;
+      this.flow.card(
+        'bad',
+        '復健年',
+        '整季都在復健室度過。<b class="dn">一場比賽也沒有上</b>——去年那一刀比誰想的都重。',
+      );
+      return;
+    }
+
+    const result = rollInjury(this.world, {
+      age: this.#age,
+      traits: this.#traits,
+      extraRisk: this.#injuryRisk,
+    });
+    const chance = injuryChance({
+      age: this.#age,
+      traits: this.#traits,
+      extraRisk: this.#injuryRisk,
+    });
+    this.#injuryRisk = 0;
+    this.#seasonFactor = result.seasonFactor;
+
+    if (result.kind === 'none') {
+      this.flow.card('info', '健康回報', `本季平安出賽。<span class="sub">（受傷機率 ${chance}%）</span>`);
+      return;
+    }
+
+    const lines = [esc(result.text)];
+    lines.push(this.#applyInjuryLoss(result));
+
+    if (result.kind === 'major') {
+      this.#majorInjuries++;
+      if (result.rehabNextYear) {
+        this.#rehabYear = true;
+        lines.push('醫生搖搖頭：<b class="dn">明年也很難趕上開季</b>。');
+      }
+    }
+
+    this.flow.card('bad', result.kind === 'major' ? '大傷' : '小傷', lines.filter((l) => l !== '').join('<br>'));
+
+    if (
+      result.kind === 'major' &&
+      unlocksGlass({ majorInjuries: this.#majorInjuries, age: this.#age, traits: this.#traits })
+    ) {
+      this.#unlockTrait(
+        'glass',
+        '玻璃人',
+        '生涯第二次大傷。從此傷病如影隨形——<b class="dn">往後每季的受傷機率都有一個下限</b>。',
+        'bad',
+      );
+    } else if (result.kind === 'major' && this.#majorInjuries >= 2 && !this.#traits.has('glass')) {
+      // 32 歲以後的大傷是歲月的損耗，不是體質問題。
+      this.flow.card(
+        'info',
+        '醫療團隊評估',
+        '「這是歲月的損耗，不是體質問題。」——老將的傷，球團看得比誰都開。',
+      );
+    }
+  }
+
+  /** 套用傷勢留下的永久損失，回傳給卡片用的敘述。 */
+  #applyInjuryLoss(result: Injury): string {
+    if (result.loss.scope === 'none') return '';
+
+    // 只扣他實際在用的那一側。定位鎖定之後另一側早就不練了，扣它沒有意義。
+    const keys = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide));
+    if (keys.length === 0) return '';
+
+    if (result.loss.scope === 'all') {
+      for (const key of keys) {
+        this.#ability[key] = Math.max(
+          abilities.scale.hard_floor,
+          (this.#ability[key] ?? 0) - result.loss.points,
+        );
+      }
+      // 能力值降下來，那一級的成本跟著變便宜——存著的點數可能已經夠用了。
+      this.#settleCarry();
+      return `重大傷勢重創身體素質：<b class="dn">全能力 −${result.loss.points}</b>。`;
+    }
+
+    const key = keys[this.world.stream('health').int(0, keys.length - 1)];
+    if (key === undefined) return '';
+    const before = this.#ability[key] ?? 0;
+    this.#ability[key] = Math.max(abilities.scale.hard_floor, before - result.loss.points);
+    this.#settleCarry();
+    const name = abilities.abilities[key] ?? key;
+    return `傷勢留下後遺症：<b class="dn">${esc(name)} −${before - (this.#ability[key] ?? 0)}</b>。`;
   }
 
   /**
@@ -2101,6 +2218,9 @@ export class Game {
       side,
       traits: this.#traits,
       tradeRefused: this.#tradeRefuseYears > 0,
+      // 傷病史縮短年限。這個輸入從合約系統做好那天就寫在那裡，恆為 0——
+      // 傷病系統上線之後它第一次有數字。
+      injuries: { majorInjuries: this.#majorInjuries, tjSurgeries: 0 },
     });
 
     const base = salaryFor(pro.level, this.#lastD);

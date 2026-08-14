@@ -186,8 +186,8 @@ describe('子序列歸屬', () => {
     expect(counts.season).toBeGreaterThan(0);
     expect(counts.events).toBeGreaterThan(0);
     expect(counts.career).toBeGreaterThan(0);
-    // 傷病判定還沒實作，這條流必須是零
-    expect(counts.health).toBe(0);
+    // 傷病走 health。那條子序列從 ADR 0002 就保留著，傷病是它第一個使用者。
+    expect(counts.health).toBeGreaterThan(0);
   });
 });
 

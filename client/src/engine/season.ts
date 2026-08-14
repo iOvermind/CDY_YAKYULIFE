@@ -58,6 +58,13 @@ export interface SeasonContext {
   readonly standards?: LeagueStandards | null;
   /** 球隊勝率。輪值線掛在它上面——強隊難擠、弱隊容易占。二軍沒有戰力表，未知時視為 .500。 */
   readonly teamWinRate?: number | null;
+  /**
+   * 這一季的出賽係數，1 為全勤、0 為整季報銷。傷病落在這裡。
+   *
+   * **它乘的是出賽量，不是事後把數據打折**——他真的只上場了那麼多，因此率型
+   * 數據（打擊率、防禦率）不受影響，累積型數據才會少。
+   */
+  readonly seasonFactor?: number;
 }
 
 /**
@@ -186,13 +193,16 @@ export function proBattingLine(
   level: string,
   overall: number,
   standards: LeagueStandards | null = null,
+  seasonFactor = 1,
 ): ProBattingLine {
   const rng = world.stream('season');
   const b = cfg.batting;
   const par = standardOf(standards, level).par;
   const noise = () => b.noise.min + rng.next() * (b.noise.max - b.noise.min);
 
-  const games = gamesPlayed(world, ability, position, level, overall, standards);
+  const games = Math.round(
+    gamesPlayed(world, ability, position, level, overall, standards) * seasonFactor,
+  );
   const pa = plateAppearances(world, games, overall, par);
 
   const bb = Math.round(pa * rateOf(b.walk_rate, ability, par) * noise());
@@ -298,6 +308,7 @@ export function proPitchingLine(
   overall: number,
   standards: LeagueStandards | null = null,
   teamWinRate: number | null = null,
+  seasonFactor = 1,
 ): ProPitchingLine {
   const rng = world.stream('season');
   const p = cfg.pitching;
@@ -338,6 +349,11 @@ export function proPitchingLine(
     const n = p.reliever.noise;
     ip = games * per * (n.min + rng.next() * (n.max - n.min));
   }
+  // 傷病落在出賽量上：他真的只上場了那麼多，因此率型數據不受影響。
+  games = Math.round(games * seasonFactor);
+  starts = Math.round(starts * seasonFactor);
+  ip *= seasonFactor;
+
   // 出局數才是原子單位——存小數會生出 29.5 這種棒球裡不存在的局數。
   const outs = Math.max(0, Math.round(ip * 3));
   ip = outs / 3;
@@ -397,10 +413,26 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
   return {
     level: ctx.level,
     pitching: asPitcher
-      ? proPitchingLine(world, ctx.ability, ctx.level, ctx.overall, standards, ctx.teamWinRate ?? null)
+      ? proPitchingLine(
+          world,
+          ctx.ability,
+          ctx.level,
+          ctx.overall,
+          standards,
+          ctx.teamWinRate ?? null,
+          ctx.seasonFactor ?? 1,
+        )
       : null,
     batting: asBatter
-      ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, ctx.overall, standards)
+      ? proBattingLine(
+          world,
+          ctx.ability,
+          ctx.position,
+          ctx.level,
+          ctx.overall,
+          standards,
+          ctx.seasonFactor ?? 1,
+        )
       : null,
   };
 }

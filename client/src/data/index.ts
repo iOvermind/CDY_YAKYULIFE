@@ -15,6 +15,7 @@ import amateurJson from './amateur.json';
 import awardsJson from './awards.json';
 import flavorJson from './flavor.json';
 import hallOfFameJson from './hall_of_fame.json';
+import injuryJson from './injury.json';
 import leaguesJson from './leagues.json';
 import positionsJson from './positions.json';
 import traitsJson from './traits.json';
@@ -203,6 +204,39 @@ export interface AbilitiesData {
  * 引退場景依「代表聯盟 + 生涯分級」選用；中職的第三帶還依投打分歧，因此那一格
  * 是物件而非字串。取用時要先判斷型別。
  */
+/** 傷病。每季開打前擲一次，結果落在出賽係數上。 */
+export interface InjuryData {
+  readonly chance: {
+    readonly base: number;
+    readonly age_steps: { readonly tiers: readonly { readonly from_age: number; readonly add: number }[] };
+    readonly clamp: Range;
+    readonly traits: {
+      readonly academy: { readonly before_age: number; readonly add: number };
+      readonly iron: { readonly cap: number };
+      readonly glass: { readonly floor: number };
+      readonly both: { readonly value: number };
+    };
+  };
+  readonly severity: {
+    readonly minor_chance: number;
+    readonly minor: {
+      readonly games_lost_percent: Range;
+      readonly aftereffect: { readonly chance: number; readonly points: Range };
+    };
+    readonly major: {
+      readonly season_played_percent: Range;
+      readonly ability_loss: { readonly points: number };
+      readonly rehab_next_year: { readonly chance: number };
+    };
+  };
+  readonly glass_unlock: {
+    readonly major_injuries: number;
+    readonly before_age: number;
+    readonly trait: string;
+  };
+  readonly amateur: { readonly chance: number; readonly games_lost_percent: Range };
+}
+
 export interface FlavorData {
   readonly placeholders: Readonly<Record<string, string>>;
   /** 引退時的鄉民留言，鍵是分級（0 最高）。 */
@@ -960,6 +994,7 @@ export const amateur = amateurJson as unknown as AmateurData;
 export const awards = awardsJson as unknown as AwardsData;
 export const flavor = flavorJson as unknown as FlavorData;
 export const hallOfFame = hallOfFameJson as unknown as HallOfFameData;
+export const injury = injuryJson as unknown as InjuryData;
 export const positions = positionsJson as unknown as PositionsData;
 export const traits = traitsJson as unknown as TraitsData;
 
