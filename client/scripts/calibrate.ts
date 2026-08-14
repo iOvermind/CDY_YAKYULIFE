@@ -21,10 +21,18 @@
  */
 
 import { describe, it } from 'vitest';
-import { hallOfFame, positions } from '../src/data/index.ts';
-import { applyTierFloors, summarizeCareer, type CareerSummary } from '../src/engine/career.ts';
+import { abilities, dataKeys, hallOfFame, leagues, positions } from '../src/data/index.ts';
+import {
+  applyTierFloors,
+  difficultyOf,
+  summarizeCareer,
+  type CareerSummary,
+} from '../src/engine/career.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
-import { responsibilityOf } from '../src/engine/metrics.ts';
+import { battingShares, proBaseline, responsibilityOf, winPct } from '../src/engine/metrics.ts';
+import type { Abilities } from '../src/engine/rating.ts';
+import { World } from '../src/engine/rng.ts';
+import { playSeason } from '../src/engine/season.ts';
 
 /**
  * 模擬玩家的策略。
@@ -56,7 +64,7 @@ interface CareerResult {
 }
 
 /** 跑完一局，回傳結算結果。 */
-function runCareer(setup: GameSetup, policy: PolicyName): CareerResult {
+function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): CareerResult {
   const order = POLICIES[policy];
   const game = new Game(setup).start();
 
@@ -65,13 +73,28 @@ function runCareer(setup: GameSetup, policy: PolicyName): CareerResult {
   while (game.flow.prompt !== null && guard++ < 8000) {
     const options = game.flow.prompt.options;
     const rotated = [...order.slice(cursor % order.length), ...order];
+    const route = overseas
+      ? (options.find((o) => o.id === 'transfer:0') ??
+        options.find((o) => o.id === 'posting:ask') ??
+        options.find((o) => o.id === 'posting:0'))
+      : (options.find((o) => o.id === 'transfer:stay') ??
+        options.find((o) => o.id === 'posting:wait'));
     const pick =
       // 被下放或高齡時一律續戰——「合理但不極致」的玩家不會主動掛靴。
       options.find((o) => o.id === 'retire:stay') ??
-      // **不旅外**。這是刻意的基準線：轉會會把樣本拆到六個聯盟，而每個聯盟的
-      // 門檻與難度係數都不同，混在一起就量不出「一個中職生涯長什麼樣」。
-      // 旅外的分佈要另外用專屬策略量。
-      options.find((o) => o.id === 'transfer:stay') ??
+      // 旅外與否是校準的第二個維度。
+      //
+      // **預設不旅外**：轉會會把樣本拆到六個聯盟，而每個聯盟的門檻與難度係數
+      // 都不同，混在一起就量不出「一個中職生涯長什麼樣」。
+      //
+      // 打開 `CALIBRATE_OVERSEAS=1` 則反過來，有機會就走——那組樣本量的是
+      // **難度係數有沒有把聯盟水準的差距吃掉**：同一套玩法在不同聯盟落地，
+      // 評價分應該落在同一個帶上，落差就是係數沒調好。
+      route ??
+      // 交易：一般球員保持沉默，明星點頭同意。抱怨與否決都是「情緒」玩法，
+      // 不屬於基準線。
+      options.find((o) => o.id === 'trade:silent') ??
+      options.find((o) => o.id === 'trade:accept') ??
       // 合約：一律長約。短約是賭下次身價，那是「極致」的玩法。
       options.find((o) => o.id === 'term:long') ??
       options.find((o) => o.id === 'term:short') ??
@@ -251,8 +274,186 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   console.log(`  守位門檻目前是暫定值，正式值要把各守位的守備分分布放在同一個分位數上。`);
   console.log(`  現行 margin = ${positions.defense_average.margin}`);
 
-  console.log('\n※ 提醒：責任額目前只看場次、不看球隊戰績（0 勝的球隊照樣有勝利份額）。');
-  console.log('   那條修正會改變整套公式的參照基準，屆時全部門檻與係數都要重跑一次。\n');
+  console.log('');
+}
+
+
+/**
+ * 跨聯盟的報表。
+ *
+ * 這是難度係數唯一量得出來的地方：**同一套玩法在不同聯盟落地，評價分應該落在
+ * 同一個帶上**。日職生涯的中位數若系統性高於中職，那不是日職比較好混，是難度
+ * 係數把水準差距補過頭了。
+ *
+ * 只在旅外模式跑——不旅外的樣本裡除了中職什麼都沒有。
+ */
+function reportLeagues(results: readonly CareerResult[]): void {
+  const byOrg = new Map<
+    string,
+    { name: string; scores: number[]; perSeason: number[]; winPcts: number[]; seasons: number }
+  >();
+  for (const r of results) {
+    for (const league of r.summary.leagues) {
+      const row = byOrg.get(league.org) ?? {
+        name: league.orgName,
+        scores: [],
+        perSeason: [],
+        winPcts: [],
+        seasons: 0,
+      };
+      row.scores.push(league.score);
+      // **每季評價分才是難度係數的指標。** 生涯總分同時受年數影響，旅外的人在
+      // 每個聯盟都只待幾年，總分當然低——那是生涯形狀的問題，不是係數的問題。
+      if (league.seasons > 0) row.perSeason.push(league.score / league.seasons);
+      // 份額勝率是**不受出賽量與年數影響**的水位計，用來分辨兩件常被混為一談
+      // 的事：分數低是因為在那邊只是邊緣人（勝率低），還是因為難度係數沒有
+      // 把聯盟水準的差距補回來（勝率相當、分數卻差一截）。
+      row.winPcts.push(winPct(league.shares));
+      row.seasons += league.seasons;
+      byOrg.set(league.org, row);
+    }
+  }
+
+  console.log('── 跨聯盟（旅外模式）');
+  console.log('  同一套玩法在不同聯盟落地，中位數應該互相接近——那正是難度係數要做的事。');
+  const rows = [...byOrg.entries()].sort((a, b) => b[1].scores.length - a[1].scores.length);
+  for (const [org, row] of rows) {
+    const sorted = [...row.scores].sort((a, b) => a - b);
+    const per = [...row.perSeason].sort((a, b) => a - b);
+    const wp = [...row.winPcts].sort((a, b) => a - b);
+    console.log(
+      `  ${row.name.padEnd(6)}（${org.padEnd(4)}）` +
+        `生涯 ${String(sorted.length).padStart(4)} 段` +
+        `　平均 ${(row.seasons / Math.max(1, sorted.length)).toFixed(1).padStart(4)} 季` +
+        `　總分 p50 ${quantile(sorted, 0.5).toFixed(0).padStart(4)}` +
+        `　每季 p25 ${quantile(per, 0.25).toFixed(1).padStart(5)}` +
+        `　p50 ${quantile(per, 0.5).toFixed(1).padStart(5)}` +
+        `　p90 ${quantile(per, 0.9).toFixed(1).padStart(5)}` +
+        `　份額勝率 p50 ${quantile(wp, 0.5).toFixed(3)}`,
+    );
+  }
+  console.log('  ※ 段數少的聯盟中位數噪音大，要看的是段數夠多的那幾個。');
+  console.log('     要比的是「每季」那三欄——總分低多半只代表待得短。');
+  console.log('     份額勝率相當、每季分數卻差一截，才是難度係數沒調好。');
+  console.log('');
+}
+
+/** 全能力一律設成同一個數字的受試者。難度實驗要的是「同一個人」。 */
+function uniformAbility(value: number): Abilities {
+  const out: Record<string, number> = {};
+  for (const key of dataKeys(abilities.abilities)) out[key] = value;
+  return out as Abilities;
+}
+
+/**
+ * 難度係數的實驗。
+ *
+ * 這是唯一乾淨的量法：**同一個能力值，在每個頂級聯盟各打一批球季**。生涯樣本
+ * 量不出來，因為旅外的人在新聯盟一律是邊緣人（落地規則就是 `min + 4`），分數
+ * 低是選擇效應而不是係數不準——那兩件事在生涯報表裡混在一起。
+ *
+ * 判準：能力相同的人在弱聯盟宰制力更強、原始份額更高，乘上難度係數之後**應該
+ * 拉回同一條水平線**。剩下的落差就是指數沒調好。
+ */
+function reportDifficulty(): void {
+  const SAMPLES = 400;
+
+  console.log('── 難度係數（各聯盟各打一批球季）');
+  console.log(`  每個聯盟 ${SAMPLES} 季。兩組受試者回答兩個不同的問題——`);
+  console.log('    絕對能力組：同一個人到處打，量的是「同一個人在弱聯盟是不是更威」。');
+  console.log('    相對能力組：每個聯盟都取比平均高 6 分的人，量的是**聯盟自我參照留下的虛胖**。');
+  console.log('    後者若已經齊平，難度係數就不是在壓虛胖，而是在宣告「強聯盟的一季比較值錢」。');
+
+  difficultyGroup('絕對能力組（全能力 58）', SAMPLES, true);
+  difficultyGroup('相對能力組（各聯盟 par＋6）', SAMPLES, false);
+  console.log('');
+}
+
+/** 難度實驗的一組樣本。`absolute` 為真時全聯盟共用同一個能力值。 */
+function difficultyGroup(label: string, SAMPLES: number, absolute: boolean): void {
+  console.log(`
+  ${label}`);
+  const rows: {
+    level: string;
+    name: string;
+    par: number;
+    games: number;
+    raw: number;
+    perGame: number;
+    adjusted: number;
+  }[] = [];
+  for (const level of dataKeys(leagues.levels)) {
+    const info = leagues.levels[level];
+    if (info === undefined || info.top === undefined) continue;
+
+    const overall = absolute ? 58 : info.par + 6;
+    const ability = uniformAbility(overall);
+    const world = new World(`difficulty-${level}`);
+    let raw = 0;
+    for (let i = 0; i < SAMPLES; i++) {
+      const line = playSeason(world, {
+        level,
+        ability,
+        position: 'CF',
+        overall,
+        better: 'fielder',
+        twoWay: false,
+        standards: null,
+      });
+      if (line.batting === null) continue;
+      // 看的是**勝利份額**，不是責任額——責任額只是出賽量的換算，每場一定
+      // 相等，量它等於量行事曆。「弱聯盟虛胖」講的是勝利份額。
+      //
+      // 只取打擊一項：三個分段各有各的雜訊，混在一起看不出係數的走向。
+      raw += battingShares(line.batting, proBaseline(level), null).win;
+    }
+    const mean = raw / SAMPLES;
+    rows.push({
+      level,
+      name: info.name,
+      par: info.par,
+      games: info.games,
+      raw: mean,
+      // **每場才比得下去。** 份額本來就隨球季長度累積，大聯盟一季 162 場、
+      // 澳職四十幾場，不除掉場次的話量到的是行事曆不是難度。
+      perGame: (mean / info.games) * 100,
+      adjusted: (mean / info.games) * 100 * difficultyOf(info.par),
+    });
+  }
+
+  for (const r of rows) {
+    console.log(
+      `  ${r.name.padEnd(6)}（par ${String(r.par).padStart(2)}｜${String(r.games).padStart(3)} 場）` +
+        `　每季 ${r.raw.toFixed(2).padStart(6)}` +
+        `　每百場 ${r.perGame.toFixed(2).padStart(6)}` +
+        `　×難度 ${r.adjusted.toFixed(2).padStart(6)}`,
+    );
+  }
+  const ratio = (pick: (r: (typeof rows)[number]) => number): number => {
+    const list = rows.map(pick);
+    return Math.max(...list) / Math.max(0.001, Math.min(...list));
+  };
+  console.log(
+    `  最大／最小比　修正前 ${ratio((r) => r.perGame).toFixed(2)}` +
+      `　修正後 ${ratio((r) => r.adjusted).toFixed(2)}（越接近 1.00 越好）`,
+  );
+  // 掃一遍指數，找出把這一組壓得最平的值。這是「正式值由校準腳本決定」那句話
+  // 真正兌現的地方。
+  let bestExp = 0;
+  let bestSpread = Number.POSITIVE_INFINITY;
+  for (let e = 0; e <= 4.001; e += 0.05) {
+    const adj = rows.map((r) => r.perGame * Math.pow(r.par / hallOfFame.difficulty.reference_par, e));
+    const spread = Math.max(...adj) / Math.max(0.001, Math.min(...adj));
+    if (spread < bestSpread) {
+      bestSpread = spread;
+      bestExp = e;
+    }
+  }
+  console.log(
+    `  現行 exponent = ${hallOfFame.difficulty.exponent}` +
+      `　｜壓得最平的 exponent = ${bestExp.toFixed(2)}（比 ${bestSpread.toFixed(2)}）`,
+  );
+  console.log('  ※ 修正後比修正前更離散，就代表係數在反方向加碼。');
 }
 
 /**
@@ -269,6 +470,7 @@ describe('校準', () => {
   it('跑出報表', { timeout: 900_000 }, () => {
       const runs = Number(argOf('runs', '400'));
       const policy = argOf('policy', 'balanced') as PolicyName;
+      const overseas = argOf('overseas', '') !== '';
       if (POLICIES[policy] === undefined) {
         throw new Error(`未知的策略：${policy}（可用：${Object.keys(POLICIES).join('、')}）`);
       }
@@ -286,9 +488,12 @@ describe('校準', () => {
               bats: 'R',
             },
             policy,
+            overseas,
           ),
         );
       }
     report(results, policy, runs);
+    if (overseas) reportLeagues(results);
+    reportDifficulty();
   });
 });
