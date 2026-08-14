@@ -505,8 +505,8 @@ function StatsPanel({
         )}
         {/* 登錄守位只有頂級聯盟才有——二軍不挑位置，那裡沒有守位可顯示。 */}
         {state.pro?.positionName != null && (
-          <div className="stat-cell">
-            <b>{state.pro.positionName}</b>
+          <div className="stat-cell" title={state.pro.positionName}>
+            <b>{state.pro.position}</b>
             <span>登錄守位</span>
           </div>
         )}
@@ -557,6 +557,7 @@ function StatsPanel({
           batting={state.seasonBatting}
           pitching={state.seasonPitching}
           base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
+          defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
         />
       )}
 
@@ -827,7 +828,7 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
       <h4 style={{ marginTop: 14 }}>{title}</h4>
       {batting.length > 0 && (
         <div className="fin-scroll">
-          <div className="fin-caption">打擊</div>
+          <div className="fin-caption">野手</div>
           <table className="fin">
             <thead>
               <tr>
@@ -917,7 +918,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
       {batting.length > 0 && (
         <div className="fin-scroll">
           {/* 兩張表的欄位差很多，沒有小標的話捲到一半會分不出在看哪一側。 */}
-          <div className="fin-caption">打擊</div>
+          <div className="fin-caption">野手</div>
           <table className="fin">
             <thead>
               <tr>
@@ -1036,12 +1037,15 @@ function StatLines({
   batting,
   pitching,
   base,
+  defenseRuns,
 }: {
   label: string | null;
   batting: BattingLine | null;
   pitching: PitchingLine | null;
   /** 聯盟平均。ERA+／OPS+／WS 都要跟它比。 */
   base: Baseline;
+  /** 這一季的守備分。守備沒有別的欄位，因此掛在野手那張表的最後一欄。 */
+  defenseRuns?: number | null;
 }) {
   if (batting === null && pitching === null) {
     return (
@@ -1080,7 +1084,7 @@ function StatLines({
       )}
       {batting !== null && (
         <div className="fin-scroll">
-          <div className="fin-caption">打擊</div>
+          <div className="fin-caption">野手</div>
           <table className="fin">
             <thead>
               <tr>
@@ -1089,6 +1093,7 @@ function StatLines({
                     {c.key}
                   </th>
                 ))}
+                {defenseRuns != null && <th title="守備分">DEF</th>}
               </tr>
             </thead>
             <tbody>
@@ -1096,6 +1101,9 @@ function StatLines({
                 {BATTING_COLUMNS.map((c) => (
                   <td key={c.key}>{c.value(batting, base)}</td>
                 ))}
+                {defenseRuns != null && (
+                  <td>{defenseRuns > 0 ? `+${defenseRuns}` : defenseRuns}</td>
+                )}
               </tr>
             </tbody>
           </table>
@@ -1129,9 +1137,11 @@ function Board({
   // 特性，寫兩次只是佔位。
   // 野手側的守位由守備能力決定：守得動就站守位，守不動就是 DH，這也是多數
   // 投手出身的二刀流的歸宿。
+  // 寫英文代碼（P＋DH），不寫「投手＋指定打擊」——姓名那一行還要擠慣用手，
+  // 中文全稱會把它撐到換行。
   const roleLabel = state.traits.has('two_way')
-    ? `投手＋${positionName(fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL))}`
-    : abilities.start_positions[player.startPosition];
+    ? `P＋${fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL)}`
+    : player.startPosition;
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>

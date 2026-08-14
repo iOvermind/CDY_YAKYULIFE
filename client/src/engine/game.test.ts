@@ -1408,3 +1408,52 @@ describe('季中交易', () => {
     }
   });
 });
+
+describe('下放與換體系', () => {
+  /**
+   * 「你被送回 X」的 X 必須等於他現在所在的層級。
+   *
+   * 從判定下放到問這句話之間隔著挖角、入札、下放遞約三個入口，任何一個成交
+   * 都會讓他換到別的體系——那時他根本沒有被下放。舊版把 demotedTo 一路當參數
+   * 傳下去，於是人已經在墨西哥了，畫面還在問「要不要接受下放回中職二軍」。
+   */
+  it('換了體系就不會再問要不要接受下放', () => {
+    let sawDemotionPrompt = false;
+    let sawMove = false;
+    for (let i = 0; i < 60; i++) {
+      const game = started({ seed: `demote-${i}` });
+      let guard = 0;
+      let cursor = 0;
+      while (game.flow.prompt !== null && guard++ < 8000) {
+        const prompt = game.flow.prompt;
+        const title = prompt.title ?? '';
+        if (title.startsWith('你被送回')) {
+          sawDemotionPrompt = true;
+          const level = game.state?.pro?.levelName ?? '';
+          expect(title).toBe(`你被送回${level}。要接受下放，還是就此掛靴？`);
+        }
+        const options = prompt.options;
+        // 有換舞台的機會就換——那正是會踩到的那條路。
+        const move =
+          options.find((o) => o.id === 'demote:0') ?? options.find((o) => o.id === 'transfer:0');
+        if (move !== undefined) sawMove = true;
+        const rotated = [...EFFECTIVE.slice(cursor % EFFECTIVE.length), ...EFFECTIVE];
+        const pick =
+          move ??
+          rotated
+            .map((k) => options.find((o) => o.id === `alloc:${k}` && o.disabled !== true))
+            .find((o) => o !== undefined) ??
+          options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+          options[0];
+        if (pick === undefined) break;
+        if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;
+        game.choose(pick.id);
+      }
+    }
+    // 樣本裡必須真的出現過這兩件事，否則這條測試什麼都沒驗到。
+    expect(sawMove).toBe(true);
+    expect(sawDemotionPrompt).toBe(true);
+  });
+});
