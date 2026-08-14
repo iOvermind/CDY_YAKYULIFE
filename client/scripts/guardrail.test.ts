@@ -13,7 +13,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { hallOfFame } from '../src/data/index.ts';
+import { hallOfFame, season as seasonCfg } from '../src/data/index.ts';
+import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import type { CareerSummary } from '../src/engine/career.ts';
 
@@ -52,6 +53,42 @@ const summaries = Array.from({ length: RUNS }, (_, i) =>
 const withPro = summaries.filter((s) => s.leagues.length > 0);
 const share = (tier: number) =>
   withPro.filter((s) => s.bestTier === tier).length / Math.max(1, withPro.length);
+
+/**
+ * 聯盟的基準環境。
+ *
+ * 這幾條看的是「這個聯盟像不像棒球」——它們不隨玩法變動，因此可以定得比
+ * 分佈那幾條緊得多。
+ */
+describe('聯盟基準環境', () => {
+  const base = proBaseline('CPBL1');
+
+  it('聯盟平均 OPS 落在 .700–.800', () => {
+    expect(baselineOps(base)).toBeGreaterThanOrEqual(0.7);
+    expect(baselineOps(base)).toBeLessThanOrEqual(0.8);
+  });
+
+  it('聯盟平均防禦率落在 3.5–4.5', () => {
+    expect(base.era).toBeGreaterThanOrEqual(3.5);
+    expect(base.era).toBeLessThanOrEqual(4.5);
+  });
+
+  /**
+   * 封閉聯盟裡「全聯盟得分 = 全聯盟失分」。打線推導出來的每場得分，換算成
+   * 自責分之後必須與設定的聯盟平均防禦率相當——否則分數會憑空生出或消失，
+   * ERA+ 與投手的份額全部會偏。
+   */
+  it('打線產出的分數與聯盟平均防禦率對得起來', () => {
+    const runsPerGame = base.runsCreatedPerPa * seasonCfg.advanced.shares.team_pa_per_game;
+    const impliedEra = runsPerGame / seasonCfg.pitching.runs_per_earned_run.value;
+    expect(Math.abs(impliedEra - base.era)).toBeLessThan(0.5);
+  });
+
+  it('聯盟平均打擊率落在合理範圍', () => {
+    expect(base.avg).toBeGreaterThan(0.23);
+    expect(base.avg).toBeLessThan(0.3);
+  });
+});
 
 describe('平衡護欄', () => {
   it('每一局都跑得完並產出總結', () => {

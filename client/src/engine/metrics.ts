@@ -13,8 +13,10 @@ import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
 import { levelOf } from './season.ts';
 
-/** 聯盟平均：一名平均球員的上壘率、長打率與防禦率。 */
+/** 聯盟平均：一名平均球員的打擊率、上壘率、長打率與防禦率。 */
 export interface Baseline {
+  /** 打擊率。年度獎項的門檻要跟它比，因此基準線必須帶著它。 */
+  readonly avg: number;
   readonly obp: number;
   readonly slg: number;
   readonly era: number;
@@ -111,6 +113,7 @@ function build(
     ab,
   } as unknown as BattingLine;
   return {
+    avg: ab === 0 ? 0 : hits / ab,
     obp: pa === 0 ? 0 : (hits + bb) / pa,
     slg: ab === 0 ? 0 : totalBases / ab,
     era,
@@ -154,6 +157,11 @@ export interface Shares {
 /** 責任額，也就是勝利份額與敗戰份額的總和。 */
 export function responsibilityOf(shares: Shares): number {
   return shares.win + shares.loss;
+}
+
+/** 聯盟平均的 OPS。獎項門檻與護欄都要看它。 */
+export function baselineOps(base: Baseline): number {
+  return base.obp + base.slg;
 }
 
 /** 這段表現的勝率。責任額為 0 時回傳 .500——沒有樣本就沒有意見。 */

@@ -1254,6 +1254,13 @@ export class Game {
       role: pitching?.role ?? null,
       position: pro.position,
       fieldingWinPct,
+      // 這一季的勝利份額。#recordSeason 已經在前一步算好並存進紀錄裡，
+      // 直接取最後一筆——重算一次會有兩份實作，遲早對不起來。
+      winShares: (() => {
+        const last = this.#seasons.at(-1);
+        if (last === undefined) return 0;
+        return last.shares.batting.win + last.shares.pitching.win + last.shares.fielding.win;
+      })(),
     });
     if (won.length === 0) return;
 

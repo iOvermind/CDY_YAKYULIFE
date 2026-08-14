@@ -1,153 +1,117 @@
 {
   "schemaVersion": 1,
   "_source": "抽取自 index_legacy.html awards() 的 TH 表與各獎項判定",
-  "_note": "年度獎項門檻。每項為 [基礎門檻, 鬼神保底門檻]：達到基礎門檻才進入機率判定，達到鬼神門檻則必定入選。",
-
-  "_calibration_note": "比率數據（era / avg / obp）與非場次連動數據（sv / hld / sb）三個聯盟統一標準；只有吃打席與局數的（so / hr / rbi）依 120:143:162 的場次比例放大。",
-
-  "_two_way_note": "二刀流球員的投手獎項與打擊獎項**分開判定**，各自對照自己那側的門檻，互不稀釋——同一年拿下年度最佳投手與打擊王是允許的。成績的呈現與合併指標（WS / WAR）的處理見 hall_of_fame.json 的 two_way。",
-
+  "_note": "年度獎項。單項王與年度最佳投手用「當年的門檻線 ± 波動」判定——那條線是「今年聯盟第一名打到哪」，本來就該年年不同。明星賽、新人王與 MVP 是票選或選拔，維持機率判定。",
+  "_calibration_note": "率型門檻寫成 d 值（相對聯盟平均的能力差），因此會自動跟著成績模型走——調了 hit_rate 的斜率，門檻跟著變，不會默默失準。累積型門檻是絕對值，依球季場次等比放大。",
   "thresholds": {
-    "CPBL": {
-      "games": 120,
-      "era": [3.20, 2.20],
-      "sv": [22, 35],
-      "hld": [18, 30],
-      "so": [130, 180],
-      "avg": [0.300, 0.360],
-      "hr": [20, 32],
-      "rbi": [75, 105],
-      "obp": [0.370, 0.430],
-      "sb": [25, 45]
+    "_note": "各聯盟的球季場次。累積型門檻依它等比放大——中職 120 場的 130 次三振，到大聯盟 162 場就是 176 次。率型門檻不需要它（d 值本來就與場次無關）。",
+    "reference_games": 120,
+    "games": {
+      "CPBL": 120,
+      "NPB": 143,
+      "KBO": 144,
+      "LMB": 90,
+      "ABL": 40,
+      "MLB": 162
     },
-    "NPB": {
-      "games": 143,
-      "era": [3.20, 2.20],
-      "sv": [22, 35],
-      "hld": [18, 30],
-      "so": [155, 215],
-      "avg": [0.300, 0.360],
-      "hr": [24, 38],
-      "rbi": [90, 125],
-      "obp": [0.370, 0.430],
-      "sb": [25, 45]
-    },
-    "MLB": {
-      "games": 162,
-      "era": [3.20, 2.20],
-      "sv": [22, 35],
-      "hld": [18, 30],
-      "so": [175, 240],
-      "avg": [0.300, 0.360],
-      "hr": [27, 43],
-      "rbi": [100, 140],
-      "obp": [0.370, 0.430],
-      "sb": [25, 45]
-    }
+    "default_games": 120
   },
   "_fallback_league": "CPBL",
-
   "titles": {
-    "_note": "單項王。每項的判定都是同一個形狀：先過資格門檻（打席或局數），成績達到基礎門檻才進入機率判定，達到鬼神門檻則必定入選。機率 = base + (成績 − 基礎門檻) / step × per_step，套上下限。",
-    "_stat_note": "step 為 1 時就是「每多一個單位加 per_step」；比率型數據（avg / obp）的 step 是 0.005，因為每 0.005 才是一個有感的差距。",
+    "_note": "單項王。判定方式：算出當年的門檻線，達到就拿、沒達到就沒有——不再是「達標之後再擲機率」。",
+    "_line_note": "率型（avg / obp / era）的線是「聯盟平均 + (門檻 − 聯盟平均) × (1 ± band)」——波動加在**超出聯盟平均的幅度**上，不是加在絕對值上。.380 的打擊率 ±12% 會讓線在 .334–.426 之間跳，那太誇張了；加在超出幅度上則是 ±.014，剛好。",
+    "_counting_note": "累積型（so / sv / hr / rbi / sb）的線是「門檻 × 場次比例 × (1 ± band)」。這類數據的自然下限就是 0，因此波動直接加在絕對值上。",
+    "_band_note": "band 是那條線的年度波動。低於下緣一定拿不到，高於上緣一定拿得到——這就是「鬼神必得」，不必再另設一道門檻。",
     "_missing_note": "中繼王沒有實作——它需要中繼成功數（HLD）與中繼投手（MR）的定位，兩者都還沒有。見 ROADMAP 的「投手定位細分」。",
     "list": [
-      {
-        "code": "strikeout_king",
-        "name": "三振王",
-        "side": "pitcher",
-        "stat": "so",
-        "min_ip": 0,
-        "base": 25,
-        "step": 1,
-        "per_step": 1.2,
-        "clamp": { "min": 25, "max": 95 }
-      },
-      {
-        "code": "save_king",
-        "name": "救援王",
-        "side": "pitcher",
-        "stat": "sv",
-        "requires_role": "RP",
-        "base": 28,
-        "step": 1,
-        "per_step": 5,
-        "clamp": { "min": 28, "max": 95 }
-      },
       {
         "code": "batting_king",
         "name": "打擊王",
         "side": "batter",
         "stat": "avg",
-        "min_pa": 350,
-        "base": 25,
-        "step": 0.005,
-        "per_step": 6,
-        "clamp": { "min": 25, "max": 95 }
-      },
-      {
-        "code": "hr_king",
-        "name": "全壘打王",
-        "side": "batter",
-        "stat": "hr",
-        "min_pa": 300,
-        "base": 25,
-        "step": 1,
-        "per_step": 5,
-        "clamp": { "min": 25, "max": 95 }
-      },
-      {
-        "code": "rbi_king",
-        "name": "打點王",
-        "side": "batter",
-        "stat": "rbi",
-        "min_pa": 300,
-        "base": 25,
-        "step": 1,
-        "per_step": 2,
-        "clamp": { "min": 25, "max": 95 }
-      },
-      {
-        "code": "steal_king",
-        "name": "盜壘王",
-        "side": "batter",
-        "stat": "sb",
-        "min_pa": 300,
-        "base": 25,
-        "step": 1,
-        "per_step": 4,
-        "clamp": { "min": 25, "max": 95 }
+        "kind": "rate",
+        "d": 19,
+        "band": 0.12,
+        "min_pa": 350
       },
       {
         "code": "obp_king",
         "name": "上壘王",
         "side": "batter",
         "stat": "obp",
-        "min_pa": 350,
-        "base": 25,
-        "step": 0.005,
-        "per_step": 5,
-        "clamp": { "min": 25, "max": 95 }
+        "kind": "rate",
+        "d": 16,
+        "band": 0.12,
+        "min_pa": 350
+      },
+      {
+        "code": "hr_king",
+        "name": "全壘打王",
+        "side": "batter",
+        "stat": "hr",
+        "kind": "counting",
+        "base": 28,
+        "band": 0.15,
+        "min_pa": 300
+      },
+      {
+        "code": "rbi_king",
+        "name": "打點王",
+        "side": "batter",
+        "stat": "rbi",
+        "kind": "counting",
+        "base": 95,
+        "band": 0.15,
+        "min_pa": 300
+      },
+      {
+        "code": "steal_king",
+        "name": "盜壘王",
+        "side": "batter",
+        "stat": "sb",
+        "kind": "counting",
+        "base": 35,
+        "band": 0.2,
+        "min_pa": 300
+      },
+      {
+        "code": "strikeout_king",
+        "name": "三振王",
+        "side": "pitcher",
+        "stat": "so",
+        "kind": "counting",
+        "base": 165,
+        "band": 0.15
+      },
+      {
+        "code": "save_king",
+        "name": "救援王",
+        "side": "pitcher",
+        "stat": "sv",
+        "kind": "counting",
+        "base": 30,
+        "band": 0.2,
+        "requires_role": "RP"
       }
     ]
   },
-
   "mvp": {
-    "_note": "年度最有價值球員。資格看出場量（投手看局數或後援場次，野手看打席），機率看 d 值。",
-    "_role_note": "後援投手的基礎機率明顯較低——一個守護神再神，票也很難投得過先發與強打者。",
+    "code": "mvp",
     "name": "年度MVP",
-    "min_d": 6,
-    "god_d": 15,
+    "_note": "年度最有價值球員。判定看**那一季的勝利份額**，不看 d 值——d 值是「他多強」，不是「他今年打得多好」。用份額判定會自動把出賽時間、守位價值、投打合計與球隊戰績一起算進去，而那正是 MVP 這個獎的意思。",
+    "_line_note": "與單項王同一套「當年門檻線 ± 波動」的判定。門檻依球季場次等比放大——120 場的聯盟拿 20 份，162 場的聯盟就要 27 份。",
+    "_two_way_note": "二刀流的投打份額本來就相加，因此他在 MVP 這個獎上有結構性的優勢。那是對的：一個投打都達到聯盟前段的球員，本來就該是那年最有價值的人。",
+    "stat": "win_shares",
+    "kind": "counting",
+    "base": 21,
+    "band": 0.15,
     "qualify": {
+      "_note": "出場量的門檻。再有價值也要先站上場。",
       "starter_min_ip": 120,
       "reliever_min_games": 45,
       "batter_pa_per_game": 3.4
-    },
-    "base": { "SP": 12, "RP": 5, "batter": 12 },
-    "per_d_over_min": 11,
-    "clamp": { "min": 5, "max": 95 }
+    }
   },
-
   "fielding": {
     "_note": "守備獎項。判定看**守備勝率**（守備分相對該守位平均換算而得），不看守備分那個顯示數字——顯示的尺度可以隨時放大縮小，判定不該跟著跑掉。",
     "_dh_note": "指定打擊不參與守備獎項——他不守備。",
@@ -160,7 +124,10 @@
         "base": 38,
         "step": 0.01,
         "per_step": 4,
-        "clamp": { "min": 38, "max": 95 }
+        "clamp": {
+          "min": 38,
+          "max": 95
+        }
       },
       {
         "code": "defense_king",
@@ -170,44 +137,54 @@
         "base": 30,
         "step": 0.01,
         "per_step": 5,
-        "clamp": { "min": 30, "max": 95 }
+        "clamp": {
+          "min": 30,
+          "max": 95
+        }
       }
     ]
   },
-
   "all_star": {
     "_note": "明星賽入選機率隨 d 值動態提升。台中猛瑪有人氣加成——d 值不足時入選會標註「（人氣入選）」。",
     "base": 28,
     "per_d": 7,
-    "clamp": { "min": 3, "max": 92 },
+    "clamp": {
+      "min": 3,
+      "max": 92
+    },
     "popularity_bonus": {
       "league": "CPBL",
       "team": "台中猛瑪",
       "add": 30,
-      "clamp": { "min": 3, "max": 97 },
+      "clamp": {
+        "min": 3,
+        "max": 97
+      },
       "flag_below_d": 2
     }
   },
-
   "rookie_of_year": {
     "_note": "僅生涯第一個球季可得。中職的資格另要求沒有日職、大聯盟或小聯盟的出賽紀錄。",
     "min_d": 4,
     "base": 30,
     "per_d_over_min": 15,
-    "clamp": { "min": 30, "max": 95 }
+    "clamp": {
+      "min": 30,
+      "max": 95
+    }
   },
-
   "pitcher_of_year": {
+    "_note": "限先發，局數需達該聯盟的場次數。與單項王同一套判定——防禦率越低越好，因此比較方向相反。",
+    "code": "pitcher_of_year",
     "name": "年度最佳投手",
-    "_note": "限先發投手。局數需達該聯盟場次數，ERA 需達基礎門檻。",
+    "side": "pitcher",
+    "stat": "era",
+    "kind": "rate",
+    "d": 16,
+    "band": 0.12,
     "requires_role": "SP",
-    "min_ip_equals": "games",
-    "god": { "ip": 150 },
-    "base": 30,
-    "era_factor": 35,
-    "ip_factor": 0.4,
-    "clamp": { "min": 30, "max": 95 }
+    "min_ip_equals_games": true
   },
-
-  "_closer_award_merged": "舊的 closer_award 與 titles 裡的 save_king 是同一個獎（legacy 的終結者分支產生的就是「救援王」），已合併到 titles，避免同一個獎有兩份設定。"
+  "_two_way_note": "二刀流球員的投手獎項與打擊獎項分開判定，各自對照自己那側的門檻，互不稀釋——同一年拿下年度最佳投手與打擊王是允許的。",
+  "_closer_award_merged": "舊的 closer_award 與 titles 裡的 save_king 是同一個獎（legacy 的終結者分支產生的就是「救援王」），已合併到 titles。"
 }

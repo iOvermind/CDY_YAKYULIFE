@@ -261,16 +261,33 @@ export interface AwardChance {
   readonly clamp: Range;
 }
 
-/** 單項王的設定。門檻取自 thresholds[stat]，`[基礎, 鬼神]`。 */
-export interface TitleAward extends AwardChance {
+/**
+ * 一項「聯盟第一名」型的獎：單項王與年度最佳投手。
+ *
+ * 判定是「算出當年的門檻線，達到就拿」，不是「達標之後再擲機率」。那條線
+ * 年年不同——它代表的是「今年聯盟第一名打到哪」。
+ */
+export interface LeaderAward {
   readonly code: string;
   readonly name: string;
   readonly side: 'pitcher' | 'batter';
-  /** 對照 thresholds 裡的哪一項。 */
+  /** 對照哪一項成績。 */
   readonly stat: string;
+  /**
+   * 率型（avg / obp / era）的門檻寫成 d 值，因此會自動跟著成績模型走；
+   * 累積型（hr / rbi / sb / so / sv）寫成絕對值，依球季場次等比放大。
+   */
+  readonly kind: 'rate' | 'counting';
+  /** 率型的門檻：相對聯盟平均的能力差。 */
+  readonly d?: number;
+  /** 累積型的門檻，以 reference_games 場的聯盟為準。 */
+  readonly base?: number;
+  /** 那條線的年度波動。低於下緣一定拿不到，高於上緣一定拿得到。 */
+  readonly band: number;
   readonly requires_role?: 'SP' | 'RP';
   readonly min_pa?: number;
-  readonly min_ip?: number;
+  /** 局數需達該聯盟的場次數。 */
+  readonly min_ip_equals_games?: boolean;
 }
 
 /** 守備獎項。判定看守備勝率，不看守備分的顯示數字。 */
@@ -282,23 +299,23 @@ export interface FieldingAward extends AwardChance {
 }
 
 export interface AwardsData {
-  /** 各聯盟的成績門檻，`[基礎, 鬼神]`。`games` 是該聯盟的球季場次。 */
-  readonly thresholds: Readonly<
-    Record<string, { readonly games: number } & Readonly<Record<string, readonly number[]>>>
-  >;
-  readonly titles: { readonly list: readonly TitleAward[] };
-  readonly mvp: {
-    readonly name: string;
-    readonly min_d: number;
-    readonly god_d: number;
+  readonly thresholds: {
+    readonly reference_games: number;
+    readonly games: Readonly<Record<string, number>>;
+    readonly default_games: number;
+  };
+  readonly titles: { readonly list: readonly LeaderAward[] };
+  readonly pitcher_of_year: LeaderAward;
+  /**
+   * 年度 MVP。判定看那一季的勝利份額，不看 d 值——d 值是「他多強」，不是
+   * 「他今年打得多好」。因此它與單項王共用同一套「當年門檻線 ± 波動」。
+   */
+  readonly mvp: LeaderAward & {
     readonly qualify: {
       readonly starter_min_ip: number;
       readonly reliever_min_games: number;
       readonly batter_pa_per_game: number;
     };
-    readonly base: Readonly<Record<string, number>>;
-    readonly per_d_over_min: number;
-    readonly clamp: Range;
   };
   readonly fielding: { readonly list: readonly FieldingAward[] };
   readonly all_star: {
@@ -317,15 +334,6 @@ export interface AwardsData {
     readonly min_d: number;
     readonly base: number;
     readonly per_d_over_min: number;
-    readonly clamp: Range;
-  };
-  readonly pitcher_of_year: {
-    readonly name: string;
-    readonly requires_role: 'SP';
-    readonly god: { readonly ip: number };
-    readonly base: number;
-    readonly era_factor: number;
-    readonly ip_factor: number;
     readonly clamp: Range;
   };
 }
