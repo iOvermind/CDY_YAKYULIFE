@@ -1,0 +1,70 @@
+# 把網頁版部署到 GitHub Pages。
+#
+# 只建置 client/ 的靜態產物——**不碰 Tauri 桌面版**，那需要 Rust 工具鏈，而且
+# 產物也不是網頁能用的東西。
+#
+# 注意根目錄的 index_legacy.html：那是舊版的單檔遊戲，如果改用「從分支根目錄
+# 發佈」的模式，GitHub 會直接把它當首頁。這裡只上傳 client/dist，不會有這個問題。
+#
+# 上線前還要做兩件事，都在 GitHub 網頁上：
+#   1. repo 目前是 private，免費方案的 Pages 不支援——轉公開或升級方案
+#   2. Settings → Pages → Source 選「GitHub Actions」
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  # 手動觸發。第一次設定完可以直接跑一次，不必先推一個 commit。
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時只跑一個部署。連續推兩個 commit 時，讓後面那個等前面跑完再上，
+# 而不是互相覆蓋。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+
+      # 測試跑在建置之前——平衡參數改壞時護欄測試會擋下來，那比部署一個
+      # 壞掉的版本上去好。
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm run build
+        env:
+          # 專案頁面掛在 /<repo>/ 底下，資源要帶前綴。改 repo 名字時這裡也要改。
+          PAGES_BASE: /${{ github.event.repository.name }}/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: client/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

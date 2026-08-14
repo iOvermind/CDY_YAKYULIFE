@@ -36,6 +36,22 @@
 
 將本專案 clone 回本機，或直接下載儲存庫中的 `index_legacy.html` 檔案即可。不需要安裝任何東西。
 
+### 網頁版（GitHub Pages）
+
+新架構的網頁版可以直接部署到 GitHub Pages——它沒有用到任何 Tauri 的執行期 API，`npm run build` 產出的就是一份純靜態網站。工作流在 `.github/workflows/pages.yml`，推到 `main` 就會建置並部署。
+
+首次啟用還要在 GitHub 網頁上做兩件事：
+
+1. **儲存庫必須是公開的**（免費方案的 Pages 不支援私有儲存庫）
+2. **Settings → Pages → Source 選「GitHub Actions」**
+
+網址會是 `https://<帳號>.github.io/<儲存庫名>/`。資源路徑靠環境變數 `PAGES_BASE` 帶前綴——**桌面版與本機開發不要設它**，那會讓資源指向不存在的子目錄。
+
+```bash
+# 本機模擬 Pages 的產物
+PAGES_BASE=/CDY_YAKYULIFE/ npm run build
+```
+
 ---
 
 ## 快速開始
