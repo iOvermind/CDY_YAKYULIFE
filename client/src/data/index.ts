@@ -13,6 +13,8 @@
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
 import awardsJson from './awards.json';
+import flavorJson from './flavor.json';
+import hallOfFameJson from './hall_of_fame.json';
 import leaguesJson from './leagues.json';
 import positionsJson from './positions.json';
 import traitsJson from './traits.json';
@@ -166,6 +168,89 @@ export interface AbilitiesData {
     readonly trait_modifiers: Readonly<Record<string, number>>;
   };
   readonly potential_ceiling: { readonly tiers: readonly Range[] };
+}
+
+/**
+ * 文案庫。全部是展示用字串，不影響任何數值運算。
+ *
+ * 引退場景依「代表聯盟 + 生涯分級」選用；中職的第三帶還依投打分歧，因此那一格
+ * 是物件而非字串。取用時要先判斷型別。
+ */
+export interface FlavorData {
+  readonly placeholders: Readonly<Record<string, string>>;
+  /** 引退時的鄉民留言，鍵是分級（0 最高）。 */
+  readonly fan_reactions: Readonly<Record<string, readonly string[]>>;
+  readonly retire_scenes: Readonly<
+    Record<string, string | Readonly<Record<string, string | Readonly<Record<string, string>>>>>
+  >;
+  readonly second_life: { readonly closing: string; readonly stories: readonly string[] };
+}
+
+/** 一項里程碑：達到 steps[i] 就拿到 points[i] 分，逐級累進。 */
+export interface Milestone {
+  readonly stat: string;
+  readonly name: string;
+  readonly side: 'batter' | 'pitcher';
+  readonly steps: readonly number[];
+  readonly points: readonly number[];
+}
+
+export interface HallOfFameData {
+  readonly difficulty: { readonly reference_par: number; readonly exponent: number };
+  readonly tier_thresholds: {
+    /** 五帶的名稱，由高到低。 */
+    readonly labels: readonly string[];
+    /** 四道門檻，由高到低。 */
+    readonly values: readonly number[];
+  };
+  readonly award_points: {
+    readonly by_code: Readonly<Record<string, number>>;
+    readonly championship: { readonly points: number };
+    readonly default: number;
+  };
+  readonly tier_floors: {
+    readonly rules: readonly { readonly codes: readonly string[]; readonly min_tier: number }[];
+  };
+  readonly milestones: {
+    readonly reference_games: number;
+    readonly league: readonly Milestone[];
+    readonly career: readonly Milestone[];
+  };
+  readonly halls: Readonly<
+    Record<
+      string,
+      {
+        readonly name: string;
+        readonly wait_years: number;
+        readonly total_voters: number;
+        readonly league: string;
+      }
+    >
+  >;
+  readonly first_ballot: {
+    readonly multiplier: Readonly<Record<string, number>>;
+    readonly default_multiplier: number;
+    readonly wait_if_not_first: Range;
+  };
+  readonly vote_percent: {
+    readonly base: number;
+    readonly over_threshold_factor: number;
+    readonly random_max: number;
+    readonly wait_penalty_per_year: number;
+    readonly floor: number;
+    readonly cap: number;
+  };
+  readonly near_miss: { readonly pct: Range; readonly tries: Range };
+  readonly representative_league: { readonly check_order: readonly string[] };
+  readonly settlement_traits: {
+    readonly legend: { readonly trait: string };
+    readonly small_school: { readonly trait: string; readonly school_tier: number };
+    readonly grinder: {
+      readonly trait: string;
+      readonly percentile: number;
+      readonly provisional_sum: number;
+    };
+  };
 }
 
 /** 一項獎的機率設定：達到基礎門檻才判定，每超出一個 step 加 per_step。 */
@@ -590,6 +675,12 @@ export interface SeasonData {
     readonly age_chance: { readonly base: number; readonly per_year: number; readonly max: number };
     readonly released_forces_retirement_age: number;
     readonly max_age: number;
+    /** 幾歲之後每季提供「宣布引退」的選項。 */
+    readonly voluntary_from_age: number;
+    /** 幾歲之後被下放時提供「就此引退」的選項。年輕人還有再拚一次的餘地。 */
+    readonly refuse_demotion_from_age: number;
+    /** 幾歲之前離開棒球會走第二人生的敘事。 */
+    readonly second_life_max_age: number;
   };
   readonly advanced: {
     readonly runs_per_win: number;
@@ -646,6 +737,8 @@ export interface TraitsData {
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
 export const awards = awardsJson as unknown as AwardsData;
+export const flavor = flavorJson as unknown as FlavorData;
+export const hallOfFame = hallOfFameJson as unknown as HallOfFameData;
 export const positions = positionsJson as unknown as PositionsData;
 export const traits = traitsJson as unknown as TraitsData;
 

@@ -12,7 +12,10 @@ import {
   abilities,
   ALL_ABILITIES,
   amateur,
+  flavor,
+  hallOfFame,
   leagues,
+  season as seasonCfg,
   PITCH_FAMILIES,
   type AbilityKey,
   type Hand,
@@ -51,9 +54,26 @@ import {
   fieldingResponsibility,
   positionAverage,
   positionLabel,
+  requiredScore,
   DH,
 } from './defense.ts';
-import { fieldingShares, winPct } from './metrics.ts';
+import {
+  difficultyOf,
+  summarizeCareer,
+  type CareerSummary,
+  type SeasonRecord,
+} from './career.ts';
+import { runBallots, type BallotResult } from './hall.ts';
+import {
+  battingShares,
+  fieldingReplacementWinPct,
+  fieldingShares,
+  lossPenalty,
+  pitchingShares,
+  proBaseline,
+  winPct,
+  type Shares,
+} from './metrics.ts';
 import { esc, Flow, type Option } from './flow.ts';
 import {
   advanceStandards,
@@ -322,6 +342,16 @@ export class Game {
    * ——七座 MVP 在清單上只有一行，但評價分要算七次。
    */
   #awards: AwardRecord[] = [];
+  /**
+   * 逐段的生涯紀錄。
+   *
+   * 取代「以體系為鍵的桶式累加」——桶裡只留總計，年份與層級當場就丟掉了，
+   * 因此印不出逐年表，也分不出一軍與二軍。評價分只算頂級聯盟，那個區分是
+   * 必要的。
+   */
+  #seasons: SeasonRecord[] = [];
+  /** 結算出來的生涯總結。引退之前為 null。 */
+  #summary: CareerSummary | null = null;
   /** 上一年說過的聯盟風向。用來避免同一句話年年重複。 */
   #lastStandardsNote: string | null = null;
   /**
@@ -340,6 +370,15 @@ export class Game {
   /** 目前的球員。流程開始前為 null。 */
   get player(): NewPlayer | null {
     return this.#player;
+  }
+
+  /**
+   * 結算出來的生涯總結。引退之前為 null。
+   *
+   * 介面層要畫生涯表與名人堂結果都靠它——引擎已經算好了，介面不必再算一次。
+   */
+  get summary(): CareerSummary | null {
+    return this.#summary;
   }
 
   /** 目前的球員狀態。流程開始前為 null。 */
@@ -1070,6 +1109,8 @@ export class Game {
       this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
     }
 
+    this.#recordSeason(line.batting, line.pitching, def ?? 0);
+
     const parts: string[] = [];
     if (line.pitching !== null) {
       const p = line.pitching;
@@ -1093,6 +1134,70 @@ export class Game {
 
     this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
     this.#annualAwards(line.batting, line.pitching);
+  }
+
+  /**
+   * 把這一季記進生涯紀錄。
+   *
+   * **份額與 k 在當下就算好存進去**，不留到結算時回算：那些值取決於當年的聯盟
+   * 水準，而聯盟水準逐年浮動，事後回算會把整段生涯都套上引退那年的數字。
+   */
+  #recordSeason(
+    batting: BattingLine | null,
+    pitching: ProPitchingLine | null,
+    defense: number,
+  ): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    const info = levelOf(pro.level);
+    const now = standardOf(this.#standards, pro.level);
+    const baseline = proBaseline(pro.level);
+
+    // 守備的份額：沒登錄守位（二軍、投手、指定打擊）就沒有守備責任。
+    let fielding: Shares = { win: 0, loss: 0 };
+    let fieldingK = 0;
+    if (pro.position !== null && pro.position !== DH && batting !== null) {
+      const average = positionAverage(pro.position, pro.level, this.#standards);
+      const threshold = requiredScore(pro.position, pro.level, this.#age);
+      if (average !== null) {
+        fielding = fieldingShares({
+          defenseScore: defenseScore(this.#ability, pro.position),
+          positionAverage: average,
+          positionShare: fieldingResponsibility(pro.position),
+          leagueGames: info.games,
+          gamesShare: batting.games / info.games,
+        });
+        if (threshold !== null) {
+          const p0 = fieldingReplacementWinPct(threshold, average);
+          fieldingK = p0 >= 1 ? 0 : p0 / (1 - p0);
+        }
+      }
+    }
+
+    this.#seasons.push({
+      year: this.#year,
+      age: this.#age,
+      org: info.org,
+      level: pro.level,
+      levelName: info.name,
+      team: pro.team,
+      position: pro.position,
+      batting,
+      pitching,
+      defenseRuns: defense,
+      shares: {
+        batting: batting === null ? { win: 0, loss: 0 } : battingShares(batting, baseline),
+        pitching: pitching === null ? { win: 0, loss: 0 } : pitchingShares(pitching, baseline),
+        fielding,
+      },
+      lossPenalty: {
+        batting: lossPenalty('batting', pro.level, this.#standards),
+        pitching: lossPenalty('pitching', pro.level, this.#standards),
+        fielding: fieldingK,
+      },
+      difficulty: difficultyOf(now.par),
+      top: info.top ?? null,
+    });
   }
 
   /**
@@ -1212,6 +1317,7 @@ export class Game {
     });
 
     let released = false;
+    let demotedTo: string | null = null;
     if (move.movement === 'release') {
       released = true;
       this.flow.card('bad', '戰力外', `球團通知你不再續約——${esc(move.reason)}。`);
@@ -1222,6 +1328,7 @@ export class Game {
         move.movement === 'promote' ? '升上一軍' : '下放二軍',
         `${esc(move.reason)}，${move.movement === 'promote' ? '被叫上' : '被送回'}<b class="hl">${esc(to.name)}</b>。`,
       );
+      if (move.movement === 'demote') demotedTo = to.name;
       pro.level = move.level;
     }
 
@@ -1234,52 +1341,336 @@ export class Game {
       this.flow.push(() => this.#retire(retire.retire ? retire.reason : move.reason));
       return;
     }
+
+    // 被下放的老將可以選擇不接受。年輕人不給這個選項——他們還有再拚一次的
+    // 餘地，讓他們在二十出頭就能一鍵結束生涯只會製造後悔。
+    const cfg = seasonCfg.retirement;
+    if (demotedTo !== null && this.#age >= cfg.refuse_demotion_from_age) {
+      this.#askRetire(
+        `你被送回${demotedTo}。要接受下放，還是就此掛靴？`,
+        '接受下放，從頭再來',
+        `不願下放，${this.#year} 年宣布引退`,
+      );
+      return;
+    }
+
+    // 高齡的每季自主引退。這是玩家自己按下的那個鍵——與被系統告知「你老了」
+    // 是兩種完全不同的情緒，而引退場景要承接的正是這個差別。
+    if (this.#age >= cfg.voluntary_from_age) {
+      this.#askRetire(
+        `${this.#age} 歲了。再拚一年，還是在這裡畫下句點？`,
+        '再拚一年',
+        `功成身退，${this.#year} 年宣布引退`,
+      );
+      return;
+    }
+
     this.flow.push(() => this.#proYear());
   }
 
-  /** 引退：結算生涯。 */
-  #retire(reason: string): void {
-    const pro = this.#pro;
-    const total = this.#statsByStage[levelOf(pro?.level ?? 'CPBL1').org];
-    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 引退`);
-
-    const lines: string[] = [];
-    if (total?.pitching != null) {
-      const p = total.pitching;
-      lines.push(
-        `投手：${p.games} 場・${p.ip.toFixed(1)} 局・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}`,
-      );
-    }
-    if (total?.batting != null) {
-      const b = total.batting;
-      lines.push(
-        `打者：${b.games} 場・${b.hits} 安打・${b.hr} 全壘打・${b.rbi} 打點` +
-          `・生涯打擊率 <b class="hl">${fmtAvg(b.avg)}</b>`,
-      );
-    }
-
-    this.flow.card(
-      'gold',
-      '引退',
-      `${esc(reason)}。在<b class="hl">${esc(pro?.team ?? '')}</b>結束了 ${pro?.year ?? 0} 年的職業生涯。` +
-        (lines.length > 0 ? `<br>${lines.join('<br>')}` : '') +
-        (this.#honors.length > 0 ? `<br>生涯榮譽：${esc(this.#honors.join('、'))}` : ''),
+  /** 問玩家要不要就此引退。選擇本身會寫進重播日誌。 */
+  #askRetire(question: string, stay: string, quit: string): void {
+    this.flow.ask(
+      {
+        title: question,
+        options: [
+          { id: 'retire:stay', label: stay, role: 'main' },
+          { id: 'retire:quit', label: quit, role: 'warn' },
+        ],
+      },
+      (choice) => {
+        if (choice === 'retire:quit') {
+          this.flow.push(() => this.#retire(quit));
+          return;
+        }
+        this.flow.push(() => this.#proYear());
+      },
     );
-    this.flow.card(
-      'info',
-      '尚未實作',
-      '名人堂、生涯獎項與二週目繼承還沒做。流程到這裡為止。',
-    );
-    this.#pro = null;
   }
 
-  /** 生涯在進入職業之前結束。 */
-  #careerOver(reason: string): void {
+  /**
+   * 引退：結算生涯。
+   *
+   * 順序是刻意的——先說「他走了」，再算他留下什麼，最後才是別人怎麼記得他。
+   * 名人堂票選必須排在結算特性之前，因為首輪入選是「歷史級球星」的觸發條件。
+   */
+  #retire(reason: string): void {
+    const pro = this.#pro;
+    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 引退`);
     this.flow.card(
       'info',
-      '尚未實作',
-      `${esc(reason)}之後的流程還沒做——大學、業餘成棒與隔年重新參加選秀都待實作。` +
-        '流程到這裡為止。',
+      '引退',
+      `${esc(reason)}。在<b class="hl">${esc(pro?.team ?? '')}</b>結束了 ${pro?.year ?? 0} 年的職業生涯。`,
+    );
+    this.#pro = null;
+    this.#settle();
+  }
+
+  /**
+   * 生涯在進入職業之前結束。
+   *
+   * 走**同一個出口**：生涯總結照樣呈現，只是沒有職業成績可算，名人堂整段跳過。
+   * 選秀落選是一個相當常見的結局，尤其是玩得不好的第一局——讓玩家撞上一張
+   * 「尚未實作」，體感是遊戲壞了。
+   *
+   * 大學與業餘成棒那條路還沒做，因此落選目前就是生涯結束，只是結束得早。
+   */
+  #careerOver(reason: string): void {
+    this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 生涯結束`);
+    this.flow.card('info', '球員生涯結束', `${esc(reason)}。`);
+    this.#settle();
+  }
+
+  /** 生涯總結：成績、評價、名人堂、特性、看板、第二人生。 */
+  #settle(): void {
+    const summary = summarizeCareer(this.#seasons, this.#awards, this.#counts.domesticTitles);
+    this.#summary = summary;
+
+    this.#careerTables(summary);
+    this.#careerScores(summary);
+
+    const ballots = summary.leagues.length > 0 ? runBallots(this.world, summary.leagues) : [];
+    this.#retireScene(summary);
+    this.#hallOfFame(ballots);
+    this.#settlementTraits(summary, ballots);
+    this.#fanBoard(summary);
+    this.#secondLife();
+  }
+
+  /** 生涯成績表：養成期、各頂級聯盟、各非頂級層級，最後是兩份通算。 */
+  #careerTables(summary: CareerSummary): void {
+    const line = (batting: BattingLine | null, pitching: PitchingLine | null): string => {
+      const parts: string[] = [];
+      if (pitching !== null) {
+        parts.push(
+          `投手 ${pitching.games} 場・${pitching.ip.toFixed(1)} 局・` +
+            `${pitching.wins} 勝 ${pitching.losses} 敗` +
+            `${pitching.saves > 0 ? ` ${pitching.saves} 救援` : ''}・` +
+            `防禦率 <b class="hl">${pitching.era.toFixed(2)}</b>・奪三振 ${pitching.so}`,
+        );
+      }
+      if (batting !== null) {
+        parts.push(
+          `打者 ${batting.games} 場・${batting.hits} 安打・${batting.hr} 轟・` +
+            `${batting.rbi} 打點・打擊率 <b class="hl">${fmtAvg(batting.avg)}</b>`,
+        );
+      }
+      return parts.join('<br>');
+    };
+
+    for (const stage of amateur.stages.order) {
+      const stats = this.#statsByStage[stage];
+      if (stats === undefined) continue;
+      const body = line(stats.batting, stats.pitching);
+      if (body !== '') this.flow.card('info', `${stageOf(stage).name}通算`, body);
+    }
+
+    for (const league of summary.leagues) {
+      const body = line(league.batting, league.pitching);
+      if (body === '') continue;
+      this.flow.card(
+        'info',
+        `${league.orgName}通算（${league.seasons} 季）`,
+        `${body}${league.defenseRuns !== 0 ? `<br>守備 ${league.defenseRuns > 0 ? '+' : ''}${league.defenseRuns}` : ''}`,
+      );
+    }
+
+    for (const minor of summary.minors) {
+      const body = line(minor.batting, minor.pitching);
+      if (body !== '') {
+        this.flow.card('info', `${minor.levelName}通算（${minor.seasons} 季）`, body);
+      }
+    }
+
+    // 兩份通算只有在真的分成好幾段時才有意義——單一聯盟的生涯，通算等於上面
+    // 那張表，再印一次是噪音。
+    if (summary.leagues.length > 1) {
+      const body = line(summary.topTotal.batting, summary.topTotal.pitching);
+      if (body !== '') this.flow.card('gold', '所有一軍通算', body);
+    }
+    if (summary.minors.length > 1) {
+      const body = line(summary.minorTotal.batting, summary.minorTotal.pitching);
+      if (body !== '') this.flow.card('info', '所有二軍通算', body);
+    }
+  }
+
+  /** 生涯評價分：各聯盟一份，並攤開三個來源。 */
+  #careerScores(summary: CareerSummary): void {
+    if (summary.leagues.length === 0) return;
+
+    const rows = summary.leagues.map((l) => {
+      const detail =
+        `份額 ${l.sharePoints.toFixed(1)}` +
+        `${l.awardPoints > 0 ? `＋榮譽 ${l.awardPoints.toFixed(1)}` : ''}` +
+        `${l.milestonePoints > 0 ? `＋里程碑 ${l.milestonePoints.toFixed(1)}` : ''}`;
+      return (
+        `<b class="hl">${esc(l.orgName)}${esc(l.tierLabel)}</b>` +
+        `　評價分 <b class="hl">${Math.round(l.score)}</b>（${detail}）` +
+        `<br><span class="sub">勝利份額 ${l.shares.win.toFixed(1)}／敗戰份額 ${l.shares.loss.toFixed(1)}` +
+        `${l.milestones.length > 0 ? `　·　${esc(l.milestones.join('、'))}` : ''}</span>`
+      );
+    });
+
+    this.flow.card('gold', '生涯評價', rows.join('<br><br>'));
+
+    if (summary.careerMilestones.length > 0) {
+      this.flow.card(
+        'gold',
+        '生涯里程碑',
+        `${esc(summary.careerMilestones.join('、'))}` +
+          `<br><span class="sub">跨聯盟通算的成就，不計入單一聯盟的評價分。</span>`,
+      );
+    }
+  }
+
+  /**
+   * 引退之日。
+   *
+   * 場景依「代表聯盟＋生涯分級」選用，文案全在 flavor.json。沒打過頂級聯盟的
+   * 人走 minor 那則——沒有鎂光燈的版本。
+   */
+  #retireScene(summary: CareerSummary): void {
+    const org = summary.representative?.org ?? null;
+    const tier = summary.bestTier;
+    const scenes = flavor.retire_scenes;
+
+    let text: string | null = null;
+    const bucket = org === null ? undefined : scenes[org];
+    if (typeof bucket === 'string') {
+      text = bucket;
+    } else if (bucket !== undefined) {
+      const hit = bucket[String(tier)] ?? bucket['default'];
+      if (typeof hit === 'string') {
+        text = hit;
+      } else if (hit !== undefined) {
+        // 中職第三帶依投打分歧，因此那一格是物件。
+        text = hit[this.#lockedSide === 'pitcher' ? 'P' : 'default'] ?? hit['default'] ?? null;
+      }
+    }
+    if (text === null) {
+      const fallback = scenes['minor'];
+      text = typeof fallback === 'string' ? fallback : null;
+    }
+    if (text === null) return;
+
+    const firstHit = this.#lockedSide === 'pitcher' ? '職棒初登板' : '職棒初安打';
+    this.flow.card(
+      'gold',
+      '引退之日',
+      text.replace(/\{n\}/g, esc(this.#player?.name ?? '')).replace(/\{first_hit\}/g, firstHit),
+    );
+  }
+
+  /** 名人堂票選。可多聯盟並存——三個聯盟的名人堂是三件事。 */
+  #hallOfFame(ballots: readonly BallotResult[]): void {
+    if (ballots.length === 0) return;
+
+    const lines = ballots.map((b) => {
+      if (!b.inducted) {
+        return (
+          `你連續 ${b.ballotYear} 年入圍${esc(b.hallName)}票選，最高曾獲得 ` +
+          `${b.percent.toFixed(1)}% 得票率，可惜始終未能跨過門檻。`
+        );
+      }
+      return (
+        `引退 <b class="hl">${b.waitYears}</b> 年後（${this.#year + b.waitYears} 年）進入候選，` +
+        `於<b class="hl">第 ${b.ballotYear} 年投票</b>以 <b class="hl">${b.votes}</b> 票` +
+        `（得票率 ${b.percent.toFixed(1)}%）榮登<b class="hl">${esc(b.hallName)}</b>。` +
+        `名匾上的隊徽，是 <b class="hl">${esc(b.capTeam || '—')}</b>。` +
+        `${b.firstBallot ? '<b class="hl">一票入魂，首輪即殿堂。</b>' : ''}`
+      );
+    });
+
+    this.flow.card('gold', '名人堂票選', lines.join('<br><br>'));
+  }
+
+  /**
+   * 只在結算時才判定得了的三個特性。
+   *
+   * 它們的觸發條件全部要等生涯結束才知道結果，離開這裡就沒有別的地方能判。
+   */
+  #settlementTraits(summary: CareerSummary, ballots: readonly BallotResult[]): void {
+    const cfg = hallOfFame.settlement_traits;
+
+    if (ballots.some((b) => b.firstBallot)) {
+      this.#unlockTrait(
+        cfg.legend.trait,
+        '歷史級球星',
+        '第一年投票就披上名人堂金袍——你不只是進了殿堂，你<b class="hl">定義了一個時代</b>。',
+      );
+    }
+
+    // 以下兩個都要求「站上過頂級舞台」——在二軍打一輩子的人，那兩個故事都不成立。
+    const reachedTop = summary.leagues.length > 0;
+    if (!reachedTop) return;
+
+    if (this.#schoolTier === cfg.small_school.school_tier) {
+      this.#unlockTrait(
+        cfg.small_school.trait,
+        '小學校之光',
+        '當年那所沒沒無聞的小學校，走出了一個站上頂級舞台的男人。你證明了：出身，從來不是天花板。',
+      );
+    }
+
+    const potential = Object.values(this.#player?.potential ?? {}).reduce((a, b) => a + b, 0);
+    if (potential > 0 && potential <= cfg.grinder.provisional_sum) {
+      this.#unlockTrait(
+        cfg.grinder.trait,
+        '努力仔',
+        '天賦平庸的球員千千萬萬，能走到這裡的卻寥寥無幾。你不是天選之人，你是把汗水熬成天賦的那種人。',
+      );
+    }
+  }
+
+  /** 取得一個特性並跳卡。已經有了就不重複。 */
+  #unlockTrait(id: string, name: string, text: string): void {
+    if (this.#traits.has(id)) return;
+    this.#traits.add(id);
+    this.flow.card('gold', `隱藏特性：${name}`, text);
+  }
+
+  /**
+   * 球迷看板。
+   *
+   * 依生涯分級挑留言。這是唯一會**根據分級變臉**的區塊——玩家從留言的語氣就
+   * 讀得出自己這輩子打得怎麼樣，那是結算的情緒收尾。
+   */
+  #fanBoard(summary: CareerSummary): void {
+    const pool = flavor.fan_reactions[String(summary.bestTier)];
+    if (pool === undefined || pool.length === 0) return;
+
+    const rng = this.world.stream('career');
+    const picks: string[] = [];
+    const used = new Set<number>();
+    const want = Math.min(3, pool.length);
+    while (picks.length < want) {
+      const i = rng.int(0, pool.length - 1);
+      if (used.has(i)) continue;
+      used.add(i);
+      picks.push(pool[i] ?? '');
+    }
+
+    const name = this.#player?.name ?? '';
+    this.flow.card(
+      'info',
+      '球迷看板・引退串',
+      picks.map((p) => `「${esc(p.replace(/\{n\}/g, name))}」`).join('<br>'),
+    );
+  }
+
+  /** 太早離開棒球的人，走向棒球之外的第二人生。 */
+  #secondLife(): void {
+    if (this.#age >= seasonCfg.retirement.second_life_max_age) return;
+    const stories = flavor.second_life.stories;
+    if (stories.length === 0) return;
+
+    const name = this.#player?.name ?? '';
+    const story = stories[this.world.stream('career').int(0, stories.length - 1)] ?? '';
+    this.flow.card(
+      'gold',
+      '第二人生',
+      `${esc(story.replace(/\{n\}/g, name))}<br><br>` +
+        `<span class="sub">${esc(flavor.second_life.closing.replace(/\{n\}/g, name))}</span>`,
     );
   }
 

@@ -905,3 +905,125 @@ describe('年度獎項', () => {
     expect(playAmateur(started()).state?.awards).toEqual([]);
   });
 });
+
+describe('引退與結算', () => {
+  const DURABLE = ['sta', 'con', 'pow', 'rng', 'fld', 'eye'];
+
+  /** 打到底，遇到引退提問一律選「再拚一年」。 */
+  function playToRetire(seed: string, quitRetire = false): Game {
+    const game = started({ seed });
+    let guard = 0;
+    let k = 0;
+    while (game.flow.prompt !== null && guard++ < 5000) {
+      const options = game.flow.prompt.options;
+      const retireChoice = options.find((o) => o.id === (quitRetire ? 'retire:quit' : 'retire:stay'));
+      const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+      const pick =
+        retireChoice ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options[0];
+      if (pick === undefined) break;
+      if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+      game.choose(pick.id);
+    }
+    return game;
+  }
+
+  const titles = (game: Game) =>
+    game.flow.log.filter((e) => e.kind === 'card').map((e) => (e as { title?: string }).title ?? '');
+
+  it('流程一定跑得完——不再卡在「尚未實作」', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = playToRetire(`end-${i}`);
+      expect(game.flow.prompt).toBeNull();
+      expect(titles(game)).not.toContain('尚未實作');
+    }
+  });
+
+  it('引退之後一定有生涯總結與引退場景', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playToRetire(`scene-${i}`);
+      const t = titles(game);
+      expect(t).toContain('引退之日');
+      expect(game.summary).not.toBeNull();
+    }
+  });
+
+  it('打過職業的人會有生涯評價與球迷看板', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = playToRetire(`eval-${i}`);
+      if ((game.summary?.leagues.length ?? 0) === 0) continue;
+      const t = titles(game);
+      expect(t).toContain('生涯評價');
+      expect(t).toContain('球迷看板・引退串');
+      return;
+    }
+    throw new Error('三十局都沒有人打進頂級聯盟');
+  });
+
+  /**
+   * 選秀落選是相當常見的結局，尤其是玩得不好的第一局。要走到這條路徑必須
+   * 主動拒絕指名——引退之後 pro 一律是 null，從狀態上分不出「沒進過職業」。
+   */
+  it('沒進職業的生涯也走同一個出口，並接上第二人生', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = started({ seed: `nopro-${i}` });
+      let guard = 0;
+      let rejected = false;
+      while (game.flow.prompt !== null && guard++ < 5000) {
+        const options = game.flow.prompt.options;
+        const reject = options.find((o) => o.id === 'draft:reject');
+        if (reject !== undefined) rejected = true;
+        const pick = reject ?? defaultPick(game, DURABLE);
+        if (pick === undefined) break;
+        game.choose(typeof pick === 'string' ? pick : pick.id);
+      }
+      if (!rejected) continue;
+      const t = titles(game);
+      expect(t).toContain('球員生涯結束');
+      // 二十歲出頭離開棒球，一定走得到第二人生
+      expect(t).toContain('第二人生');
+      expect(game.summary?.leagues).toEqual([]);
+      return;
+    }
+    throw new Error('四十局都沒有出現可拒絕的指名');
+  });
+
+  it('玩家可以自己按下引退鍵，而且比等到最後更早結束', () => {
+    for (let i = 0; i < 30; i++) {
+      const stay = playToRetire(`quit-${i}`);
+      const quit = playToRetire(`quit-${i}`, true);
+      if (stay.state?.age === quit.state?.age) continue;
+      expect(quit.state?.age).toBeLessThan(stay.state?.age ?? 99);
+      return;
+    }
+    throw new Error('三十局都沒有出現引退提問');
+  });
+
+  it('生涯評價分只算頂級聯盟——二軍成績另外通算', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = playToRetire(`minor-${i}`);
+      const summary = game.summary;
+      if (summary === null || summary.minors.length === 0) continue;
+      for (const league of summary.leagues) {
+        expect(league.org).not.toBe('');
+      }
+      // 二軍的成績出現在 minors 而不是 leagues
+      expect(summary.minors.every((m) => m.level.endsWith('2'))).toBe(true);
+      return;
+    }
+  });
+
+  it('引退之後不再有任何提問——流程真的結束了', () => {
+    const game = playToRetire('done-1');
+    expect(game.flow.prompt).toBeNull();
+  });
+
+  it('相同種子加相同選擇，結算結果完全相同', () => {
+    const a = playToRetire('replay-1');
+    const b = playToRetire('replay-1');
+    expect(a.summary?.totalScore).toBe(b.summary?.totalScore);
+    expect(a.flow.log).toEqual(b.flow.log);
+  });
+});

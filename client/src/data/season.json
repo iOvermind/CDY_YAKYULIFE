@@ -254,7 +254,12 @@
     "min_age": 30,
     "age_chance": { "base": 3, "per_year": 6, "max": 85 },
     "released_forces_retirement_age": 33,
-    "max_age": 44
+    "max_age": 44,
+
+    "_choice_note": "引退不只是判定，也可以是玩家自己按下的。自己決定掛靴與被系統告知「你老了」是兩種完全不同的情緒，而引退場景要承接的正是這個。續約時的「召開引退記者會」與 FA 乏人問津的引退掛在合約系統上，那個系統還沒做——見 ROADMAP。",
+    "voluntary_from_age": 33,
+    "refuse_demotion_from_age": 28,
+    "second_life_max_age": 25
   },
 
   "advanced": {

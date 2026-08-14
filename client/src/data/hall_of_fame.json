@@ -1,21 +1,101 @@
 {
-  "schemaVersion": 1,
-  "_source": "抽取自 index_legacy.html TIER_TH / HOF_CFG / retireScene() 的 fbMult",
-  "_note": "生涯評價與名人堂。tier_thresholds 是五帶金字塔的四道門檻，由高到低對應名人堂／明星／每日／替補；低於最後一道即第五帶。",
+  "schemaVersion": 2,
+  "_source": "門檻與名人堂設定原抽取自 index_legacy.html TIER_TH / HOF_CFG / retireScene()；評價分的基底已改為勝利份額／敗戰份額雙帳制，見 ADR 0003。",
+  "_note": "生涯評價與名人堂。評價分 = 勝利份額 − k × 敗戰份額，再加上榮譽與聯盟里程碑的加分，全部乘上該聯盟的難度係數。只算頂級聯盟，每個頂級聯盟各算一份，因此一個人可以同時進入多個名人堂。",
+
+  "_migration_note": "schemaVersion 1 的 tier_thresholds 是每個聯盟一組（中職 12000／日職 8500／大聯盟 7500），因為當時的難度差藏在門檻裡。改用雙帳制之後難度改由分數端的係數承擔，門檻統一為一組——任何聯盟只要 leagues.json 給了 par 與 min 就算得出分級，不必再各生一組門檻。原本的 _expansion_gap（KBO／LMB／ABL 沒有門檻）因此消失。",
 
   "two_way": {
     "_note": "二刀流球員的成績呈現與評價。投手成績（W/L/SV/IP/SO/ERA…）與野手成績（PA/H/HR/RBI/AVG…）**分開累積、分開顯示、分開評獎**——它們的單位不同，硬湊在一起沒有意義。",
-    "_combined_note": "但有一類指標是投打通用的貢獻值——Win Shares、WAR 這種把不同貢獻換算成同一個尺度的統計。這類指標**可以跨投打加總**，並在介面上獨立一頁呈現「合併生涯紀錄」，讓二刀流球員能與單一領域的球員放在同一張榜上比較。公式見 ROADMAP 階段二的「綜合評價 (WAR)」。",
-    "score_rule": "career_score = pitching_score + batting_score",
-    "combined_metrics": ["WS", "WAR"]
+    "_combined_note": "但勝利份額是投打通用的：投球貢獻 20 勝、打擊貢獻 20 勝，合起來就是 40 個勝利，這是同一個單位的真實加總，不是硬湊。因此二刀流的評價分直接把兩側相加，門檻不另設——投打都達到聯盟前段的球員本來就該是歷史級的，而代價已經由養成期的成長成本與取得機率承擔。",
+    "score_rule": "career_score = pitching_score + batting_score + fielding_score",
+    "combined_metrics": ["WS", "LS", "WAR"]
+  },
+
+  "difficulty": {
+    "_note": "聯盟難度係數，把不同聯盟的勝利份額換算到同一把尺上。存在的理由是弱聯盟的份額會虛胖——聯盟平均是自我參照的（各級聯盟的打擊率都在同一個水準），因此能力相同的球員在弱聯盟宰制力更強、份額更高。",
+    "_year_note": "用**當年的 par**，不是 leagues.json 的基準值。聯盟水準逐年浮動，弱年的份額同樣會虛胖；用當年的值計算，浮動就會被吃掉——玩家不會因為生在弱年而白賺生涯評價分，但成績單上仍看得到那年打得特別兇。",
+    "_calibration_note": "exponent 為暫定值。正式值由校準腳本決定——跑同一個能力的球員在各層級，看份額虛胖多少，係數就設成能把它壓平的值。",
+    "reference_par": 44,
+    "exponent": 2.0
   },
 
   "tier_thresholds": {
-    "_note": "擬真玩家尺的校準：成功稀有化、浮沉為大宗、失敗有感。索引 0 為名人堂門檻。",
-    "labels": ["名人堂", "明星", "每日", "替補"],
-    "CPBL": [12000, 7000, 4300, 2100],
-    "NPB": [8500, 6200, 3000, 1900],
-    "MLB": [7500, 6200, 3500, 1900]
+    "_note": "生涯評價分的五帶門檻，**所有聯盟共用一組**。四道門檻切出五帶，由高到低。低於最後一道即第五帶。",
+    "_calibration_note": "暫定值。取自一批 250 局的樣本，把門檻放在 2／8／25／40 累進的分位數上——但那批樣本用的是單一種攻守兼備的自動玩法，母體偏強。正式值由校準腳本決定：目標分佈為名人堂 2%／明星 8%／每日 25%／替補 40%／過客 25%，母體取有職業出賽紀錄的生涯，策略為「合理但不極致」。",
+    "labels": ["名人堂", "明星", "每日", "替補", "過客"],
+    "values": [215, 154, 106, 65]
+  },
+
+  "award_points": {
+    "_note": "榮譽的加分，單位與勝利份額相同（WS 當量）。刻意壓低到佔評價分的 15–25%——份額已經涵蓋了表現，再為「那年拿了 MVP」加一大筆等於同一份表現算兩次。榮譽剩下的價值是同儕與時代的認可，它該影響邊緣案例的入選與否，不該主導排序。",
+    "by_code": {
+      "mvp": 10,
+      "pitcher_of_year": 8,
+      "rookie_of_year": 3,
+      "batting_king": 3,
+      "hr_king": 3,
+      "rbi_king": 3,
+      "obp_king": 2.5,
+      "steal_king": 2,
+      "strikeout_king": 3,
+      "save_king": 3,
+      "gold_glove": 3,
+      "defense_king": 2,
+      "all_star": 0.5
+    },
+    "championship": {
+      "_note": "所屬球隊奪冠。冠軍是九個人的事，因此給得比個人獎項輕。",
+      "points": 2
+    },
+    "default": 0
+  },
+
+  "tier_floors": {
+    "_note": "獎項保底：拿過這些獎的人，分級至少到某一帶。這個機制在份額尺度下比在 legacy 的累積量尺度下更重要——它處理的正是「短而璀璨」的生涯，那種人的累積份額不高，但沒有人會說他不是明星球員。",
+    "_calibration_finding": "實測發現保底規則會**主導**分級分佈：一批 250 局的樣本裡，把門檻放在 2／8／25／40 的分位數上之後，明星帶仍佔 23.6%（目標 8%），因為拿過 MVP 或年度最佳投手的人一律被保到那一帶。校準時要一起看的是獎項的取得率，而不只是門檻——保底規則本身沒有錯，是獎項發得太浮濫。",
+    "rules": [
+      { "codes": ["mvp", "pitcher_of_year"], "min_tier": 1 },
+      {
+        "codes": [
+          "batting_king",
+          "hr_king",
+          "rbi_king",
+          "obp_king",
+          "steal_king",
+          "strikeout_king",
+          "save_king",
+          "gold_glove",
+          "defense_king"
+        ],
+        "min_tier": 2
+      }
+    ]
+  },
+
+  "milestones": {
+    "_note": "累進制的成就門檻。之所以與勝利份額並存，是因為兩者衡量的不是同一件事——**打到 1999 支和 2000 支的社會意義不同，即使份額算出來一樣**。",
+    "_scaling_note": "聯盟里程碑的門檻依球季場次等比放大：base 是 reference_games 場的聯盟所用的值。中職 120 場的 1000 安，到大聯盟 162 場就是 1350 安。比率型的成就不在此列（本表目前只有累積量）。",
+    "_scope_note": "聯盟里程碑只加進**該聯盟**的評價分；生涯里程碑跨聯盟通算，不進任何單一聯盟的評價分，只進總評價分與成就系統。",
+    "reference_games": 120,
+    "league": [
+      { "stat": "hits", "name": "安打", "side": "batter", "steps": [1000, 1500, 2000], "points": [4, 8, 14] },
+      { "stat": "hr", "name": "全壘打", "side": "batter", "steps": [150, 250, 350], "points": [4, 8, 14] },
+      { "stat": "rbi", "name": "打點", "side": "batter", "steps": [600, 900, 1200], "points": [3, 6, 11] },
+      { "stat": "sb", "name": "盜壘", "side": "batter", "steps": [200, 350, 500], "points": [3, 6, 11] },
+      { "stat": "wins", "name": "勝投", "side": "pitcher", "steps": [80, 130, 180], "points": [4, 8, 14] },
+      { "stat": "so", "name": "奪三振", "side": "pitcher", "steps": [1000, 1750, 2500], "points": [4, 8, 14] },
+      { "stat": "saves", "name": "救援", "side": "pitcher", "steps": [100, 200, 300], "points": [4, 8, 14] }
+    ],
+    "career": [
+      { "stat": "hits", "name": "生涯安打", "side": "batter", "steps": [1500, 2000, 2500, 3000], "points": [5, 10, 16, 24] },
+      { "stat": "hr", "name": "生涯全壘打", "side": "batter", "steps": [200, 300, 400, 500], "points": [5, 10, 16, 24] },
+      { "stat": "rbi", "name": "生涯打點", "side": "batter", "steps": [800, 1200, 1600, 2000], "points": [4, 8, 13, 20] },
+      { "stat": "sb", "name": "生涯盜壘", "side": "batter", "steps": [300, 500, 700], "points": [4, 8, 13] },
+      { "stat": "wins", "name": "生涯勝投", "side": "pitcher", "steps": [100, 150, 200, 250], "points": [5, 10, 16, 24] },
+      { "stat": "so", "name": "生涯奪三振", "side": "pitcher", "steps": [1500, 2250, 3000, 3500], "points": [5, 10, 16, 24] },
+      { "stat": "saves", "name": "生涯救援", "side": "pitcher", "steps": [150, 250, 350], "points": [5, 10, 16] }
+    ]
   },
 
   "halls": {
@@ -27,17 +107,15 @@
     "MLB": { "name": "美國棒球名人堂", "wait_years": 5, "total_voters": 389, "league": "大聯盟" }
   },
 
-  "_expansion_gap": "KBO / LMB / ABL 有名人堂設定，但 tier_thresholds 與 first_ballot.multiplier 沒有對應項目。這三個聯盟目前無法計算生涯評價分級，也就無法真的進行名人堂票選。要啟用需補齊門檻。",
-
   "first_ballot": {
-    "_note": "評價分需超過名人堂門檻的指定倍數才在第一年當選，否則等待 2~6 年。大聯盟最嚴，中職與日職放寬。",
+    "_note": "評價分需超過名人堂門檻的指定倍數才在第一年當選，否則等待 2~6 年。這是各國票選文化的差異，不是難度——難度已經由分數端的係數處理，因此這裡仍逐聯盟設定。大聯盟最嚴，中職與日職放寬。",
     "multiplier": { "CPBL": 1.12, "NPB": 1.12, "MLB": 1.2 },
     "default_multiplier": 1.2,
     "wait_if_not_first": { "min": 2, "max": 6 }
   },
 
   "vote_percent": {
-    "_note": "得票率 = 75 + (評價分 − 名人堂門檻) / 門檻 × 40 + 隨機 0~6 − (等待年數 − 1) × 4，下限 75、上限 99.1。",
+    "_note": "得票率 = base + (評價分 − 名人堂門檻) / 門檻 × over_threshold_factor + 隨機 0~random_max − (等待年數 − 1) × wait_penalty_per_year，套上下限。",
     "base": 75,
     "over_threshold_factor": 40,
     "random_max": 6,
@@ -46,8 +124,34 @@
     "cap": 99.1
   },
 
+  "near_miss": {
+    "_note": "分級為明星卻沒進名人堂的人，會年復一年地入圍票選卻跨不過門檻。這是名人堂敘事裡最有重量的一種——差一點的人比差很多的人更難受。",
+    "pct": { "min": 55, "max": 72 },
+    "tries": { "min": 3, "max": 9 }
+  },
+
   "representative_league": {
-    "_note": "生涯代表聯盟：先取生涯最佳分級（i 最小）的聯盟，若有多個同分級，取出賽年資最多者。帽徽由此決定。",
-    "check_order": ["MLB", "NPB", "CPBL"]
+    "_note": "生涯代表聯盟：先取生涯最佳分級（tier 最小）的聯盟，若有多個同分級，取出賽年資最多者；仍相同則取當年 par 較高者——同樣的成就在更強的聯盟達成，代表性更高。帽徽由代表聯盟中效力最久的球隊決定。",
+    "check_order": ["MLB", "NPB", "KBO", "LMB", "ABL", "CPBL"]
+  },
+
+  "settlement_traits": {
+    "_note": "只在結算時才判定得了的隱藏特性。其餘 24 種的觸發時機在生涯中途，見 ROADMAP。",
+    "legend": {
+      "_note": "名人堂首輪入選。它是票選的直接產物，離開結算流程就沒有別的地方能判。",
+      "trait": "legend"
+    },
+    "small_school": {
+      "_note": "出身弱校卻站上頂級舞台。school_tier 為 3 代表最弱的那一級。",
+      "trait": "smallschool",
+      "school_tier": 3
+    },
+    "grinder": {
+      "_note": "天賦平庸卻走完一段頂級生涯。legacy 的門檻（投手 ≤237／野手 ≤469）是照舊的能力模型訂的——舊版投打擁有的能力項目不同，所以兩個門檻差這麼多。新架構每位球員都有全部 15 項能力，那兩個數字沒有意義，改用初始潛力總和的分位數。",
+      "_calibration_note": "percentile 為暫定值，正式值由校準腳本用實際的潛力分布決定。",
+      "trait": "grinder",
+      "percentile": 0.25,
+      "provisional_sum": 620
+    }
   }
 }
