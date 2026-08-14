@@ -596,6 +596,41 @@ export interface LeagueLevel {
   readonly top?: string;
 }
 
+/** 年齡窗口的一階。年齡在 max_age 以內時，挖角機率乘上 value。 */
+export interface AgeWindowTier {
+  readonly max_age: number;
+  readonly value: number;
+}
+
+/** 一個體系的年齡窗口。null 表示不看年齡（墨聯與澳職）。 */
+export interface AgeWindow {
+  readonly tiers: readonly AgeWindowTier[];
+  readonly default: number;
+  /** 關窗之後的例外：能力遠超落地門檻的即戰力仍有微弱機會。 */
+  readonly monster?: { readonly over_landing_bar: number; readonly value: number };
+}
+
+/** 一個體系的轉會設定。`scouts` 為 false 者只接人、不挖人。 */
+export interface TransferOrg {
+  readonly scouts: boolean;
+  readonly scout_min_overall?: number;
+  readonly scout_chance?: number;
+  readonly signing_bonus: { readonly base: number; readonly per_d: number };
+  /** 入札制度的目的地。null 表示這個體系沒有入札。 */
+  readonly posting: { readonly to: string } | null;
+  readonly age_window: AgeWindow | null;
+}
+
+export interface TransferData {
+  readonly import_premium: { readonly value: number };
+  readonly scouting: {
+    readonly offers_per_org: Range;
+    readonly min_win_pct: { readonly value: number };
+  };
+  readonly fallback: { readonly max_offers: number };
+  readonly orgs: Readonly<Record<string, TransferOrg>>;
+}
+
 /** 一個層級的薪資設定。年薪 = base + clamp(d, 0, d_cap) × per_point，單位萬元。 */
 export interface SalarySpec {
   readonly base: number;
@@ -614,6 +649,8 @@ export interface LeaguesData {
     readonly levels: Readonly<Record<string, SalarySpec>>;
     readonly posting_fee_multiplier: { readonly value: number };
   };
+  /** 跨體系轉會。邊由這裡的門檻與年齡窗口推導，見 ADR 0004。 */
+  readonly transfer: TransferData;
   /** 各體系由低到高的升遷路徑。 */
   readonly paths: Readonly<Record<string, readonly string[]>>;
   readonly top_league_names: Readonly<Record<string, string>>;
@@ -865,6 +902,21 @@ export interface Team {
 
 export interface TeamsData {
   readonly leagues: Readonly<Record<string, readonly Team[]>>;
+}
+
+/**
+ * 走訪一份 JSON 映射的「真正的鍵」。
+ *
+ * 本專案的慣例是 `_` 開頭的鍵都是給人看的註解（見本檔開頭）。那個慣例對讀
+ * 檔的人很好，但對 `Object.keys()` 是陷阱——註解鍵會混進迭代裡，而且型別上
+ * 看不出來，因為它們不在介面裡。
+ *
+ * 曾經發生過：`leagues.paths` 的 `_note` 被當成一條升遷路徑，字串被逐字元
+ * 迭代，於是出現「未知的聯盟層級：各」。**任何要走訪 JSON 映射的地方都該
+ * 用這個函式。**
+ */
+export function dataKeys<T>(map: Readonly<Record<string, T>>): readonly string[] {
+  return Object.keys(map).filter((k) => !k.startsWith('_'));
 }
 
 /** 全部能力代碼，順序穩定（依 abilities.json 的宣告順序）。 */

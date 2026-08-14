@@ -81,6 +81,7 @@ import {
   lossPenalty,
   pitchingShares,
   proBaseline,
+  sumShares,
   winPct,
   type Shares,
 } from './metrics.ts';
@@ -96,6 +97,13 @@ import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './gene
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
 import { fmtMoney, salaryFor } from './salary.ts';
+import {
+  fallbackOffers,
+  orgLabel,
+  scoutingNote,
+  scoutingOffers,
+  type TransferOffer,
+} from './transfer.ts';
 import { levelOf, playSeason, positionName, type ProPitchingLine } from './season.ts';
 import {
   advanceLeague,
@@ -384,6 +392,15 @@ export class Game {
    * 年表要把兩者接在一起，因為養成六年也是這段生涯的一部分。
    */
   #amateurSeasons: AmateurSeasonRecord[] = [];
+  /** 待過的體系。回到其中之一算落葉歸根。 */
+  #playedOrgs = new Set<string>();
+  /**
+   * 上一季的勝率——勝利份額佔責任額的比例。
+   *
+   * 挖角的成績門檻看它：**球探是看了你去年的表現才來的**。傷缺或低潮的一年
+   * 會讓你錯過窗口，而年齡窗口本來就在關。
+   */
+  #lastWinPct = 0.5;
   /** 結算出來的生涯總結。引退之前為 null。 */
   #summary: CareerSummary | null = null;
   /**
@@ -1206,6 +1223,7 @@ export class Game {
     }
 
     this.#lastD = r.overall - standardOf(this.#standards, pro.level).par;
+    this.#playedOrgs.add(levelOf(pro.level).org);
 
     // 領薪水。**在成績結算之後才領**——年薪看的是這一季的 d 值，而 d 值要等
     // 這季打完、能力定案才算得準。
@@ -1213,6 +1231,13 @@ export class Game {
     this.#earnings += salary;
 
     this.#recordSeason(line.batting, line.pitching, def ?? 0);
+    // 上季勝率：三個分段的份額加總。挖角的成績門檻看它。
+    const record = this.#seasons.at(-1);
+    if (record !== undefined) {
+      this.#lastWinPct = winPct(
+        sumShares(record.shares.batting, record.shares.pitching, record.shares.fielding),
+      );
+    }
 
     const parts: string[] = [];
     if (line.pitching !== null) {
@@ -1443,12 +1468,16 @@ export class Game {
       this.flow.card('bad', '戰力外', `球團通知你不再續約——${esc(move.reason)}。`);
     } else if (move.level !== null && move.level !== pro.level) {
       const to = levelOf(move.level);
-      this.flow.card(
-        move.movement === 'promote' ? 'gold' : 'bad',
-        move.movement === 'promote' ? '升上一軍' : '下放二軍',
-        `${esc(move.reason)}，${move.movement === 'promote' ? '被叫上' : '被送回'}<b class="hl">${esc(to.name)}</b>。`,
-      );
+      // 下放的卡片交給 #demotionOffers 說——那裡才知道有沒有別的邀請，
+      // 在這裡先講一次會變成同一件事講兩遍。
       if (move.movement === 'demote') demotedTo = to.name;
+      else {
+        this.flow.card(
+          'gold',
+          '升上一軍',
+          `${esc(move.reason)}，被叫上<b class="hl">${esc(to.name)}</b>。`,
+        );
+      }
       pro.level = move.level;
     }
 
@@ -1457,10 +1486,15 @@ export class Game {
 
     // ---- 引退
     const retire = shouldRetire(this.world, { age: this.#age, released });
-    if (retire.retire || released) {
-      // 球團主動終止要付全額；球員自己撐不下去而引退則只拿七成。
-      this.#payBuyout(released ? 'club' : 'player');
-      this.flow.push(() => this.#retire(retire.retire ? retire.reason : move.reason));
+    if (retire.retire) {
+      this.#payBuyout('player');
+      this.flow.push(() => this.#retire(retire.reason));
+      return;
+    }
+    if (released) {
+      // 球團主動終止要付全額。被釋出不等於生涯結束——先問問別的體系收不收。
+      this.#payBuyout('club');
+      this.flow.push(() => this.#fallback(move.reason));
       return;
     }
 
@@ -1551,14 +1585,126 @@ export class Game {
       return;
     }
 
-    this.#askTerms(`合約到期 · 與 ${pro.team} 續約`, (years, mult) => {
-      pro.contract = { years, mult, extensionOffered: false };
+    this.#freeAgency(demotedTo);
+  }
+
+  /**
+   * 自由球員。
+   *
+   * 兩條路：與母隊續約，或**跳出合約測試市場**。後者是真正的賭注——市場可能
+   * 冷得可怕，那時只剩減薪回原隊或掛靴。
+   *
+   * 市場上的報價來自尋路（不看年齡、不看上季表現），因為 FA 問的同樣是「哪裡
+   * 收得下你」而不是「誰想要你」。旅外球員因此在這裡自然拿得到返台的選項——
+   * 落葉歸根不必特別寫。
+   */
+  #freeAgency(demotedTo: string | null): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+
+    this.flow.ask(
+      {
+        title: `合約到期 · 取得自由球員資格（服務 ${pro.serviceYears} 年）`,
+        options: [
+          { id: 'fa:stay', label: `與 ${pro.team} 續約`, note: '接著選擇長約或短約', role: 'main' },
+          {
+            id: 'fa:market',
+            label: '跳出合約，測試自由市場',
+            note: '可能乏人問津，那時只剩減薪回原隊或引退',
+            role: 'warn',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'fa:market') {
+          this.#faMarket(demotedTo);
+          return;
+        }
+        this.#askTerms(`與 ${pro.team} 續約 · 選擇合約類型`, (years, mult) => {
+          pro.contract = { years, mult, extensionOffered: false };
+          this.flow.card(
+            'info',
+            '續約',
+            `與 <b class="hl">${esc(pro.team)}</b> 完成 <b class="hl">${years} 年</b>續約` +
+              `（年薪係數 ×${mult.toFixed(2)}）。`,
+          );
+          this.#endOfYearChoices(demotedTo);
+        });
+      },
+    );
+  }
+
+  /** 自由市場。沒有人開價時的兩個結局：減薪回原隊，或就此引退。 */
+  #faMarket(demotedTo: string | null): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+
+    // FA 問的是「誰想要你」，因此不列比現在更差的舞台。真的沒有人開價，
+    // 那才叫市場冷。
+    const offers = fallbackOffers(this.world, {
+      ...this.#transferContext,
+      minPar: standardOf(this.#standards, pro.level).par,
+    });
+    if (offers.length === 0) {
       this.flow.card(
-        'info',
-        '續約',
-        `與 <b class="hl">${esc(pro.team)}</b> 完成 <b class="hl">${years} 年</b>續約` +
-          `（年薪係數 ×${mult.toFixed(2)}）。`,
+        'bad',
+        '自由市場',
+        '電話一直沒有響。經紀人聳聳肩——市場對你的評價比想像中冷。',
       );
+      this.flow.ask(
+        {
+          title: '沒有球隊開價',
+          options: [
+            {
+              id: 'fa:crawl',
+              label: `回 ${pro.team} 減薪簽約`,
+              note: `1 年｜年薪係數 ×${seasonCfg.contract.multiplier.by_performance.default.toFixed(2)}`,
+              role: 'main',
+            },
+            { id: 'fa:retire', label: '就此引退', role: 'warn' },
+          ],
+        },
+        (choice) => {
+          if (choice === 'fa:retire') {
+            this.flow.push(() => this.#retire(`自由市場乏人問津，${this.#year} 年黯然引退`));
+            return;
+          }
+          pro.contract = {
+            years: 1,
+            mult: seasonCfg.contract.multiplier.by_performance.default,
+            extensionOffered: false,
+          };
+          this.flow.card(
+            'bad',
+            '減薪合約',
+            `低著頭回到 <b class="hl">${esc(pro.team)}</b>，年薪打折。`,
+          );
+          this.#endOfYearChoices(demotedTo);
+        },
+      );
+      return;
+    }
+
+    const options: Option[] = [
+      ...offers.map((o, i) => ({
+        id: `market:${i}`,
+        label: `${o.orgName}　${o.team}（${o.levelName}）`,
+        note: `簽約金 ${fmtMoney(o.bonus)}${o.homecoming ? '｜落葉歸根' : ''}`,
+      })),
+      { id: 'market:stay', label: `回 ${pro.team} 續約`, role: 'main' },
+    ];
+
+    this.flow.ask({ title: '自由市場報價一覽', options }, (choice) => {
+      const picked = offers[Number(choice.split(':')[1])];
+      if (picked === undefined) {
+        this.#askTerms(`與 ${pro.team} 續約 · 選擇合約類型`, (years, mult) => {
+          pro.contract = { years, mult, extensionOffered: false };
+          this.flow.card('info', '續約', `重回 <b class="hl">${esc(pro.team)}</b>。`);
+          this.#endOfYearChoices(demotedTo);
+        });
+        return;
+      }
+      this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
       this.#endOfYearChoices(demotedTo);
     });
   }
@@ -1624,8 +1770,222 @@ export class Game {
     });
   }
 
-  /** 年末的引退選擇。合約處理完才問——先知道明年有沒有球打，再決定要不要走。 */
+  /** 轉會判定用的上下文。挖角與尋路共用。 */
+  get #transferContext() {
+    const pro = this.#pro;
+    return {
+      overall: this.rating?.overall ?? 0,
+      age: this.#age,
+      lastWinPct: this.#lastWinPct,
+      currentOrg: pro === null ? '' : levelOf(pro.level).org,
+      currentTeam: pro?.team ?? '',
+      playedOrgs: this.#playedOrgs,
+      standards: this.#standards,
+    };
+  }
+
+  /**
+   * 挖角。
+   *
+   * 每個體系各自擲一次，命中的**併成同一張報價單**——「日職和大聯盟同時來搶」
+   * 是旅外題材最好看的一幕，拆成兩次提問就沒了。
+   *
+   * 拒絕沒有代價，但敘述會透露球探的關注度在變——用觀察到的現象講，不講機率。
+   */
+  #scouting(next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null) {
+      next();
+      return;
+    }
+
+    const ctx = this.#transferContext;
+    const offers = scoutingOffers(this.world, ctx);
+    const note = scoutingNote(ctx);
+
+    if (offers.length === 0) {
+      if (note !== null) this.flow.card('info', '海外的風聲', esc(note));
+      next();
+      return;
+    }
+
+    this.flow.ask(
+      {
+        title: '海外球團遞出合約',
+        options: [
+          ...offers.map((o, i) => ({
+            id: `transfer:${i}`,
+            label: `${o.orgName}　${o.team}（${o.levelName}）`,
+            note:
+              `簽約金 ${fmtMoney(o.bonus)}` +
+              (o.homecoming ? '｜回到熟悉的聯盟' : '') +
+              (levelOf(o.level).top === undefined ? '｜先從小聯盟出發' : ''),
+          })),
+          { id: 'transfer:stay', label: `留在${orgLabel(ctx.currentOrg)}`, role: 'main' as const },
+        ],
+      },
+      (choice) => {
+        const picked = offers[Number(choice.split(':')[1])];
+        if (picked === undefined) {
+          if (note !== null) this.flow.card('info', '海外的風聲', esc(note));
+          next();
+          return;
+        }
+        this.#payBuyout('player');
+        this.#moveTo(picked, '旅外');
+        next();
+      },
+    );
+  }
+
+  /**
+   * 尋路：被釋出時，其他體系的邀請。
+   *
+   * 這裡問的不是「誰想要你」，而是「哪裡還收得下你」——因此不看年齡、不看
+   * 上季表現。墨聯與澳職只出現在這條路上，那正是它們的價值：當所有頂級聯盟
+   * 都關門時，還有地方打球。
+   *
+   * 一個都找不到就是真的沒有球隊要你了，生涯到此為止。
+   */
+  #fallback(reason: string): void {
+    const offers = fallbackOffers(this.world, this.#transferContext);
+    if (offers.length === 0) {
+      this.flow.push(() => this.#retire(reason));
+      return;
+    }
+
+    this.flow.card(
+      'bad',
+      '戰力外通告',
+      `${esc(reason)}。所幸還有球隊捎來邀請——`,
+    );
+
+    const options: Option[] = offers.map((o, i) => {
+      const base = {
+        id: `fallback:${i}`,
+        label: `${o.orgName}　${o.team}（${o.levelName}）`,
+        note: `簽約金 ${fmtMoney(o.bonus)}${o.homecoming ? '｜落葉歸根' : ''}`,
+      };
+      return i === 0 ? { ...base, role: 'main' as const } : base;
+    });
+    options.push({ id: 'fallback:retire', label: '就此引退', role: 'warn' });
+
+    this.flow.ask({ title: '新東家的邀請', options }, (choice) => {
+      const picked = offers[Number(choice.split(':')[1])];
+      if (picked === undefined) {
+        this.flow.push(() => this.#retire(`${reason}，${this.#year} 年選擇引退`));
+        return;
+      }
+      this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
+      this.flow.push(() => this.#proYear());
+    });
+  }
+
+  /**
+   * 換體系。
+   *
+   * 要重置的東西比想像中多：守位登錄（各層級門檻不同）、體系年資（新東家沒有
+   * 理由享有原球團的掌控權）、聯盟戰力表、以及合約。**任何以體系為鍵的東西
+   * 都要檢查是否需要重置**，漏掉會產生難以察覺的錯誤。
+   */
+  #moveTo(offer: TransferOffer, headline: string): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+
+    this.#earnings += offer.bonus;
+    this.#playedOrgs.add(offer.org);
+
+    pro.level = offer.level;
+    pro.team = offer.team;
+    pro.position = null;
+    pro.yearsAtBottom = 0;
+    pro.year = 1;
+    pro.serviceYears = 0;
+    pro.changedOrg = true;
+    pro.contract = rookieContract();
+
+    // 新體系有自己的球隊格局，必須重抽——沿用舊的等於把中職的強弱貼到日職身上。
+    this.#league = initLeague(this.world, offer.org);
+    this.#lastStandardsNote = null;
+
+    this.flow.card(
+      'gold',
+      headline,
+      `與 <b class="hl">${esc(offer.team)}</b> 簽約，從 <b class="hl">${esc(offer.levelName)}</b> 出發。` +
+        `簽約金 <b class="hl">${fmtMoney(offer.bonus)}</b>。` +
+        (offer.homecoming ? '<br>回到熟悉的聯盟，看台上有人記得你的名字。' : ''),
+    );
+  }
+
+  /**
+   * 年末的引退選擇。合約處理完、挖角問過才輪到它——先知道明年有沒有球打、
+   * 在哪裡打，再決定要不要走。
+   */
   #endOfYearChoices(demotedTo: string | null): void {
+    this.#scouting(() => {
+      if (demotedTo === null) {
+        this.#retirementChoices(null);
+        return;
+      }
+      this.#demotionOffers(demotedTo, () => this.#retirementChoices(demotedTo));
+    });
+  }
+
+  /**
+   * 下放遞約。
+   *
+   * 被送回二軍的那一刻，其他體系的邀請也到了——**這是旅外最真實的觸發時機**：
+   * 在這裡待不下去，不代表在別處待不下去。與戰力外走同一條尋路，差別只在
+   * 這裡可以選擇留下。
+   */
+  #demotionOffers(demotedTo: string, next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null) {
+      next();
+      return;
+    }
+    // 下限是被送去的那一層——換舞台是為了不被下放，不是為了去更差的地方。
+    const offers = fallbackOffers(this.world, {
+      ...this.#transferContext,
+      minPar: standardOf(this.#standards, pro.level).par,
+    });
+    if (offers.length === 0) {
+      // 沒有別的邀請時仍要說一聲——不然下放會無聲發生。
+      this.flow.card(
+        'bad',
+        '降級通知',
+        `成績未達標，被送回 <b class="dn">${esc(demotedTo)}</b>。`,
+      );
+      next();
+      return;
+    }
+
+    const options: Option[] = [
+      { id: 'demote:accept', label: `接受下放，留在${demotedTo}`, role: 'main' },
+      ...offers.map((o, i) => ({
+        id: `demote:${i}`,
+        label: `${o.orgName}　${o.team}（${o.levelName}）`,
+        note: `簽約金 ${fmtMoney(o.bonus)}${o.homecoming ? '｜落葉歸根' : ''}`,
+      })),
+    ];
+
+    this.flow.card(
+      'bad',
+      '降級通知',
+      `成績未達標，球團打算把你送回 <b class="dn">${esc(demotedTo)}</b>——但消息一出，其他聯盟的邀請也到了。`,
+    );
+    this.flow.ask({ title: '接受下放，還是換個舞台？', options }, (choice) => {
+      const picked = offers[Number(choice.split(':')[1])];
+      if (picked !== undefined) {
+        this.#payBuyout('player');
+        this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
+      }
+      next();
+    });
+  }
+
+  /** 引退的兩個選擇點。 */
+  #retirementChoices(demotedTo: string | null): void {
     // 被下放的老將可以選擇不接受。年輕人不給這個選項——他們還有再拚一次的
     // 餘地，讓他們在二十出頭就能一鍵結束生涯只會製造後悔。
     const cfg = seasonCfg.retirement;

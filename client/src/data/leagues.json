@@ -219,5 +219,175 @@
       "_note": "入札金 = 簽約金 × 這個倍率。它是母隊放人的對價，與球員拿到的簽約金是兩筆不同的錢。取自 legacy 的顯示式（入札總額 = 簽約金 × 4）。",
       "value": 4
     }
+  },
+  "transfer": {
+    "_note": "跨體系轉會。邊由資料推導而非逐條列出——一個體系只要在這裡填好門檻與年齡窗口，就自動接上轉會圖。見 ADR 0004。",
+    "import_premium": {
+      "_note": "外籍球員的落地加成。落地層級是「能力達得到 min + 這個值」的最高層級——被挖角不代表到了那邊還是一軍球員。",
+      "_why_note": "外籍名額有限，球團不會拿一個剛好及格的外籍去佔位，他必須明顯強過本土的替代人選。legacy 的美職落地門檻 60 對 MLB 的 min 56，差距正好是 4。",
+      "value": 4
+    },
+    "scouting": {
+      "_note": "挖角。每個體系各自擲一次「今年要不要來」，命中的全部併成同一張報價單——「日職和大聯盟同時來搶」是旅外題材最好看的一幕，拆成兩次提問就沒了。",
+      "_eligibility_note": "資格看能力、上季表現與年齡窗口，**不看目前在哪一層**。球探看的是球員，不是他登錄在幾軍。",
+      "offers_per_org": {
+        "min": 1,
+        "max": 2
+      },
+      "min_win_pct": {
+        "_note": "上一季的勝率門檻（勝利份額佔責任額的比例，.500 為聯盟平均）。球探是看了你去年的表現才來的——傷缺或低潮的一年會讓你錯過窗口，而年齡窗口本來就在關。",
+        "value": 0.54
+      }
+    },
+    "fallback": {
+      "_note": "尋路：被釋出或被下放時，在其他體系尋找容身之處。與挖角方向相反——它往下找，而且**不看年齡**。",
+      "_note_2": "墨聯與澳職只出現在這裡。它們不搶當打之年的球星，它們接住掉下來的人——34 歲被釋出的中職球員、旅美失敗回不去的人，才是它們的客戶。",
+      "max_offers": 3
+    },
+    "orgs": {
+      "_note": "各體系的轉會設定。scouts 為 false 者只接人、不挖人。",
+      "CPBL": {
+        "_note": "母體聯盟。它不主動去別的體系挖角（真實世界的中職沒有海外球探網），但永遠接得住回來的人——那就是落葉歸根。",
+        "scouts": false,
+        "signing_bonus": {
+          "base": 300,
+          "per_d": 60
+        },
+        "posting": null,
+        "age_window": null
+      },
+      "NPB": {
+        "_note": "日職。窗口寬，要的是即戰力——三十歲的球員照樣簽得到。",
+        "scouts": true,
+        "scout_min_overall": 53,
+        "scout_chance": 35,
+        "signing_bonus": {
+          "base": 1200,
+          "per_d": 200
+        },
+        "posting": {
+          "_note": "日職球員可以申請入札前往美職。",
+          "to": "MiLB"
+        },
+        "age_window": {
+          "tiers": [
+            {
+              "max_age": 26,
+              "value": 1.0
+            },
+            {
+              "max_age": 28,
+              "value": 0.7
+            },
+            {
+              "max_age": 30,
+              "value": 0.45
+            },
+            {
+              "max_age": 31,
+              "value": 0.25
+            }
+          ],
+          "default": 0
+        }
+      },
+      "KBO": {
+        "_note": "韓職。與日職同型但門檻略低、市場略小。",
+        "scouts": true,
+        "scout_min_overall": 50,
+        "scout_chance": 30,
+        "signing_bonus": {
+          "base": 700,
+          "per_d": 120
+        },
+        "posting": {
+          "_note": "韓職球員同樣可以申請入札前往美職。",
+          "to": "MiLB"
+        },
+        "age_window": {
+          "tiers": [
+            {
+              "max_age": 27,
+              "value": 1.0
+            },
+            {
+              "max_age": 29,
+              "value": 0.7
+            },
+            {
+              "max_age": 31,
+              "value": 0.4
+            },
+            {
+              "max_age": 32,
+              "value": 0.2
+            }
+          ],
+          "default": 0
+        }
+      },
+      "MiLB": {
+        "_note": "美職。窗口最緊——他們要的是可以養的年輕人，不是即戰力。",
+        "_monster_note": "28 歲之後只剩怪物條款：能力超過落地門檻夠多的人仍有微弱機會。",
+        "scouts": true,
+        "scout_min_overall": 57,
+        "scout_chance": 30,
+        "signing_bonus": {
+          "base": 2000,
+          "per_d": 400
+        },
+        "posting": null,
+        "age_window": {
+          "tiers": [
+            {
+              "max_age": 22,
+              "value": 1.0
+            },
+            {
+              "max_age": 24,
+              "value": 0.75
+            },
+            {
+              "max_age": 26,
+              "value": 0.5
+            },
+            {
+              "max_age": 27,
+              "value": 0.3
+            },
+            {
+              "max_age": 28,
+              "value": 0.15
+            }
+          ],
+          "default": 0,
+          "monster": {
+            "_note": "關窗之後的例外：能力超過落地門檻這麼多的人，仍有微弱的機會。",
+            "over_landing_bar": 5,
+            "value": 0.08
+          }
+        }
+      },
+      "LMB": {
+        "_note": "墨西哥聯盟。**只接人、不挖人、不看年齡**——它是生涯的下半場，不是旅外的目的地。",
+        "scouts": false,
+        "signing_bonus": {
+          "base": 300,
+          "per_d": 50
+        },
+        "posting": null,
+        "age_window": null
+      },
+      "ABL": {
+        "_note": "澳洲聯盟。同樣只接人。這裡接近半職業，是所有門都關上之後還打得到球的地方。",
+        "scouts": false,
+        "signing_bonus": {
+          "base": 80,
+          "per_d": 15
+        },
+        "posting": null,
+        "age_window": null
+      }
+    }
   }
 }

@@ -68,6 +68,19 @@ function runCareer(setup: GameSetup, policy: PolicyName): CareerResult {
     const pick =
       // 被下放或高齡時一律續戰——「合理但不極致」的玩家不會主動掛靴。
       options.find((o) => o.id === 'retire:stay') ??
+      // **不旅外**。這是刻意的基準線：轉會會把樣本拆到六個聯盟，而每個聯盟的
+      // 門檻與難度係數都不同，混在一起就量不出「一個中職生涯長什麼樣」。
+      // 旅外的分佈要另外用專屬策略量。
+      options.find((o) => o.id === 'transfer:stay') ??
+      // 合約：一律長約。短約是賭下次身價，那是「極致」的玩法。
+      options.find((o) => o.id === 'term:long') ??
+      options.find((o) => o.id === 'term:short') ??
+      // 合約到期先與母隊談，不跳市場。
+      options.find((o) => o.id === 'fa:stay') ??
+      options.find((o) => o.id === 'fa:crawl') ??
+      // 被下放就接受；被釋出則接受最好的那條退路。
+      options.find((o) => o.id === 'demote:accept') ??
+      options.find((o) => o.id === 'fallback:0') ??
       rotated
         .map((key) => options.find((o) => o.id === `alloc:${key}`))
         .find((o) => o !== undefined) ??

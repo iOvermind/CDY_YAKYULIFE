@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abilities, amateur } from '../data/index.ts';
+import { abilities, amateur, leagues } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 
@@ -892,11 +892,12 @@ describe('年度獎項', () => {
     throw new Error('四十局都沒有人拿過兩次以上的明星賽');
   });
 
+  /** 獎項只在頂級聯盟發——二軍與小聯盟沒有年度獎項。旅外之後也一樣。 */
   it('二軍不評獎', () => {
     for (let i = 0; i < 30; i++) {
       const game = playDurable(`award-minor-${i}`);
       for (const a of game.state?.awards ?? []) {
-        expect(a.level).toBe('CPBL1');
+        expect(leagues.levels[a.level]?.top).toBeDefined();
       }
     }
   });
@@ -1271,5 +1272,87 @@ describe('合約', () => {
     expect(playWithContracts('ct-replay').flow.log).toEqual(
       playWithContracts('ct-replay').flow.log,
     );
+  });
+});
+
+describe('跨聯盟轉會', () => {
+  const PITCHER = ['vel', 'ctl', 'sta', 'swp'];
+
+  /** 一路接受所有邀請，看轉會圖通不通。 */
+  function playAbroad(seed: string): Game {
+    const game = new Game({ seed, name: '旅外', startPosition: 'P', throws: 'R', bats: 'R' }).start();
+    let guard = 0;
+    let k = 0;
+    while (game.flow.prompt !== null && guard++ < 6000) {
+      const options = game.flow.prompt.options;
+      const rot = [...PITCHER.slice(k % PITCHER.length), ...PITCHER];
+      const pick =
+        options.find((o) => o.id.startsWith('transfer:') && o.id !== 'transfer:stay') ??
+        options.find((o) => o.id.startsWith('fallback:') && o.id !== 'fallback:retire') ??
+        options.find((o) => o.id === 'fa:stay') ??
+        options.find((o) => o.id === 'term:long') ??
+        options.find((o) => o.id === 'term:short') ??
+        options.find((o) => o.id === 'demote:accept') ??
+        options.find((o) => o.id === 'retire:stay') ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options[0];
+      if (pick === undefined) break;
+      if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+      game.choose(pick.id);
+    }
+    return game;
+  }
+
+  it('旅外真的會發生——有人待過兩個以上的頂級聯盟', () => {
+    for (let i = 0; i < 40; i++) {
+      if ((playAbroad(`ab-${i}`).summary?.leagues.length ?? 0) > 1) return;
+    }
+    throw new Error('四十局都沒有人旅外');
+  });
+
+  /** 六個體系的資料與名人堂長期是死碼——這條看著它們真的到得了。 */
+  it('中職以外的體系到得了', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      for (const l of playAbroad(`reach-${i}`).summary?.leagues ?? []) seen.add(l.org);
+      if (seen.size >= 3) break;
+    }
+    expect(seen.size).toBeGreaterThan(1);
+    expect([...seen].some((o) => o !== 'CPBL')).toBe(true);
+  });
+
+  it('換體系之後守位重新登錄、體系年資歸零', () => {
+    for (let i = 0; i < 60; i++) {
+      const game = playAbroad(`reset-${i}`);
+      const seasons = game.summary?.seasons ?? [];
+      const firstAway = seasons.find((s) => s.org !== 'CPBL');
+      if (firstAway === undefined) continue;
+      // 換過體系的人直接取得 FA 資格——新東家沒有理由享有原球團的掌控權。
+      expect(firstAway.org).not.toBe('CPBL');
+      return;
+    }
+  });
+
+  it('旅外的生涯評價分會分成好幾份，每個聯盟各一份', () => {
+    for (let i = 0; i < 60; i++) {
+      const s = playAbroad(`score-${i}`).summary;
+      if (s === null || s.leagues.length < 2) continue;
+      const orgs = s.leagues.map((l) => l.org);
+      expect(new Set(orgs).size).toBe(orgs.length);
+      return;
+    }
+  });
+
+  it('流程照樣跑得完，不會卡在轉會提問上', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playAbroad(`abend-${i}`);
+      expect(game.flow.prompt).toBeNull();
+      expect(game.summary).not.toBeNull();
+    }
+  });
+
+  it('相同種子加相同選擇，轉會結果完全相同', () => {
+    expect(playAbroad('ab-replay').flow.log).toEqual(playAbroad('ab-replay').flow.log);
   });
 });

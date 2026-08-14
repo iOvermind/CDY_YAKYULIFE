@@ -13,7 +13,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { abilities, hallOfFame, season as seasonCfg } from '../src/data/index.ts';
+import {
+  abilities,
+  dataKeys,
+  hallOfFame,
+  leagues as leaguesData,
+  season as seasonCfg,
+  teams as teamsData,
+} from '../src/data/index.ts';
 import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import type { CareerSummary } from '../src/engine/career.ts';
@@ -30,8 +37,16 @@ function runCareer(seed: string, startPosition: GameSetup['startPosition']): Car
   while (game.flow.prompt !== null && guard++ < 8000) {
     const options = game.flow.prompt.options;
     const rotated = [...BALANCED.slice(cursor % BALANCED.length), ...BALANCED];
+    // 與校準腳本的策略必須一致——護欄與校準要看同一種玩家。
     const pick =
       options.find((o) => o.id === 'retire:stay') ??
+      options.find((o) => o.id === 'transfer:stay') ??
+      options.find((o) => o.id === 'term:long') ??
+      options.find((o) => o.id === 'term:short') ??
+      options.find((o) => o.id === 'fa:stay') ??
+      options.find((o) => o.id === 'fa:crawl') ??
+      options.find((o) => o.id === 'demote:accept') ??
+      options.find((o) => o.id === 'fallback:0') ??
       rotated.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
       options.find((o) => o.id === 'alloc:confirm') ??
       options.find((o) => o.id === 'draft:accept') ??
@@ -184,5 +199,34 @@ describe('平衡護欄', () => {
     const threshold = hallOfFame.settlement_traits.grinder.provisional_sum;
     expect(threshold).toBeGreaterThan(sums[0]!);
     expect(threshold).toBeLessThan(sums.at(-1)!);
+  });
+});
+
+/**
+ * 球隊清單以**體系代碼**為鍵，不是層級代碼。
+ *
+ * 曾經發生過：美職的清單誤寫成 `MLB`（層級代碼）而不是 `MiLB`（體系代碼），
+ * 結果是美職一份轉會報價都發不出來——抽不到球隊就不會 push，**靜默失敗**，
+ * 而且真的轉過去會讓 initLeague 直接炸掉。
+ */
+describe('球隊清單涵蓋所有體系', () => {
+  it('每個體系都有球隊', () => {
+    for (const org of dataKeys(leaguesData.paths)) {
+      expect(teamsData.leagues[org], `${org} 沒有球隊清單`).toBeDefined();
+      expect((teamsData.leagues[org] ?? []).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('沒有多餘的清單掛在層級代碼上', () => {
+    const orgs = new Set(dataKeys(leaguesData.paths));
+    for (const key of dataKeys(teamsData.leagues)) {
+      expect(orgs.has(key), `${key} 不是體系代碼`).toBe(true);
+    }
+  });
+
+  it('每個體系的球隊數足夠抽出多份報價', () => {
+    for (const org of dataKeys(leaguesData.paths)) {
+      expect((teamsData.leagues[org] ?? []).length).toBeGreaterThanOrEqual(2);
+    }
   });
 });
