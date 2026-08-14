@@ -828,6 +828,8 @@ export interface SeasonData {
         readonly pitching: number;
         readonly fielding: number;
       };
+      /** 投球責任額的高槓桿加權，鍵為投手角色。終結者專挑關鍵局面。 */
+      readonly leverage: Readonly<Record<string, number>>;
       readonly team_pa_per_game: number;
       readonly team_ip_per_game: number;
       readonly pythagorean_exponent: number;

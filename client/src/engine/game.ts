@@ -1557,7 +1557,9 @@ export class Game {
         batting:
           batting === null ? { win: 0, loss: 0 } : battingShares(batting, baseline, teamWinRate),
         pitching:
-          pitching === null ? { win: 0, loss: 0 } : pitchingShares(pitching, baseline, teamWinRate),
+          pitching === null
+            ? { win: 0, loss: 0 }
+            : pitchingShares(pitching, baseline, teamWinRate, pitching.role),
         fielding,
       },
       lossPenalty: {

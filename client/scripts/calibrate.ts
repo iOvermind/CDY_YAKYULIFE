@@ -110,6 +110,9 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
       // 合約到期先與母隊談，不跳市場。
       options.find((o) => o.id === 'fa:stay') ??
       options.find((o) => o.id === 'fa:crawl') ??
+      // 事件卡一律照常執行。**不能讓代理每張都選全力一搏**——那是第一個選項，
+      // 照順序挑就會挑到它，而「一年賭三次」不是「認真玩但沒查攻略」的樣子。
+      options.find((o) => o.id === 'event:normal') ??
       // 被下放就接受；被釋出則接受最好的那條退路。
       options.find((o) => o.id === 'demote:accept') ??
       options.find((o) => o.id === 'fallback:0') ??
@@ -233,7 +236,7 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   );
   console.log('     明星帶超標時要先看這裡，不是先調門檻。');
 
-  console.log('\n── 份額三分量佔比（靶：打擊 52%／投球 32%／守備 16%）');
+  console.log('\n── 份額三分量佔比（靶：打擊 50%／投球 35%／守備 15%）');
   const parts = { batting: 0, pitching: 0, fielding: 0 };
   for (const r of withPro) {
     for (const league of r.summary.leagues) {
@@ -244,9 +247,9 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   }
   const partTotal = parts.batting + parts.pitching + parts.fielding;
   const TARGET_PARTS: Readonly<Record<string, number>> = {
-    batting: 52,
-    pitching: 32,
-    fielding: 16,
+    batting: 50,
+    pitching: 35,
+    fielding: 15,
   };
   const PART_LABEL: Readonly<Record<string, string>> = {
     batting: '打擊',

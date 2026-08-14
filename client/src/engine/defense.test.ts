@@ -245,8 +245,8 @@ describe('fieldingResponsibility', () => {
     expect(fieldingResponsibility('C')).toBeGreaterThan(fieldingResponsibility('1B'));
   });
 
-  it('左外野與右外野的責任相同——兩者的難度差由門檻表達，不由身價表達', () => {
-    expect(fieldingResponsibility('LF')).toBe(fieldingResponsibility('RF'));
+  it('右外野的責任略高於左外野——邊線與長傳本壘的臂力責任更重', () => {
+    expect(fieldingResponsibility('RF')).toBeGreaterThan(fieldingResponsibility('LF'));
     expect(requiredScore('RF', 'CPBL1', 30)!).toBeGreaterThan(requiredScore('LF', 'CPBL1', 30)!);
   });
 

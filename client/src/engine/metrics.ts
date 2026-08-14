@@ -223,7 +223,7 @@ export function teamAdjustedWinPct(individual: number, teamWinRate: number | nul
  * 打擊的責任額：每個打席分到多少份。
  *
  * 由球隊的總份額推導，因此聯盟場次會自然約掉：一支球隊整季 `場次 × 3` 份，
- * 其中 52% 屬於進攻，除以球隊整季的打席數，就是每個打席的份額。**打得越多，
+ * 其中 50% 屬於進攻，除以球隊整季的打席數，就是每個打席的份額。**打得越多，
  * 兩本帳都累積越多**——這正是「佔著位置打不好」會顯形的機制。
  */
 export function battingResponsibility(pa: number): number {
@@ -231,10 +231,17 @@ export function battingResponsibility(pa: number): number {
   return (pa * s.per_game * s.split.batting) / s.team_pa_per_game;
 }
 
-/** 投球的責任額：每一局分到多少份。 */
-export function pitchingResponsibility(ip: number): number {
+/**
+ * 投球的責任額：每一局分到多少份，再乘上該角色的**高槓桿加權**。
+ *
+ * 加權是 James 特別為後援設計的：終結者專挑領先或平手的關鍵局面，同樣一局的
+ * 價值遠高於敗戰處理。**局數少不代表貢獻小**——沒有這一層，六十幾局的頂尖
+ * 終結者永遠只值先發的三分之一，而那不是 Win Shares 的意思。
+ */
+export function pitchingResponsibility(ip: number, role: string = 'SP'): number {
   const s = cfg.advanced.shares;
-  return (ip * s.per_game * s.split.pitching) / s.team_ip_per_game;
+  const leverage = s.leverage[role] ?? 1;
+  return (ip * s.per_game * s.split.pitching * leverage) / s.team_ip_per_game;
 }
 
 /**
@@ -242,9 +249,9 @@ export function pitchingResponsibility(ip: number): number {
  *
  * `(守位責任占比 / 100) × 聯盟場次 × 每場份數 × 守備占比 × 出賽比重`
  *
- * 守位占比取自 `positions.json`，八個守位相加為 91——缺的 9 是 James 分給
- * 投手的守備份額，我們不做，因此守備段實際只發出 91%。這是誠實的少發，不是
- * 把投手那份轉嫁給野手。
+ * 守位占比取自 `positions.json`，八個守位相加為 100——那是**野手純守備池**
+ * 內部的分配。投手自己的守備不在這張表裡，它含在投球那 35% 之中（James 的
+ * 防守端拆分是「投手 70 ／ 野手 30」）。
  */
 export function fieldingResponsibilityShares(options: {
   readonly positionShare: number;
@@ -284,12 +291,13 @@ export function pitchingShares(
   line: PitchingLine,
   base: Baseline,
   teamWinRate: number | null = null,
+  role: string = 'SP',
 ): Shares {
   if (line.outs === 0 || base.era === 0) return { win: 0, loss: 0 };
   // 防禦率 0 是完美，不是無限差——直接除會炸開，改用一個極小值代替。
   const era = line.era <= 0 ? 0.01 : line.era;
   return splitShares(
-    pitchingResponsibility(innings(line)),
+    pitchingResponsibility(innings(line), role),
     teamAdjustedWinPct(pythagoreanWinPct(base.era / era), teamWinRate),
   );
 }
