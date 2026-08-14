@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { hallOfFame, season as seasonCfg } from '../src/data/index.ts';
+import { abilities, hallOfFame, season as seasonCfg } from '../src/data/index.ts';
 import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import type { CareerSummary } from '../src/engine/career.ts';
@@ -87,6 +87,43 @@ describe('聯盟基準環境', () => {
   it('聯盟平均打擊率落在合理範圍', () => {
     expect(base.avg).toBeGreaterThan(0.23);
     expect(base.avg).toBeLessThan(0.3);
+  });
+});
+
+/**
+ * 介面用的能力分組必須是引擎分組的重新分割——同樣的能力，不多不少。
+ *
+ * 兩份資料並存是刻意的（引擎看投手側／野手側，介面要把打擊與守備分開），
+ * 但並存就會漂：加了新能力卻忘記讓它出現在介面上，玩家就永遠加不到那一項。
+ */
+describe('顯示分組與引擎分組一致', () => {
+  const engine = abilities.ability_groups;
+  const display = abilities.display_groups;
+
+  const sorted = (keys: readonly string[]) => [...keys].sort();
+
+  it('顯示分組涵蓋全部能力，不多不少', () => {
+    const all = sorted([...engine.shared, ...engine.pitcher, ...engine.fielder]);
+    const shown = sorted(display.order.flatMap((g) => display.members[g] ?? []));
+    expect(shown).toEqual(all);
+  });
+
+  it('沒有能力被重複列在兩組裡', () => {
+    const shown = display.order.flatMap((g) => display.members[g] ?? []);
+    expect(new Set(shown).size).toBe(shown.length);
+  });
+
+  it('投手側的顯示分組與引擎的投手組完全相同', () => {
+    expect(sorted(display.members['pitching'] ?? [])).toEqual(sorted(engine.pitcher));
+  });
+
+  it('打擊與守備合起來就是引擎的野手組', () => {
+    const fielderSide = [...(display.members['batting'] ?? []), ...(display.members['fielding'] ?? [])];
+    expect(sorted(fielderSide)).toEqual(sorted(engine.fielder));
+  });
+
+  it('每一組都有名字', () => {
+    for (const g of display.order) expect(display.names[g]).toBeTruthy();
   });
 });
 

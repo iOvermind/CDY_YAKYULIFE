@@ -106,6 +106,18 @@ export interface AbilitiesData {
     readonly pitcher: string;
     readonly fielder: string;
   };
+  /**
+   * 介面用的能力分組。
+   *
+   * 與 `ability_groups` 是兩件事：那份是引擎用的，野手為一組，因為二刀流
+   * 判定與定位鎖定都以「投手側／野手側」為單位。這份把野手拆成打擊與守備，
+   * 純粹是為了讓能力表好讀。兩份的成員必須完全一致，護欄測試看著這件事。
+   */
+  readonly display_groups: {
+    readonly order: readonly string[];
+    readonly names: Readonly<Record<string, string>>;
+    readonly members: Readonly<Record<string, readonly AbilityKey[]>>;
+  };
   readonly pitch_families: Readonly<
     Record<
       PitchFamily,

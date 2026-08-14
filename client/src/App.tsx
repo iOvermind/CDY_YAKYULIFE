@@ -979,24 +979,25 @@ function AbilityPanel({
   allocatable: Map<string, Option>;
   onChoose: (optionId: string) => void;
 }) {
-  const groups = abilities.ability_groups;
-  const names = abilities.ability_group_names;
+  const display = abilities.display_groups;
   const common = { state, allocatable, onChoose };
-
-  // 定位鎖定之後整組收起來，不是變灰。留著一組永遠動不了的數字只會佔版面，
-  // 也會讓玩家一直以為還有機會補回來。
-  const show = (side: 'pitcher' | 'fielder') =>
-    isSideVisible(groups[side][0] ?? '', state.lockedSide);
 
   return (
     <>
-      <AbilityBlock title={names.shared} keys={groups.shared} {...common} />
-      {show('pitcher') && (
-        <AbilityBlock title={names.pitcher} keys={groups.pitcher} {...common} />
-      )}
-      {show('fielder') && (
-        <AbilityBlock title={names.fielder} keys={groups.fielder} {...common} />
-      )}
+      {display.order.map((group) => {
+        const keys = display.members[group] ?? [];
+        // 定位鎖定之後整組收起來，不是變灰。留著一組永遠動不了的數字只會佔
+        // 版面，也會讓玩家一直以為還有機會補回來。體力兩側共用，永遠顯示。
+        if (!isSideVisible(keys[0] ?? '', state.lockedSide)) return null;
+        return (
+          <AbilityBlock
+            key={group}
+            title={display.names[group] ?? group}
+            keys={keys}
+            {...common}
+          />
+        );
+      })}
     </>
   );
 }

@@ -23,7 +23,7 @@
     "pow": "力量",
     "spd": "速度",
     "eye": "選球",
-    "rng": "守備範圍",
+    "rng": "範圍",
     "fld": "接球",
     "arm": "臂力",
     "cat": "配球"
@@ -525,5 +525,46 @@
         "max": 62
       }
     ]
+  },
+  "display_groups": {
+    "_note": "**只給介面用的分組。** 引擎的分組看 ability_groups——那裡野手是一組，因為二刀流判定與定位鎖定都以「投手側／野手側」為單位。這裡把野手拆成打擊與守備兩塊，純粹是為了讓能力表好讀：八項擠在同一個標題底下，玩家分不出哪些是打擊、哪些是守備。",
+    "_invariant_note": "拆出來的組別**必須**是 ability_groups 的重新分割——同樣的能力、不多不少。護欄測試看著這件事，免得哪天加了新能力卻忘記讓它出現在介面上。",
+    "order": [
+      "shared",
+      "pitching",
+      "batting",
+      "fielding"
+    ],
+    "names": {
+      "shared": "體力",
+      "pitching": "投球",
+      "batting": "打擊",
+      "fielding": "守備"
+    },
+    "members": {
+      "shared": [
+        "sta"
+      ],
+      "pitching": [
+        "vel",
+        "ctl",
+        "swp",
+        "drp",
+        "chg",
+        "gim"
+      ],
+      "batting": [
+        "con",
+        "pow",
+        "spd",
+        "eye"
+      ],
+      "fielding": [
+        "rng",
+        "fld",
+        "arm",
+        "cat"
+      ]
+    }
   }
 }
