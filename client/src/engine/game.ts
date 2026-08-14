@@ -1152,6 +1152,9 @@ export class Game {
     const info = levelOf(pro.level);
     const now = standardOf(this.#standards, pro.level);
     const baseline = proBaseline(pro.level);
+    // 球隊戰績決定兩本帳怎麼切——0 勝的球隊沒有勝利份額可分。二軍沒有聯盟
+    // 戰力表，那裡的球隊勝率視為未知，不做調整。
+    const teamWinRate = this.#league?.get(pro.team)?.winRate ?? null;
 
     // 守備的份額：沒登錄守位（二軍、投手、指定打擊）就沒有守備責任。
     let fielding: Shares = { win: 0, loss: 0 };
@@ -1166,6 +1169,7 @@ export class Game {
           positionShare: fieldingResponsibility(pro.position),
           leagueGames: info.games,
           gamesShare: batting.games / info.games,
+          teamWinRate,
         });
         if (threshold !== null) {
           const p0 = fieldingReplacementWinPct(threshold, average);
@@ -1186,8 +1190,10 @@ export class Game {
       pitching,
       defenseRuns: defense,
       shares: {
-        batting: batting === null ? { win: 0, loss: 0 } : battingShares(batting, baseline),
-        pitching: pitching === null ? { win: 0, loss: 0 } : pitchingShares(pitching, baseline),
+        batting:
+          batting === null ? { win: 0, loss: 0 } : battingShares(batting, baseline, teamWinRate),
+        pitching:
+          pitching === null ? { win: 0, loss: 0 } : pitchingShares(pitching, baseline, teamWinRate),
         fielding,
       },
       lossPenalty: {

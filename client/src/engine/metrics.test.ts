@@ -21,6 +21,7 @@ import {
   runsCreated,
   splitShares,
   sumShares,
+  teamAdjustedWinPct,
   winPct,
 } from './metrics.ts';
 import { World } from './rng.ts';
@@ -342,5 +343,64 @@ describe('proBaselineAt', () => {
 
   it('基準線與層級無關——聯盟平均是自我參照的', () => {
     expect(proBaseline('CPBL2').runsCreatedPerPa).toBe(proBaseline('MLB').runsCreatedPerPa);
+  });
+});
+
+describe('球隊戰績的耦合', () => {
+  const coupling = cfg.advanced.shares.team_coupling;
+
+  it('.500 的球隊不改變個人勝率', () => {
+    expect(teamAdjustedWinPct(0.6, 0.5)).toBeCloseTo(0.6, 10);
+  });
+
+  /** 這是這條修正存在的理由：0 勝的球隊沒有任何勝利份額可分。 */
+  it('0 勝的球隊裡，聯盟平均水準的球員拿不到勝利份額', () => {
+    expect(teamAdjustedWinPct(0.5, 0)).toBeCloseTo(0.5 - 0.5 * coupling, 10);
+    if (coupling >= 1) expect(teamAdjustedWinPct(0.5, 0)).toBe(0);
+  });
+
+  it('0 勝的球隊裡，比平均強的球員仍拿得到一點份額', () => {
+    expect(teamAdjustedWinPct(0.65, 0)).toBeGreaterThan(teamAdjustedWinPct(0.5, 0));
+  });
+
+  it('同樣的表現，球隊越強份額越多', () => {
+    expect(teamAdjustedWinPct(0.55, 0.65)).toBeGreaterThan(teamAdjustedWinPct(0.55, 0.35));
+  });
+
+  it('夾在 0 與 1 之間，不會溢出', () => {
+    expect(teamAdjustedWinPct(0.98, 1)).toBeLessThanOrEqual(1);
+    expect(teamAdjustedWinPct(0.02, 0)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('沒有球隊戰績時不做調整——養成期沒有球隊勝率可言', () => {
+    expect(teamAdjustedWinPct(0.6, null)).toBe(0.6);
+  });
+
+  it('接進打擊與投球的雙帳：同樣的成績，爛隊的勝利份額比較少', () => {
+    const strong = battingShares(bat(), base, 0.65);
+    const weak = battingShares(bat(), base, 0.35);
+    expect(strong.win).toBeGreaterThan(weak.win);
+    expect(strong.loss).toBeLessThan(weak.loss);
+    // 責任額不變——出賽時間與球隊強弱無關
+    expect(responsibilityOf(strong)).toBeCloseTo(responsibilityOf(weak), 10);
+  });
+
+  it('接進投球的雙帳', () => {
+    expect(pitchingShares(pit(), base, 0.65).win).toBeGreaterThan(
+      pitchingShares(pit(), base, 0.35).win,
+    );
+  });
+
+  it('接進守備的雙帳', () => {
+    const field = (teamWinRate: number) =>
+      fieldingShares({
+        defenseScore: 58,
+        positionAverage: 54,
+        positionShare: 18,
+        leagueGames: 120,
+        gamesShare: 1,
+        teamWinRate,
+      });
+    expect(field(0.65).win).toBeGreaterThan(field(0.35).win);
   });
 });

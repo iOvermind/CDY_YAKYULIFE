@@ -184,6 +184,34 @@ export function pythagoreanWinPct(ratio: number): number {
 }
 
 /**
+ * 把個人勝率錨在球隊戰績上。
+ *
+ * 真實的 Win Shares 裡，一支球隊能發出的勝利份額總額是「勝場 × 3」——**0 勝
+ * 的球隊沒有任何勝利份額可分**，隊上再強的球員也拿不到。用場次推導責任額卻
+ * 不看戰績，等於讓爛隊憑空生出勝利。
+ *
+ * 作法是平移而非相乘：一個表現剛好等於聯盟平均的球員，勝率就是他球隊的勝率；
+ * 比平均好多少，就在球隊勝率之上加多少。因此
+ *
+ * - 平均球員 × .500 的球隊 → .500
+ * - 平均球員 × 0 勝的球隊 → 0（一份勝利份額都沒有）
+ * - 比平均好 .15 的球員 × 0 勝的球隊 → .15（他確實比隊友強，但份額很少）
+ *
+ * `team_coupling` 是耦合強度：1.0 完全照 James，0 則完全不看球隊。這是 Win
+ * Shares 最常被批評的性質——生在爛隊會被連累——但那也正是這套系統的定義。
+ *
+ * `teamWinRate` 為 null 時不做調整（養成期沒有球隊戰績可言）。
+ */
+export function teamAdjustedWinPct(individual: number, teamWinRate: number | null): number {
+  const s = cfg.advanced.shares;
+  if (teamWinRate === null) return individual;
+  const shifted = individual + (teamWinRate - 0.5) * s.team_coupling;
+  // 下限是 0 而不是 win_pct_clamp.min：0 勝的球隊就該是 0，那不是極端值的
+  // 夾擠，是這套系統的定義。
+  return clamp(shifted, 0, 1);
+}
+
+/**
  * 打擊的責任額：每個打席分到多少份。
  *
  * 由球隊的總份額推導，因此聯盟場次會自然約掉：一支球隊整季 `場次 × 3` 份，
@@ -225,19 +253,37 @@ export function fieldingResponsibilityShares(options: {
   );
 }
 
-/** 打擊的雙帳。相對聯盟平均的得分創造率決定勝率。 */
-export function battingShares(line: BattingLine, base: Baseline): Shares {
+/**
+ * 打擊的雙帳。相對聯盟平均的得分創造率決定勝率，再錨到球隊戰績上。
+ *
+ * `teamWinRate` 為 null 時不做球隊調整。
+ */
+export function battingShares(
+  line: BattingLine,
+  base: Baseline,
+  teamWinRate: number | null = null,
+): Shares {
   if (line.pa === 0 || base.runsCreatedPerPa === 0) return { win: 0, loss: 0 };
   const ratio = runsCreated(line) / line.pa / base.runsCreatedPerPa;
-  return splitShares(battingResponsibility(line.pa), pythagoreanWinPct(ratio));
+  return splitShares(
+    battingResponsibility(line.pa),
+    teamAdjustedWinPct(pythagoreanWinPct(ratio), teamWinRate),
+  );
 }
 
 /** 投球的雙帳。防禦率越低勝率越高，因此比值取倒數。 */
-export function pitchingShares(line: PitchingLine, base: Baseline): Shares {
+export function pitchingShares(
+  line: PitchingLine,
+  base: Baseline,
+  teamWinRate: number | null = null,
+): Shares {
   if (line.ip === 0 || base.era === 0) return { win: 0, loss: 0 };
   // 防禦率 0 是完美，不是無限差——直接除會炸開，改用一個極小值代替。
   const era = line.era <= 0 ? 0.01 : line.era;
-  return splitShares(pitchingResponsibility(line.ip), pythagoreanWinPct(base.era / era));
+  return splitShares(
+    pitchingResponsibility(line.ip),
+    teamAdjustedWinPct(pythagoreanWinPct(base.era / era), teamWinRate),
+  );
 }
 
 /**
@@ -253,12 +299,16 @@ export function fieldingShares(options: {
   readonly positionShare: number;
   readonly leagueGames: number;
   readonly gamesShare: number;
+  readonly teamWinRate?: number | null;
 }): Shares {
   if (options.positionAverage <= 0 || options.positionShare <= 0) return { win: 0, loss: 0 };
   const responsibility = fieldingResponsibilityShares(options);
   return splitShares(
     responsibility,
-    pythagoreanWinPct(options.defenseScore / options.positionAverage),
+    teamAdjustedWinPct(
+      pythagoreanWinPct(options.defenseScore / options.positionAverage),
+      options.teamWinRate ?? null,
+    ),
   );
 }
 

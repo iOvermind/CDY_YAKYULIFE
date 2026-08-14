@@ -698,6 +698,8 @@ export interface SeasonData {
       readonly team_ip_per_game: number;
       readonly pythagorean_exponent: number;
       readonly win_pct_clamp: Range;
+      /** 個人勝率錨在球隊戰績上的強度。1.0 完全照 James，0 則完全不看球隊。 */
+      readonly team_coupling: number;
     };
   };
   readonly team_strength: {
