@@ -85,6 +85,7 @@ import {
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
+import { fmtMoney, salaryFor } from './salary.ts';
 import { levelOf, playSeason, positionName, type ProPitchingLine } from './season.ts';
 import {
   advanceLeague,
@@ -161,6 +162,8 @@ export interface PlayerState {
    * 七座 MVP 在清單上只有一行，在這裡是七筆。
    */
   readonly awards: readonly AwardRecord[];
+  /** 生涯累積收入，單位萬元。含簽約金與逐季年薪。 */
+  readonly earnings: number;
   /** 尚未分配的能力點。 */
   readonly pool: number;
   /** 各項能力被提升的上限點數。 */
@@ -241,6 +244,8 @@ export interface ProState {
   readonly par: number;
   /** 這個層級**當年**的最低門檻，也就是替代水準。 */
   readonly min: number;
+  /** 這一季的年薪，單位萬元。 */
+  readonly salary: number;
 }
 
 export class Game {
@@ -352,6 +357,13 @@ export class Game {
   #seasons: SeasonRecord[] = [];
   /** 結算出來的生涯總結。引退之前為 null。 */
   #summary: CareerSummary | null = null;
+  /**
+   * 生涯累積收入，單位萬元。
+   *
+   * 含簽約金與逐季年薪。它是玩家會在意的數字，也是將來天梯的排序依據之一
+   * （ROADMAP 階段三的「神獸殿堂」）。
+   */
+  #earnings = 0;
   /** 上一年說過的聯盟風向。用來避免同一句話年年重複。 */
   #lastStandardsNote: string | null = null;
   /**
@@ -398,6 +410,7 @@ export class Game {
       honors: this.#honors,
       counts: this.#counts,
       awards: this.#awards,
+      earnings: this.#earnings,
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
       injuryRisk: this.#injuryRisk,
@@ -428,7 +441,20 @@ export class Game {
       defenseRuns: this.#defenseRuns[pro.level] ?? 0,
       par: standardOf(this.#standards, pro.level).par,
       min: standardOf(this.#standards, pro.level).min,
+      salary: this.#seasonSalary,
     };
+  }
+
+  /**
+   * 這一季的年薪。
+   *
+   * d 值用**當年**的 par 算——聯盟水準逐年浮動，用基準值會讓弱年的薪水虛高。
+   */
+  get #seasonSalary(): number {
+    const pro = this.#pro;
+    if (pro === null) return 0;
+    const d = (this.rating?.overall ?? 0) - standardOf(this.#standards, pro.level).par;
+    return salaryFor(pro.level, d);
   }
 
   /**
@@ -909,6 +935,7 @@ export class Game {
             ? '即戰力評價，直接放入一軍名單。'
             : '先從二軍出發。'),
       );
+      this.#earnings += result.bonus;
       this.flow.push(() => this.#professionalStart(result.level ?? '', result.team ?? ''));
     };
 
@@ -1109,6 +1136,11 @@ export class Game {
       this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
     }
 
+    // 領薪水。**在成績結算之後才領**——年薪看的是這一季的 d 值，而 d 值要等
+    // 這季打完、能力定案才算得準。
+    const salary = this.#seasonSalary;
+    this.#earnings += salary;
+
     this.#recordSeason(line.batting, line.pitching, def ?? 0);
 
     const parts: string[] = [];
@@ -1131,6 +1163,10 @@ export class Game {
           `${def === null ? '' : `・守備 ${def > 0 ? '+' : ''}${def}`}`,
       );
     }
+
+    parts.push(
+      `<span class="sub">年薪 ${fmtMoney(salary)}　·　生涯累積 ${fmtMoney(this.#earnings)}</span>`,
+    );
 
     this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
     this.#annualAwards(line.batting, line.pitching);
@@ -1525,6 +1561,13 @@ export class Game {
     });
 
     this.flow.card('gold', '生涯評價', rows.join('<br><br>'));
+
+    this.flow.card(
+      'info',
+      '生涯收入',
+      `簽約金與年薪合計 <b class="hl">${fmtMoney(this.#earnings)}</b>。` +
+        `<br><span class="sub">錢不是這個遊戲的分數，但它是這段人生留下的另一種紀錄。</span>`,
+    );
 
     if (summary.careerMilestones.length > 0) {
       this.flow.card(

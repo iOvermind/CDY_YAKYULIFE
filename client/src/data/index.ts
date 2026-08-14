@@ -579,8 +579,24 @@ export interface LeagueLevel {
   readonly top?: string;
 }
 
+/** 一個層級的薪資設定。年薪 = base + clamp(d, 0, d_cap) × per_point，單位萬元。 */
+export interface SalarySpec {
+  readonly base: number;
+  readonly per_point: number;
+  readonly d_cap: number;
+}
+
 export interface LeaguesData {
   readonly levels: Readonly<Record<string, LeagueLevel>>;
+  /**
+   * 薪資設定，單位萬元台幣／年。
+   *
+   * **反映的是市場規模，不是競技水準**——兩者是獨立的旋鈕。見 ADR 0004。
+   */
+  readonly salary: {
+    readonly levels: Readonly<Record<string, SalarySpec>>;
+    readonly posting_fee_multiplier: { readonly value: number };
+  };
   /** 各體系由低到高的升遷路徑。 */
   readonly paths: Readonly<Record<string, readonly string[]>>;
   readonly top_league_names: Readonly<Record<string, string>>;

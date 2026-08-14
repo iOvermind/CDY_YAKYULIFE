@@ -34,6 +34,7 @@ import {
   type Baseline,
 } from './engine/metrics.ts';
 import { fieldingPosition, isSideVisible, type Rating } from './engine/rating.ts';
+import { fmtMoneyShort } from './engine/salary.ts';
 import { positionName } from './engine/season.ts';
 import { newSeed } from './engine/rng.ts';
 
@@ -489,6 +490,18 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
           <div className="stat-cell">
             <b>{state.pro.par.toFixed(1)}</b>
             <span>聯盟水準</span>
+          </div>
+        )}
+        {state.pro !== null && (
+          <div className="stat-cell">
+            <b>{fmtMoneyShort(state.pro.salary)}</b>
+            <span>年薪</span>
+          </div>
+        )}
+        {state.earnings > 0 && (
+          <div className="stat-cell">
+            <b>{fmtMoneyShort(state.earnings)}</b>
+            <span>生涯收入</span>
           </div>
         )}
       </div>

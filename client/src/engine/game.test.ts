@@ -1027,3 +1027,113 @@ describe('引退與結算', () => {
     expect(a.flow.log).toEqual(b.flow.log);
   });
 });
+
+describe('薪資', () => {
+  const DURABLE = ['sta', 'con', 'pow', 'rng', 'fld', 'eye'];
+
+  function playFull(seed: string): Game {
+    const game = started({ seed });
+    let guard = 0;
+    let k = 0;
+    while (game.flow.prompt !== null && guard++ < 5000) {
+      const options = game.flow.prompt.options;
+      const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+      const pick =
+        options.find((o) => o.id === 'retire:stay') ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options[0];
+      if (pick === undefined) break;
+      if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+      game.choose(pick.id);
+    }
+    return game;
+  }
+
+  it('養成期沒有收入', () => {
+    expect(playAmateur(started()).state?.earnings).toBe(0);
+  });
+
+  it('進職業之後開始累積——簽約金先進帳', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = started({ seed: `pay-${i}` });
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 5000) {
+        const options = game.flow.prompt.options;
+        const pick =
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+          options[0];
+        if (pick === undefined) break;
+        game.choose(pick.id);
+        if (game.state?.pro != null) {
+          expect(game.state.earnings).toBeGreaterThan(0);
+          return;
+        }
+      }
+    }
+    throw new Error('二十局都沒有人進職業');
+  });
+
+  it('生涯收入只增不減', () => {
+    const game = started({ seed: 'pay-mono' });
+    let guard = 0;
+    let last = 0;
+    while (game.flow.prompt !== null && guard++ < 5000) {
+      const options = game.flow.prompt.options;
+      const pick =
+        options.find((o) => o.id === 'retire:stay') ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+        options[0];
+      if (pick === undefined) break;
+      game.choose(pick.id);
+      const now = game.state?.earnings ?? 0;
+      expect(now).toBeGreaterThanOrEqual(last);
+      last = now;
+    }
+  });
+
+  it('打完整段生涯的收入有相當的量級', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playFull(`pay-big-${i}`);
+      if ((game.summary?.leagues.length ?? 0) === 0) continue;
+      expect(game.state?.earnings).toBeGreaterThan(1000);
+      return;
+    }
+  });
+
+  it('結算時會列出生涯收入', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playFull(`pay-card-${i}`);
+      const titles = game.flow.log
+        .filter((e) => e.kind === 'card')
+        .map((e) => (e as { title?: string }).title ?? '');
+      if (!titles.includes('生涯收入')) continue;
+      expect(titles).toContain('生涯收入');
+      return;
+    }
+    throw new Error('二十局都沒有出現生涯收入');
+  });
+
+  it('狀態欄看得到當季年薪', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = started({ seed: `pay-state-${i}` });
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 5000) {
+        const options = game.flow.prompt.options;
+        const pick =
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+          options[0];
+        if (pick === undefined) break;
+        game.choose(pick.id);
+        const pro = game.state?.pro;
+        if (pro != null) {
+          expect(pro.salary).toBeGreaterThan(0);
+          return;
+        }
+      }
+    }
+  });
+});

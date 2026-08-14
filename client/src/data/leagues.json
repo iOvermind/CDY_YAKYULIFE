@@ -2,33 +2,133 @@
   "schemaVersion": 1,
   "_source": "抽取自 index_legacy.html LV / PATHS / LG_N",
   "_note": "聯盟階梯。par 是該層級的平均水準，min 是最低限度（低於則降級或戰力外），games 是球季場次。有 top 欄位者為頂級聯盟——進入後才登錄守備位置並累積 FA 年資。",
-
   "levels": {
-    "CPBL2": { "name": "中職二軍", "par": 34, "min": 30, "games": 80, "org": "CPBL" },
-    "CPBL1": { "name": "中職一軍", "par": 44, "min": 41, "games": 120, "org": "CPBL", "top": "CPBL" },
-    "NPB2": { "name": "日職二軍", "par": 47, "min": 44, "games": 100, "org": "NPB" },
-    "NPB1": { "name": "日職一軍", "par": 53, "min": 50, "games": 143, "org": "NPB", "top": "NPB" },
-    "KBO2": { "name": "韓職二軍", "par": 40, "min": 36, "games": 100, "org": "KBO" },
-    "KBO1": { "name": "韓職一軍", "par": 50, "min": 47, "games": 144, "org": "KBO", "top": "KBO" },
-    "LMB": { "name": "墨西哥聯盟", "par": 48, "min": 45, "games": 90, "org": "LMB", "top": "LMB" },
-    "ABL": { "name": "澳洲棒球聯盟", "par": 42, "min": 38, "games": 40, "org": "ABL", "top": "ABL" },
-    "R": { "name": "新人聯盟", "par": 41, "min": 39, "games": 55, "org": "MiLB" },
-    "A1": { "name": "1A", "par": 45, "min": 43, "games": 110, "org": "MiLB" },
-    "A2": { "name": "2A", "par": 49, "min": 47, "games": 120, "org": "MiLB" },
-    "A3": { "name": "3A", "par": 54, "min": 52, "games": 130, "org": "MiLB" },
-    "MLB": { "name": "大聯盟", "par": 59, "min": 56, "games": 162, "org": "MiLB", "top": "MLB" }
+    "CPBL2": {
+      "name": "中職二軍",
+      "par": 34,
+      "min": 30,
+      "games": 80,
+      "org": "CPBL"
+    },
+    "CPBL1": {
+      "name": "中職一軍",
+      "par": 44,
+      "min": 41,
+      "games": 120,
+      "org": "CPBL",
+      "top": "CPBL"
+    },
+    "NPB2": {
+      "name": "日職二軍",
+      "par": 47,
+      "min": 44,
+      "games": 100,
+      "org": "NPB"
+    },
+    "NPB1": {
+      "name": "日職一軍",
+      "par": 53,
+      "min": 50,
+      "games": 143,
+      "org": "NPB",
+      "top": "NPB"
+    },
+    "KBO2": {
+      "name": "韓職二軍",
+      "par": 40,
+      "min": 36,
+      "games": 100,
+      "org": "KBO"
+    },
+    "KBO1": {
+      "name": "韓職一軍",
+      "par": 50,
+      "min": 47,
+      "games": 144,
+      "org": "KBO",
+      "top": "KBO"
+    },
+    "LMB": {
+      "name": "墨西哥聯盟",
+      "par": 48,
+      "min": 45,
+      "games": 90,
+      "org": "LMB",
+      "top": "LMB"
+    },
+    "ABL": {
+      "name": "澳洲棒球聯盟",
+      "par": 42,
+      "min": 38,
+      "games": 40,
+      "org": "ABL",
+      "top": "ABL"
+    },
+    "R": {
+      "name": "新人聯盟",
+      "par": 41,
+      "min": 39,
+      "games": 55,
+      "org": "MiLB"
+    },
+    "A1": {
+      "name": "1A",
+      "par": 45,
+      "min": 43,
+      "games": 110,
+      "org": "MiLB"
+    },
+    "A2": {
+      "name": "2A",
+      "par": 49,
+      "min": 47,
+      "games": 120,
+      "org": "MiLB"
+    },
+    "A3": {
+      "name": "3A",
+      "par": 54,
+      "min": 52,
+      "games": 130,
+      "org": "MiLB"
+    },
+    "MLB": {
+      "name": "大聯盟",
+      "par": 59,
+      "min": 56,
+      "games": 162,
+      "org": "MiLB",
+      "top": "MLB"
+    }
   },
-
   "paths": {
     "_note": "各體系的升遷路徑，由低到高。KBO 為新架構的擴充聯盟；LMB 與 ABL 為單層級，無二軍。",
-    "CPBL": ["CPBL2", "CPBL1"],
-    "NPB": ["NPB2", "NPB1"],
-    "KBO": ["KBO2", "KBO1"],
-    "LMB": ["LMB"],
-    "ABL": ["ABL"],
-    "MiLB": ["R", "A1", "A2", "A3", "MLB"]
+    "CPBL": [
+      "CPBL2",
+      "CPBL1"
+    ],
+    "NPB": [
+      "NPB2",
+      "NPB1"
+    ],
+    "KBO": [
+      "KBO2",
+      "KBO1"
+    ],
+    "LMB": [
+      "LMB"
+    ],
+    "ABL": [
+      "ABL"
+    ],
+    "MiLB": [
+      "R",
+      "A1",
+      "A2",
+      "A3",
+      "MLB"
+    ]
   },
-
   "top_league_names": {
     "CPBL": "中職",
     "NPB": "日職",
@@ -37,14 +137,87 @@
     "ABL": "澳職",
     "MLB": "大聯盟"
   },
-
   "_expansion_note": "KBO / LMB / ABL 是新架構的擴充聯盟，index_legacy.html 沒有它們。ROADMAP 階段五的「擴充聯盟資料」即指這批。index_legacy 的線性升降級無法表達它們之間的轉會關係，需要 ROADMAP 階段五的有向圖尋路系統才能真正啟用。",
-
   "org_names": {
     "CPBL": "中職",
     "NPB": "旅日",
     "MiLB": "旅美"
   },
-
-  "minor_label": "小聯盟／二軍"
+  "minor_label": "小聯盟／二軍",
+  "salary": {
+    "_note": "薪資設定，單位是萬元台幣／年。每個層級的年薪 = base + clamp(d, 0, d_cap) × per_point，其中 d 是綜合能力減當年 par。非頂級層級一律固定薪（base，per_point 為 0）——二軍與小聯盟的薪水不隨表現浮動。",
+    "_market_note": "**薪資反映的是市場規模，不是競技水準，兩者是獨立的旋鈕。** 大聯盟的 par 只比中職一軍高三成，薪資卻是八倍起跳、頂端三十四倍。韓職的 par（50）高於墨聯（48），但墨聯的市場規模遠小於韓職——「還能打球，但錢不多」正是墨聯的性格。若薪資跟著 par 走，這兩個聯盟就會失去區別。見 ADR 0004。",
+    "_source_note": "中職／日職／美職的數字取自 index_legacy.html 的 salaryFor()。韓職、墨聯、澳職是新增的——韓職約日職的四成，墨聯略高於中職但頂端低得多，澳職接近半職業。",
+    "levels": {
+      "CPBL2": {
+        "base": 84,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "CPBL1": {
+        "base": 300,
+        "per_point": 120,
+        "d_cap": 25
+      },
+      "NPB2": {
+        "base": 240,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "NPB1": {
+        "base": 1600,
+        "per_point": 560,
+        "d_cap": 26
+      },
+      "KBO2": {
+        "base": 110,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "KBO1": {
+        "base": 640,
+        "per_point": 225,
+        "d_cap": 26
+      },
+      "LMB": {
+        "base": 360,
+        "per_point": 95,
+        "d_cap": 22
+      },
+      "ABL": {
+        "base": 90,
+        "per_point": 20,
+        "d_cap": 18
+      },
+      "R": {
+        "base": 60,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "A1": {
+        "base": 95,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "A2": {
+        "base": 135,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "A3": {
+        "base": 270,
+        "per_point": 0,
+        "d_cap": 0
+      },
+      "MLB": {
+        "base": 2400,
+        "per_point": 4300,
+        "d_cap": 26
+      }
+    },
+    "posting_fee_multiplier": {
+      "_note": "入札金 = 簽約金 × 這個倍率。它是母隊放人的對價，與球員拿到的簽約金是兩筆不同的錢。取自 legacy 的顯示式（入札總額 = 簽約金 × 4）。",
+      "value": 4
+    }
+  }
 }
