@@ -490,10 +490,7 @@ function StatsPanel({
           <b>{yearLabel}</b>
           <span>{state.pro === null ? '學年' : '職涯'}</span>
         </div>
-        <div className="stat-cell">
-          <b>{state.pool}</b>
-          <span>可分配點</span>
-        </div>
+        {/* 可分配點只寫在左側記分板。同一個數字寫兩次，玩家會以為是兩件事。 */}
         {state.lockedSide !== 'fielder' && (
           <div className="stat-cell">
             <b>{rating?.pitcher ?? 0}</b>
@@ -1059,6 +1056,8 @@ function StatLines({
       {label !== null && <h4 style={{ marginTop: 12 }}>{label}</h4>}
       {pitching !== null && (
         <div className="fin-scroll">
+          {/* 二刀流會同時出現兩張表，沒有小標就分不出哪張是哪張。 */}
+          <div className="fin-caption">投球</div>
           <table className="fin">
             <thead>
               <tr>
@@ -1081,6 +1080,7 @@ function StatLines({
       )}
       {batting !== null && (
         <div className="fin-scroll">
+          <div className="fin-caption">打擊</div>
           <table className="fin">
             <thead>
               <tr>
