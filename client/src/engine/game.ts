@@ -41,6 +41,7 @@ import {
 } from './amateurStats.ts';
 import { canRejectOffer, qualifiesAsTwoWay, runDraft, TWO_WAY_TRAIT } from './draft.ts';
 import {
+  cardsPerYear,
   drawEvent,
   resolveEvent,
   successChances,
@@ -658,7 +659,7 @@ export class Game {
     );
     this.flow.push(
       () => this.#springTraining(),
-      () => this.#drawEventCard(),
+      () => this.#drawEventCards(),
       () => this.#cups(),
       () => this.#youthTournament(),
       () => this.#endYear(),
@@ -720,8 +721,22 @@ export class Game {
     }
   }
 
-  /** 抽一張事件卡並讓玩家決定怎麼應對。 */
-  #drawEventCard(): void {
+  /**
+   * 這一年的事件卡。
+   *
+   * 張數由階段決定（國中 1、高中 2、職業 3）——十三歲的一年裡不會發生那麼多
+   * 事，而高中開始密度就該上來了。一張解完才抽下一張，因此用續傳串起來，不能
+   * 用迴圈：中間每一張都要等玩家作答。
+   */
+  #drawEventCards(): void {
+    const stage = this.#pro === null ? this.#stage : 'PRO';
+    const remaining = cardsPerYear(stage);
+    this.#drawEventCard(remaining);
+  }
+
+  /** 抽一張事件卡並讓玩家決定怎麼應對。解完之後接著抽剩下的。 */
+  #drawEventCard(remaining: number): void {
+    if (remaining <= 0) return;
     const event = drawEvent(this.world, this.#eventContext);
     const chances = successChances(this.#traits);
 
@@ -739,7 +754,10 @@ export class Game {
           { id: 'event:safe', label: '保守應對', note: `成功率 ${chances.safe}%｜幅度最小` },
         ],
       },
-      (choice) => this.#resolveEventCard(event, choice.slice('event:'.length) as EventMode),
+      (choice) => {
+        this.#resolveEventCard(event, choice.slice('event:'.length) as EventMode);
+        this.#drawEventCard(remaining - 1);
+      },
     );
   }
 
@@ -1118,7 +1136,7 @@ export class Game {
     this.flow.push(
       () => this.#proSpringTraining(),
       () => this.#positionReview(),
-      () => this.#drawEventCard(),
+      () => this.#drawEventCards(),
       () => this.#tradeDeadline(),
       () => this.#proSeason(),
       () => this.#proEndYear(),

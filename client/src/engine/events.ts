@@ -53,9 +53,21 @@ interface EventsData {
     };
   };
   readonly events: readonly GameEvent[];
+  /** 每年抽幾張事件卡，鍵為階段代碼（含 PRO）。 */
+  readonly cards_per_year: Readonly<Record<string, number>>;
 }
 
 const data = eventsJson as unknown as EventsData;
+
+/**
+ * 這個階段每年抽幾張事件卡。
+ *
+ * legacy 是「職業 3 張、養成 2 張」；這裡再把國中拆出來——十三歲的一年裡不會
+ * 發生那麼多事，而高中開始密度就該上來了。
+ */
+export function cardsPerYear(stage: string): number {
+  return data.cards_per_year[stage] ?? data.cards_per_year['default'] ?? 1;
+}
 
 /** 預設抽取權重。未標 weight 的事件都是常見事件。 */
 const DEFAULT_WEIGHT = 100;

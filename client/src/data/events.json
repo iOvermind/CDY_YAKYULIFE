@@ -3,6 +3,14 @@
   "_source": "承接原 events.json（22 筆），其中 17 筆對應 index_legacy.html 的 EVENTS，另 5 筆為新架構的原創內容",
   "_note": "事件卡：全部中性，玩家在保守／照常／全力一搏之間抉擇。good_effects 與 bad_effects 的鍵若為能力代碼即直接加減；特殊鍵見 effect_keys。",
 
+  "cards_per_year": {
+    "_note": "每年抽幾張事件卡。legacy 是「職業 3 張、養成 2 張」，這裡再把國中拆出來——十三歲的一年裡不會發生那麼多事，而高中開始密度就該上來了。",
+    "_key_note": "鍵是階段代碼（amateur.json 的 stages）加上 PRO。找不到時用 default。",
+    "default": 1,
+    "JHS": 1,
+    "HS": 2,
+    "PRO": 3
+  },
   "audience_codes": {
     "*": "全部球員",
     "P": "投手",

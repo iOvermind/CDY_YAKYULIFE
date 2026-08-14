@@ -54,6 +54,15 @@ const POLICIES = {
   pitcher: ['sta', 'vel', 'ctl', 'swp', 'drp'],
 } as const;
 
+/**
+ * 策略綁定的起始守位。
+ *
+ * **投手路線必須開投手。** 起始守位平常輪流換，避免整批樣本都是同一種球員；
+ * 但投手策略若照樣輪，五分之四的樣本會是野手在猛練投球能力，量出來的分佈
+ * 與「一個投手生涯長什麼樣」毫無關係。
+ */
+const POLICY_POSITION: Partial<Record<PolicyName, 'P'>> = { pitcher: 'P' };
+
 type PolicyName = keyof typeof POLICIES;
 
 interface CareerResult {
@@ -482,8 +491,9 @@ describe('校準', () => {
             {
               seed: `calib-${policy}-${i}`,
               name: '校準員',
-              // 起始守位輪流換，避免整批樣本都是同一種球員。
-              startPosition: (['SS', 'CF', 'C', '1B', 'P'] as const)[i % 5]!,
+              // 起始守位輪流換，避免整批樣本都是同一種球員——除非策略綁死了守位。
+              startPosition:
+                POLICY_POSITION[policy] ?? (['SS', 'CF', 'C', '1B', 'P'] as const)[i % 5]!,
               throws: 'R',
               bats: 'R',
             },
