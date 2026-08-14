@@ -303,17 +303,22 @@ body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content
 /* 右欄：數據（上）＋ 事件（下）＋ 操作（底） */
 #col-right{display:flex;flex-direction:column;min-width:0}
 /* 引退之後這一塊會塞進整張生涯表，可能比整欄還高——而 #col-right 是
-   overflow:hidden，不給它自己的捲軸就會被裁掉而不是捲動。 */
+   overflow:hidden，不給它自己的捲軸就會被裁掉而不是捲動。
+   **上限是右欄的一半，而且是連同成就櫃與狀態一起算。** 只限生涯表沒有用：
+   成就櫃與狀態接在它下面，三塊加起來照樣會把事件流擠光。 */
 #panel-stats{padding:12px 14px;border-bottom:1px solid var(--edge);background:var(--panel);
-  min-height:0;overflow-y:auto;overscroll-behavior:contain}
-/* 生涯年表：引退之後才出現，欄位比狀態欄多得多，因此獨立一塊並允許橫向捲動。
-   高度上限是右欄的一半——一段十五年的生涯有十五列，不設限會把事件流整個擠掉。 */
-#panel-career{padding:12px 14px 4px;background:var(--panel);
-  max-height:50vh;overflow-y:auto;overscroll-behavior:contain}
+  min-height:0;max-height:50%;overflow-y:auto;overscroll-behavior:contain}
+/* 生涯年表：引退之後才出現，欄位比狀態欄多得多，因此允許橫向捲動。
+   高度不在這裡限制——捲軸交給外層的 #panel-stats，那裡才管得到成就櫃與狀態。
+   在這裡再設一層 max-height 只會生出巢狀捲軸，捲起來會打架。 */
+#panel-career{padding:12px 0 4px;background:var(--panel)}
 #panel-career h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;
   display:flex;align-items:center;gap:6px;margin:0 0 4px;color:var(--dim)}
 #panel-career h4::before{content:'■';font-size:9px;line-height:1;flex:none}
 #panel-career .fin-scroll+.fin-scroll{margin-top:14px}
+/* 兩張表的欄位差很多，捲到一半會分不出在看哪一側，因此各給一個小標。 */
+.fin-caption{font-family:var(--head);font-size:11px;letter-spacing:.16em;
+  color:var(--dim);margin-bottom:2px}
 #panel-career .sub{color:var(--dim);font-size:11px}
 /* 里程碑與獎項同屬成就，但來源不同：一個是累積出來的，一個是投票投出來的。
    底色區隔開，玩家掃一眼就分得出來。 */
@@ -362,6 +367,8 @@ table.fin th:first-child,table.fin td:first-child{text-align:left}
   #col-left{border-right:none;border-bottom:1px solid var(--edge)}
   #panel-abilities{max-height:46vh}
   #panel-log{max-height:60vh}
+  /* 單欄堆疊時右欄沒有確定高度，百分比解不出來，改用視窗高度。 */
+  #panel-stats{max-height:50vh}
 }
 
 /* ---------- 桌面三欄(>920px) ---------- */

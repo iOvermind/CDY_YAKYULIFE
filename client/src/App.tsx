@@ -596,7 +596,8 @@ function AwardList({
     summary === null
       ? []
       : [
-          ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName}${m}`)),
+          // 聯盟名與數字之間要留空白——「中職1000 安打」的中職與 1000 會黏成一團。
+          ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName} ${m}`)),
           ...summary.careerMilestones,
         ];
   if (awards.length === 0 && milestones.length === 0) return null;
@@ -746,6 +747,20 @@ interface TotalRow {
   readonly base: Baseline;
 }
 
+/**
+ * 年表用的層級簡稱。
+ *
+ * 「中職二軍」在球隊名旁邊只需要寫「二軍」——聯盟名已經由球隊說完了，
+ * 「桃園金剛・中職二軍」裡的「中職」是贅字。小聯盟的 1A／3A 本來就沒有
+ * 冠聯盟名，原樣留著。
+ */
+function shortLevelName(levelName: string, org: string): string {
+  const prefix = leagues.top_league_names[org] ?? leagues.org_names[org] ?? '';
+  return prefix !== '' && levelName.startsWith(prefix)
+    ? levelName.slice(prefix.length)
+    : levelName;
+}
+
 /** 生涯年表的一列。養成期與職業共用同一個形狀，年表才接得起來。 */
 interface CareerRow {
   readonly key: string;
@@ -815,6 +830,7 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
       <h4 style={{ marginTop: 14 }}>{title}</h4>
       {batting.length > 0 && (
         <div className="fin-scroll">
+          <div className="fin-caption">打擊</div>
           <table className="fin">
             <thead>
               <tr>
@@ -839,6 +855,7 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
       )}
       {pitching.length > 0 && (
         <div className="fin-scroll">
+          <div className="fin-caption">投球</div>
           <table className="fin">
             <thead>
               <tr>
@@ -902,6 +919,8 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
       <h4>生涯年表</h4>
       {batting.length > 0 && (
         <div className="fin-scroll">
+          {/* 兩張表的欄位差很多，沒有小標的話捲到一半會分不出在看哪一側。 */}
+          <div className="fin-caption">打擊</div>
           <table className="fin">
             <thead>
               <tr>
@@ -915,7 +934,9 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
               {batting.map((r) => (
                 <tr key={r.key}>
                   {rowLead(r)}
-                  <td>{r.position === null ? '—' : positionName(r.position)}</td>
+                  <td title={r.position === null ? undefined : positionName(r.position)}>
+                    {r.position ?? '—'}
+                  </td>
                   <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} />
                   <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
                 </tr>
@@ -927,6 +948,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
 
       {pitching.length > 0 && (
         <div className="fin-scroll">
+          <div className="fin-caption">投球</div>
           <table className="fin">
             <thead>
               <tr>
@@ -961,7 +983,8 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     year: a.year,
     age: a.age,
     team: a.school,
-    note: a.stageName,
+    // 學制不寫——校名已經說了那是國中還是高中。
+    note: null,
     position: null,
     batting: a.batting,
     pitching: a.pitching,
@@ -974,8 +997,9 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     year: s.year,
     age: s.age,
     team: s.team,
-    // 頂級聯盟不必註明——那是預設。二軍與小聯盟要講清楚。
-    note: s.top === null ? s.levelName : null,
+    // 頂級聯盟不必註明（那是預設），二軍與小聯盟則只寫層級——聯盟名已經
+    // 由同一格的球隊名說完了，「桃園金剛・中職二軍」裡的「中職」是贅字。
+    note: s.top === null ? shortLevelName(s.levelName, s.org) : null,
     position: s.position,
     batting: s.batting,
     pitching: s.pitching,
