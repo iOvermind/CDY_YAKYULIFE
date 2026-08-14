@@ -88,6 +88,14 @@ export interface AmateurSeasonRecord {
 export interface LeagueCareer {
   readonly org: string;
   readonly orgName: string;
+  /**
+   * 這個體系的頂級層級代碼，例如 CPBL1、LMB、MLB。
+   *
+   * **不要用 `org + '1'` 拼**：那只對中職、日職、韓職成立。墨聯的層級就叫
+   * `LMB`、澳職叫 `ABL`、美職的頂級是 `MLB` 而體系代碼是 `MiLB`——拼出來的
+   * `LMB1` 不存在，讀它的地方會直接拋錯。
+   */
+  readonly topLevel: string;
   readonly seasons: number;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
@@ -391,6 +399,7 @@ export function summarizeCareer(
     leagueCareers.push({
       org,
       orgName: orgNameOf(org),
+      topLevel: list[0]?.level ?? org,
       seasons: seasonCount(list),
       batting: lines.batting,
       pitching: lines.pitching,

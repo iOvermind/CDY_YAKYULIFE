@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { hallOfFame as cfg } from '../data/index.ts';
+import { dataKeys, hallOfFame as cfg, leagues } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import type { AwardRecord } from './awards.ts';
+import { proBaseline } from './metrics.ts';
 import {
   applyTierFloors,
   awardPoints,
@@ -316,5 +317,33 @@ describe('summarizeCareer', () => {
     expect(s.representative).toBeNull();
     expect(s.bestTier).toBe(cfg.tier_thresholds.values.length);
     expect(s.leagues).toEqual([]);
+  });
+});
+
+describe('每座聯盟的頂級層級', () => {
+  /**
+   * `topLevel` 必須是真的查得到的層級代碼。
+   *
+   * 介面拿它去要聯盟平均。舊版是用 `org + '1'` 拼出來的，那只對中職、日職、
+   * 韓職成立——墨聯的層級就叫 `LMB`、澳職叫 `ABL`、美職的頂級是 `MLB`，拼出來
+   * 的 `LMB1` 不存在，`levelOf()` 直接拋錯，整個結算畫面變成一片空白。
+   */
+  it('六個體系的頂級層級都查得到', () => {
+    let checked = 0;
+    for (const level of dataKeys(leagues.levels)) {
+      const info = leagues.levels[level];
+      if (info?.top === undefined) continue;
+
+      const record = season({ level, org: info.org, levelName: info.name, top: info.top });
+      const summary = summarizeCareer([record], []);
+      const league = summary.leagues[0];
+      expect(league).toBeDefined();
+      expect(league!.topLevel).toBe(level);
+      // 這一行就是介面在做的事。查不到會拋錯。
+      expect(() => proBaseline(league!.topLevel)).not.toThrow();
+      checked++;
+    }
+    // 六個體系各一座頂級聯盟。跑不到就是這條測試什麼都沒驗到。
+    expect(checked).toBe(6);
   });
 });

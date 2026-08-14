@@ -1051,7 +1051,10 @@ function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
     batting: l.batting,
     pitching: l.pitching,
     defenseRuns: l.defenseRuns,
-    base: proBaseline(`${l.org}1`),
+    // 用結算給的頂級層級，**不要拿 org 拼字串**：墨聯的層級就叫 LMB、澳職叫
+    // ABL、美職的頂級是 MLB，拼出來的 LMB1 不存在，讀它會直接拋錯——整個
+    // 結算畫面因此變成一片空白。
+    base: proBaseline(l.topLevel),
   }));
 }
 
@@ -1063,7 +1066,9 @@ function topTotalRow(summary: CareerSummary): TotalRow {
     batting: summary.topTotal.batting,
     pitching: summary.topTotal.pitching,
     defenseRuns: summary.leagues.reduce((n, l) => n + l.defenseRuns, 0),
-    base: proBaseline('CPBL1'),
+    // 通算橫跨數個聯盟，基準線只能挑一個——取評價分最高的那座，那是這段生涯
+    // 的代表舞台。沒有職業紀錄時退回中職一軍。
+    base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
   };
 }
 

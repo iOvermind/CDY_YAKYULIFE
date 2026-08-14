@@ -9,6 +9,7 @@ const HOF = cfg.tier_thresholds.values[0]!;
 const career = (over: Partial<LeagueCareer> = {}): LeagueCareer => ({
   org: 'CPBL',
   orgName: '中職',
+  topLevel: 'CPBL1',
   seasons: 15,
   batting: null,
   pitching: null,
