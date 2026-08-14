@@ -307,6 +307,7 @@ function GameScreen({
           <div id="panel-abilities">
             <h4>能力</h4>
             <AbilityPanel state={state} allocatable={allocatable} onChoose={onChoose} />
+            <HonorBoard awards={state.awards} honors={state.honors} summary={game.summary} />
           </div>
         )}
       </div>
@@ -538,22 +539,8 @@ function StatsPanel({
             <span>野手側</span>
           </div>
         )}
-        {/* 登錄守位只有頂級聯盟才有——二軍不挑位置，那裡沒有守位可顯示。 */}
-        {state.pro?.positionName != null && (
-          <div className="stat-cell" title={state.pro.positionName}>
-            <b>{state.pro.position}</b>
-            <span>登錄守位</span>
-          </div>
-        )}
-        {state.pro?.positionName != null && (
-          <div className="stat-cell">
-            <b>
-              {state.pro.defenseRuns > 0 ? '+' : ''}
-              {state.pro.defenseRuns}
-            </b>
-            <span>累計守備分</span>
-          </div>
-        )}
+        {/* 登錄守位寫在左側記分板的姓名那一行，守備分寫在「最近一季」那張表的
+            最後一欄——兩件事都已經有地方了，這裡不再重複一次。 */}
         {/* 當年的聯盟水準，不是 leagues.json 的基準值——它逐年浮動。 */}
         {state.pro !== null && (
           <div className="stat-cell">
@@ -597,43 +584,41 @@ function StatsPanel({
       )}
 
       {summary !== null && <CareerTable summary={summary} />}
-      <AwardList awards={state.awards} showYears={summary !== null} summary={summary} />
       <TraitList traits={state.traits} />
     </div>
   );
 }
 
 /**
- * 成就櫃。
+ * 榮譽榜。**只在生涯結束後出現，而且含養成期。**
  *
- * 顯示「拿過幾座」而不只是「拿過」——榮譽清單刻意去重，但七座 MVP 與一座
- * MVP 在球員的歷史地位上完全不是同一件事。
+ * 生涯進行中，左側記分板的「榮譽 N」那盞燈就夠了——那時玩家關心的是「我拿過
+ * 幾項」，攤開一整面清單只會把版面吃掉。結算之後相反：那串東西就是他的生涯
+ * 軌跡，該攤開來看。
  *
- * **獎項冠上聯盟名**：「中職年度MVP」與「日職年度MVP」是兩件事，拆開才看得
- * 出一個旅外球員在哪裡拿的獎。
+ * 三塊分開排，因為來源不同：
  *
- * 年份只在**引退之後**列出。生涯進行中玩家關心的是「我拿過幾座」，那時列一
- * 串年份只是雜訊；結算時則相反——那串年份就是他的生涯軌跡。
+ * - **職業獎項**冠上聯盟名並列出年份——「中職年度MVP」與「日職年度MVP」是
+ *   兩件事，拆開才看得出一個旅外球員在哪裡拿的獎。
+ * - **里程碑**是累積出來的，不是誰投票給你的，用不同的框線區隔。
+ * - **養成期與國際賽**的榮譽沒有結構化紀錄，只有字串，因此照原樣列。
  */
-function AwardList({
+function HonorBoard({
   awards,
-  showYears,
+  honors,
   summary,
 }: {
   awards: readonly AwardRecord[];
-  showYears: boolean;
+  honors: readonly string[];
   summary: CareerSummary | null;
 }) {
-  // 里程碑與獎項是同一類東西：這個人做到過什麼。但它們只在結算時算得出來。
-  const milestones =
-    summary === null
-      ? []
-      : [
-          // 聯盟名與數字之間要留空白——「中職1000 安打」的中職與 1000 會黏成一團。
-          ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName} ${m}`)),
-          ...summary.careerMilestones,
-        ];
-  if (awards.length === 0 && milestones.length === 0) return null;
+  if (summary === null) return null;
+
+  const milestones = [
+    // 聯盟名與數字之間要留空白——「中職1000 安打」的中職與 1000 會黏成一團。
+    ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName} ${m}`)),
+    ...summary.careerMilestones,
+  ];
 
   const tally = new Map<string, { label: string; years: number[] }>();
   for (const a of awards) {
@@ -645,28 +630,33 @@ function AwardList({
   }
   const shown = [...tally.values()].sort((a, b) => b.years.length - a.years.length);
 
+  // 職業獎項已經由上面那份結構化紀錄列出來了，這裡只留養成期與國際賽的。
+  const proLabels = new Set(shown.map((a) => a.label));
+  const rest = sortHonors(honors.filter((h) => !proLabels.has(h)));
+
+  if (shown.length === 0 && milestones.length === 0 && rest.length === 0) return null;
+
   return (
-    <>
-      <h4 style={{ marginTop: 12 }}>成就櫃</h4>
+    <div id="panel-honors">
+      <h4>榮譽</h4>
       <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
         {shown.map((a) => (
           <span className="tag" key={a.label} style={{ marginRight: 4 }}>
-            {a.label}
-            {showYears
-              ? `（${[...a.years].sort((x, y) => x - y).join('、')}）`
-              : a.years.length > 1
-                ? ` ×${a.years.length}`
-                : ''}
+            {a.label}（{[...a.years].sort((x, y) => x - y).join('、')}）
           </span>
         ))}
-        {/* 里程碑用不同的底色區隔：它是累積出來的，不是誰投票給你的。 */}
         {milestones.map((m) => (
           <span className="tag milestone" key={m} style={{ marginRight: 4 }}>
             {m}
           </span>
         ))}
+        {rest.map((h) => (
+          <span className="tag amateur" key={h} style={{ marginRight: 4 }}>
+            {h}
+          </span>
+        ))}
       </p>
-    </>
+    </div>
   );
 }
 
@@ -888,7 +878,7 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
       )}
       {pitching.length > 0 && (
         <div className="fin-scroll">
-          <div className="fin-caption">投球</div>
+          <div className="fin-caption">投手</div>
           <table className="fin">
             <thead>
               <tr>
@@ -981,7 +971,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
 
       {pitching.length > 0 && (
         <div className="fin-scroll">
-          <div className="fin-caption">投球</div>
+          <div className="fin-caption">投手</div>
           <table className="fin">
             <thead>
               <tr>
@@ -1101,7 +1091,7 @@ function StatLines({
       {pitching !== null && (
         <div className="fin-scroll">
           {/* 二刀流會同時出現兩張表，沒有小標就分不出哪張是哪張。 */}
-          <div className="fin-caption">投球</div>
+          <div className="fin-caption">投手</div>
           <table className="fin">
             <thead>
               <tr>
@@ -1179,9 +1169,12 @@ function Board({
   // 投手出身的二刀流的歸宿。
   // 寫英文代碼（P＋DH），不寫「投手＋指定打擊」——姓名那一行還要擠慣用手，
   // 中文全稱會把它撐到換行。
+  //
+  // 進了頂級聯盟就寫**現在登錄的守位**，不是起始守位：移防之後那兩者會分岔，
+  // 而右欄已經不另外列一格了，這裡停在舊守位的話就沒有地方看得到現況。
   const roleLabel = state.traits.has('two_way')
-    ? `P＋${fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL)}`
-    : player.startPosition;
+    ? `P＋${state.pro?.position ?? fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL)}`
+    : (state.pro?.position ?? player.startPosition);
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>
