@@ -106,6 +106,7 @@ import {
 } from './pro.ts';
 import { fmtMoney, postingFee, salaryFor } from './salary.ts';
 import {
+  amateurOverseasOffers,
   canRequestPosting,
   fallbackOffers,
   orgLabel,
@@ -1047,7 +1048,89 @@ export class Game {
       );
     }
 
-    this.flow.push(() => this.#draft());
+    this.flow.push(() => this.#crossroads());
+  }
+
+  /**
+   * 高中畢業 · 人生的第一個路口。
+   *
+   * **選秀不是唯一的出口。** 能力夠好的人可以直接與海外球團簽育成合約，不經過
+   * 選秀，從對方體系的低階層級出發——那是一條完全不同的生涯：起點更低、薪水
+   * 更少，但天花板高得多。
+   *
+   * 沒有任何海外報價時不問，直接進選秀：只有一個選項的提問是雜訊。
+   */
+  #crossroads(): void {
+    const overall = this.rating?.overall ?? 0;
+    const offers = amateurOverseasOffers(this.world, overall);
+    if (offers.length === 0) {
+      this.flow.push(() => this.#draft());
+      return;
+    }
+
+    // 同一個體系的報價收成一個選項，選了之後再挑球團——路口問的是「走哪條
+    // 路」，一次攤開六支球隊會把那個選擇淹掉。
+    const paths = new Map<string, typeof offers>();
+    for (const o of offers) {
+      const list = paths.get(o.org);
+      if (list === undefined) paths.set(o.org, [o]);
+      else paths.set(o.org, [...list, o]);
+    }
+
+    const options: Option[] = [
+      {
+        id: 'path:draft',
+        label: '投入中華職棒選秀',
+        note: `目前綜合 ${overall}`,
+        role: 'main',
+      },
+      ...[...paths.entries()].map(([org, list]) => ({
+        id: `path:${org}`,
+        label: list[0]!.label,
+        note: `${list[0]!.note}｜簽約金 ${fmtMoney(list[0]!.bonus)}`,
+      })),
+    ];
+
+    this.flow.ask({ title: `高中畢業 · 綜合能力 ${overall} · 人生的第一個路口`, options }, (choice) => {
+      const org = choice.slice('path:'.length);
+      const list = paths.get(org);
+      if (list === undefined) {
+        this.flow.push(() => this.#draft());
+        return;
+      }
+      this.#amateurSigning(list);
+    });
+  }
+
+  /** 選定體系之後挑球團。與旅外的報價單同一個形狀。 */
+  #amateurSigning(offers: readonly (TransferOffer & { readonly label: string })[]): void {
+    this.flow.ask(
+      {
+        title: `${offers[0]!.orgName}球團的報價`,
+        options: offers.map((o, i) => ({
+          id: `sign:${i}`,
+          label: `${o.team}（${o.levelName}）`,
+          note: `簽約金 ${fmtMoney(o.bonus)}`,
+        })),
+      },
+      (choice) => {
+        const picked = offers[Number(choice.split(':')[1])];
+        if (picked === undefined) {
+          this.flow.push(() => this.#draft());
+          return;
+        }
+        this.#earnings += picked.bonus;
+        this.#playedOrgs.add(picked.org);
+        this.flow.card(
+          'gold',
+          picked.label.replace('洽談', '').replace('合約', ''),
+          `與 <b class="hl">${esc(picked.team)}</b> 簽下育成合約，從 <b class="hl">${esc(picked.levelName)}</b> 出發。` +
+            `簽約金 <b class="hl">${fmtMoney(picked.bonus)}</b>。` +
+            '<br><span class="sub">沒有選秀會的舞台，也沒有人保證你上得去。一切從最底層開始。</span>',
+        );
+        this.flow.push(() => this.#professionalStart(picked.level, picked.team));
+      },
+    );
   }
 
   /** 中華職棒選秀。 */

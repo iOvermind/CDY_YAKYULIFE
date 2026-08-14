@@ -449,6 +449,19 @@ export interface AmateurData {
     };
     readonly honor_prefix: string;
   };
+  /** 高中畢業時的旅外簽約。選秀之外的另一個出口，見 amateur.json。 */
+  readonly amateur_overseas: {
+    readonly offers: Range;
+    readonly paths: readonly {
+      readonly org: string;
+      readonly min_overall: number;
+      readonly label: string;
+      readonly note: string;
+      readonly level: string;
+      readonly level_upgrade?: { readonly min_overall: number; readonly level: string };
+      readonly signing_bonus: { readonly base: number; readonly per_point_over: number };
+    }[];
+  };
   readonly draft: {
     readonly evaluation: {
       readonly age_pivot: number;

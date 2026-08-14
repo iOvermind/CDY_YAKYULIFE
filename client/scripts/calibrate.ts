@@ -82,6 +82,11 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
   while (game.flow.prompt !== null && guard++ < 8000) {
     const options = game.flow.prompt.options;
     const rotated = [...order.slice(cursor % order.length), ...order];
+    // 高中畢業的路口：基準線走選秀，旅外模式則直接簽出去。**不能靠「取第一個
+    // 選項」矇對**——選項順序改一次，整批樣本就換成另一種生涯。
+    const crossroads = overseas
+      ? (options.find((o) => o.id === 'path:MiLB') ?? options.find((o) => o.id === 'path:NPB'))
+      : options.find((o) => o.id === 'path:draft');
     const route = overseas
       ? (options.find((o) => o.id === 'transfer:0') ??
         options.find((o) => o.id === 'posting:ask') ??
@@ -105,6 +110,8 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
       // 打開 `CALIBRATE_OVERSEAS=1` 則反過來，有機會就走——那組樣本量的是
       // **難度係數有沒有把聯盟水準的差距吃掉**：同一套玩法在不同聯盟落地，
       // 評價分應該落在同一個帶上，落差就是係數沒調好。
+      crossroads ??
+      options.find((o) => o.id === 'sign:0') ??
       route ??
       // 交易：一般球員保持沉默，明星點頭同意。抱怨與否決都是「情緒」玩法，
       // 不屬於基準線。

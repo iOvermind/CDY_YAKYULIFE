@@ -14,7 +14,7 @@
  * 抽取一律走 career 子序列——轉會是生涯層級的事件。
  */
 
-import { dataKeys, leagues, teams as teamsData } from '../data/index.ts';
+import { amateur, dataKeys, leagues, teams as teamsData } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
 import { pathOf } from './pro.ts';
 import type { World } from './rng.ts';
@@ -397,6 +397,59 @@ export function overseasFaOffers(
 ): readonly TransferOffer[] {
   if (!hasOverseasFreeAgency(ctx.org, ctx.serviceYears)) return [];
   return overseasOffers(world, ctx);
+}
+
+/**
+ * 高中畢業時的旅外報價。
+ *
+ * **這是選秀之外的另一個出口**：不經過選秀，直接與海外球團簽育成／國際業餘
+ * 合約，從對方體系的低階層級出發。移植自 legacy 的「高中畢業 · 人生的第一個
+ * 路口」。
+ *
+ * 門檻看的是綜合能力的**絕對值**，不是相對聯盟的 d 值——十八歲的業餘球員沒有
+ * 所屬聯盟可以相對。落地層級也寫死在資料裡，不走 `landingLevel()`：那條規則
+ * 問的是「他現在打得動哪一層」，而育成合約問的是「他值不值得養」，十八歲的人
+ * 本來就打不動一軍，那不是拒絕他的理由。
+ */
+export function amateurOverseasOffers(
+  world: World,
+  overall: number,
+): readonly (TransferOffer & { readonly label: string; readonly note: string })[] {
+  const cfg = amateur.amateur_overseas;
+  const out: (TransferOffer & { label: string; note: string })[] = [];
+
+  for (const path of cfg.paths) {
+    // 抽取一律先做，與資格無關——否則差一分就會讓後面所有判定整串偏移。
+    const count = world.stream('career').int(cfg.offers.min, cfg.offers.max);
+    if (overall < path.min_overall) continue;
+
+    const upgrade = path.level_upgrade;
+    const level =
+      upgrade !== undefined && overall >= upgrade.min_overall ? upgrade.level : path.level;
+    const bonus = Math.round(
+      path.signing_bonus.base +
+        Math.max(0, overall - path.min_overall) * path.signing_bonus.per_point_over,
+    );
+
+    const used = new Set<string>();
+    for (let i = 0; i < count; i++) {
+      const team = pickTeam(world, path.org, null);
+      if (team === null || used.has(team)) continue;
+      used.add(team);
+      out.push({
+        org: path.org,
+        orgName: orgLabel(path.org),
+        level,
+        levelName: leagues.levels[level]?.name ?? level,
+        team,
+        bonus,
+        homecoming: false,
+        label: path.label,
+        note: path.note,
+      });
+    }
+  }
+  return out;
 }
 
 /**

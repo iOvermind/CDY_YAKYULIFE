@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { leagues } from '../data/index.ts';
+import { amateur, leagues } from '../data/index.ts';
 import { pathOf } from './pro.ts';
 import { World } from './rng.ts';
 import {
+  amateurOverseasOffers,
   canRequestPosting,
   hasOverseasFreeAgency,
   landingLevel,
@@ -224,5 +225,53 @@ describe('母國聯盟不收外籍加成', () => {
       expect(landingLevel(org, min, null)).toBeNull();
       expect(landingLevel(org, min + premium, null)).toBe(bottom);
     }
+  });
+});
+
+describe('高中畢業的旅外報價', () => {
+  const cfg = amateur.amateur_overseas;
+  const npb = cfg.paths.find((p) => p.org === 'NPB')!;
+  const milb = cfg.paths.find((p) => p.org === 'MiLB')!;
+  const offers = (overall: number, seed = 'amateur') =>
+    amateurOverseasOffers(new World(seed), overall);
+
+  it('門檻看綜合能力的絕對值——十八歲的人沒有所屬聯盟可以相對', () => {
+    expect(offers(npb.min_overall - 1)).toHaveLength(0);
+    expect(offers(npb.min_overall).some((o) => o.org === 'NPB')).toBe(true);
+    expect(offers(milb.min_overall - 1).some((o) => o.org === 'MiLB')).toBe(false);
+    expect(offers(milb.min_overall).some((o) => o.org === 'MiLB')).toBe(true);
+  });
+
+  it('落地層級寫死在資料裡，不走 landingLevel', () => {
+    // 十八歲的人本來就打不動一軍，那不是拒絕他的理由。
+    for (const o of offers(npb.min_overall).filter((x) => x.org === 'NPB')) {
+      expect(o.level).toBe(npb.level);
+    }
+    expect(landingLevel('NPB', npb.min_overall, null)).toBeNull();
+  });
+
+  it('能力夠好的旅美直接從 1A 起跳', () => {
+    const up = milb.level_upgrade!;
+    for (const o of offers(up.min_overall - 1).filter((x) => x.org === 'MiLB')) {
+      expect(o.level).toBe(milb.level);
+    }
+    for (const o of offers(up.min_overall).filter((x) => x.org === 'MiLB')) {
+      expect(o.level).toBe(up.level);
+    }
+  });
+
+  it('簽約金隨超出門檻的幅度上升', () => {
+    const low = offers(npb.min_overall).find((o) => o.org === 'NPB')!;
+    const high = offers(npb.min_overall + 6).find((o) => o.org === 'NPB')!;
+    expect(high.bonus).toBeGreaterThan(low.bonus);
+  });
+
+  // 抽取次數必須與資格無關，否則同一個種子會因為差一分而讓後面所有判定整串偏移。
+  it('不合格時也照抽', () => {
+    const a = new World('drift');
+    const b = new World('drift');
+    amateurOverseasOffers(a, 0);
+    amateurOverseasOffers(b, 0);
+    expect(a.stream('career').next()).toBe(b.stream('career').next());
   });
 });
