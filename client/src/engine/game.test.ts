@@ -830,3 +830,78 @@ describe('聯盟水準逐年浮動', () => {
     }
   });
 });
+
+describe('年度獎項', () => {
+  /** 練體力才有出賽數，有出賽數才有累積數據，有累積數據才拿得到獎。 */
+  const DURABLE = ['sta', 'con', 'pow', 'rng', 'fld', 'eye'];
+
+  function playDurable(seed: string): Game {
+    const game = started({ seed });
+    let guard = 0;
+    let k = 0;
+    while (game.flow.prompt !== null && guard++ < 5000) {
+      const options = game.flow.prompt.options;
+      const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+      const pick =
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        options.find((o) => o.id === 'draft:accept') ??
+        options[0];
+      if (pick === undefined) break;
+      if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+      game.choose(pick.id);
+    }
+    return game;
+  }
+
+  it('打得好的球員會拿到年度獎項', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playDurable(`award-${i}`);
+      const awards = game.state?.awards ?? [];
+      if (awards.length === 0) continue;
+      expect(awards[0]?.org).toBe('CPBL');
+      expect(awards[0]?.year).toBeGreaterThan(0);
+      return;
+    }
+    throw new Error('二十局都沒有人拿過獎');
+  });
+
+  it('獎項同時進結構化紀錄與去重的榮譽清單', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playDurable(`award-h-${i}`);
+      const awards = game.state?.awards ?? [];
+      const honors = game.state?.honors ?? [];
+      if (awards.length === 0) continue;
+      for (const a of awards) {
+        expect(honors.some((h) => h.includes(a.name))).toBe(true);
+      }
+      return;
+    }
+  });
+
+  /** 這正是獎項要與榮譽清單分開的理由。 */
+  it('同一個獎拿很多次時，結構化紀錄數得出來但榮譽清單不會重複', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = playDurable(`award-dup-${i}`);
+      const awards = game.state?.awards ?? [];
+      const stars = awards.filter((a) => a.code === 'all_star');
+      if (stars.length < 2) continue;
+      const honors = game.state?.honors ?? [];
+      expect(honors.filter((h) => h.includes('明星賽')).length).toBeLessThan(stars.length);
+      return;
+    }
+    throw new Error('四十局都沒有人拿過兩次以上的明星賽');
+  });
+
+  it('二軍不評獎', () => {
+    for (let i = 0; i < 30; i++) {
+      const game = playDurable(`award-minor-${i}`);
+      for (const a of game.state?.awards ?? []) {
+        expect(a.level).toBe('CPBL1');
+      }
+    }
+  });
+
+  it('養成期沒有年度獎項', () => {
+    expect(playAmateur(started()).state?.awards).toEqual([]);
+  });
+});

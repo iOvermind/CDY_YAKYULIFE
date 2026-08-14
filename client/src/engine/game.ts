@@ -44,7 +44,16 @@ import {
   type EventMode,
   type GameEvent,
 } from './events.ts';
-import { assignPosition, defenseRuns, positionLabel, DH } from './defense.ts';
+import { annualAwards, type AwardRecord } from './awards.ts';
+import {
+  assignPosition,
+  defenseRuns,
+  fieldingResponsibility,
+  positionAverage,
+  positionLabel,
+  DH,
+} from './defense.ts';
+import { fieldingShares, winPct } from './metrics.ts';
 import { esc, Flow, type Option } from './flow.ts';
 import {
   advanceStandards,
@@ -56,7 +65,7 @@ import {
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
 import { applyAging, evaluateMovement, pathOf, proDiceCount, shouldRetire } from './pro.ts';
-import { levelOf, playSeason, positionName } from './season.ts';
+import { levelOf, playSeason, positionName, type ProPitchingLine } from './season.ts';
 import {
   advanceLeague,
   championshipOdds,
@@ -64,7 +73,7 @@ import {
   playerEffect,
   type LeagueTable,
 } from './teams.ts';
-import { isSideVisible, rate, ratingPosition } from './rating.ts';
+import { defenseScore, isSideVisible, rate, ratingPosition } from './rating.ts';
 import { World } from './rng.ts';
 
 
@@ -125,6 +134,13 @@ export interface PlayerState {
   readonly honors: readonly string[];
   /** 生涯次數統計。榮譽清單去重之後，次數必須另外算。 */
   readonly counts: CareerCounts;
+  /**
+   * 得過的年度獎項，結構化保存。
+   *
+   * 與 honors 分工：那份清單去重、負責顯示；這份逐座記錄、負責計分與計次。
+   * 七座 MVP 在清單上只有一行，在這裡是七筆。
+   */
+  readonly awards: readonly AwardRecord[];
   /** 尚未分配的能力點。 */
   readonly pool: number;
   /** 各項能力被提升的上限點數。 */
@@ -299,6 +315,13 @@ export class Game {
   #standards: LeagueStandards | null = null;
   /** 生涯累計的守備分，以層級為鍵。 */
   #defenseRuns: Record<string, number> = {};
+  /**
+   * 得過的年度獎項，結構化保存。
+   *
+   * 與去重的榮譽清單分開：清單負責顯示「他做到過什麼」，這裡負責計分與計次
+   * ——七座 MVP 在清單上只有一行，但評價分要算七次。
+   */
+  #awards: AwardRecord[] = [];
   /** 上一年說過的聯盟風向。用來避免同一句話年年重複。 */
   #lastStandardsNote: string | null = null;
   /**
@@ -335,6 +358,7 @@ export class Game {
       schoolTier: this.#schoolTier,
       honors: this.#honors,
       counts: this.#counts,
+      awards: this.#awards,
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
       injuryRisk: this.#injuryRisk,
@@ -1068,6 +1092,64 @@ export class Game {
     }
 
     this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
+    this.#annualAwards(line.batting, line.pitching);
+  }
+
+  /**
+   * 年度獎項。
+   *
+   * 只在頂級聯盟評獎——二軍沒有年度獎項。獎項存成結構化紀錄供計分使用，同時
+   * 把名稱寫進去重的榮譽清單供顯示（見 #addHonor 的說明：清單是「他做到過
+   * 什麼」，次數要看結構化紀錄）。
+   */
+  #annualAwards(batting: BattingLine | null, pitching: ProPitchingLine | null): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+    const info = levelOf(pro.level);
+    if (info.top === undefined) return;
+
+    const r = this.rating;
+    const par = standardOf(this.#standards, pro.level).par;
+
+    // 守備勝率：獎項判定看它而不是守備分的顯示數字——顯示尺度可以隨時調整，
+    // 判定不該跟著跑掉。
+    let fieldingWinPct: number | null = null;
+    if (pro.position !== null && pro.position !== DH && batting !== null) {
+      const average = positionAverage(pro.position, pro.level, this.#standards);
+      if (average !== null) {
+        fieldingWinPct = winPct(
+          fieldingShares({
+            defenseScore: defenseScore(this.#ability, pro.position),
+            positionAverage: average,
+            positionShare: fieldingResponsibility(pro.position),
+            leagueGames: info.games,
+            gamesShare: batting.games / info.games,
+          }),
+        );
+      }
+    }
+
+    const won = annualAwards(this.world, {
+      year: this.#year,
+      org: info.org,
+      level: pro.level,
+      leagueGames: info.games,
+      d: (r?.overall ?? 0) - par,
+      team: pro.team,
+      // 第一年就在頂級聯盟才算新人年——在二軍待過幾年再上來的人不是新人。
+      rookie: this.#awards.every((a) => a.org !== info.org),
+      batting,
+      pitching,
+      role: pitching?.role ?? null,
+      position: pro.position,
+      fieldingWinPct,
+    });
+    if (won.length === 0) return;
+
+    this.#awards.push(...won);
+    const orgName = leagues.top_league_names[info.org] ?? info.org;
+    for (const a of won) this.#addHonor(`${orgName}${a.name}`);
+    this.flow.card('gold', '年度獎項', won.map((a) => esc(a.name)).join('｜'));
   }
 
   /**

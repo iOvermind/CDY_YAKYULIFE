@@ -17,7 +17,8 @@
       "avg": [0.300, 0.360],
       "hr": [20, 32],
       "rbi": [75, 105],
-      "obp": [0.370, 0.430]
+      "obp": [0.370, 0.430],
+      "sb": [25, 45]
     },
     "NPB": {
       "games": 143,
@@ -28,7 +29,8 @@
       "avg": [0.300, 0.360],
       "hr": [24, 38],
       "rbi": [90, 125],
-      "obp": [0.370, 0.430]
+      "obp": [0.370, 0.430],
+      "sb": [25, 45]
     },
     "MLB": {
       "games": 162,
@@ -39,10 +41,139 @@
       "avg": [0.300, 0.360],
       "hr": [27, 43],
       "rbi": [100, 140],
-      "obp": [0.370, 0.430]
+      "obp": [0.370, 0.430],
+      "sb": [25, 45]
     }
   },
   "_fallback_league": "CPBL",
+
+  "titles": {
+    "_note": "單項王。每項的判定都是同一個形狀：先過資格門檻（打席或局數），成績達到基礎門檻才進入機率判定，達到鬼神門檻則必定入選。機率 = base + (成績 − 基礎門檻) / step × per_step，套上下限。",
+    "_stat_note": "step 為 1 時就是「每多一個單位加 per_step」；比率型數據（avg / obp）的 step 是 0.005，因為每 0.005 才是一個有感的差距。",
+    "_missing_note": "中繼王沒有實作——它需要中繼成功數（HLD）與中繼投手（MR）的定位，兩者都還沒有。見 ROADMAP 的「投手定位細分」。",
+    "list": [
+      {
+        "code": "strikeout_king",
+        "name": "三振王",
+        "side": "pitcher",
+        "stat": "so",
+        "min_ip": 0,
+        "base": 25,
+        "step": 1,
+        "per_step": 1.2,
+        "clamp": { "min": 25, "max": 95 }
+      },
+      {
+        "code": "save_king",
+        "name": "救援王",
+        "side": "pitcher",
+        "stat": "sv",
+        "requires_role": "RP",
+        "base": 28,
+        "step": 1,
+        "per_step": 5,
+        "clamp": { "min": 28, "max": 95 }
+      },
+      {
+        "code": "batting_king",
+        "name": "打擊王",
+        "side": "batter",
+        "stat": "avg",
+        "min_pa": 350,
+        "base": 25,
+        "step": 0.005,
+        "per_step": 6,
+        "clamp": { "min": 25, "max": 95 }
+      },
+      {
+        "code": "hr_king",
+        "name": "全壘打王",
+        "side": "batter",
+        "stat": "hr",
+        "min_pa": 300,
+        "base": 25,
+        "step": 1,
+        "per_step": 5,
+        "clamp": { "min": 25, "max": 95 }
+      },
+      {
+        "code": "rbi_king",
+        "name": "打點王",
+        "side": "batter",
+        "stat": "rbi",
+        "min_pa": 300,
+        "base": 25,
+        "step": 1,
+        "per_step": 2,
+        "clamp": { "min": 25, "max": 95 }
+      },
+      {
+        "code": "steal_king",
+        "name": "盜壘王",
+        "side": "batter",
+        "stat": "sb",
+        "min_pa": 300,
+        "base": 25,
+        "step": 1,
+        "per_step": 4,
+        "clamp": { "min": 25, "max": 95 }
+      },
+      {
+        "code": "obp_king",
+        "name": "上壘王",
+        "side": "batter",
+        "stat": "obp",
+        "min_pa": 350,
+        "base": 25,
+        "step": 0.005,
+        "per_step": 5,
+        "clamp": { "min": 25, "max": 95 }
+      }
+    ]
+  },
+
+  "mvp": {
+    "_note": "年度最有價值球員。資格看出場量（投手看局數或後援場次，野手看打席），機率看 d 值。",
+    "_role_note": "後援投手的基礎機率明顯較低——一個守護神再神，票也很難投得過先發與強打者。",
+    "name": "年度MVP",
+    "min_d": 6,
+    "god_d": 15,
+    "qualify": {
+      "starter_min_ip": 120,
+      "reliever_min_games": 45,
+      "batter_pa_per_game": 3.4
+    },
+    "base": { "SP": 12, "RP": 5, "batter": 12 },
+    "per_d_over_min": 11,
+    "clamp": { "min": 5, "max": 95 }
+  },
+
+  "fielding": {
+    "_note": "守備獎項。判定看**守備勝率**（守備分相對該守位平均換算而得），不看守備分那個顯示數字——顯示的尺度可以隨時放大縮小，判定不該跟著跑掉。",
+    "_dh_note": "指定打擊不參與守備獎項——他不守備。",
+    "list": [
+      {
+        "code": "gold_glove",
+        "name": "金手套",
+        "min_win_pct": 0.56,
+        "god_win_pct": 0.72,
+        "base": 38,
+        "step": 0.01,
+        "per_step": 4,
+        "clamp": { "min": 38, "max": 95 }
+      },
+      {
+        "code": "defense_king",
+        "name": "守備王",
+        "min_win_pct": 0.64,
+        "god_win_pct": 0.78,
+        "base": 30,
+        "step": 0.01,
+        "per_step": 5,
+        "clamp": { "min": 30, "max": 95 }
+      }
+    ]
+  },
 
   "all_star": {
     "_note": "明星賽入選機率隨 d 值動態提升。台中猛瑪有人氣加成——d 值不足時入選會標註「（人氣入選）」。",
@@ -78,11 +209,5 @@
     "clamp": { "min": 30, "max": 95 }
   },
 
-  "closer_award": {
-    "_note": "限終結者，依救援成功數。",
-    "requires_role": "CL",
-    "base": 28,
-    "per_sv_over_threshold": 5,
-    "clamp": { "min": 28, "max": 95 }
-  }
+  "_closer_award_merged": "舊的 closer_award 與 titles 裡的 save_king 是同一個獎（legacy 的終結者分支產生的就是「救援王」），已合併到 titles，避免同一個獎有兩份設定。"
 }

@@ -90,8 +90,8 @@
 
   "defense_score_scale": {
     "_note": "守備分最終係數：DEF = (守備分 − 該守位當年平均) × fielding_responsibility × scale × 出賽比重。",
-    "_calibration_note": "暫定值。正式值由校準腳本連同守備占全體勝利份額的比重（靶 16–17%）一起定，見 ADR 0003。",
-    "scale": 0.06
+    "_display_only_note": "**只影響顯示**。守備側的勝利份額由「守位責任占比 × 出賽比重」與「守備分相對該守位平均」直接算出，不讀這個數字——因此放大它讓成績單好讀，不會動到任何評價分。",
+    "scale": 0.15
   },
 
   "scan_order": {

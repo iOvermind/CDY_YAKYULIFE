@@ -262,8 +262,18 @@
     "_ws_note": "完整的 Bill James Win Shares 要把球隊的總勝利分配給全隊，需要全隊的成績。這裡改用「相對替代水準的貢獻」直接估算個人值：算出比替代級球員多創造／少失掉幾分，除以每勝所需分數，再乘上每勝三份的慣例。數量級與真正的 WS 相當，但不保證全隊加總等於球隊勝場的三倍。",
     "runs_per_win": 10,
     "win_shares_per_win": 3,
-    "batting_replacement": 0.52,
-    "pitching_replacement_era_multiplier": 1.25
+
+    "shares": {
+      "_note": "勝利份額與敗戰份額的雙帳制參數。球隊每場球產生 per_game 份（勝場 ×3 是勝利份額，敗場 ×3 是敗戰份額，合計即該隊的總份額），依 split 切給打擊、投球、守備三段，再依球員佔用的時間分給個人。見 ADR 0003。",
+      "_split_note": "進攻約 52%、投球約 32%、守備約 16%，這是 Bill James 的 Win Shares 結構比例。守備那 16% 再依守位的責任占比切開（見 positions.json 的 fielding_responsibility），其中投手應得的 9% 我們不做，因此守備段實際只發出 91%。",
+      "_win_pct_note": "勝率用畢氏公式：把球員的相對表現當成得分／失分比，win% = r^exponent / (r^exponent + 1)。表現與聯盟同水準時 r = 1，勝率剛好 .500。三個分段共用同一條映射，行為才會一致。",
+      "per_game": 3,
+      "split": { "batting": 0.52, "pitching": 0.32, "fielding": 0.16 },
+      "team_pa_per_game": 38,
+      "team_ip_per_game": 9,
+      "pythagorean_exponent": 2,
+      "win_pct_clamp": { "min": 0.02, "max": 0.98 }
+    }
   },
 
   "team_strength": {

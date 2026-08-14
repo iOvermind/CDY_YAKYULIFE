@@ -10,6 +10,7 @@
 
 import { amateur, season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import { standardOf, type LeagueStandards } from './league.ts';
 import { levelOf } from './season.ts';
 
 /** 聯盟平均：一名平均球員的上壘率、長打率與防禦率。 */
@@ -35,18 +36,42 @@ export function runsCreated(line: BattingLine): number {
   return denominator === 0 ? 0 : (onBase * totalBases) / denominator;
 }
 
-/** 職業聯盟的平均水準。 */
+/**
+ * 職業聯盟的平均水準。
+ *
+ * **刻意與層級無關。** 聯盟平均是自我參照的——3A 與大聯盟的聯盟打擊率都在
+ * .260 上下，不因難度而異。難度的差別落在球員的 d 值上（弱聯盟 d 大、成績
+ * 漂亮），因此跨聯盟比較要靠難度係數修正，不能靠移動基準線。見 ADR 0003。
+ */
 export function proBaseline(level: string): Baseline {
+  return proBaselineAt(level, 0);
+}
+
+/**
+ * 能力比聯盟平均高 `d` 點的球員，打出來的成績長什麼樣。
+ *
+ * 用來推導**替代水準的勝率**：把 d 設成「當年 min 減當年 par」，算出的基準線
+ * 就是一個剛好卡在降級線上的球員。生涯評價分的零點定在那裡（ADR 0003）。
+ */
+export function proBaselineAt(level: string, d: number): Baseline {
   const b = cfg.batting;
   const pa = 600;
-  const bb = pa * b.walk_rate.base;
+  const bb = pa * rateAt(b.walk_rate, d);
   const ab = pa - bb;
-  const hits = ab * b.hit_rate.base;
-  const hr = ab * b.hr_rate.base;
+  const hits = ab * rateAt(b.hit_rate, d);
+  const hr = ab * rateAt(b.hr_rate, d);
   const rest = hits - hr;
-  const double = rest * b.extra_base.double_rate.base;
-  const triple = rest * b.extra_base.triple_rate.base;
-  return build(pa, ab, bb, hits, double, triple, hr, cfg.pitching.era.base, levelOf(level).name);
+  const double = rest * rateAt(b.extra_base.double_rate, d);
+  const triple = rest * rateAt(b.extra_base.triple_rate, d);
+  return build(pa, ab, bb, hits, double, triple, hr, rateAt(cfg.pitching.era, d), levelOf(level).name);
+}
+
+/** 一條率在 d 值下的值，套上該率自己的上下限。 */
+function rateAt(
+  spec: { base: number; per_point: number; min: number; max: number },
+  d: number,
+): number {
+  return Math.max(spec.min, Math.min(spec.max, spec.base + d * spec.per_point));
 }
 
 /** 養成期的平均水準。門檻與職業不同，因此基準線也不同。 */
@@ -115,31 +140,198 @@ export function opsPlus(line: BattingLine, base: Baseline): number | null {
 }
 
 /**
- * 打者的 Win Shares。
+ * 一段表現的雙帳紀錄：勝利份額與敗戰份額。
  *
- * 完整的 Bill James WS 要把球隊的總勝利分配給全隊，需要全隊的成績。這裡改用
- * 「相對替代水準的貢獻」直接估算個人值：比替代級球員多創造幾分，除以每勝
- * 所需分數，再乘上每勝三份的慣例。
- *
- * 數量級與真正的 WS 相當，但**不保證全隊加總等於球隊勝場的三倍**——這是取捨，
- * 換來的是不需要模擬隊友。
+ * 兩者相加即**責任額**——這名球員佔用了球隊多少出場機會。表現差不會產生負的
+ * 勝利份額，而是產生大量的敗戰份額；這與投手的勝敗紀錄是同一個概念，只是推廣
+ * 到所有貢獻上。見 ADR 0003。
  */
-export function battingWinShares(line: BattingLine, base: Baseline): number {
-  const a = cfg.advanced;
-  const replacement = base.runsCreatedPerPa * line.pa * a.batting_replacement;
-  const above = runsCreated(line) - replacement;
-  return Math.max(0, (above / a.runs_per_win) * a.win_shares_per_win);
+export interface Shares {
+  readonly win: number;
+  readonly loss: number;
+}
+
+/** 責任額，也就是勝利份額與敗戰份額的總和。 */
+export function responsibilityOf(shares: Shares): number {
+  return shares.win + shares.loss;
+}
+
+/** 這段表現的勝率。責任額為 0 時回傳 .500——沒有樣本就沒有意見。 */
+export function winPct(shares: Shares): number {
+  const total = responsibilityOf(shares);
+  return total === 0 ? 0.5 : shares.win / total;
+}
+
+/** 把責任額與勝率拆成雙帳。 */
+export function splitShares(responsibility: number, pct: number): Shares {
+  const safe = Math.max(0, responsibility);
+  return { win: safe * pct, loss: safe * (1 - pct) };
 }
 
 /**
- * 投手的 Win Shares。
+ * 相對表現轉勝率，畢氏公式。
  *
- * 用「比替代級投手少失幾分」估算。替代水準是聯盟防禦率乘上一個倍率——一個
- * 隨時找得到的投手，防禦率本來就比聯盟平均差一截。
+ * `r` 是球員相對聯盟平均的表現比（得分創造率、防禦率倒數、守備分比），
+ * `win% = r^n / (r^n + 1)`。r = 1 時剛好 .500——與聯盟同水準的人是五成勝率。
+ *
+ * 三個分段（打擊、投球、守備）共用這一條映射，行為才會一致。
  */
-export function pitchingWinShares(line: PitchingLine, base: Baseline): number {
-  const a = cfg.advanced;
-  const replacementEra = base.era * a.pitching_replacement_era_multiplier;
-  const runsSaved = ((replacementEra - line.era) / 9) * line.ip;
-  return Math.max(0, (runsSaved / a.runs_per_win) * a.win_shares_per_win);
+export function pythagoreanWinPct(ratio: number): number {
+  const s = cfg.advanced.shares;
+  if (!Number.isFinite(ratio) || ratio <= 0) return s.win_pct_clamp.min;
+  const r = Math.pow(ratio, s.pythagorean_exponent);
+  return clamp(r / (r + 1), s.win_pct_clamp.min, s.win_pct_clamp.max);
+}
+
+/**
+ * 打擊的責任額：每個打席分到多少份。
+ *
+ * 由球隊的總份額推導，因此聯盟場次會自然約掉：一支球隊整季 `場次 × 3` 份，
+ * 其中 52% 屬於進攻，除以球隊整季的打席數，就是每個打席的份額。**打得越多，
+ * 兩本帳都累積越多**——這正是「佔著位置打不好」會顯形的機制。
+ */
+export function battingResponsibility(pa: number): number {
+  const s = cfg.advanced.shares;
+  return (pa * s.per_game * s.split.batting) / s.team_pa_per_game;
+}
+
+/** 投球的責任額：每一局分到多少份。 */
+export function pitchingResponsibility(ip: number): number {
+  const s = cfg.advanced.shares;
+  return (ip * s.per_game * s.split.pitching) / s.team_ip_per_game;
+}
+
+/**
+ * 守備的責任額。
+ *
+ * `(守位責任占比 / 100) × 聯盟場次 × 每場份數 × 守備占比 × 出賽比重`
+ *
+ * 守位占比取自 `positions.json`，八個守位相加為 91——缺的 9 是 James 分給
+ * 投手的守備份額，我們不做，因此守備段實際只發出 91%。這是誠實的少發，不是
+ * 把投手那份轉嫁給野手。
+ */
+export function fieldingResponsibilityShares(options: {
+  readonly positionShare: number;
+  readonly leagueGames: number;
+  readonly gamesShare: number;
+}): number {
+  const s = cfg.advanced.shares;
+  return (
+    (options.positionShare / 100) *
+    options.leagueGames *
+    s.per_game *
+    s.split.fielding *
+    options.gamesShare
+  );
+}
+
+/** 打擊的雙帳。相對聯盟平均的得分創造率決定勝率。 */
+export function battingShares(line: BattingLine, base: Baseline): Shares {
+  if (line.pa === 0 || base.runsCreatedPerPa === 0) return { win: 0, loss: 0 };
+  const ratio = runsCreated(line) / line.pa / base.runsCreatedPerPa;
+  return splitShares(battingResponsibility(line.pa), pythagoreanWinPct(ratio));
+}
+
+/** 投球的雙帳。防禦率越低勝率越高，因此比值取倒數。 */
+export function pitchingShares(line: PitchingLine, base: Baseline): Shares {
+  if (line.ip === 0 || base.era === 0) return { win: 0, loss: 0 };
+  // 防禦率 0 是完美，不是無限差——直接除會炸開，改用一個極小值代替。
+  const era = line.era <= 0 ? 0.01 : line.era;
+  return splitShares(pitchingResponsibility(line.ip), pythagoreanWinPct(base.era / era));
+}
+
+/**
+ * 守備的雙帳。
+ *
+ * 勝率由**守備分相對該守位平均**決定，不是相對聯盟的一般水準——各守位的守備分
+ * 量級本來就不同，用同一條線比會讓門檻高的守位天生虛胖。守位之間的價值差則由
+ * 責任額承擔。
+ */
+export function fieldingShares(options: {
+  readonly defenseScore: number;
+  readonly positionAverage: number;
+  readonly positionShare: number;
+  readonly leagueGames: number;
+  readonly gamesShare: number;
+}): Shares {
+  if (options.positionAverage <= 0 || options.positionShare <= 0) return { win: 0, loss: 0 };
+  const responsibility = fieldingResponsibilityShares(options);
+  return splitShares(
+    responsibility,
+    pythagoreanWinPct(options.defenseScore / options.positionAverage),
+  );
+}
+
+/**
+ * 替代水準球員的勝率。
+ *
+ * 替代水準就是 `leagues.json` 的 `min`——跌破就降級或戰力外的那條線。把它與
+ * 當年 par 的差代進成績模型，算出那種球員打出來的成績，再換成勝率。
+ *
+ * 這是生涯評價分零點的來源：**卡在留隊邊緣的球員，生涯評價分原地踏步。**
+ */
+export function replacementWinPct(
+  side: 'batting' | 'pitching',
+  level: string,
+  standards: LeagueStandards | null = null,
+): number {
+  const now = standardOf(standards, level);
+  const d = now.min - now.par;
+  const base = proBaselineAt(level, 0);
+  const replacement = proBaselineAt(level, d);
+  if (side === 'batting') {
+    if (base.runsCreatedPerPa === 0) return 0.5;
+    return pythagoreanWinPct(replacement.runsCreatedPerPa / base.runsCreatedPerPa);
+  }
+  if (replacement.era === 0) return 0.5;
+  return pythagoreanWinPct(base.era / replacement.era);
+}
+
+/**
+ * 敗戰份額的扣分係數 `k`。
+ *
+ * `評價分 = 勝利份額 − k × 敗戰份額`，而 `k` **不是自由參數**——它唯一的作用是
+ * 決定「哪個水準的球員生涯評價分不動」。分數為零的點滿足 `p₀ = k/(1+k)`，
+ * 因此 `k = p₀/(1−p₀)`，其中 `p₀` 是替代水準球員的勝率。
+ *
+ * 逐層級、逐年計算：`min` 與 `par` 的差距本身會擺盪，所以人才斷層的年份與
+ * 競爭白熱的年份，那條零線的位置不一樣。
+ */
+export function lossPenalty(
+  side: 'batting' | 'pitching',
+  level: string,
+  standards: LeagueStandards | null = null,
+): number {
+  const p0 = replacementWinPct(side, level, standards);
+  if (p0 >= 1) return Number.POSITIVE_INFINITY;
+  return p0 / (1 - p0);
+}
+
+/**
+ * 守備側替代水準的勝率。
+ *
+ * 守備的替代水準是**守得動這個位置的最低標準**，也就是該守位的門檻；平均線
+ * 則是門檻加上 margin。兩者的比值就是替代水準球員的相對表現。
+ *
+ * 與打擊、投球用的是同一個概念——「剛好還留得住的人」——只是那條線在守備上
+ * 由守位門檻定義，而不是由聯盟的 min 定義。
+ */
+export function fieldingReplacementWinPct(threshold: number, average: number): number {
+  if (average <= 0) return 0.5;
+  return pythagoreanWinPct(threshold / average);
+}
+
+/** 把幾筆雙帳加總。 */
+export function sumShares(...list: readonly Shares[]): Shares {
+  let win = 0;
+  let loss = 0;
+  for (const s of list) {
+    win += s.win;
+    loss += s.loss;
+  }
+  return { win, loss };
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }

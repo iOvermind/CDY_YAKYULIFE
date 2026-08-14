@@ -12,6 +12,7 @@
 
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
+import awardsJson from './awards.json';
 import leaguesJson from './leagues.json';
 import positionsJson from './positions.json';
 import traitsJson from './traits.json';
@@ -165,6 +166,83 @@ export interface AbilitiesData {
     readonly trait_modifiers: Readonly<Record<string, number>>;
   };
   readonly potential_ceiling: { readonly tiers: readonly Range[] };
+}
+
+/** 一項獎的機率設定：達到基礎門檻才判定，每超出一個 step 加 per_step。 */
+export interface AwardChance {
+  readonly base: number;
+  readonly step: number;
+  readonly per_step: number;
+  readonly clamp: Range;
+}
+
+/** 單項王的設定。門檻取自 thresholds[stat]，`[基礎, 鬼神]`。 */
+export interface TitleAward extends AwardChance {
+  readonly code: string;
+  readonly name: string;
+  readonly side: 'pitcher' | 'batter';
+  /** 對照 thresholds 裡的哪一項。 */
+  readonly stat: string;
+  readonly requires_role?: 'SP' | 'RP';
+  readonly min_pa?: number;
+  readonly min_ip?: number;
+}
+
+/** 守備獎項。判定看守備勝率，不看守備分的顯示數字。 */
+export interface FieldingAward extends AwardChance {
+  readonly code: string;
+  readonly name: string;
+  readonly min_win_pct: number;
+  readonly god_win_pct: number;
+}
+
+export interface AwardsData {
+  /** 各聯盟的成績門檻，`[基礎, 鬼神]`。`games` 是該聯盟的球季場次。 */
+  readonly thresholds: Readonly<
+    Record<string, { readonly games: number } & Readonly<Record<string, readonly number[]>>>
+  >;
+  readonly titles: { readonly list: readonly TitleAward[] };
+  readonly mvp: {
+    readonly name: string;
+    readonly min_d: number;
+    readonly god_d: number;
+    readonly qualify: {
+      readonly starter_min_ip: number;
+      readonly reliever_min_games: number;
+      readonly batter_pa_per_game: number;
+    };
+    readonly base: Readonly<Record<string, number>>;
+    readonly per_d_over_min: number;
+    readonly clamp: Range;
+  };
+  readonly fielding: { readonly list: readonly FieldingAward[] };
+  readonly all_star: {
+    readonly base: number;
+    readonly per_d: number;
+    readonly clamp: Range;
+    readonly popularity_bonus: {
+      readonly league: string;
+      readonly team: string;
+      readonly add: number;
+      readonly clamp: Range;
+      readonly flag_below_d: number;
+    };
+  };
+  readonly rookie_of_year: {
+    readonly min_d: number;
+    readonly base: number;
+    readonly per_d_over_min: number;
+    readonly clamp: Range;
+  };
+  readonly pitcher_of_year: {
+    readonly name: string;
+    readonly requires_role: 'SP';
+    readonly god: { readonly ip: number };
+    readonly base: number;
+    readonly era_factor: number;
+    readonly ip_factor: number;
+    readonly clamp: Range;
+  };
 }
 
 export interface PositionsData {
@@ -516,8 +594,20 @@ export interface SeasonData {
   readonly advanced: {
     readonly runs_per_win: number;
     readonly win_shares_per_win: number;
-    readonly batting_replacement: number;
-    readonly pitching_replacement_era_multiplier: number;
+    /** 勝利份額／敗戰份額雙帳制的參數，見 ADR 0003。 */
+    readonly shares: {
+      /** 每場球產生幾份（勝場與敗場各自 ×3）。 */
+      readonly per_game: number;
+      readonly split: {
+        readonly batting: number;
+        readonly pitching: number;
+        readonly fielding: number;
+      };
+      readonly team_pa_per_game: number;
+      readonly team_ip_per_game: number;
+      readonly pythagorean_exponent: number;
+      readonly win_pct_clamp: Range;
+    };
   };
   readonly team_strength: {
     readonly initial: Range;
@@ -555,6 +645,7 @@ export interface TraitsData {
 
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
+export const awards = awardsJson as unknown as AwardsData;
 export const positions = positionsJson as unknown as PositionsData;
 export const traits = traitsJson as unknown as TraitsData;
 

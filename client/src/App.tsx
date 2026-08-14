@@ -19,15 +19,17 @@ import {
   type BattingLine,
   type PitchingLine,
 } from './engine/amateurStats.ts';
+import type { AwardRecord } from './engine/awards.ts';
 import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
 import {
   amateurBaseline,
-  battingWinShares,
+  battingShares,
   eraPlus,
   opsPlus,
-  pitchingWinShares,
+  pitchingShares,
   proBaseline,
+  winPct,
   type Baseline,
 } from './engine/metrics.ts';
 import { fieldingPosition, isSideVisible, type Rating } from './engine/rating.ts';
@@ -499,8 +501,41 @@ function StatsPanel({ state, rating }: { state: PlayerState; rating: Rating | nu
         base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
       />
 
+      <AwardList awards={state.awards} />
       <TraitList traits={state.traits} />
     </div>
+  );
+}
+
+/**
+ * 生涯獎項櫃。
+ *
+ * 顯示「拿過幾座」而不只是「拿過」——榮譽清單刻意去重，但七座 MVP 與一座
+ * MVP 在球員的歷史地位上完全不是同一件事。依座數排序，多的在前。
+ */
+function AwardList({ awards }: { awards: readonly AwardRecord[] }) {
+  if (awards.length === 0) return null;
+
+  const tally = new Map<string, { name: string; count: number }>();
+  for (const a of awards) {
+    const hit = tally.get(a.code);
+    if (hit === undefined) tally.set(a.code, { name: a.name, count: 1 });
+    else hit.count++;
+  }
+  const shown = [...tally.values()].sort((a, b) => b.count - a.count);
+
+  return (
+    <>
+      <h4 style={{ marginTop: 12 }}>獎項櫃</h4>
+      <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
+        {shown.map((a) => (
+          <span className="tag" key={a.name} style={{ marginRight: 4 }}>
+            {a.name}
+            {a.count > 1 ? ` ×${a.count}` : ''}
+          </span>
+        ))}
+      </p>
+    </>
   );
 }
 
@@ -583,7 +618,9 @@ const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'SLG', title: '長打率', value: (b) => fmtAvg(b.slg) },
   { key: 'OPS', title: '整體攻擊指數', value: (b) => fmtAvg(ops(b)) },
   { key: 'OPS+', title: '相對聯盟平均的攻擊表現（100 為聯盟平均）', value: (b, base) => rel(opsPlus(b, base)) },
-  { key: 'WS', title: 'Win Shares：勝利貢獻', value: (b, base) => battingWinShares(b, base).toFixed(1) },
+  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (b, base) => battingShares(b, base).win.toFixed(1) },
+  { key: 'LS', title: '敗戰份額：佔用了出場機會卻沒換回勝利的部分', value: (b, base) => battingShares(b, base).loss.toFixed(1) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base) => fmtAvg(winPct(battingShares(b, base))) },
 ];
 
 const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
@@ -603,7 +640,9 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'K/9', title: '每九局奪三振', value: (p) => kPerNine(p).toFixed(1) },
   { key: 'BB/9', title: '每九局四壞', value: (p) => bbPerNine(p).toFixed(1) },
   { key: 'ERA+', title: '相對聯盟平均的防禦率（100 為聯盟平均）', value: (p, base) => rel(eraPlus(p, base)) },
-  { key: 'WS', title: 'Win Shares：勝利貢獻', value: (p, base) => pitchingWinShares(p, base).toFixed(1) },
+  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (p, base) => pitchingShares(p, base).win.toFixed(1) },
+  { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分', value: (p, base) => pitchingShares(p, base).loss.toFixed(1) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base) => fmtAvg(winPct(pitchingShares(p, base))) },
 ];
 
 function StatLines({

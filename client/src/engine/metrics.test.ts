@@ -1,15 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import { advanceStandards, initStandards, standardOf } from './league.ts';
 import {
   amateurBaseline,
-  battingWinShares,
+  battingResponsibility,
+  battingShares,
   eraPlus,
+  fieldingReplacementWinPct,
+  fieldingShares,
+  lossPenalty,
   opsPlus,
-  pitchingWinShares,
+  pitchingResponsibility,
+  pitchingShares,
   proBaseline,
+  proBaselineAt,
+  pythagoreanWinPct,
+  replacementWinPct,
+  responsibilityOf,
   runsCreated,
+  splitShares,
+  sumShares,
+  winPct,
 } from './metrics.ts';
+import { World } from './rng.ts';
 
 const base = proBaseline('CPBL1');
 
@@ -71,9 +85,7 @@ describe('eraPlus', () => {
   });
 
   it('防禦率越低 ERA+ 越高', () => {
-    expect(eraPlus(pit({ era: 2.0 }), base)!).toBeGreaterThan(
-      eraPlus(pit({ era: 5.0 }), base)!,
-    );
+    expect(eraPlus(pit({ era: 2.0 }), base)!).toBeGreaterThan(eraPlus(pit({ era: 5.0 }), base)!);
   });
 
   it('防禦率是聯盟一半時大約 200', () => {
@@ -97,7 +109,6 @@ describe('opsPlus', () => {
   });
 
   it('上壘與長打各自相對聯盟——上壘型打者不會被低估', () => {
-    // 兩人的 OPS 相同，但上壘型的 OBP 高。分項相除時兩者不該相差太遠。
     const onBase = opsPlus(bat({ obp: base.obp + 0.06, slg: base.slg }), base)!;
     const slugger = opsPlus(bat({ obp: base.obp, slg: base.slg + 0.06 }), base)!;
     expect(onBase).toBeGreaterThan(slugger);
@@ -108,41 +119,228 @@ describe('opsPlus', () => {
   });
 });
 
-describe('winShares', () => {
-  it('聯盟平均的打者拿得到正的 WS——替代水準低於平均', () => {
-    expect(battingWinShares(bat(), base)).toBeGreaterThan(0);
+describe('pythagoreanWinPct', () => {
+  it('與聯盟同水準的人是五成勝率', () => {
+    expect(pythagoreanWinPct(1)).toBeCloseTo(0.5, 10);
   });
 
-  it('打得越好 WS 越高', () => {
-    expect(battingWinShares(bat({ hits: 180, hr: 35 }), base)).toBeGreaterThan(
-      battingWinShares(bat({ hits: 80, hr: 2 }), base),
+  it('表現越好勝率越高，越差越低', () => {
+    expect(pythagoreanWinPct(1.3)).toBeGreaterThan(0.5);
+    expect(pythagoreanWinPct(0.7)).toBeLessThan(0.5);
+  });
+
+  it('極端值被夾住，不會出現 0 或 1', () => {
+    const c = cfg.advanced.shares.win_pct_clamp;
+    expect(pythagoreanWinPct(999)).toBeLessThanOrEqual(c.max);
+    expect(pythagoreanWinPct(0.0001)).toBeGreaterThanOrEqual(c.min);
+    expect(pythagoreanWinPct(0)).toBe(c.min);
+    expect(pythagoreanWinPct(-1)).toBe(c.min);
+  });
+});
+
+describe('責任額', () => {
+  it('打席越多責任額越大——上場本身就是責任', () => {
+    expect(battingResponsibility(600)).toBeGreaterThan(battingResponsibility(200));
+  });
+
+  it('責任額與打席成正比', () => {
+    expect(battingResponsibility(600)).toBeCloseTo(battingResponsibility(300) * 2, 10);
+  });
+
+  it('沒上場就沒有責任', () => {
+    expect(battingResponsibility(0)).toBe(0);
+    expect(pitchingResponsibility(0)).toBe(0);
+  });
+
+  it('全職主力的責任額落在真實 WS+LS 的數量級——二十幾份', () => {
+    expect(battingResponsibility(600)).toBeGreaterThan(15);
+    expect(battingResponsibility(600)).toBeLessThan(35);
+  });
+
+  it('責任額就是兩本帳的總和', () => {
+    const s = battingShares(bat(), base);
+    expect(responsibilityOf(s)).toBeCloseTo(battingResponsibility(500), 10);
+  });
+});
+
+describe('雙帳制', () => {
+  it('聯盟平均的打者勝率貼近 .500', () => {
+    const s = battingShares(bat(), base);
+    expect(winPct(s)).toBeGreaterThan(0.4);
+    expect(winPct(s)).toBeLessThan(0.6);
+  });
+
+  it('打得越好，勝利份額越多、敗戰份額越少', () => {
+    const good = battingShares(bat({ hits: 180, hr: 35, obp: 0.42, slg: 0.6 }), base);
+    const bad = battingShares(bat({ hits: 80, hr: 2, obp: 0.25, slg: 0.28 }), base);
+    expect(good.win).toBeGreaterThan(bad.win);
+    expect(good.loss).toBeLessThan(bad.loss);
+  });
+
+  it('打席相同時，好壞球員的責任額相同——差別在怎麼分配', () => {
+    const good = battingShares(bat({ hits: 180, hr: 35 }), base);
+    const bad = battingShares(bat({ hits: 80, hr: 2 }), base);
+    expect(responsibilityOf(good)).toBeCloseTo(responsibilityOf(bad), 10);
+  });
+
+  /** 這正是雙帳制存在的理由：單帳制下混得越久分越高。 */
+  it('爛球員打得越多，敗戰份額累積越多', () => {
+    const few = battingShares(bat({ pa: 150, hits: 24, hr: 0, obp: 0.24, slg: 0.26 }), base);
+    const many = battingShares(bat({ pa: 600, hits: 96, hr: 0, obp: 0.24, slg: 0.26 }), base);
+    expect(many.loss).toBeGreaterThan(few.loss);
+  });
+
+  it('勝利份額永遠不是負的——負面貢獻表達為敗戰份額', () => {
+    const awful = battingShares(
+      bat({ hits: 5, double: 0, triple: 0, hr: 0, bb: 0, ibb: 0, obp: 0.02, slg: 0.02 }),
+      base,
+    );
+    expect(awful.win).toBeGreaterThanOrEqual(0);
+    expect(awful.loss).toBeGreaterThan(awful.win);
+  });
+
+  it('沒有出賽就兩本帳都是 0', () => {
+    expect(battingShares(bat({ pa: 0, ab: 0, hits: 0, bb: 0, ibb: 0 }), base)).toEqual({
+      win: 0,
+      loss: 0,
+    });
+    expect(pitchingShares(pit({ ip: 0 }), base)).toEqual({ win: 0, loss: 0 });
+  });
+
+  it('投得越好勝利份額越高', () => {
+    expect(pitchingShares(pit({ era: 2.2 }), base).win).toBeGreaterThan(
+      pitchingShares(pit({ era: 4.5 }), base).win,
     );
   });
 
-  it('沒有出賽就沒有 WS', () => {
-    expect(battingWinShares(bat({ pa: 0, ab: 0, hits: 0, bb: 0, ibb: 0 }), base)).toBe(0);
+  it('同樣的防禦率，投得越多兩本帳都越大', () => {
+    const many = pitchingShares(pit({ ip: 200 }), base);
+    const few = pitchingShares(pit({ ip: 60 }), base);
+    expect(many.win).toBeGreaterThan(few.win);
+    expect(many.loss).toBeGreaterThan(few.loss);
   });
 
-  it('WS 不會是負的——貢獻低於替代水準就是 0', () => {
-    expect(battingWinShares(bat({ hits: 10, double: 0, triple: 0, hr: 0, bb: 0, ibb: 0 }), base)).toBe(0);
-    expect(pitchingWinShares(pit({ era: 12 }), base)).toBe(0);
+  it('防禦率 0 不會炸開', () => {
+    expect(Number.isFinite(pitchingShares(pit({ era: 0 }), base).win)).toBe(true);
   });
 
-  it('投得越好 WS 越高', () => {
-    expect(pitchingWinShares(pit({ era: 2.2 }), base)).toBeGreaterThan(
-      pitchingWinShares(pit({ era: 4.5 }), base),
+  it('全職主力的勝利份額落在真實 WS 的數量級', () => {
+    const star = battingShares(
+      bat({ hits: 175, double: 35, hr: 30, bb: 70, obp: 0.4, slg: 0.55 }),
+      base,
     );
+    expect(star.win).toBeGreaterThan(5);
+    expect(star.loss).toBeGreaterThan(0);
+    expect(star.win).toBeLessThan(45);
   });
 
-  it('同樣的防禦率，投得越多 WS 越高', () => {
-    expect(pitchingWinShares(pit({ ip: 200 }), base)).toBeGreaterThan(
-      pitchingWinShares(pit({ ip: 60 }), base),
-    );
+  it('splitShares 與 sumShares 是一對可逆操作', () => {
+    const total = sumShares(splitShares(10, 0.6), splitShares(20, 0.4));
+    expect(responsibilityOf(total)).toBeCloseTo(30, 10);
+    expect(total.win).toBeCloseTo(6 + 8, 10);
+  });
+});
+
+describe('守備的雙帳', () => {
+  const field = (score: number, share: number) =>
+    fieldingShares({
+      defenseScore: score,
+      positionAverage: 54,
+      positionShare: share,
+      leagueGames: 120,
+      gamesShare: 1,
+    });
+
+  it('剛好在守位平均上的人是五成勝率', () => {
+    expect(winPct(field(54, 18))).toBeCloseTo(0.5, 10);
   });
 
-  it('全職主力的 WS 落在真實 WS 的數量級——大約個位數到二十幾', () => {
-    const star = battingWinShares(bat({ hits: 175, double: 35, hr: 30, bb: 70, obp: 0.4 }), base);
-    expect(star).toBeGreaterThan(5);
-    expect(star).toBeLessThan(45);
+  it('同樣的守備水準，責任占比越重的守位份額越大', () => {
+    expect(responsibilityOf(field(60, 24))).toBeGreaterThan(responsibilityOf(field(60, 3)));
+  });
+
+  it('爛捕手累積的敗戰份額遠多於爛一壘手——這正是責任額的意義', () => {
+    expect(field(45, 24).loss).toBeGreaterThan(field(45, 3).loss);
+  });
+
+  it('沒有守位責任就沒有份額', () => {
+    expect(field(60, 0)).toEqual({ win: 0, loss: 0 });
+  });
+
+  it('守備段的份額量級小於打擊段——真實 WS 的守備只佔約 16%', () => {
+    expect(responsibilityOf(field(54, 18))).toBeLessThan(battingResponsibility(600));
+  });
+});
+
+describe('替代水準與 k', () => {
+  it('替代水準的勝率低於五成——那是留隊邊緣，不是聯盟平均', () => {
+    expect(replacementWinPct('batting', 'CPBL1')).toBeLessThan(0.5);
+    expect(replacementWinPct('pitching', 'CPBL1')).toBeLessThan(0.5);
+  });
+
+  it('k 由替代水準推導，不是自由參數', () => {
+    const p0 = replacementWinPct('batting', 'CPBL1');
+    expect(lossPenalty('batting', 'CPBL1')).toBeCloseTo(p0 / (1 - p0), 10);
+  });
+
+  /** k 的唯一作用就是決定「哪個水準的球員生涯評價分不動」。 */
+  it('替代水準的球員，評價分剛好是 0', () => {
+    const k = lossPenalty('batting', 'CPBL1');
+    const s = splitShares(20, replacementWinPct('batting', 'CPBL1'));
+    expect(s.win - k * s.loss).toBeCloseTo(0, 10);
+  });
+
+  it('聯盟平均的球員評價分為正、低於替代水準的為負', () => {
+    const k = lossPenalty('batting', 'CPBL1');
+    const average = splitShares(20, 0.5);
+    const below = splitShares(20, replacementWinPct('batting', 'CPBL1') - 0.05);
+    expect(average.win - k * average.loss).toBeGreaterThan(0);
+    expect(below.win - k * below.loss).toBeLessThan(0);
+  });
+
+  it('k 逐年不同——平均與門檻的差距本身會擺盪', () => {
+    const world = new World('k-drift');
+    let standards = initStandards();
+    const seen = new Set<number>();
+    for (let i = 0; i < 20; i++) {
+      standards = advanceStandards(world, standards);
+      seen.add(Number(lossPenalty('batting', 'CPBL1', standards).toFixed(6)));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('差距拉大時替代水準更低，k 也更小', () => {
+    const world = new World('k-gap');
+    let standards = initStandards();
+    let widest = { gap: -1, k: 0 };
+    let narrowest = { gap: 999, k: 0 };
+    for (let i = 0; i < 60; i++) {
+      standards = advanceStandards(world, standards);
+      const now = standardOf(standards, 'CPBL1');
+      const gap = now.par - now.min;
+      const k = lossPenalty('batting', 'CPBL1', standards);
+      if (gap > widest.gap) widest = { gap, k };
+      if (gap < narrowest.gap) narrowest = { gap, k };
+    }
+    expect(widest.k).toBeLessThan(narrowest.k);
+  });
+
+  it('守備的替代水準是守位門檻，低於守位平均', () => {
+    expect(fieldingReplacementWinPct(50, 54)).toBeLessThan(0.5);
+  });
+});
+
+describe('proBaselineAt', () => {
+  it('d 為 0 時就是聯盟平均', () => {
+    expect(proBaselineAt('CPBL1', 0)).toEqual(proBaseline('CPBL1'));
+  });
+
+  it('能力越高，基準線的成績越好、防禦率越低', () => {
+    expect(proBaselineAt('CPBL1', 6).runsCreatedPerPa).toBeGreaterThan(base.runsCreatedPerPa);
+    expect(proBaselineAt('CPBL1', 6).era).toBeLessThan(base.era);
+  });
+
+  it('基準線與層級無關——聯盟平均是自我參照的', () => {
+    expect(proBaseline('CPBL2').runsCreatedPerPa).toBe(proBaseline('MLB').runsCreatedPerPa);
   });
 });
