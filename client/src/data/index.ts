@@ -635,6 +635,8 @@ export interface TransferOrg {
 }
 
 export interface TransferData {
+  /** 球員的母國體系。回這裡不算外籍，不收 import_premium。 */
+  readonly home_org: { readonly value: string };
   readonly import_premium: { readonly value: number };
   /** 入札制度。與自由球員互斥——分界正是合約。 */
   readonly posting: {

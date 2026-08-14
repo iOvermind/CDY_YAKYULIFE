@@ -205,3 +205,24 @@ describe('挖角的加薪門檻', () => {
     expect(seen).toBeGreaterThan(0);
   });
 });
+
+describe('母國聯盟不收外籍加成', () => {
+  const home = leagues.transfer.home_org.value;
+  const premium = leagues.transfer.import_premium.value;
+
+  it('回中職的門檻就是該層級的 min，不加四分', () => {
+    const bottom = pathOf(home)[0]!;
+    const min = leagues.levels[bottom]!.min;
+    expect(landingLevel(home, min, null)).toBe(bottom);
+    expect(landingLevel(home, min - 1, null)).toBeNull();
+  });
+
+  it('其他體系照收——他在那裡是外籍球員', () => {
+    for (const org of ['NPB', 'KBO', 'ABL', 'LMB', 'MiLB']) {
+      const bottom = pathOf(org)[0]!;
+      const min = leagues.levels[bottom]!.min;
+      expect(landingLevel(org, min, null)).toBeNull();
+      expect(landingLevel(org, min + premium, null)).toBe(bottom);
+    }
+  });
+});

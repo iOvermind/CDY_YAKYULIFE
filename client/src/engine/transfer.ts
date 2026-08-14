@@ -80,7 +80,10 @@ export function landingLevel(
   overall: number,
   standards: LeagueStandards | null = null,
 ): string | null {
-  const premium = cfg.import_premium.value;
+  // **回母國不算外籍。** 外籍加成的理由是「名額有限，球團得證明簽這個人比用
+  // 本地人好」，對本地人不成立——一個在日職待不下去的台灣球員回中職，他就是
+  // 個中職球員，不必比本地人強四分。
+  const premium = org === cfg.home_org.value ? 0 : cfg.import_premium.value;
   let best: string | null = null;
   // pathOf 由低到高，因此最後一個達標的就是最高的那一層。
   for (const level of pathOf(org)) {
