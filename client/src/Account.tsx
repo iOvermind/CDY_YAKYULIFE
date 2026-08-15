@@ -68,9 +68,14 @@ export function AccountBar({ account }: { account: Account }) {
   const [panel, setPanel] = useState<'login' | 'achievements' | null>(null);
   const { progress } = account;
   const me = progress.kind === 'signed-in' ? progress.me : null;
+  const offline = progress.kind === 'offline';
 
-  // 連不上伺服器時整塊不出現。放一個永遠按不動的按鈕只會讓人一直去點它。
-  if (progress.kind === 'offline' || progress.kind === 'loading') return null;
+  // 還在問「我是誰」的那一瞬間先不畫。**只有這個狀態隱藏**——連不上伺服器時
+  // 仍然要畫出來反灰，不然單機執行（Vite dev、Tauri、GitHub Pages）的人會
+  // 以為功能根本沒做，而不是「這個版本沒接上伺服器」。
+  if (progress.kind === 'loading') return null;
+
+  const OFFLINE_HINT = '這個版本沒有連上伺服器，帳號與成就功能無法使用。';
 
   return (
     <>
@@ -80,14 +85,20 @@ export function AccountBar({ account }: { account: Account }) {
           className="ghost"
           // 未登入時反灰：成就是掛在帳號上的，沒有帳號就沒有東西可看。
           disabled={me === null}
-          title={me === null ? '登入後才看得到成就與天賦商店' : undefined}
+          title={offline ? OFFLINE_HINT : me === null ? '登入後才看得到成就與天賦商店' : undefined}
           onClick={() => setPanel('achievements')}
         >
           成就{me !== null && <span className="ap">{me.ap} AP</span>}
         </button>
         {me === null ? (
-          <button type="button" className="ghost" onClick={() => setPanel('login')}>
-            登入
+          <button
+            type="button"
+            className="ghost"
+            disabled={offline}
+            title={offline ? OFFLINE_HINT : undefined}
+            onClick={() => setPanel('login')}
+          >
+            {offline ? '離線' : '登入'}
           </button>
         ) : (
           <button type="button" className="ghost" onClick={() => void account.signOut()}>

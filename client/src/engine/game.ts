@@ -550,6 +550,13 @@ export class Game {
   /** 待過的體系。回到其中之一算落葉歸根。 */
   #playedOrgs = new Set<string>();
   /**
+   * 各體系的累計一軍年資。外籍身分看它——日職在籍八年視同本土。
+   *
+   * **與 pro.serviceYears 分開記**：那一個換體系就歸零（掌控期是新東家的事），
+   * 而外籍身分留得住——去韓職打幾年再回日職，先前的八年還是那八年。
+   */
+  #orgYears = new Map<string, number>();
+  /**
    * 上一季的勝率——勝利份額佔責任額的比例。
    *
    * 挖角的成績門檻看它：**球探是看了你去年的表現才來的**。傷缺或低潮的一年
@@ -1250,7 +1257,7 @@ export class Game {
       ...[...paths.entries()].map(([org, list]) => ({
         id: `path:${org}`,
         label: list[0]!.label,
-        note: `${list[0]!.note}｜簽約金 ${fmtMoney(list[0]!.bonus)}`,
+        note: `${list[0]!.note}｜${Game.#terms(list[0]!)}`,
       })),
     ];
 
@@ -1273,7 +1280,7 @@ export class Game {
         options: offers.map((o, i) => ({
           id: `sign:${i}`,
           label: `${o.team}（${o.levelName}）`,
-          note: `簽約金 ${fmtMoney(o.bonus)}`,
+          note: Game.#terms(o),
         })),
       },
       (choice) => {
@@ -2963,7 +2970,12 @@ export class Game {
     const top = info.top !== undefined;
 
     // 服務年資只在頂級聯盟累積——二軍的年份不算進掌控期。
-    if (top) pro.serviceYears++;
+    if (top) {
+      pro.serviceYears++;
+      // 外籍身分只算一軍年份，與掌控期同一個計數口徑。
+      const org = levelOf(pro.level).org;
+      this.#orgYears.set(org, (this.#orgYears.get(org) ?? 0) + 1);
+    }
     const eligible = isFreeAgentEligible({
       serviceYears: pro.serviceYears,
       changedOrg: pro.changedOrg,
@@ -3147,7 +3159,7 @@ export class Game {
         id: `market:${i}`,
         label: `${o.orgName}　${o.team}（${o.levelName}）`,
         note:
-          `簽約金 ${fmtMoney(o.bonus)}` +
+          Game.#terms(o) +
           (o.org === overseas ? `｜海外 FA・不需母隊同意` : '') +
           (o.homecoming ? '｜落葉歸根' : ''),
       })),
@@ -3246,6 +3258,7 @@ export class Game {
       playedOrgs: this.#playedOrgs,
       standards: this.#standards,
       salary: this.#seasonSalary,
+      servedYears: this.#orgYears,
     };
   }
 
@@ -3282,7 +3295,7 @@ export class Game {
             id: `transfer:${i}`,
             label: `${o.orgName}　${o.team}（${o.levelName}）`,
             note:
-              `簽約金 ${fmtMoney(o.bonus)}` +
+              Game.#terms(o) +
               (o.homecoming ? '｜回到熟悉的聯盟' : '') +
               (levelOf(o.level).top === undefined ? '｜先從小聯盟出發' : ''),
           })),
@@ -3329,7 +3342,7 @@ export class Game {
       const base = {
         id: `fallback:${i}`,
         label: `${o.orgName}　${o.team}（${o.levelName}）`,
-        note: `簽約金 ${fmtMoney(o.bonus)}${o.homecoming ? '｜落葉歸根' : ''}`,
+        note: `${Game.#terms(o)}${o.homecoming ? '｜落葉歸根' : ''}`,
       };
       return i === 0 ? { ...base, role: 'main' as const } : base;
     });
@@ -3367,21 +3380,37 @@ export class Game {
     pro.year = 1;
     pro.serviceYears = 0;
     pro.changedOrg = true;
-    pro.contract = rookieContract();
+    // **年限由開價的球隊決定**，不是一律的新人約——爭冠的球隊給短約，重建的
+    // 敢給長約，那個取捨正是報價單上要讀的東西。
+    pro.contract = { ...rookieContract(), years: offer.years };
     // **換了體系就不算被下放了。** 沒清掉的話，接下來會跳出「你被送回中職
     // 二軍，要接受下放還是掛靴」——而他人已經在墨西哥了。
     this.#demotedTo = null;
 
-    // 新體系有自己的球隊格局，必須重抽——沿用舊的等於把中職的強弱貼到日職身上。
-    this.#league = initLeague(this.world, offer.org);
+    // **用報價帶來的那一份戰力表**，不重抽——報價單上寫的奪冠機率必須就是簽下去
+    // 之後真正面對的格局，重抽等於讓玩家看到的數字與拿到的球隊是兩回事。
+    this.#league = offer.table;
     this.#lastStandardsNote = null;
 
     this.flow.card(
       'gold',
       headline,
       `與 <b class="hl">${esc(offer.team)}</b> 簽約，從 <b class="hl">${esc(offer.levelName)}</b> 出發。` +
-        `簽約金 <b class="hl">${fmtMoney(offer.bonus)}</b>。` +
+        `簽約金 <b class="hl">${fmtMoney(offer.bonus)}</b>，約期 <b class="hl">${offer.years}</b> 年。` +
         (offer.homecoming ? '<br>回到熟悉的聯盟，看台上有人記得你的名字。' : ''),
+    );
+  }
+
+  /**
+   * 報價的條件摘要。
+   *
+   * **三件事要一起看**：錢、年限、球隊處境。爭冠的球隊砸錢卻只給一兩年，
+   * 重建的給不起大錢卻敢給長約——把奪冠機率寫出來，那個取捨才讀得出來。
+   */
+  static #terms(o: TransferOffer): string {
+    return (
+      `簽約金 ${fmtMoney(o.bonus)}｜${o.years} 年` +
+      `｜球隊奪冠 ${Math.round(o.odds * 100)}%`
     );
   }
 
@@ -3394,6 +3423,7 @@ export class Game {
       age: this.#age,
       playedOrgs: this.#playedOrgs,
       standards: this.#standards,
+      servedYears: this.#orgYears,
     };
   }
 
@@ -3565,7 +3595,7 @@ export class Game {
       ...offers.map((o, i) => ({
         id: `demote:${i}`,
         label: `${o.orgName}　${o.team}（${o.levelName}）`,
-        note: `簽約金 ${fmtMoney(o.bonus)}${o.homecoming ? '｜落葉歸根' : ''}`,
+        note: `${Game.#terms(o)}${o.homecoming ? '｜落葉歸根' : ''}`,
       })),
     ];
 

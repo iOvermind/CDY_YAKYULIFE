@@ -874,6 +874,12 @@ export interface TransferOrg {
   readonly scout_min_overall?: number;
   readonly scout_chance?: number;
   readonly signing_bonus: { readonly base: number; readonly per_d: number };
+  /**
+   * 在這個體系服務滿幾年之後不再算外籍（不收 import_premium）。
+   *
+   * 缺席表示這個體系沒有這條規則。日職是 8——「在籍八年視同本土」。
+   */
+  readonly domestic_after_years?: number;
   /** 入札制度的目的地。null 表示這個體系沒有入札。 */
   readonly posting: { readonly to: string } | null;
   readonly age_window: AgeWindow | null;
@@ -883,6 +889,12 @@ export interface TransferData {
   /** 球員的母國體系。回這裡不算外籍，不收 import_premium。 */
   readonly home_org: { readonly value: string };
   readonly import_premium: { readonly value: number };
+  /** 球隊的處境如何改變它開出的條件：爭冠的砸錢但給短約，重建的相反。 */
+  readonly contention: {
+    readonly reference_odds: number;
+    readonly bonus: { readonly per_odds: number; readonly min: number; readonly max: number };
+    readonly years: { readonly per_odds: number; readonly min: number; readonly max: number };
+  };
   /** 入札制度。與自由球員互斥——分界正是合約。 */
   readonly posting: {
     readonly consent: {

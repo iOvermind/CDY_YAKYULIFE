@@ -275,3 +275,79 @@ describe('高中畢業的旅外報價', () => {
     expect(a.stream('career').next()).toBe(b.stream('career').next());
   });
 });
+
+describe('在籍夠久就視同本土', () => {
+  const premium = leagues.transfer.import_premium.value;
+  const years = leagues.transfer.orgs['NPB']!.domestic_after_years!;
+
+  it('日職滿八年之後，落地門檻不再加四分', () => {
+    const top = pathOf('NPB')[pathOf('NPB').length - 1]!;
+    const min = leagues.levels[top]!.min;
+
+    // 差一分就上不了一軍——外籍身分還在。
+    expect(landingLevel('NPB', min + premium - 1, null, 0)).not.toBe(top);
+    // 待滿之後同樣的能力就夠了。
+    expect(landingLevel('NPB', min, null, years)).toBe(top);
+  });
+
+  it('差一年還不算——門檻是「滿」幾年', () => {
+    const top = pathOf('NPB')[pathOf('NPB').length - 1]!;
+    const min = leagues.levels[top]!.min;
+    expect(landingLevel('NPB', min, null, years - 1)).not.toBe(top);
+  });
+
+  it('沒有這條規則的體系待再久也是外籍', () => {
+    for (const org of ['KBO', 'MiLB', 'LMB', 'ABL']) {
+      expect(leagues.transfer.orgs[org]?.domestic_after_years).toBeUndefined();
+      const bottom = pathOf(org)[0]!;
+      const min = leagues.levels[bottom]!.min;
+      expect(landingLevel(org, min, null, 30)).toBeNull();
+    }
+  });
+
+  it('母國本來就不收，年資無關', () => {
+    const home = leagues.transfer.home_org.value;
+    const bottom = pathOf(home)[0]!;
+    expect(landingLevel(home, leagues.levels[bottom]!.min, null, 0)).toBe(bottom);
+  });
+});
+
+describe('球隊處境影響開出的條件', () => {
+  /**
+   * 收集一整批報價。
+   *
+   * **只取同一個體系**：各體系的簽約金基數差很多（日職 1200、小聯盟 800），
+   * 混在一起比會被基數的差距蓋過球隊處境的效果。
+   */
+  function sample(org: string): { odds: number; bonus: number; years: number }[] {
+    const out: { odds: number; bonus: number; years: number }[] = [];
+    for (let i = 0; i < 300; i++) {
+      for (const o of amateurOverseasOffers(new World(`odds-${i}`), 60)) {
+        if (o.org !== org) continue;
+        out.push({ odds: o.odds, bonus: o.bonus, years: o.years });
+      }
+    }
+    return out;
+  }
+
+  it('奪冠機率越高，簽約金越高', () => {
+    const rows = sample('NPB').filter((r) => r.odds > 0);
+    expect(rows.length).toBeGreaterThan(20);
+    const sorted = [...rows].sort((a, b) => a.odds - b.odds);
+    const low = sorted.slice(0, 20).reduce((s, r) => s + r.bonus, 0) / 20;
+    const high = sorted.slice(-20).reduce((s, r) => s + r.bonus, 0) / 20;
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('奪冠機率越高，年限反而越短——錢與年限是兩個要取捨的東西', () => {
+    const rows = sample('NPB').filter((r) => r.odds > 0);
+    const sorted = [...rows].sort((a, b) => a.odds - b.odds);
+    const low = sorted.slice(0, 20).reduce((s, r) => s + r.years, 0) / 20;
+    const high = sorted.slice(-20).reduce((s, r) => s + r.years, 0) / 20;
+    expect(high).toBeLessThan(low);
+  });
+
+  it('年限永遠至少一年', () => {
+    for (const r of sample('NPB')) expect(r.years).toBeGreaterThanOrEqual(1);
+  });
+});

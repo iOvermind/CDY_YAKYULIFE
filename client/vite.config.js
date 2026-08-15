@@ -40,5 +40,20 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    /**
+     * 把 /api 轉給本機的伺服器。
+     *
+     * 沒有它，dev server 會把 /api/* 交給單頁應用的 fallback 回一份 index.html，
+     * 前端就判定成「這個部署沒有帳號功能」，右上角的登入與成就整排反灰。
+     *
+     * 伺服器要自己另外開（`cd server && npm run dev`）。沒開也不會壞，只是照樣
+     * 走離線那條路。
+     */
+    proxy: {
+      "/api": {
+        target: process.env.API_ORIGIN ?? "http://localhost:8099",
+        changeOrigin: false,
+      },
+    },
   },
 }));

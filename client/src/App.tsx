@@ -612,14 +612,8 @@ function StatsPanel({
     <div id="panel-stats">
       <h4>當年數據</h4>
       <div className="stat-grid">
-        <div className="stat-cell">
-          <b>{state.year}</b>
-          <span>年份</span>
-        </div>
-        <div className="stat-cell">
-          <b>{state.age}</b>
-          <span>年齡</span>
-        </div>
+        {/* 年份與年齡只寫在左側記分板。同一個數字寫兩次，玩家會以為是兩件事
+            ——可分配點與登錄守位先前也是為了同樣的理由收掉的。 */}
         <div className="stat-cell">
           <b>{yearLabel}</b>
           <span>{summary !== null ? '生涯' : state.pro === null ? '學年' : '職涯'}</span>
@@ -655,9 +649,7 @@ function StatsPanel({
         {state.pro !== null && (
           <div className="stat-cell">
             <b>{state.pro.contractYears}</b>
-            {/* 掌控期內合約到期由球團說了算，取得 FA 資格之後才輪到自己談。
-                那個差別玩家該看得到，因此標題會變。 */}
-            <span>{state.pro.freeAgentEligible ? '合約剩餘' : '合約（掌控期）'}</span>
+            <span>合約</span>
           </div>
         )}
         {state.earnings > 0 && (

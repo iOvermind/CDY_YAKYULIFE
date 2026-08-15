@@ -14,11 +14,12 @@
  * 抽取一律走 career 子序列——轉會是生涯層級的事件。
  */
 
-import { amateur, dataKeys, leagues, teams as teamsData } from '../data/index.ts';
+import { amateur, dataKeys, leagues, season, teams as teamsData } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
 import { pathOf } from './pro.ts';
 import type { World } from './rng.ts';
 import { salaryFor } from './salary.ts';
+import { championshipOdds, initLeague, type LeagueTable } from './teams.ts';
 
 const cfg = leagues.transfer;
 
@@ -34,6 +35,34 @@ export interface TransferOffer {
   readonly bonus: number;
   /** 是不是回到曾經效力過的體系。落葉歸根的敘述要看它。 */
   readonly homecoming: boolean;
+  /** 這支球隊今年的奪冠機率。簽約金與年限都看它。 */
+  readonly odds: number;
+  /** 這張約幾年。爭冠的球隊給短約，重建的敢給長約。 */
+  readonly years: number;
+  /**
+   * 目標體系的當季戰力表。
+   *
+   * **報價要連著它一起帶走**：報價單上寫的奪冠機率必須就是簽下去之後真正面對
+   * 的那個聯盟格局。少了這一欄，成交時得重抽一次戰力表，玩家看到的數字與拿到
+   * 的球隊會是兩回事。
+   */
+  readonly table: LeagueTable;
+}
+
+/**
+ * 每個體系每年只建一次戰力表。
+ *
+ * 同一年同一個體系開出的每一份報價都必須看同一份格局——分開抽的話，「阪神」
+ * 在第一份報價裡爭冠、在第二份裡墊底。
+ */
+type TableCache = Map<string, LeagueTable>;
+
+function tableFor(world: World, org: string, cache: TableCache): LeagueTable {
+  const cached = cache.get(org);
+  if (cached !== undefined) return cached;
+  const table = initLeague(world, org);
+  cache.set(org, table);
+  return table;
 }
 
 /** 這個體系的轉會設定。沒有設定的體系不參與轉會圖。 */
@@ -79,11 +108,9 @@ export function landingLevel(
   org: string,
   overall: number,
   standards: LeagueStandards | null = null,
+  servedYears = 0,
 ): string | null {
-  // **回母國不算外籍。** 外籍加成的理由是「名額有限，球團得證明簽這個人比用
-  // 本地人好」，對本地人不成立——一個在日職待不下去的台灣球員回中職，他就是
-  // 個中職球員，不必比本地人強四分。
-  const premium = org === cfg.home_org.value ? 0 : cfg.import_premium.value;
+  const premium = importPremium(org, servedYears);
   let best: string | null = null;
   // pathOf 由低到高，因此最後一個達標的就是最高的那一層。
   for (const level of pathOf(org)) {
@@ -92,11 +119,32 @@ export function landingLevel(
   return best;
 }
 
-/** 落地在頂級聯盟需要的能力。怪物條款要拿它當基準。 */
-function topLandingBar(org: string, standards: LeagueStandards | null): number {
+/**
+ * 這個人在這個體系要不要吃外籍加成。
+ *
+ * 兩種情況不吃：
+ *
+ * - **回母國。** 外籍加成的理由是「名額有限，球團得證明簽這個人比用本地人
+ *   好」，對本地人不成立——一個在日職待不下去的台灣球員回中職，他就是個中職
+ *   球員，不必比本地人強四分。
+ * - **在當地服務夠久。** 日職的「在籍八年視同本土」是真實規則：待滿之後不再
+ *   佔用外籍名額。這個身分**留得住**——離開日職去韓職打幾年再回來，八年還是
+ *   那八年，因此年資是累計的而不是連續的。
+ */
+export function importPremium(org: string, servedYears: number): number {
+  if (org === cfg.home_org.value) return 0;
+  const threshold = orgConfig(org)?.domestic_after_years;
+  if (threshold !== undefined && servedYears >= threshold) return 0;
+  return cfg.import_premium.value;
+}
+
+/** 落地在頂級聯盟需要的能力。怪物條款與簽約金的 d 值都拿它當基準。 */
+function topLandingBar(org: string, standards: LeagueStandards | null, servedYears = 0): number {
   const path = pathOf(org);
   const top = path[path.length - 1] ?? '';
-  return standardOf(standards, top).min + cfg.import_premium.value;
+  // 與 landingLevel 走同一個加成——先前這裡寫死 import_premium，回母國時門檻
+  // 因此被高估四分，簽約金與怪物條款都連帶算錯。
+  return standardOf(standards, top).min + importPremium(org, servedYears);
 }
 
 /** 抽一支球隊。走訪順序照 teams.json 的宣告順序，否則同一個種子會抽出不同結果。 */
@@ -134,12 +182,57 @@ function worthMoving(
   return projected >= ctx.salary * cfg.scouting.min_raise;
 }
 
-/** 簽約金：體系的基礎金額加上 d 值的加給。 */
-function signingBonus(org: string, d: number): number {
+/** 簽約金：體系的基礎金額加上 d 值的加給，再乘上球隊處境的倍率。 */
+function signingBonus(org: string, d: number, odds: number): number {
   const spec = orgConfig(org)?.signing_bonus;
   if (spec === undefined) return 0;
-  return Math.round(spec.base + Math.max(0, d) * spec.per_d);
+  const base = spec.base + Math.max(0, d) * spec.per_d;
+  return Math.round(base * contentionBonusMult(odds));
 }
+
+/**
+ * 球隊處境對簽約金的倍率。
+ *
+ * **爭冠的球隊願意砸錢**——他們的窗口就這一兩年，一個補進來的即戰力值多少
+ * 錢是用「今年能不能拿下來」算的，不是用市場行情算的。
+ */
+function contentionBonusMult(odds: number): number {
+  const c = cfg.contention;
+  const raw = 1 + (odds - c.reference_odds) * c.bonus.per_odds;
+  return clamp(raw, c.bonus.min, c.bonus.max);
+}
+
+/**
+ * 這支球隊願意給幾年。
+ *
+ * **符號是反的，這是刻意的。** 爭冠球隊砸錢但給短約：他們買的是今年。重建
+ * 球隊給不起大錢，卻敢給年限——他們賭的是三年後你還在，而那時候他們正好起來。
+ * 於是「錢多」與「約長」變成兩個要取捨的東西，而不是同一件事的兩種說法。
+ */
+function contractLength(odds: number): number {
+  const c = cfg.contention;
+  const base = season.contract.rookie_contract.years;
+  const delta = clamp(
+    Math.round((c.reference_odds - odds) * c.years.per_odds),
+    c.years.min,
+    c.years.max,
+  );
+  return Math.max(1, base + delta);
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * 在各體系累計的一軍年資，以體系代碼為鍵。
+ *
+ * 用來判定外籍身分（`importPremium`）。**累計而非連續**——離開再回去，先前
+ * 待過的年份仍然算數。
+ */
+export type ServedYears = ReadonlyMap<string, number>;
+
+const servedIn = (served: ServedYears | undefined, org: string): number => served?.get(org) ?? 0;
 
 export interface ScoutContext {
   readonly overall: number;
@@ -153,6 +246,8 @@ export interface ScoutContext {
   readonly standards: LeagueStandards | null;
   /** 目前的年薪。挖角要加薪才提得出口，見 scouting.min_raise。 */
   readonly salary: number;
+  /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
+  readonly servedYears?: ServedYears;
 }
 
 /**
@@ -164,6 +259,7 @@ export interface ScoutContext {
 export function scoutingOffers(world: World, ctx: ScoutContext): readonly TransferOffer[] {
   const rng = world.stream('career');
   const out: TransferOffer[] = [];
+  const tables: TableCache = new Map();
 
   for (const org of dataKeys(cfg.orgs)) {
     const spec = orgConfig(org);
@@ -172,8 +268,9 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
 
     // 資格：能力、上季表現、年齡窗口。三者缺一不可。
     const minOverall = spec.scout_min_overall ?? Number.POSITIVE_INFINITY;
-    const level = landingLevel(org, ctx.overall, ctx.standards);
-    const overBar = ctx.overall - topLandingBar(org, ctx.standards);
+    const served = servedIn(ctx.servedYears, org);
+    const level = landingLevel(org, ctx.overall, ctx.standards, served);
+    const overBar = ctx.overall - topLandingBar(org, ctx.standards, served);
     const gate = ageGate(org, ctx.age, overBar);
 
     // 機率一律先抽，不管有沒有資格——抽取次數必須與資格無關，否則同一個種子
@@ -189,20 +286,25 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
     // 移動本來就伴隨語言、家庭與適應成本，薪水只是打平的話沒有人會走。
     if (!worthMoving(org, level, ctx)) continue;
 
+    const table = tableFor(world, org, tables);
     const count = rng.int(cfg.scouting.offers_per_org.min, cfg.scouting.offers_per_org.max);
     const used = new Set<string>();
     for (let i = 0; i < count; i++) {
       const team = pickTeam(world, org, null);
       if (team === null || used.has(team)) continue;
       used.add(team);
+      const odds = championshipOdds(table, team);
       out.push({
         org,
         orgName: orgLabel(org),
         level,
         levelName: leagues.levels[level]?.name ?? level,
         team,
-        bonus: signingBonus(org, overBar),
+        bonus: signingBonus(org, overBar, odds),
         homecoming: ctx.playedOrgs.has(org),
+        odds,
+        years: contractLength(odds),
+        table,
       });
     }
   }
@@ -230,6 +332,8 @@ export interface FallbackContext {
    *   選項只會讓人誤以為那是市場行情；真的沒有人開價，那才叫市場冷。
    */
   readonly minPar?: number;
+  /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
+  readonly servedYears?: ServedYears;
 }
 
 /**
@@ -242,16 +346,20 @@ export interface FallbackContext {
  */
 export function fallbackOffers(world: World, ctx: FallbackContext): readonly TransferOffer[] {
   const out: TransferOffer[] = [];
+  const tables: TableCache = new Map();
 
   for (const org of dataKeys(cfg.orgs)) {
     if (orgConfig(org) === undefined) continue;
     if (org === ctx.currentOrg) continue;
-    const level = landingLevel(org, ctx.overall, ctx.standards);
+    const served = servedIn(ctx.servedYears, org);
+    const level = landingLevel(org, ctx.overall, ctx.standards, served);
     if (level === null) continue;
     if (ctx.minPar !== undefined && standardOf(ctx.standards, level).par < ctx.minPar) continue;
 
+    const table = tableFor(world, org, tables);
     const team = pickTeam(world, org, null);
     if (team === null) continue;
+    const odds = championshipOdds(table, team);
 
     out.push({
       org,
@@ -259,8 +367,11 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
       level,
       levelName: leagues.levels[level]?.name ?? level,
       team,
-      bonus: signingBonus(org, ctx.overall - topLandingBar(org, ctx.standards)),
+      bonus: signingBonus(org, ctx.overall - topLandingBar(org, ctx.standards, served), odds),
       homecoming: ctx.playedOrgs.has(org),
+      odds,
+      years: contractLength(odds),
+      table,
     });
   }
 
@@ -324,6 +435,8 @@ export interface OverseasContext {
   readonly age: number;
   readonly playedOrgs: ReadonlySet<string>;
   readonly standards: LeagueStandards | null;
+  /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
+  readonly servedYears?: ServedYears;
 }
 
 /**
@@ -344,26 +457,32 @@ function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOf
   const count = rng.int(cfg.posting.bidders.min, cfg.posting.bidders.max);
   if (target === null) return [];
 
-  const level = landingLevel(target, ctx.overall, ctx.standards);
+  const served = servedIn(ctx.servedYears, target);
+  const level = landingLevel(target, ctx.overall, ctx.standards, served);
   if (level === null || leagues.levels[level]?.top === undefined) return [];
 
-  const overBar = ctx.overall - topLandingBar(target, ctx.standards);
+  const overBar = ctx.overall - topLandingBar(target, ctx.standards, served);
   if (roll >= ageGate(target, ctx.age, overBar) * 100) return [];
 
+  const table = tableFor(world, target, new Map());
   const bids: TransferOffer[] = [];
   const used = new Set<string>();
   for (let i = 0; i < count; i++) {
     const team = pickTeam(world, target, null);
     if (team === null || used.has(team)) continue;
     used.add(team);
+    const odds = championshipOdds(table, team);
     bids.push({
       org: target,
       orgName: orgLabel(target),
       level,
       levelName: leagues.levels[level]?.name ?? level,
       team,
-      bonus: signingBonus(target, overBar),
+      bonus: signingBonus(target, overBar, odds),
       homecoming: ctx.playedOrgs.has(target),
+      odds,
+      years: contractLength(odds),
+      table,
     });
   }
   return bids;
@@ -417,6 +536,7 @@ export function amateurOverseasOffers(
 ): readonly (TransferOffer & { readonly label: string; readonly note: string })[] {
   const cfg = amateur.amateur_overseas;
   const out: (TransferOffer & { label: string; note: string })[] = [];
+  const tables: TableCache = new Map();
 
   for (const path of cfg.paths) {
     // 抽取一律先做，與資格無關——否則差一分就會讓後面所有判定整串偏移。
@@ -426,24 +546,29 @@ export function amateurOverseasOffers(
     const upgrade = path.level_upgrade;
     const level =
       upgrade !== undefined && overall >= upgrade.min_overall ? upgrade.level : path.level;
-    const bonus = Math.round(
+    const base =
       path.signing_bonus.base +
-        Math.max(0, overall - path.min_overall) * path.signing_bonus.per_point_over,
-    );
+      Math.max(0, overall - path.min_overall) * path.signing_bonus.per_point_over;
 
+    const table = tableFor(world, path.org, tables);
     const used = new Set<string>();
     for (let i = 0; i < count; i++) {
       const team = pickTeam(world, path.org, null);
       if (team === null || used.has(team)) continue;
       used.add(team);
+      // 育成合約也吃球隊處境：正在爭冠的球團補起未來也捨得花錢。
+      const odds = championshipOdds(table, team);
       out.push({
         org: path.org,
         orgName: orgLabel(path.org),
         level,
         levelName: leagues.levels[level]?.name ?? level,
         team,
-        bonus,
+        bonus: Math.round(base * contentionBonusMult(odds)),
         homecoming: false,
+        odds,
+        years: contractLength(odds),
+        table,
         label: path.label,
         note: path.note,
       });
