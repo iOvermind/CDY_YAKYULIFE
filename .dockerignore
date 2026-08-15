@@ -1,0 +1,26 @@
+# 建置的 context 是專案根目錄，少了這一份會把 node_modules 與整個 .git 都送給
+# Docker daemon——那是幾百 MB 的無謂搬運，而且 node_modules 還會被 Dockerfile
+# 裡的 npm ci 覆蓋掉。
+
+.git
+.github
+node_modules
+**/node_modules
+
+# 前端在 image 裡重新建置，本機的產物不要帶進去（架構還可能不一樣）。
+client/dist
+
+# 密碼與金鑰是執行時的環境變數，絕不烤進 image。
+**/.env
+!**/.env.example
+
+# 只有本機開發與測試會用到的東西。dev.ts 跑的是記憶體假資料庫，
+# 不該出現在正式的 image 裡。
+server/src/dev.ts
+server/src/fakedb.ts
+**/*.test.ts
+
+# 文件與 legacy 參考檔，執行時用不到。
+docs
+*.md
+index_legacy.html

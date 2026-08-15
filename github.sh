@@ -1,9 +1,9 @@
 #!/bin/bash
 # 設定編碼 (Linux 預設通常已是 UTF-8)
 
-REPO_NAME="RICH2_EDITOR"
+REPO_NAME="CDY_YAKYULIFE"
 # 🔑 直接把 SSH 遠端網址寫死在這裡
-REPO_URL="git@github.com:iOvermind/RICH2_EDITOR.git"
+REPO_URL="git@github.com:iOvermind/CDY_YAKYULIFE.git"
 
 echo "=================================="
 echo "   🚀 Git 自動化助手 (SSH 終極懶人版)"
