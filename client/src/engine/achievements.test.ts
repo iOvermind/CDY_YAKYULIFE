@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { achievements as cfg } from '../data/index.ts';
-import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import type { BattingLine } from './amateurStats.ts';
 import { evaluateAchievements, type AchievementContext } from './achievements.ts';
 import type { CareerSummary, LeagueCareer } from './career.ts';
 

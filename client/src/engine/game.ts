@@ -95,6 +95,7 @@ import {
   type Shares,
 } from './metrics.ts';
 import { esc, Flow, type Option } from './flow.ts';
+import { applyTalents, type TalentLevels } from './overlay.ts';
 import {
   advanceStandards,
   initStandards,
@@ -205,6 +206,16 @@ export interface GameSetup {
   readonly throws: Hand;
   /** 打擊慣用手。 */
   readonly bats: Hand;
+  /**
+   * 這一局帶著的天賦與層級。
+   *
+   * **它必須在 setup 裡，因為它改變模擬結果。** 天賦動的是天賦上限、衰老、受傷
+   * 機率這些引擎的輸入，重播日誌少了它，伺服器重跑就會得到另一段人生。
+   *
+   * 天賦可以退款，因此「玩家現在擁有什麼」與「這一局帶著什麼」是兩件事——伺服器
+   * 驗證時用的是開局登記凍結的那一組，不是客戶端在這裡寫的。見 ADR 0007。
+   */
+  readonly talents?: TalentLevels;
 }
 
 /**
@@ -443,6 +454,8 @@ export class Game {
   #intlScore = 0;
   /** 這一局的成就結算。引退後才有值。 */
   #achievements: AchievementResult | null = null;
+  /** 還原天賦覆蓋的函式。見 constructor 與 dispose()。 */
+  #revertTalents: () => void = () => {};
   /** 國際賽的生涯成績。與聯盟成績分開——它不屬於任何聯盟。 */
   #intlBatting: BattingLine | null = null;
   #intlPitching: PitchingLine | null = null;
@@ -568,6 +581,22 @@ export class Game {
   constructor(setup: GameSetup) {
     this.setup = setup;
     this.world = new World(setup.seed);
+    // 天賦是設定覆蓋層，**在整局期間都套著**——它改的是規則資料本身，而規則資料
+    // 在每一個步驟都會被讀到。還原交給 dispose()。
+    //
+    // 這是全域可變狀態：**同一時間只能有一局套著覆蓋**。瀏覽器本來就只跑一局；
+    // 伺服器端的重跑驗證必須序列化，或隔離到獨立行程。見 ADR 0007。
+    this.#revertTalents = applyTalents(setup.talents ?? {});
+  }
+
+  /**
+   * 收掉這一局，還原天賦的覆蓋。
+   *
+   * **開始下一局之前一定要呼叫**，否則新的一局會帶著上一局的加成。
+   */
+  dispose(): void {
+    this.#revertTalents();
+    this.#revertTalents = () => {};
   }
 
   /** 目前的球員。流程開始前為 null。 */
@@ -4177,7 +4206,9 @@ export class Game {
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */
   #ceilingOf(key: AbilityKey): number {
     const base = this.#player?.potential[key] ?? abilities.scale.max;
-    return base + (this.#ceilingBonus[key] ?? 0);
+    // 三個來源：抽到的天賦、事件卡提升的那一項、天賦商店買到的全域加成。
+    // 最後一項平常是 0，由設定覆蓋層寫入（見 ADR 0007）。
+    return base + (this.#ceilingBonus[key] ?? 0) + abilities.talent_bonus.ceiling;
   }
 
   /** 把點數投進一項能力，並產生對應的敘事。 */

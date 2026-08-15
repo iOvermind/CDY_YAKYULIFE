@@ -14,6 +14,7 @@ import achievementsJson from './achievements.json';
 import abilitiesJson from './abilities.json';
 import amateurJson from './amateur.json';
 import awardsJson from './awards.json';
+import eventsJson from './events.json';
 import flavorJson from './flavor.json';
 import hallOfFameJson from './hall_of_fame.json';
 import injuryJson from './injury.json';
@@ -22,6 +23,7 @@ import loveJson from './love.json';
 import positionsJson from './positions.json';
 import traitsJson from './traits.json';
 import seasonJson from './season.json';
+import talentsJson from './talents.json';
 import teamsJson from './teams.json';
 
 /** 能力代碼，例如 'pow'、'ctl'。 */
@@ -98,6 +100,8 @@ export interface PitcherRoleWeights {
 }
 
 export interface AbilitiesData {
+  /** 天賦商店買到的全域加成。平常是 0，由設定覆蓋層寫入。 */
+  readonly talent_bonus: { readonly ceiling: number };
   readonly scale: {
     readonly min: number;
     readonly max: number;
@@ -348,6 +352,27 @@ export interface AchievementsData {
     };
   };
   readonly first_career_bonus: { readonly points: number; readonly name: string; readonly desc: string };
+}
+
+/** 天賦商店。用 AP 購買的永久強化，效果走設定覆蓋層宣告。見 ADR 0007。 */
+export interface TalentsData {
+  readonly talents: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly group: string;
+    readonly desc: string;
+    readonly levels: readonly {
+      readonly cost: number;
+      readonly effect_text: string;
+      readonly effects: readonly {
+        readonly path: string;
+        readonly op: 'add' | 'set';
+        readonly value: number;
+        readonly min?: number;
+        readonly max?: number;
+      }[];
+    }[];
+  }[];
 }
 
 export interface FlavorData {
@@ -1163,9 +1188,17 @@ export const amateur = amateurJson as unknown as AmateurData;
 export const awards = awardsJson as unknown as AwardsData;
 export const flavor = flavorJson as unknown as FlavorData;
 export const hallOfFame = hallOfFameJson as unknown as HallOfFameData;
+/**
+ * 事件卡。
+ *
+ * 型別定義在 `engine/events.ts`（那裡才有 GameEvent 的形狀），這裡只負責把原始
+ * 資料掛進資料層——設定覆蓋層要透過統一的入口才改得到它。
+ */
+export const events = eventsJson as unknown as Record<string, unknown>;
 export const injury = injuryJson as unknown as InjuryData;
 export const love = loveJson as unknown as LoveData;
 export const achievements = achievementsJson as unknown as AchievementsData;
+export const talents = talentsJson as unknown as TalentsData;
 export const positions = positionsJson as unknown as PositionsData;
 export const traits = traitsJson as unknown as TraitsData;
 

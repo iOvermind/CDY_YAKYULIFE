@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "_note": "天賦商店。用成就點數（AP）購買的永久強化，見 CONTEXT.md 的「天賦」與 ADR 0007。",
+  "_vs_trait_note": "**天賦與隱藏特性是兩件事。** 特性是在一段生涯裡掙來的、只屬於那個球員；天賦是跨局累積的、屬於玩家——他開的每一局都帶著買過的天賦。",
+  "_effect_note": "效果宣告成「改哪一個設定、怎麼改、夾在哪」，由設定覆蓋層在載入規則資料時套上。**新增一個天賦只是新增一筆 JSON，不必改程式。** 代價是路徑寫錯不會在編譯期被抓到，因此有一條護欄測試把每一個天賦的每一條路徑都解一次。",
+  "_path_note": "路徑的第一段是規則資料的檔名（abilities / season / amateur / leagues / awards / events / injury / love / traits / positions / hall_of_fame），其後是該檔內的鍵。",
+  "_ops_note": "op 只有兩種：add（加）與 set（直接指定）。min / max 是套用後的夾擠——「天賦上限 +5 仍不超過 80」「成本 −2 不低於 1」那個「仍不」就寫在這裡。",
+  "_refund_note": "天賦**可以退掉換回 AP**，退款全額。因此「玩家現在擁有什麼」與「某一局帶著什麼」是兩件事——見 CONTEXT.md 的「開局登記」。",
+  "_cost_note": "價格遞增：第二級明顯比第一級貴。這讓玩家真的要在「先把一項點滿」與「各項都買一級」之間選——一次性的解鎖清單買完就結束了，遞增的則永遠有下一級在那裡。一段 balanced 生涯約 23 AP。",
+
+  "talents": [
+    {
+      "id": "gifted",
+      "name": "天賦異稟",
+      "group": "成長",
+      "desc": "有些人生來就站在別人練一輩子才到得了的地方。",
+      "levels": [
+        { "cost": 5, "effect_text": "每項能力的天賦上限 +2", "effects": [{ "path": "abilities.talent_bonus.ceiling", "op": "add", "value": 2, "max": 15 }] },
+        { "cost": 12, "effect_text": "每項能力的天賦上限 +5", "effects": [{ "path": "abilities.talent_bonus.ceiling", "op": "set", "value": 5, "max": 15 }] },
+        { "cost": 25, "effect_text": "每項能力的天賦上限 +10", "effects": [{ "path": "abilities.talent_bonus.ceiling", "op": "set", "value": 10, "max": 15 }] }
+      ]
+    },
+    {
+      "id": "breakthrough",
+      "name": "破繭",
+      "group": "成長",
+      "desc": "天花板是別人畫的。你只是沒打算停在那裡。",
+      "levels": [
+        { "cost": 6, "effect_text": "突破天賦上限後的成本倍率 −1", "effects": [{ "path": "abilities.growth_cost.default.above_ceiling_multiplier", "op": "add", "value": -1, "min": 1 }] },
+        { "cost": 16, "effect_text": "突破天賦上限後的成本倍率 −2", "effects": [{ "path": "abilities.growth_cost.default.above_ceiling_multiplier", "op": "add", "value": -2, "min": 1 }] }
+      ]
+    },
+    {
+      "id": "diligence",
+      "name": "勤能補拙",
+      "group": "成長",
+      "desc": "沒有人看見的那些早晨，累積成了別人看得見的東西。",
+      "levels": [
+        { "cost": 5, "effect_text": "訓練骰的最小點數提高到 2", "effects": [{ "path": "abilities.training_dice.faces.default.min", "op": "set", "value": 2, "max": 6 }] },
+        { "cost": 14, "effect_text": "訓練骰的最小點數提高到 3", "effects": [{ "path": "abilities.training_dice.faces.default.min", "op": "set", "value": 3, "max": 6 }] }
+      ]
+    },
+    {
+      "id": "accumulate",
+      "name": "厚積",
+      "group": "成長",
+      "desc": "巔峰之前的每一年，身體都還在悄悄地長。",
+      "levels": [
+        { "cost": 6, "effect_text": "巔峰前每季的自然成長上限 +1", "effects": [{ "path": "season.aging.growth.points.max", "op": "add", "value": 1 }] },
+        { "cost": 15, "effect_text": "巔峰前每季的自然成長上限 +2", "effects": [{ "path": "season.aging.growth.points.max", "op": "add", "value": 2 }] }
+      ]
+    },
+
+    {
+      "id": "evergreen",
+      "name": "老而彌堅",
+      "group": "衰退",
+      "desc": "同梯的都退了，你還在打。",
+      "levels": [
+        { "cost": 7, "effect_text": "巔峰期結束延後 1 年", "effects": [{ "path": "season.aging.peak_end", "op": "add", "value": 1 }] },
+        { "cost": 17, "effect_text": "巔峰期結束延後 2 年", "effects": [{ "path": "season.aging.peak_end", "op": "add", "value": 2 }] }
+      ]
+    },
+    {
+      "id": "defiance",
+      "name": "不服老",
+      "group": "衰退",
+      "desc": "身體在抗議，你假裝沒聽見——而它居然聽話了一陣子。",
+      "levels": [
+        { "cost": 8, "effect_text": "每年的衰退幅度減少", "effects": [{ "path": "season.aging.decline.per_year_after_peak", "op": "add", "value": -0.1, "min": 0 }] },
+        { "cost": 18, "effect_text": "每年的衰退幅度大幅減少", "effects": [{ "path": "season.aging.decline.per_year_after_peak", "op": "add", "value": -0.2, "min": 0 }] }
+      ]
+    },
+    {
+      "id": "marathoner",
+      "name": "長跑者",
+      "group": "衰退",
+      "desc": "他們說四十歲是終點。你把它當成一個路標。",
+      "levels": [
+        { "cost": 6, "effect_text": "年齡上限 +1", "effects": [{ "path": "season.retirement.max_age", "op": "add", "value": 1 }] },
+        { "cost": 14, "effect_text": "年齡上限 +2", "effects": [{ "path": "season.retirement.max_age", "op": "add", "value": 2 }] }
+      ]
+    },
+
+    {
+      "id": "allin",
+      "name": "孤注一擲",
+      "group": "事件卡",
+      "desc": "全力一搏的那一刻，別人在算風險，你在算贏面。",
+      "levels": [
+        { "cost": 6, "effect_text": "全力一搏的成功率 +10%", "effects": [{ "path": "events.good_result_chance.mode_modifier.bold", "op": "add", "value": 10 }] },
+        { "cost": 15, "effect_text": "全力一搏的成功率 +20%", "effects": [{ "path": "events.good_result_chance.mode_modifier.bold", "op": "add", "value": 20 }] }
+      ]
+    },
+    {
+      "id": "fortune",
+      "name": "福將",
+      "group": "事件卡",
+      "desc": "同樣的選擇，你的結果就是比較好看。沒有人解釋得了。",
+      "levels": [
+        { "cost": 7, "effect_text": "事件卡的基礎成功率 +6%", "effects": [{ "path": "events.good_result_chance.base", "op": "add", "value": 6, "max": 95 }] },
+        { "cost": 17, "effect_text": "事件卡的基礎成功率 +12%", "effects": [{ "path": "events.good_result_chance.base", "op": "add", "value": 12, "max": 95 }] }
+      ]
+    },
+
+    {
+      "id": "ironframe",
+      "name": "鋼筋鐵骨",
+      "group": "傷病",
+      "desc": "撞牆、滑壘、連續出賽——身體居然都撐住了。",
+      "levels": [
+        { "cost": 6, "effect_text": "受傷機率 −8%", "effects": [{ "path": "injury.chance.base", "op": "add", "value": -8, "min": 0 }] },
+        { "cost": 15, "effect_text": "受傷機率 −15%", "effects": [{ "path": "injury.chance.base", "op": "add", "value": -15, "min": 0 }] }
+      ]
+    },
+    {
+      "id": "recovery",
+      "name": "快速康復",
+      "group": "傷病",
+      "desc": "醫生說一年，你八個月就站回打擊區。",
+      "levels": [
+        { "cost": 5, "effect_text": "大傷後隔年報廢的機率減半", "effects": [{ "path": "injury.severity.major.rehab_next_year.chance", "op": "add", "value": -10, "min": 0 }] },
+        { "cost": 13, "effect_text": "大傷後幾乎不會影響隔年", "effects": [{ "path": "injury.severity.major.rehab_next_year.chance", "op": "set", "value": 2, "min": 0 }] }
+      ]
+    },
+
+    {
+      "id": "scouted",
+      "name": "伯樂",
+      "group": "職業",
+      "desc": "有一雙眼睛，在你自己都還沒發現的時候就看見了你。",
+      "levels": [
+        { "cost": 5, "effect_text": "選秀評價的年齡加分提高", "effects": [{ "path": "amateur.draft.evaluation.age_bonus_per_year", "op": "add", "value": 1 }] },
+        { "cost": 13, "effect_text": "選秀評價的年齡加分大幅提高", "effects": [{ "path": "amateur.draft.evaluation.age_bonus_per_year", "op": "add", "value": 2 }] }
+      ]
+    },
+    {
+      "id": "overseas_eyes",
+      "name": "越洋的眼睛",
+      "group": "職業",
+      "desc": "看台上多了幾個帶碼錶的人，沒有人知道他們從哪裡來。",
+      "levels": [
+        { "cost": 7, "effect_text": "日職與韓職的球探關注度提升", "effects": [
+          { "path": "leagues.transfer.orgs.NPB.scout_chance", "op": "add", "value": 10, "max": 95 },
+          { "path": "leagues.transfer.orgs.KBO.scout_chance", "op": "add", "value": 10, "max": 95 }
+        ] },
+        { "cost": 18, "effect_text": "各國的球探關注度都明顯提升", "effects": [
+          { "path": "leagues.transfer.orgs.NPB.scout_chance", "op": "add", "value": 20, "max": 95 },
+          { "path": "leagues.transfer.orgs.KBO.scout_chance", "op": "add", "value": 20, "max": 95 },
+          { "path": "leagues.transfer.orgs.MiLB.scout_chance", "op": "add", "value": 15, "max": 95 }
+        ] }
+      ]
+    },
+    {
+      "id": "spotlight",
+      "name": "鎂光燈",
+      "group": "職業",
+      "desc": "同樣的成績，鏡頭就是比較常找上你。",
+      "levels": [
+        { "cost": 4, "effect_text": "明星賽入選機率提升", "effects": [{ "path": "awards.all_star.base", "op": "add", "value": 8, "max": 95 }] },
+        { "cost": 11, "effect_text": "明星賽入選機率大幅提升", "effects": [{ "path": "awards.all_star.base", "op": "add", "value": 16, "max": 95 }] }
+      ]
+    },
+    {
+      "id": "focused",
+      "name": "心無旁騖",
+      "group": "職業",
+      "desc": "場外的事就留在場外。你只想著下一個打席。",
+      "levels": [
+        { "cost": 5, "effect_text": "感情風波的機率下降", "effects": [{ "path": "love.turmoil.base_chance", "op": "add", "value": -5, "min": 0 }] },
+        { "cost": 12, "effect_text": "感情風波幾乎不發生", "effects": [{ "path": "love.turmoil.base_chance", "op": "set", "value": 2, "min": 0 }] }
+      ]
+    }
+  ]
+}

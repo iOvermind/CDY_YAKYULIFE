@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abilities, amateur, leagues } from '../data/index.ts';
+import { abilities, amateur, leagues, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 
@@ -1518,5 +1518,48 @@ describe('戰力外之後的去路', () => {
     // 樣本裡真的要出現過高齡戰力外，否則這條測試什麼都沒驗到。
     expect(veteranReleases).toBeGreaterThan(0);
     expect(veteranOffers).toBe(veteranReleases);
+  });
+});
+
+describe('天賦', () => {
+  /** 同一個種子、同一套選擇，只差在帶不帶天賦。 */
+  const play = (talents: Record<string, number>) => {
+    const game = new Game({ ...setup, seed: 'talent-seed', talents }).start();
+    let guard = 0;
+    while (game.flow.prompt !== null && guard++ < 8000) {
+      const pick = defaultPick(game, EFFECTIVE);
+      if (pick === undefined) break;
+      game.choose(pick);
+    }
+    return game;
+  };
+
+  it('帶著天賦的同一顆種子會長出不同的人生', () => {
+    // 天賦改的是天賦上限、衰老、受傷機率這些引擎的輸入——**因此它必須在重播
+    // 日誌裡**，否則伺服器重跑會得到另一段人生。
+    const plain = play({});
+    plain.dispose();
+    const buffed = play({ gifted: 3, evergreen: 2, ironframe: 2 });
+    buffed.dispose();
+    expect(buffed.toReplayLog().setup.talents).toBeDefined();
+    expect(JSON.stringify(buffed.flow.log)).not.toBe(JSON.stringify(plain.flow.log));
+  });
+
+  it('dispose() 之後設定回到原狀——不然下一局會帶著上一局的加成', () => {
+    const before = seasonData.retirement.max_age;
+    const game = new Game({ ...setup, talents: { marathoner: 2 } });
+    expect(seasonData.retirement.max_age).toBeGreaterThan(before);
+    game.dispose();
+    expect(seasonData.retirement.max_age).toBe(before);
+  });
+
+  it('重播帶天賦的日誌會重現同一段人生', () => {
+    const original = play({ gifted: 2, allin: 1 });
+    const log = original.toReplayLog();
+    original.dispose();
+
+    const replayed = Game.replay(log);
+    replayed.dispose();
+    expect(JSON.stringify(replayed.flow.log)).toBe(JSON.stringify(original.flow.log));
   });
 });

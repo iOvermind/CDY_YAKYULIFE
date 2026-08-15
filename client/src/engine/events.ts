@@ -9,7 +9,7 @@
  * ——那讓「神秘的營養品」和「打擊機特訓」一樣輕。
  */
 
-import eventsJson from '../data/events.json';
+import { events as eventsJson } from '../data/index.ts';
 import { type AbilityKey } from '../data/index.ts';
 import type { World } from './rng.ts';
 
