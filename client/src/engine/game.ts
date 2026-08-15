@@ -3574,10 +3574,12 @@ export class Game {
       next();
       return;
     }
-    // 下限是被送去的那一層——換舞台是為了不被下放，不是為了去更差的地方。
+    // **只問「哪裡有一軍的位置」，不比水準高低。** 用 par 當下限會把澳職與中職
+    // 濾掉——它們的 par 確實低於日職二軍，但「回台灣先發」與「在日本坐農場」
+    // 對一段生涯是完全不同的兩件事，而後者正是玩家想避開的。
     const offers = fallbackOffers(this.world, {
       ...this.#transferContext,
-      minPar: standardOf(this.#standards, pro.level).par,
+      topLevelOnly: true,
     });
     if (offers.length === 0) {
       // 沒有別的邀請時仍要說一聲——不然下放會無聲發生。

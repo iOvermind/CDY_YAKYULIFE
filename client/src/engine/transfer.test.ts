@@ -5,6 +5,7 @@ import { World } from './rng.ts';
 import {
   amateurOverseasOffers,
   canRequestPosting,
+  fallbackOffers,
   hasOverseasFreeAgency,
   landingLevel,
   overseasFaOffers,
@@ -349,5 +350,47 @@ describe('球隊處境影響開出的條件', () => {
 
   it('年限永遠至少一年', () => {
     for (const r of sample('NPB')) expect(r.years).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('下放時的退路', () => {
+  /** 從日職一軍被送回二軍的處境。 */
+  function demotionOffers(overall: number) {
+    return fallbackOffers(new World(`demote-${overall}`), {
+      overall,
+      currentOrg: 'NPB',
+      currentTeam: '某隊',
+      playedOrgs: new Set(['CPBL', 'NPB']),
+      standards: null,
+      topLevelOnly: true,
+    });
+  }
+
+  /**
+   * 這是回歸測試。先前這裡用 `minPar`（被送去的那一層的 par）當下限，
+   * 而日職二軍的 par 是 47——中職一軍 44 與澳職 42 因此永遠被濾掉，
+   * 能力不到墨聯 49 的人會一個邀請都收不到，只剩「接受下放」。
+   */
+  it('澳職與中職一軍要出現——它們的 par 低於日職二軍，但那是一軍的位置', () => {
+    const orgs = demotionOffers(48).map((o) => o.org);
+    expect(orgs).toContain('ABL');
+    expect(orgs).toContain('CPBL');
+  });
+
+  it('能力不高的人也有退路，不會零邀請', () => {
+    for (const overall of [46, 48, 50, 52]) {
+      expect(demotionOffers(overall).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('四條路同時開著時不會被上限切掉最弱的那條', () => {
+    const orgs = demotionOffers(54).map((o) => o.org);
+    expect(new Set(orgs)).toEqual(new Set(['KBO', 'LMB', 'CPBL', 'ABL']));
+  });
+
+  it('只給一軍的位置——不會為了從日職二軍換到 2A 而搬家', () => {
+    for (const o of demotionOffers(54)) {
+      expect(leagues.levels[o.level]?.top).toBeDefined();
+    }
   });
 });

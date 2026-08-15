@@ -332,6 +332,16 @@ export interface FallbackContext {
    *   選項只會讓人誤以為那是市場行情；真的沒有人開價，那才叫市場冷。
    */
   readonly minPar?: number;
+  /**
+   * 只列出落地在該體系**頂級聯盟**的報價。
+   *
+   * 下放專用。那個處境要問的不是「哪裡的水準比日職二軍高」，而是**「哪裡有
+   * 一軍的位置」**——中職一軍的 par 44 確實低於日職二軍的 47，但「回台灣先發」
+   * 與「在日本坐農場」對一段生涯是完全不同的兩件事，用 par 去比會把前者濾掉。
+   *
+   * 反過來也擋掉了沒有意義的平移：不會有人為了從日職二軍換到 2A 而搬家。
+   */
+  readonly topLevelOnly?: boolean;
   /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
   readonly servedYears?: ServedYears;
 }
@@ -354,6 +364,7 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
     const served = servedIn(ctx.servedYears, org);
     const level = landingLevel(org, ctx.overall, ctx.standards, served);
     if (level === null) continue;
+    if (ctx.topLevelOnly === true && leagues.levels[level]?.top === undefined) continue;
     if (ctx.minPar !== undefined && standardOf(ctx.standards, level).par < ctx.minPar) continue;
 
     const table = tableFor(world, org, tables);
