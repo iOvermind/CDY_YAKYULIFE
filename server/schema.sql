@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS achievements (
   user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   -- 成就 id 不含局內年份：每一局都從 2026 開始，年份跨局沒有鑑別力。
   achievement TEXT NOT NULL,
+  -- 顯示用的名稱與分類。**成就是推導出來的，沒有一份靜態目錄**——不存下來的話，
+  -- 前端拿到一串 id 就只能顯示 id。
+  name        TEXT NOT NULL DEFAULT '',
+  category    TEXT NOT NULL DEFAULT '',
   points      INTEGER NOT NULL,
   -- **真實時間戳**，不是局內年份。由伺服器蓋章，不由客戶端提供。
   unlocked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -50,3 +54,8 @@ CREATE TABLE IF NOT EXISTS careers (
 );
 
 CREATE INDEX IF NOT EXISTS careers_user_idx ON careers (user_id, started_at DESC);
+
+-- 後補的欄位。`CREATE TABLE IF NOT EXISTS` 對已經存在的表什麼都不做，因此加欄位
+-- 必須另外寫一行——這整份檔案每次啟動都會跑，所以每一行都得是冪等的。
+ALTER TABLE achievements ADD COLUMN IF NOT EXISTS name     TEXT NOT NULL DEFAULT '';
+ALTER TABLE achievements ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';

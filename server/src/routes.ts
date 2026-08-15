@@ -43,7 +43,7 @@ export async function meOf(user: UserRow): Promise<Me> {
     account: user.account,
     ap,
     apEarned: earned,
-    achievements: achievements.map((a) => a.id),
+    achievements,
     talents: levels,
   };
 }
@@ -139,9 +139,10 @@ export async function finishCareer(
       await client.query('BEGIN');
       for (const a of result.newly) {
         await client.query(
-          `INSERT INTO achievements (user_id, achievement, points) VALUES ($1, $2, $3)
+          `INSERT INTO achievements (user_id, achievement, name, category, points)
+           VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (user_id, achievement) DO NOTHING`,
-          [user.id, a.id, a.points],
+          [user.id, a.id, a.name, a.category, a.points],
         );
       }
       await client.query(

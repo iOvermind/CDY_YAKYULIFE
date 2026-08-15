@@ -11,6 +11,21 @@
 import type { ReplayLog } from '../engine/game.ts';
 import type { TalentLevels } from '../engine/overlay.ts';
 
+/**
+ * 一項已經解鎖的成就。
+ *
+ * 名稱與分類**存在伺服器上**，不是前端從 id 查來的——成就是從生涯推導出來的，
+ * 沒有一份靜態目錄可以查。
+ */
+export interface UnlockedAchievement {
+  readonly id: string;
+  readonly name: string;
+  readonly category: string;
+  readonly points: number;
+  /** 解鎖的**真實時間**（ISO 字串），不是局內年份——局內時間是循環的。 */
+  readonly at: string;
+}
+
 /** 目前登入的玩家。未登入時整個物件是 null。 */
 export interface Me {
   readonly account: string;
@@ -18,8 +33,8 @@ export interface Me {
   readonly ap: number;
   /** 生涯累積拿過的 AP。退款不會減少它——那是「賺過多少」，不是「還剩多少」。 */
   readonly apEarned: number;
-  /** 已解鎖的成就 id。**伺服器是唯一真相**，客戶端算的只拿來顯示。 */
-  readonly achievements: readonly string[];
+  /** 已解鎖的成就，最新的在前。**伺服器是唯一真相**，客戶端算的只拿來顯示。 */
+  readonly achievements: readonly UnlockedAchievement[];
   /** 目前買下的天賦與層級。 */
   readonly talents: TalentLevels;
 }
@@ -101,3 +116,13 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
+/**
+ * 「根本沒有伺服器」的狀態碼。
+ *
+ * 與 401（沒登入）**必須分開**：沒登入是「去登入」，連不上是「這個部署沒有帳號
+ * 功能」——例如 GitHub Pages 上的純前端版本。兩者在畫面上要說不同的話。
+ */
+export const OFFLINE = 0;
+
+export const isOffline = (e: unknown): boolean => e instanceof ApiError && e.status === OFFLINE;

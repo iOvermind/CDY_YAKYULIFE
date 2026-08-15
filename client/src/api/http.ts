@@ -18,8 +18,23 @@ import {
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> =
     init.body === undefined ? {} : { 'content-type': 'application/json' };
-  const res = await fetch(path, { credentials: 'same-origin', headers, ...init });
+  let res: Response;
+  try {
+    res = await fetch(path, { credentials: 'same-origin', headers, ...init });
+  } catch {
+    throw new ApiError(0, '連不上伺服器。');
+  }
   if (res.status === 204) return undefined as T;
+
+  /**
+   * 沒有 API 的部署（例如 GitHub Pages）會把 `/api/*` 交給單頁應用的 fallback，
+   * 於是回傳 200 與一整份 index.html。**不檢查型別的話那份 HTML 會被當成登入
+   * 成功的回應**，畫面就會顯示成登入了卻什麼都沒有。
+   */
+  if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
+    throw new ApiError(0, '這個版本沒有連上伺服器，帳號與成就功能無法使用。');
+  }
+
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const message =

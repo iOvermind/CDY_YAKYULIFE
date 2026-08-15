@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './app.css';
+import { AccountBar, useAccount, type Account } from './Account.tsx';
+import { httpProgress } from './api/http.ts';
 import {
   abilities,
   amateur,
@@ -23,7 +25,14 @@ import {
 } from './engine/amateurStats.ts';
 import type { AwardRecord } from './engine/awards.ts';
 import type { CareerSummary } from './engine/career.ts';
-import { fmtAvg, Game, TWO_WAY_REFERENCE_LEVEL, type PlayerState } from './engine/game.ts';
+import {
+  fmtAvg,
+  Game,
+  NO_PROGRESS,
+  TWO_WAY_REFERENCE_LEVEL,
+  type CareerProgress,
+  type PlayerState,
+} from './engine/game.ts';
 import { abilityCost, growthCurve } from './engine/growth.ts';
 import {
   amateurBaseline,
@@ -90,13 +99,52 @@ export default function App() {
   const [game, setGame] = useState<Game | null>(null);
   // Game 是可變物件，React 不會察覺內部變化，因此用一個計數器手動觸發重繪。
   const [, bump] = useState(0);
+  const account = useAccount(httpProgress);
+  /** 這一局在伺服器上的登記編號。未登入時是 null，那一局不入帳。 */
+  const careerId = useRef<string | null>(null);
+  /** 已經送出結算的局，避免重繪時重送。 */
+  const reported = useRef<Game | null>(null);
 
   useEffect(() => {
     document.body.dataset['theme'] = theme;
   }, [theme]);
 
+  /**
+   * 引退時把重播日誌送回伺服器。
+   *
+   * **伺服器用同一份引擎重跑，自己算 AP**；這裡送上去的成就只是拿來比對的
+   * （見 ADR 0007）。因此送不出去也不擋畫面——玩家已經看完結算了，重試或放棄
+   * 都是背景的事。
+   */
+  useEffect(() => {
+    const id = careerId.current;
+    if (game === null || id === null) return;
+    if (game.summary === null || reported.current === game) return;
+    reported.current = game;
+    void account.store
+      .finishCareer(id, {
+        log: game.toReplayLog(),
+        claimed: (game.achievements?.list ?? []).map((a) => a.id),
+      })
+      .then(() => account.store.me())
+      .then((me) => {
+        if (me !== null) account.update(me);
+      })
+      .catch((e: unknown) => console.warn('[career] 結算沒有送出', e));
+  });
+
   if (game === null) {
-    return <StartScreen theme={theme} onTheme={setTheme} onStart={setGame} />;
+    return (
+      <StartScreen
+        theme={theme}
+        onTheme={setTheme}
+        account={account}
+        onStart={(g, ticket) => {
+          careerId.current = ticket;
+          setGame(g);
+        }}
+      />
+    );
   }
 
   return (
@@ -106,7 +154,12 @@ export default function App() {
         game.choose(id);
         bump((n) => n + 1);
       }}
-      onRestart={() => setGame(null)}
+      onRestart={() => {
+        // 天賦覆蓋是全域可變狀態，不還原的話下一局會疊上這一局的加成。
+        game.dispose();
+        careerId.current = null;
+        setGame(null);
+      }}
     />
   );
 }
@@ -115,24 +168,58 @@ function StartScreen({
   theme,
   onTheme,
   onStart,
+  account,
 }: {
   theme: string;
   onTheme: (t: string) => void;
-  onStart: (g: Game) => void;
+  onStart: (g: Game, careerId: string | null) => void;
+  account: Account;
 }) {
   const [name, setName] = useState('');
   const [startPosition, setStartPosition] = useState<StartPosition>('P');
   const [throws, setThrows] = useState<Hand>('R');
   const [bats, setBats] = useState<Hand>('R');
   const [seed, setSeed] = useState(newSeed());
+  const [starting, setStarting] = useState(false);
 
-  const begin = () =>
-    onStart(
-      new Game({ seed, name: name.trim() || '無名氏', startPosition, throws, bats }).start(),
-    );
+  /**
+   * 開局。
+   *
+   * 登入時**先向伺服器登記**，拿回它凍結的那一組天賦——天賦可以退款，「玩家現在
+   * 擁有什麼」與「這一局帶著什麼」是兩件事，而驗證時算數的是伺服器凍結的那一組
+   * （見 ADR 0007）。
+   *
+   * 登記失敗就照樣開局，只是這一局不入帳。**不能因為伺服器打嗝就不讓人玩**。
+   */
+  const begin = () => {
+    if (starting) return;
+    setStarting(true);
+    const setup = { seed, name: name.trim() || '無名氏', startPosition, throws, bats };
+    const signedIn = account.progress.kind === 'signed-in';
+    const ticket = signedIn
+      ? account.store.startCareer().catch((e: unknown) => {
+          console.warn('[career] 開局登記失敗，這一局不入帳', e);
+          return null;
+        })
+      : Promise.resolve(null);
+
+    void ticket.then((t) => {
+      const me = account.progress.kind === 'signed-in' ? account.progress.me : null;
+      const progress: CareerProgress =
+        me === null
+          ? NO_PROGRESS
+          : {
+              firstCareer: me.achievements.length === 0,
+              unlocked: new Set(me.achievements.map((a) => a.id)),
+            };
+      const game = new Game({ ...setup, talents: t?.talents ?? {} }, progress).start();
+      onStart(game, t?.careerId ?? null);
+    });
+  };
 
   return (
     <div id="start">
+      <AccountBar account={account} />
       <div className="wrap">
         <h1>
           <em>棒球人生模擬器</em>
@@ -227,7 +314,13 @@ function StartScreen({
           </div>
         </div>
 
-        <button type="button" className="btn main" style={{ marginTop: 28 }} onClick={begin}>
+        <button
+          type="button"
+          className="btn main"
+          style={{ marginTop: 28 }}
+          disabled={starting}
+          onClick={begin}
+        >
           {/* 起點的學年與季節都從資料來——寫死會像先前那樣，養成期擴成六年之後
               按鈕還停在「高一春天」。 */}
           開始生涯 ▸ {stageOf('JHS').year_labels[0]}{amateur.career_start.season}

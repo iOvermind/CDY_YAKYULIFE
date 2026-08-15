@@ -219,6 +219,23 @@ export interface GameSetup {
 }
 
 /**
+ * 跨局累積的進度。
+ *
+ * **刻意不放進 `GameSetup`**：它不影響模擬，只影響成就結算怎麼算 AP。放進去
+ * 會讓重播日誌帶著一份會隨時間變動的資料，同一份日誌今天與明天重播出不同的
+ * 結果——而伺服器驗證時本來就會用自己那邊的紀錄重算（見 ADR 0007）。
+ */
+export interface CareerProgress {
+  /** 這是不是玩家的第一段人生。有幾項成就只在第一段給。 */
+  readonly firstCareer: boolean;
+  /** 先前已經解鎖過的成就 id。同一項只給一次 AP。 */
+  readonly unlocked: ReadonlySet<string>;
+}
+
+/** 沒有帳號時的進度：每一局都是第一段人生，每一項都算新解鎖。 */
+export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Set<string>() };
+
+/**
  * 判定二刀流野手側守位時參照的聯盟層級。
  *
  * 養成期沒有正式登錄守位，但介面仍要說出「他守得動什麼」。用職業的入門層級
@@ -578,8 +595,12 @@ export class Game {
    */
   #league: LeagueTable | null = null;
 
-  constructor(setup: GameSetup) {
+  /** 跨局進度。見 CareerProgress——它不進重播日誌。 */
+  readonly #progress: CareerProgress;
+
+  constructor(setup: GameSetup, progress: CareerProgress = NO_PROGRESS) {
     this.setup = setup;
+    this.#progress = progress;
     this.world = new World(setup.seed);
     // 天賦是設定覆蓋層，**在整局期間都套著**——它改的是規則資料本身，而規則資料
     // 在每一個步驟都會被讀到。還原交給 dispose()。
@@ -3962,7 +3983,10 @@ export class Game {
    *
    * **同一項成就只給一次 AP**——在中職打滿 500 安兩次不會拿兩次點數。AP 買到的
    * 天賦是永久啟用的，因此成就是一棵解鎖樹，不是每局重刷的獎金。跨局的已解鎖
-   * 清單要等存檔層做好才接得上，目前一律視為全新。
+   * 清單由 `CareerProgress` 帶進來；未登入時是空的，因此每一項都顯示成新解鎖。
+   *
+   * **這裡算出來的只是顯示用的。** 真正入帳的 AP 由伺服器重跑同一份日誌後認定，
+   * 客戶端算的只拿去比對（見 ADR 0007）。
    */
   #achievementCard(summary: CareerSummary, ballots: readonly BallotResult[]): void {
     const result = evaluateAchievements({
@@ -3971,9 +3995,9 @@ export class Game {
       traits: this.#traits,
       honors: this.#honors,
       halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
-      // 存檔層還沒做，因此每一局都是「第一段人生」、每一項都算新解鎖。
-      firstCareer: true,
-      unlocked: new Set<string>(),
+      // 未登入時是 NO_PROGRESS：每一局都是「第一段人生」、每一項都算新解鎖。
+      firstCareer: this.#progress.firstCareer,
+      unlocked: this.#progress.unlocked,
     });
     this.#achievements = result;
     if (result.list.length === 0) return;

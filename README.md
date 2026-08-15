@@ -48,6 +48,15 @@ docker compose up -d --build
 
 一個 image 同時服務前端與 `/api`，因此**前端與伺服器端的引擎永遠是同一份建置**；同源也讓 session 可以走 HttpOnly cookie。資料庫是 PostgreSQL，對外由 Cloudflare Tunnel 接上網域。
 
+開局畫面右上角是登入與成就。未登入時成就鈕是反灰的——成就掛在帳號上，沒有帳號就沒有東西可看。
+
+只調介面而不想架 Postgres 時，伺服器可以跑在記憶體裡的假資料庫上：
+
+```bash
+cd client && npm run build
+cd server && STATIC_DIR=../client/dist npm run dev   # demo / demo1234
+```
+
 不架伺服器也完全玩得起來——只是沒有帳號、成就不會累積、天賦商店不開放。
 
 ### 網頁版（GitHub Pages）
