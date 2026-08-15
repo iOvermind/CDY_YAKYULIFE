@@ -146,7 +146,7 @@
 ## 階段三：跨局繼承與 Meta-Progression
 
 *   [x] **成就檢測器**：`client/src/engine/achievements.ts`。引退時結算，**由既有系統推導**——每一個取得過的特性、每一座獎項、每一次前三名、每一階累積數據都自動成為成就，沒有第二份手寫清單。**同一項成就只給一次 AP**（識別字串因此不含年份），已領過的仍列在清單上但不計分。實測 AP 分佈：差的建構 p50 7、balanced p50 23、pitcher p50 39。
-*   [~] **線上化（ADR 0007）**：帳號、成就櫃、天賦商店、開局登記與伺服器重跑驗證都做完了，前後端接通。**還差實機部署驗證**——docker-compose 與 Cloudflare Tunnel 的設定寫好了但沒跑過真的 Postgres。原本的規劃：docker-compose 起 Node（同一 image 服務前端與 `/api`）＋ PostgreSQL ＋ cloudflared。同源因此 token 走 HttpOnly cookie；不用 Redis。帳號註冊即通過、不可重複、密碼用 argon2/bcrypt。
+*   [~] **線上化（ADR 0007）**：帳號、成就櫃、天賦商店、開局登記與伺服器重跑驗證都做完了，前後端接通，`./build-image.sh` 建得出 image。**還差實機部署驗證**——docker-compose 與 Cloudflare Tunnel 的設定寫好了，但從未跑過真的 Postgres，schema 與遷移都還是紙上的。伺服器的測試跑在記憶體假資料庫上（`server/src/fakedb.ts`），驗的是路由邏輯而不是 SQL。原本的規劃：docker-compose 起 Node（同一 image 服務前端與 `/api`）＋ PostgreSQL ＋ cloudflared。同源因此 token 走 HttpOnly cookie；不用 Redis。帳號註冊即通過、不可重複、密碼用 scrypt（`node:crypto` 內建，不必編譯原生模組；相依只剩 `pg` 一個）。
     *   **伺服器重跑驗證**：客戶端上傳重播日誌，伺服器用同一份 TS 引擎重算成就與 AP。前端與 API 同一份建置，因此版本永遠對齊。
     *   **開局登記**：開局時凍結當下的天賦組合並發回識別碼，結算時用那一組重跑——天賦可退款，「現在擁有什麼」與「那一局帶著什麼」是兩件事。
     *   **覆蓋層是全域可變狀態**：伺服器端的驗證必須序列化或隔離到獨立行程。
