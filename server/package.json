@@ -1,0 +1,19 @@
+{
+  "name": "yakyulife-server",
+  "private": true,
+  "type": "module",
+  "description": "帳號、成就點數與伺服器端重跑驗證。見 docs/adr/0007。",
+  "scripts": {
+    "start": "node --experimental-strip-types src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/*.test.ts"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "typescript": "~5.8.3"
+  }
+}

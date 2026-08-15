@@ -1,6 +1,10 @@
 /**
  * 規則資料的載入層。
  *
+ * JSON 一律帶 `with { type: 'json' }` 的匯入屬性——**伺服器端要用同一份引擎重跑
+ * 驗證**（ADR 0007），而 Node 的 ESM 沒有這個屬性就拒絕載入 JSON。Vite 兩種都
+ * 吃，因此一份原始碼兩邊都跑得動。
+ *
  * 見 CONTEXT.md 的「規則資料」：這些常數決定遊戲怎麼運作，跟著版本走、
  * 對所有玩家相同，與玩家個人的「生涯資料」相對。
  *
@@ -10,21 +14,21 @@
  * JSON 檔中所有 `_` 開頭的鍵都是給人看的註解，不參與運算，因此不出現在型別裡。
  */
 
-import achievementsJson from './achievements.json';
-import abilitiesJson from './abilities.json';
-import amateurJson from './amateur.json';
-import awardsJson from './awards.json';
-import eventsJson from './events.json';
-import flavorJson from './flavor.json';
-import hallOfFameJson from './hall_of_fame.json';
-import injuryJson from './injury.json';
-import leaguesJson from './leagues.json';
-import loveJson from './love.json';
-import positionsJson from './positions.json';
-import traitsJson from './traits.json';
-import seasonJson from './season.json';
-import talentsJson from './talents.json';
-import teamsJson from './teams.json';
+import achievementsJson from './achievements.json' with { type: 'json' };
+import abilitiesJson from './abilities.json' with { type: 'json' };
+import amateurJson from './amateur.json' with { type: 'json' };
+import awardsJson from './awards.json' with { type: 'json' };
+import eventsJson from './events.json' with { type: 'json' };
+import flavorJson from './flavor.json' with { type: 'json' };
+import hallOfFameJson from './hall_of_fame.json' with { type: 'json' };
+import injuryJson from './injury.json' with { type: 'json' };
+import leaguesJson from './leagues.json' with { type: 'json' };
+import loveJson from './love.json' with { type: 'json' };
+import positionsJson from './positions.json' with { type: 'json' };
+import traitsJson from './traits.json' with { type: 'json' };
+import seasonJson from './season.json' with { type: 'json' };
+import talentsJson from './talents.json' with { type: 'json' };
+import teamsJson from './teams.json' with { type: 'json' };
 
 /** 能力代碼，例如 'pow'、'ctl'。 */
 export type AbilityKey = string;

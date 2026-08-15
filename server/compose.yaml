@@ -1,0 +1,41 @@
+# 起三個東西：app（前端＋API）、db、tunnel。見 ADR 0007。
+#
+# **不用 Redis**——這個規模 Postgres 一個人吃得下，多一個容器只是多一處狀態
+# 不一致的來源。
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://yakyu:${POSTGRES_PASSWORD:?請在 .env 設定}@db:5432/yakyu
+      # 沒設的話伺服器會用隨機金鑰，重啟後所有人被登出。
+      SESSION_SECRET: ${SESSION_SECRET:?請在 .env 設定}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: yakyu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請在 .env 設定}
+      POSTGRES_DB: yakyu
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yakyu"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?請在 .env 設定}
+    depends_on: [app]
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -36,6 +36,20 @@
 
 將本專案 clone 回本機，或直接下載儲存庫中的 `index_legacy.html` 檔案即可。不需要安裝任何東西。
 
+### 線上版（帳號、成就與天賦商店）
+
+帳號、成就點數與天賦商店需要伺服器——**成就點數是跨局累積並換成永久強化的貨幣，它一旦可以偽造，整個系統就沒有意義**，因此伺服器會用同一份引擎重跑重播日誌來驗證每一段生涯。設計見 [ADR 0007](docs/adr/0007-online-accounts-and-server-verification.md)。
+
+```bash
+cd server
+cp .env.example .env      # 填 POSTGRES_PASSWORD、SESSION_SECRET、TUNNEL_TOKEN
+docker compose up -d --build
+```
+
+一個 image 同時服務前端與 `/api`，因此**前端與伺服器端的引擎永遠是同一份建置**；同源也讓 session 可以走 HttpOnly cookie。資料庫是 PostgreSQL，對外由 Cloudflare Tunnel 接上網域。
+
+不架伺服器也完全玩得起來——只是沒有帳號、成就不會累積、天賦商店不開放。
+
 ### 網頁版（GitHub Pages）
 
 新架構的網頁版可以直接部署到 GitHub Pages——它沒有用到任何 Tauri 的執行期 API，`npm run build` 產出的就是一份純靜態網站。工作流在 `.github/workflows/pages.yml`，推到 `main` 就會建置並部署。

@@ -146,7 +146,7 @@
 ## 階段三：跨局繼承與 Meta-Progression
 
 *   [x] **成就檢測器**：`client/src/engine/achievements.ts`。引退時結算，**由既有系統推導**——每一個取得過的特性、每一座獎項、每一次前三名、每一階累積數據都自動成為成就，沒有第二份手寫清單。**同一項成就只給一次 AP**（識別字串因此不含年份），已領過的仍列在清單上但不計分。實測 AP 分佈：差的建構 p50 7、balanced p50 23、pitcher p50 39。
-*   [ ] **線上化（ADR 0007）**：docker-compose 起 Node（同一 image 服務前端與 `/api`）＋ PostgreSQL ＋ cloudflared。同源因此 token 走 HttpOnly cookie；不用 Redis。帳號註冊即通過、不可重複、密碼用 argon2/bcrypt。
+*   [~] **線上化（ADR 0007）**：後端已經立起來（`server/`）——帳號、開局登記、伺服器重跑驗證、天賦買賣的 API 與 docker-compose 都完成，前端的介面層（`client/src/api/`）也接好了。**還差前端的 UI**（首頁右上的登入、成就頁、天賦商店）。原本的規劃：docker-compose 起 Node（同一 image 服務前端與 `/api`）＋ PostgreSQL ＋ cloudflared。同源因此 token 走 HttpOnly cookie；不用 Redis。帳號註冊即通過、不可重複、密碼用 argon2/bcrypt。
     *   **伺服器重跑驗證**：客戶端上傳重播日誌，伺服器用同一份 TS 引擎重算成就與 AP。前端與 API 同一份建置，因此版本永遠對齊。
     *   **開局登記**：開局時凍結當下的天賦組合並發回識別碼，結算時用那一組重跑——天賦可退款，「現在擁有什麼」與「那一局帶著什麼」是兩件事。
     *   **覆蓋層是全域可變狀態**：伺服器端的驗證必須序列化或隔離到獨立行程。

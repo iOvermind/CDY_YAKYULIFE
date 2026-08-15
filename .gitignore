@@ -8,3 +8,7 @@ dist/
 .DS_Store
 Thumbs.db
 *.local
+
+# 伺服器
+server/node_modules/
+server/.env
