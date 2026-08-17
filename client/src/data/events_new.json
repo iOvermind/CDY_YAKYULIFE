@@ -1,0 +1,777 @@
+{
+  "schemaVersion": 1,
+  "_source": "承接原 events.json（22 筆），其中 17 筆對應 index_legacy.html 的 EVENTS，另 5 筆為新架構的原創內容",
+  "_note": "事件卡：全部中性，玩家在保守／照常／全力一搏之間抉擇。good_effects 與 bad_effects 的鍵若為能力代碼即直接加減；特殊鍵見 effect_keys。",
+  "cards_per_year": {
+    "_note": "每年抽幾張事件卡。legacy 是「職業 3 張、養成 2 張」，這裡再把國中拆出來——十三歲的一年裡不會發生那麼多事，而高中開始密度就該上來了。",
+    "_key_note": "鍵是階段代碼（amateur.json 的 stages）加上 PRO。找不到時用 default。",
+    "default": 1,
+    "JHS": 1,
+    "HS": 2,
+    "PRO": 3
+  },
+  "audience_codes": {
+    "*": "全部球員",
+    "P": "投手",
+    "A": "非投手（野手）",
+    "B": "非投手（野手）",
+    "PRO": "僅職業階段"
+  },
+  "_audience_note": "A 與 B 在 index_legacy.html:1356 的過濾條件中行為完全相同，兩者都只判斷「非投手」。這兩個代碼是冗餘的；新架構若要收斂成一個，需同時更新下方所有事件的 for 欄位。",
+  "effect_keys": {
+    "_note": "非能力代碼的特殊效果鍵。其餘鍵一律視為 abilities.json 的能力代碼，直接加減。",
+    "rand": "隨機挑一項該球員適用的能力，加減指定點數",
+    "pitch": "隨機挑一個該投手會的球系（swp/drp/chg/gim），加減指定點數。取代舊版直接加減 brk 的做法——球系拆開後，「新的握法找到了」本來就是精進其中某一顆球。非投手抽到帶此鍵的事件時應視為無效果。",
+    "inj": "受傷機率增加指定百分點",
+    "suspension": "禁賽場次",
+    "respect": "聲望增減",
+    "ban": "永久逐出棒球界",
+    "yips": "觸發「失憶症」特性",
+    "tj_countdown": "TJ 量表直接推進指定級距",
+    "clutch": "觸發「大心臟」特性"
+  },
+  "_ceiling_note": "事件另可帶 good_ceiling / bad_ceiling 欄位，提升或降低指定能力的上限。它與 good_effects 是**不同的東西**：effects 直接加減能力值，ceiling 只移動天花板，點數仍要自己練上去。每項能力的上限提升最多累積 abilities.json 的 scale.max_ceiling_bonus 點。",
+  "magnitude": {
+    "_note": "效果幅度 = 事件的效果值 × 應對方式的倍率，四捨五入後至少為 1。舊版只取效果值的正負號、幅度一律由應對方式決定，因此稀有事件無法比常見事件更重——那讓「神秘的營養品」和「打擊機特訓」一樣輕。改為乘法之後，多數舊事件的值是 1-2，照常應對的結果與舊版相同。",
+    "safe": 0.5,
+    "normal": 1,
+    "bold": 1.5,
+    "clutch_bold": {
+      "_note": "大心臟：豪賭的上檔更高、下檔更軟。",
+      "good": 2,
+      "bad": 1
+    }
+  },
+  "injury_magnitude": {
+    "_note": "inj 效果的受傷機率增幅，依應對方式而非效果值決定——受傷風險是「你冒了多大的險」，與事件本身加減多少能力無關。",
+    "safe": 8,
+    "normal": 12,
+    "bold": 16,
+    "clutch_bold": 12
+  },
+  "good_result_chance": {
+    "_note": "抽到好結果的機率（百分比）。命中任一 boost_traits 即提升；thief（薪水小倫）另外增加失敗率。",
+    "base": 50,
+    "boosted": 70,
+    "boost_traits": [
+      "genius",
+      "late",
+      "clutch"
+    ],
+    "fail_penalty": {
+      "trait": "thief",
+      "add_fail_percent": 10
+    },
+    "mode_modifier": {
+      "_note": "應對方式對成功率的增減。豪賭的懲罰對大心臟無效——那正是那個特性的意義。",
+      "safe": 20,
+      "normal": 0,
+      "bold": -15,
+      "bold_immune_trait": "clutch",
+      "cap": 95
+    }
+  },
+  "events": [
+    {
+      "id": "event_1",
+      "name": "代幣打擊場狂揮",
+      "for": "B",
+      "good_text": "手感火燙，揮棒軌跡超順，球球咬中核心",
+      "bad_text": "越打越糊，姿勢完全走鐘，連球皮都摸不到",
+      "good_effects": {
+        "con": 2
+      },
+      "bad_effects": {
+        "con": -2
+      }
+    },
+    {
+      "id": "event_2",
+      "name": "深蹲硬舉地獄週",
+      "for": "A",
+      "good_text": "深蹲硬舉破紀錄，全身肌肉充血滿滿充滿爆發力",
+      "bad_text": "操之過急，背部緊繃直接掛病號，痛得靠背",
+      "good_effects": {
+        "pow": 2,
+        "sta": 1
+      },
+      "bad_effects": {
+        "sta": -2
+      }
+    },
+    {
+      "id": "event_3",
+      "name": "牛棚燃燒手臂狂催",
+      "for": "P",
+      "good_text": "突然開竅，變化球尾勁跟鬼一樣，轉速大突破",
+      "bad_text": "越投越懷疑人生，投球機制大亂，找不到好球帶",
+      "good_effects": {
+        "pitch": 2
+      },
+      "bad_effects": {
+        "ctl": -2
+      }
+    },
+    {
+      "id": "event_4",
+      "name": "遠投摧殘肩膀",
+      "for": "A",
+      "good_text": "臂力升級，傳球自帶雷射光，直達手套",
+      "bad_text": "肩膀有點不舒服，被教練強制關機休息",
+      "good_effects": {
+        "arm": 2
+      },
+      "bad_effects": {
+        "arm": -2
+      }
+    },
+    {
+      "id": "event_5",
+      "name": "盯著iPad看破手腳",
+      "for": "*",
+      "good_text": "完美抓到對手小動作，場上腦袋特別清楚",
+      "bad_text": "戰術資訊超載，上場反而想東想西，整個人當機",
+      "good_effects": {
+        "eye": 2,
+        "cat": 2,
+        "ctl": 1
+      },
+      "bad_effects": {
+        "eye": -2,
+        "ctl": -1
+      }
+    },
+    {
+      "id": "event_6",
+      "name": "衝刺折返跑地獄",
+      "for": "A",
+      "good_text": "啟動時機抓得超準，第一步快如閃電",
+      "bad_text": "衝刺不慎拉傷大腿後側，靠背直接休兩週",
+      "good_effects": {
+        "spd": 2
+      },
+      "bad_effects": {
+        "spd": -1,
+        "inj": 5
+      }
+    },
+    {
+      "id": "event_7",
+      "name": "內野吃土吃到飽",
+      "for": "A",
+      "good_text": "身體產生完美記憶，手套變成無情吸塵器",
+      "bad_text": "狂吃不規則彈跳，接到懷疑人生，信心大挫",
+      "good_effects": {
+        "rng": 1,
+        "fld": 2
+      },
+      "bad_effects": {
+        "fld": -2
+      }
+    },
+    {
+      "id": "event_8",
+      "name": "靠背差點被當沙包砸",
+      "for": "*",
+      "good_text": "扭腰驚險閃過，反應快得連自己都怕",
+      "bad_text": "閃避不及，結結實實挨了一記死球，瘀青超大塊",
+      "good_effects": {
+        "spd": 1
+      },
+      "bad_effects": {
+        "inj": 12
+      }
+    },
+    {
+      "id": "event_9",
+      "name": "賽後記者會講幹話",
+      "for": "*",
+      "good_text": "幹話連篇但效果極佳，人氣爆棚打球更帶勁",
+      "bad_text": "講錯話直接被炎上，壓力大到影響場上狀態",
+      "good_effects": {
+        "sta": 1
+      },
+      "bad_effects": {
+        "con": -1,
+        "ctl": -1,
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_10",
+      "name": "被教練抓去旁邊拉正",
+      "for": "*",
+      "good_text": "受到特別關照，開外掛偷學了幾招秘訣",
+      "bad_text": "被盯得死死的，動作一直被刁，渾身綁手綁腳",
+      "good_effects": {
+        "rand": 2
+      },
+      "bad_effects": {
+        "rand": -2
+      }
+    },
+    {
+      "id": "event_11",
+      "name": "嚴格控管體脂地獄",
+      "for": "*",
+      "good_text": "體脂降到底，精神飽滿，恢復力絕佳",
+      "bad_text": "吃到不乾淨的，烙賽折騰整週，腿都軟了",
+      "good_effects": {
+        "sta": 2
+      },
+      "bad_effects": {
+        "sta": -1,
+        "inj": 4
+      }
+    },
+    {
+      "id": "event_12",
+      "name": "老屁股的神秘玄學指導",
+      "for": "*",
+      "good_text": "聽君一席話如聽仙音，少走十年彎路",
+      "bad_text": "學長教的根本是屁啦，硬練反而繞了遠路",
+      "good_effects": {
+        "rand": 2
+      },
+      "bad_effects": {
+        "rand": -2
+      }
+    },
+    {
+      "id": "event_13",
+      "name": "挑戰測速槍快樂錶",
+      "for": "P",
+      "good_text": "催出誇張火球，雷達槍應該沒壞吧",
+      "bad_text": "想拚極速出力過猛，手肘發出悲鳴",
+      "good_effects": {
+        "vel": 2
+      },
+      "bad_effects": {
+        "inj": 10
+      }
+    },
+    {
+      "id": "event_14",
+      "name": "捕手配球玄學探討",
+      "for": "P",
+      "good_text": "解鎖配球新理解，把打者耍得團團轉",
+      "bad_text": "配球邏輯太複雜，想太多反而投不進去",
+      "good_effects": {
+        "ctl": 2
+      },
+      "bad_effects": {
+        "pitch": -2
+      }
+    },
+    {
+      "id": "event_15",
+      "name": "萬惡雞排與珍奶",
+      "for": "*",
+      "good_text": "忍住萬惡消夜，維持完美輕盈體態",
+      "bad_text": "雞排珍奶太香了，胖到第一步直接變慢",
+      "good_effects": {
+        "sta": 1
+      },
+      "bad_effects": {
+        "spd": -2,
+        "sta": -1,
+        "rng": -1
+      }
+    },
+    {
+      "id": "event_16",
+      "name": "拍手遊廣告賺外快",
+      "for": "PRO",
+      "good_text": "荷包賺滿滿，行程安排妥當沒荒廢本業",
+      "bad_text": "通告接太多，訓練量斷崖式下滑",
+      "good_effects": {
+        "sta": 1
+      },
+      "bad_effects": {
+        "rand": -2,
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_17",
+      "name": "衰到流湯的大低潮",
+      "for": "*",
+      "good_text": "死撐活撐走出來，抗壓性直接點滿",
+      "bad_text": "爛到流湯，拖了一個月還是找不到感覺",
+      "good_effects": {
+        "eye": 1,
+        "ctl": 1,
+        "sta": 1
+      },
+      "bad_effects": {
+        "con": -2,
+        "pitch": -1,
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_18",
+      "name": "更衣室的神秘針筒 (禁藥風波)",
+      "for": "PRO",
+      "weight": 5,
+      "good_text": "藥效發作變超人，各種數據破表，而且沒被抓到",
+      "bad_text": "靠背，尿檢沒過！被聯盟禁賽，名聲臭到爆",
+      "good_effects": {
+        "pow": 5,
+        "sta": 5,
+        "vel": 3
+      },
+      "bad_effects": {
+        "suspension": 50,
+        "respect": -100,
+        "con": -5
+      }
+    },
+    {
+      "id": "event_19",
+      "name": "條通酒店的危險茶會 (組頭接觸)",
+      "for": "PRO",
+      "weight": 2,
+      "good_text": "果斷拒絕加舉報，獲得聯盟狂讚，心智昇華",
+      "bad_text": "拿了不該拿的錢，東窗事發被永久逐出棒球界",
+      "good_effects": {
+        "clutch": 1,
+        "respect": 50
+      },
+      "bad_effects": {
+        "ban": true,
+        "respect": -999
+      }
+    },
+    {
+      "id": "event_20",
+      "name": "赴美找大師喬姿勢",
+      "for": "A",
+      "weight": 20,
+      "good_text": "找到完美的發力點，天花板直接被打破",
+      "bad_text": "整個被改壞，連原本的揮棒都不會了，雞歪",
+      "good_ceiling": {
+        "pow": 3,
+        "vel": 3
+      },
+      "bad_effects": {
+        "yips": true,
+        "con": -3,
+        "ctl": -3
+      }
+    },
+    {
+      "id": "event_21",
+      "name": "止痛藥當糖果吃",
+      "for": "A",
+      "weight": 30,
+      "good_text": "牙咬著撐過賽季，保住先發，真是條硬漢",
+      "bad_text": "硬撐結果韌帶啪一聲斷了，準備開TJ",
+      "good_effects": {
+        "respect": 10
+      },
+      "bad_effects": {
+        "tj_countdown": 1,
+        "inj": 50
+      }
+    },
+    {
+      "id": "event_22",
+      "name": "上古神獸的私下開示",
+      "for": "*",
+      "weight": 5,
+      "good_text": "吸收神仙功力，球商跟選球眼光大開眼界",
+      "bad_text": "凡人硬學神仙招，反而把自己的節奏全搞砸",
+      "good_effects": {
+        "eye": 4,
+        "cat": 4
+      },
+      "bad_effects": {
+        "con": -2,
+        "ctl": -2
+      }
+    },
+    {
+      "id": "event_23",
+      "name": "網路酸民雞歪炎上",
+      "for": "*",
+      "good_text": "酸言酸語當作耳邊風，心理素質更強大了",
+      "bad_text": "越看越走心，帶著情緒上場表現大走鐘",
+      "good_effects": {
+        "clutch": 1
+      },
+      "bad_effects": {
+        "rand": -1,
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_24",
+      "name": "底褲被看光的情蒐外流",
+      "for": "*",
+      "good_text": "將計就計反向操作，把對手騙得一愣一愣",
+      "bad_text": "底褲被看光光，弱點被瘋狂針對",
+      "good_effects": {
+        "cat": 2,
+        "eye": 1
+      },
+      "bad_effects": {
+        "con": -1,
+        "ctl": -1
+      }
+    },
+    {
+      "id": "event_25",
+      "name": "網購國外頂級手套",
+      "for": "A",
+      "good_text": "新裝備有夠順手，宛如拿到傳說級武器",
+      "bad_text": "還沒磨合好，手感生硬一直失誤",
+      "good_effects": {
+        "pow": 1,
+        "fld": 1
+      },
+      "bad_effects": {
+        "con": -1,
+        "fld": -1
+      }
+    },
+    {
+      "id": "event_26",
+      "name": "隊友超神美技護航",
+      "for": "P",
+      "good_text": "看到背後有銅牆鐵壁，投得更放膽了",
+      "bad_text": "隊友低級失誤，氣到腦充血，控球全失",
+      "good_effects": {
+        "ctl": 1,
+        "vel": 1
+      },
+      "bad_effects": {
+        "ctl": -2
+      }
+    },
+    {
+      "id": "event_27",
+      "name": "跨界上實境秀當小丑",
+      "for": "PRO",
+      "good_text": "搞笑圈粉無數，當作另類放鬆療癒",
+      "bad_text": "玩破關遊戲不小心扭到腳，靠背被教練罵死",
+      "good_effects": {
+        "respect": 10,
+        "sta": 1
+      },
+      "bad_effects": {
+        "inj": 15,
+        "respect": -5
+      }
+    },
+    {
+      "id": "event_28",
+      "name": "休賽季德州撲克狂熱",
+      "for": "*",
+      "good_text": "練就面不改色的撲克臉，場上更加沉穩",
+      "bad_text": "輸到見骨，心神不寧整天想翻本",
+      "good_effects": {
+        "clutch": 1,
+        "eye": 1
+      },
+      "bad_effects": {
+        "sta": -1,
+        "respect": -5
+      }
+    },
+    {
+      "id": "event_29",
+      "name": "亂改姿勢大改造",
+      "for": "P",
+      "weight": 20,
+      "good_text": "找到了更省力又剛猛的發力點，球威大增",
+      "bad_text": "改到不會投球，找不到好球帶，直接得投球失憶症",
+      "good_ceiling": {
+        "vel": 2
+      },
+      "good_effects": {
+        "pitch": 2
+      },
+      "bad_effects": {
+        "yips": true,
+        "ctl": -3
+      }
+    },
+    {
+      "id": "event_30",
+      "name": "清空板凳的無差別大亂鬥",
+      "for": "*",
+      "good_text": "帶起全隊氣勢，打架沒輸過，硬漢形象大增",
+      "bad_text": "被偷貓一拳，禁賽休養還要付罰款",
+      "good_effects": {
+        "pow": 1,
+        "respect": 5
+      },
+      "bad_effects": {
+        "suspension": 3,
+        "inj": 10
+      }
+    },
+    {
+      "id": "event_31",
+      "name": "遇到吸血鬼經紀人",
+      "for": "PRO",
+      "good_text": "談到肥約，無後顧之憂專心打球",
+      "bad_text": "遇到雷包經紀人，合約亂七八糟影響心情",
+      "good_effects": {
+        "sta": 1,
+        "respect": 10
+      },
+      "bad_effects": {
+        "sta": -2
+      }
+    },
+    {
+      "id": "event_32",
+      "name": "撞到滿頭包的新秀牆",
+      "for": "PRO",
+      "weight": 10,
+      "good_text": "突破自我極限，打碎新秀牆蛻變成長",
+      "bad_text": "越撞越痛，開始懷疑自己是不是打職棒的料",
+      "good_effects": {
+        "rand": 2,
+        "sta": 1
+      },
+      "bad_effects": {
+        "rand": -2,
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_33",
+      "name": "季末全身爆痠疲勞期",
+      "for": "*",
+      "good_text": "死撐活撐，身體適應高強度，耐力升級",
+      "bad_text": "全身痠痛，各項數據呈現斷崖式下滑",
+      "good_effects": {
+        "sta": 2
+      },
+      "bad_effects": {
+        "sta": -2,
+        "inj": 10
+      }
+    },
+    {
+      "id": "event_34",
+      "name": "跟眼幹裁判對噴",
+      "for": "*",
+      "good_text": "爭取到關鍵判決，氣勢大振",
+      "bad_text": "被趕出場，還吃下聯盟重罰，超衰",
+      "good_effects": {
+        "clutch": 1
+      },
+      "bad_effects": {
+        "suspension": 1,
+        "respect": -5
+      }
+    },
+    {
+      "id": "event_35",
+      "name": "看台醉漢球迷狂噴垃圾話",
+      "for": "*",
+      "good_text": "專注力爆發，完全不受外界干擾",
+      "bad_text": "被雷射筆照到眼睛或被喇叭吵到，火氣上來",
+      "good_effects": {
+        "eye": 1,
+        "ctl": 1
+      },
+      "bad_effects": {
+        "eye": -1,
+        "ctl": -1
+      }
+    },
+    {
+      "id": "event_36",
+      "name": "偷練走鐘的新球種",
+      "for": "P",
+      "good_text": "完美掌握新軌跡，打者看了直搖頭",
+      "bad_text": "練不出半點毛，還把原本的球感搞丟了",
+      "good_effects": {
+        "pitch": 3
+      },
+      "bad_effects": {
+        "pitch": -1,
+        "ctl": -1
+      }
+    },
+    {
+      "id": "event_37",
+      "name": "走火入魔的極限重訓",
+      "for": "*",
+      "good_text": "肌肉量暴增，進化成大猩猩級距",
+      "bad_text": "練太兇，椎間盤突出直接去了",
+      "good_effects": {
+        "pow": 3,
+        "vel": 3
+      },
+      "bad_effects": {
+        "inj": 20,
+        "spd": -2
+      }
+    },
+    {
+      "id": "event_38",
+      "name": "國家隊血汗徵召",
+      "for": "PRO",
+      "weight": 5,
+      "good_text": "披上國家隊戰袍大放異彩，經驗值狂飆",
+      "bad_text": "為國捐軀操勞過度，回母隊直接報銷",
+      "good_effects": {
+        "rand": 3,
+        "respect": 30
+      },
+      "bad_effects": {
+        "sta": -3,
+        "inj": 25
+      }
+    },
+    {
+      "id": "event_39",
+      "name": "凍到手指沒知覺的雨戰",
+      "for": "*",
+      "good_text": "反而掌握濕滑球感，越打越順手",
+      "bad_text": "手指凍僵，球怎麼拿都不對勁",
+      "good_effects": {
+        "cat": 1,
+        "ctl": 1
+      },
+      "bad_effects": {
+        "ctl": -2,
+        "con": -2
+      }
+    },
+    {
+      "id": "event_40",
+      "name": "打擊機制整個打掉重練",
+      "for": "A",
+      "weight": 20,
+      "good_text": "揮棒軌跡流暢無比，長打潛力噴發",
+      "bad_text": "姿勢徹底壞掉，打擊率直接探底",
+      "good_ceiling": {
+        "pow": 2,
+        "con": 1
+      },
+      "bad_effects": {
+        "con": -3
+      }
+    },
+    {
+      "id": "event_41",
+      "name": "跟心理醫生大吐苦水",
+      "for": "*",
+      "good_text": "解開內心死結，大心臟養成完畢",
+      "bad_text": "心理師太爛，聊完反而覺得人生沒希望",
+      "good_effects": {
+        "clutch": 1,
+        "eye": 1
+      },
+      "bad_effects": {
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_42",
+      "name": "高科技恢復艙初體驗",
+      "for": "*",
+      "good_text": "每天睡好睡滿，身體恢復像喝了紅水",
+      "bad_text": "機器故障，睡到落枕脖子超痛",
+      "good_effects": {
+        "sta": 3
+      },
+      "bad_effects": {
+        "inj": 5,
+        "sta": -1
+      }
+    },
+    {
+      "id": "event_43",
+      "name": "FA市場的漫天喊價",
+      "for": "PRO",
+      "good_text": "為了證明身價，表現更加兇猛",
+      "bad_text": "受流言影響，場上患得患失",
+      "good_effects": {
+        "pow": 1,
+        "vel": 1
+      },
+      "bad_effects": {
+        "con": -1,
+        "ctl": -1
+      }
+    },
+    {
+      "id": "event_44",
+      "name": "主場鄉親的窒息愛魔咒",
+      "for": "*",
+      "good_text": "破除魔咒，成為主場鄉親眼中的神仙",
+      "bad_text": "在鄉親父老面前狂吃癟，壓力山大",
+      "good_effects": {
+        "clutch": 1,
+        "rng": 1
+      },
+      "bad_effects": {
+        "con": -2,
+        "ctl": -2
+      }
+    },
+    {
+      "id": "event_45",
+      "name": "去做雷射近視手術",
+      "for": "*",
+      "good_text": "視力變成 2.0，連球的縫線都看得一清二楚",
+      "bad_text": "乾眼症發作，在場上一直揉眼睛",
+      "good_effects": {
+        "eye": 3
+      },
+      "bad_effects": {
+        "eye": -2
+      }
+    },
+    {
+      "id": "event_46",
+      "name": "洋教練的雞同鴨講",
+      "for": "*",
+      "good_text": "吸收國外先進觀念，簡直茅塞頓開",
+      "bad_text": "語言不通，根本不知道他供三小，浪費時間",
+      "good_effects": {
+        "rand": 2,
+        "cat": 1
+      },
+      "bad_effects": {
+        "rand": -1
+      }
+    },
+    {
+      "id": "event_47",
+      "name": "二軍復健賽殺豬公",
+      "for": "*",
+      "weight": 10,
+      "good_text": "滿血復活，狀態比受傷前還猛",
+      "bad_text": "操之過急，同一個地方再度拉傷，痛死",
+      "good_effects": {
+        "sta": 2
+      },
+      "bad_effects": {
+        "inj": 20
+      }
+    },
+    {
+      "id": "event_48",
+      "name": "被狗仔偷拍死會曝光",
+      "for": "*",
+      "good_text": "果斷處理掉爛桃花，心無旁騖專心打球",
+      "bad_text": "被狗仔跟拍爆料，焦頭爛額無心在場上",
+      "good_effects": {
+        "sta": 1
+      },
+      "bad_effects": {
+        "sta": -3,
+        "respect": -20
+      }
+    }
+  ]
+}
