@@ -38,6 +38,7 @@ import {
   type SeasonRecord,
 } from '../src/engine/career.ts';
 import type { BattingLine, PitchingLine } from '../src/engine/amateurStats.ts';
+import type { AwardRecord } from '../src/engine/awards.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import { battingShares, proBaseline, responsibilityOf, winPct } from '../src/engine/metrics.ts';
 import type { Abilities } from '../src/engine/rating.ts';
@@ -78,7 +79,14 @@ type PolicyName = keyof typeof POLICIES;
 interface CareerResult {
   readonly summary: CareerSummary;
   readonly potentialSum: number;
-  readonly awardCodes: readonly string[];
+  /**
+   * 完整的得獎紀錄，不只代碼。
+   *
+   * 單季取得率必須**按層級**量：一個 .340 在美職是打擊王，在中職二軍什麼都
+   * 不是。只留代碼就沒辦法把分子分回它發生的那個聯盟，分母（合格球季）卻是
+   * 分層級數的，兩邊對不起來。
+   */
+  readonly awards: readonly AwardRecord[];
   readonly reachedTop: boolean;
   /**
    * 生涯期間看過的最高 `sta`。
@@ -183,7 +191,7 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
   return {
     summary,
     potentialSum: Object.values(state?.origin.potential ?? {}).reduce((a, b) => a + b, 0),
-    awardCodes: (state?.awards ?? []).map((a) => a.code),
+    awards: state?.awards ?? [],
     reachedTop: summary.leagues.length > 0,
     peakSta: Math.max(peakSta, state?.ability['sta'] ?? 0),
   };
@@ -220,7 +228,7 @@ function suggestThresholds(results: readonly CareerResult[]): readonly Suggestio
   const cumulative = [0.02, 0.1, 0.35, 0.75];
   const total = results.length;
   const floorOf = (r: CareerResult) =>
-    applyTierFloors(Number.MAX_SAFE_INTEGER, new Set(r.awardCodes));
+    applyTierFloors(Number.MAX_SAFE_INTEGER, new Set(r.awards.map((a) => a.code)));
 
   return cumulative.map((target, tier) => {
     // 被保底送進這一帶（或更高）的人，不管門檻訂多少都會在這裡。
@@ -237,17 +245,24 @@ function suggestThresholds(results: readonly CareerResult[]): readonly Suggestio
   });
 }
 
-/** 合格球季：在頂級聯盟且打席數達到 MVP 的資格線。單季取得率的分母。 */
-function countQualifiedSeasons(r: CareerResult): number {
-  let n = 0;
+/**
+ * 合格球季：在頂級聯盟出過賽的一年。單季取得率的分母。
+ *
+ * **按層級分開數。** 靶是「MLB 的單項王 1–3%」，把所有聯盟混在一起量出來的
+ * 那個數字不對應任何一句話——它是各聯盟難度被生涯路徑加權平均後的產物，往
+ * 哪個方向調都可能是錯的。
+ *
+ * 分母**不套各獎自己的資格閘**。曾經套過 MVP 的打席資格線，結果明星賽量出
+ * 102.8%：那個閘擋掉的球季，明星賽照發，分子就大過分母了。每個獎的閘都不同，
+ * 一個分母配不了全部；能同時容納所有獎的母體只有「他在這個聯盟打了這一年」。
+ */
+function qualifiedByLevel(r: CareerResult, into: Map<string, number>): void {
   for (const s of r.summary.seasons) {
     if (leagues.top_league_names[s.org] === undefined) continue;
     if (leagues.levels[s.level]?.org !== s.org) continue;
-    const games = leagues.levels[s.level]?.games ?? awardsCfg.thresholds.reference_games;
-    if ((s.batting?.pa ?? 0) < games * awardsCfg.mvp.qualify.batter_pa_per_game) continue;
-    n++;
+    if ((s.batting?.pa ?? 0) <= 0 && (s.pitching?.outs ?? 0) <= 0) continue;
+    into.set(s.level, (into.get(s.level) ?? 0) + 1);
   }
-  return n;
 }
 
 /**
@@ -368,8 +383,8 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   const awardRuns = new Map<string, number>();
   const awardTotal = new Map<string, number>();
   for (const r of withPro) {
-    for (const code of new Set(r.awardCodes)) awardRuns.set(code, (awardRuns.get(code) ?? 0) + 1);
-    for (const code of r.awardCodes) awardTotal.set(code, (awardTotal.get(code) ?? 0) + 1);
+    for (const a of new Set(r.awards.map((x) => x.code))) awardRuns.set(a, (awardRuns.get(a) ?? 0) + 1);
+    for (const a of r.awards) awardTotal.set(a.code, (awardTotal.get(a.code) ?? 0) + 1);
   }
   for (const [code, count] of [...awardRuns].sort((a, b) => b[1] - a[1])) {
     const perCareer = (awardTotal.get(code) ?? 0) / Math.max(1, withPro.length);
@@ -379,16 +394,36 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   }
   // ADR 0015 定的靶是**單季**取得率，不是生涯。生涯數字是它與生涯長度的複合，
   // 會被體力、傷病這些無關的改動推著跑，只能當輸出看，不能當靶。
-  const qualified = withPro.reduce((n, r) => n + countQualifiedSeasons(r), 0);
-  console.log(
-    `\n── 單季取得率（靶：單項王 1–3%、明星賽 10 幾%）　合格球季 ${qualified} 季`,
+  const qualified = new Map<string, number>();
+  for (const r of withPro) qualifiedByLevel(r, qualified);
+  const wonAt = new Map<string, Map<string, number>>();
+  for (const r of withPro) {
+    for (const a of r.awards) {
+      const row = wonAt.get(a.level) ?? new Map<string, number>();
+      row.set(a.code, (row.get(a.code) ?? 0) + 1);
+      wonAt.set(a.level, row);
+    }
+  }
+
+  // 靶訂在 MLB；其餘聯盟只是參考，照設計本來就該比 MLB 寬鬆。
+  const ANCHOR = 'MLB';
+  const ranked = [...qualified].sort((a, b) =>
+    a[0] === ANCHOR ? -1 : b[0] === ANCHOR ? 1 : b[1] - a[1],
   );
-  for (const [code, total] of [...awardTotal].sort((a, b) => b[1] - a[1])) {
-    const rate = total / Math.max(1, qualified);
-    const hot = code === 'all_star' ? rate > 0.25 : rate > 0.03;
-    console.log(
-      `  ${code.padEnd(18)} ${(rate * 100).toFixed(1).padStart(5)}%${hot ? '　← 偏高' : ''}`,
-    );
+  console.log('\n── 單季取得率（靶：MLB 單項王 1–3%、明星賽 10 幾%）');
+  for (const [level, seasons] of ranked) {
+    if (seasons < 100) continue; // 樣本太少，比數字更會誤導。
+    const row = wonAt.get(level);
+    if (row === undefined) continue;
+    const mark = level === ANCHOR ? '★' : ' ';
+    console.log(`${mark} ${level}　合格球季 ${seasons} 季`);
+    for (const [code, total] of [...row].sort((a, b) => b[1] - a[1])) {
+      const rate = total / seasons;
+      const off = level !== ANCHOR ? '' : code === 'all_star'
+        ? (rate > 0.25 ? '　← 偏高' : rate < 0.08 ? '　← 偏低' : '')
+        : (rate > 0.03 ? '　← 偏高' : rate < 0.01 ? '　← 偏低' : '');
+      console.log(`    ${code.padEnd(18)} ${(rate * 100).toFixed(1).padStart(5)}%${off}`);
+    }
   }
   console.log(
     '  ※ 獎項保底規則會直接決定分級分佈——拿過 MVP 或年度最佳投手就保到明星帶。',
