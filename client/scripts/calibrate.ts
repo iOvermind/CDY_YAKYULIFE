@@ -237,6 +237,19 @@ function suggestThresholds(results: readonly CareerResult[]): readonly Suggestio
   });
 }
 
+/** 合格球季：在頂級聯盟且打席數達到 MVP 的資格線。單季取得率的分母。 */
+function countQualifiedSeasons(r: CareerResult): number {
+  let n = 0;
+  for (const s of r.summary.seasons) {
+    if (leagues.top_league_names[s.org] === undefined) continue;
+    if (leagues.levels[s.level]?.org !== s.org) continue;
+    const games = leagues.levels[s.level]?.games ?? awardsCfg.thresholds.reference_games;
+    if ((s.batting?.pa ?? 0) < games * awardsCfg.mvp.qualify.batter_pa_per_game) continue;
+    n++;
+  }
+  return n;
+}
+
 /**
  * 累積型獎項的門檻線 vs 實際的份額分佈。
  *
@@ -362,6 +375,19 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
     const perCareer = (awardTotal.get(code) ?? 0) / Math.max(1, withPro.length);
     console.log(
       `  ${code.padEnd(18)} ${pct(count, withPro.length).padStart(6)}　平均每局 ${perCareer.toFixed(2)} 座`,
+    );
+  }
+  // ADR 0015 定的靶是**單季**取得率，不是生涯。生涯數字是它與生涯長度的複合，
+  // 會被體力、傷病這些無關的改動推著跑，只能當輸出看，不能當靶。
+  const qualified = withPro.reduce((n, r) => n + countQualifiedSeasons(r), 0);
+  console.log(
+    `\n── 單季取得率（靶：單項王 1–3%、明星賽 10 幾%）　合格球季 ${qualified} 季`,
+  );
+  for (const [code, total] of [...awardTotal].sort((a, b) => b[1] - a[1])) {
+    const rate = total / Math.max(1, qualified);
+    const hot = code === 'all_star' ? rate > 0.25 : rate > 0.03;
+    console.log(
+      `  ${code.padEnd(18)} ${(rate * 100).toFixed(1).padStart(5)}%${hot ? '　← 偏高' : ''}`,
     );
   }
   console.log(
