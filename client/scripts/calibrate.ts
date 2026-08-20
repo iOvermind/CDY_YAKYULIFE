@@ -21,13 +21,23 @@
  */
 
 import { describe, it } from 'vitest';
-import { abilities, dataKeys, hallOfFame, leagues, positions } from '../src/data/index.ts';
+import {
+  abilities,
+  awards as awardsCfg,
+  dataKeys,
+  hallOfFame,
+  leagues,
+  positions,
+  season as seasonCfg,
+} from '../src/data/index.ts';
 import {
   applyTierFloors,
   difficultyOf,
   summarizeCareer,
   type CareerSummary,
+  type SeasonRecord,
 } from '../src/engine/career.ts';
+import type { BattingLine, PitchingLine } from '../src/engine/amateurStats.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import { battingShares, proBaseline, responsibilityOf, winPct } from '../src/engine/metrics.ts';
 import type { Abilities } from '../src/engine/rating.ts';
@@ -70,6 +80,15 @@ interface CareerResult {
   readonly potentialSum: number;
   readonly awardCodes: readonly string[];
   readonly reachedTop: boolean;
+  /**
+   * 生涯期間看過的最高 `sta`。
+   *
+   * 出賽率量出來上不去的時候，這個數字分辨兩種完全不同的病：**公式壓著**
+   * （sta 早就到 70 的飽和點，卻還是打不滿）與**沒人練到那裡**（配點策略
+   * 根本不把點投在體力上）。前者調 `stamina_factor`，後者調策略或點數成本，
+   * 修錯邊會把已經對的旋鈕轉壞。
+   */
+  readonly peakSta: number;
 }
 
 /** 跑完一局，回傳結算結果。 */
@@ -83,7 +102,9 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
 
   let guard = 0;
   let cursor = 0;
+  let peakSta = 0;
   while (game.flow.prompt !== null && guard++ < 8000) {
+    peakSta = Math.max(peakSta, game.state?.ability['sta'] ?? 0);
     const options = game.flow.prompt.options;
     const rotated = [...order.slice(cursor % order.length), ...order];
     // 高中畢業的路口：基準線走選秀，旅外模式則直接簽出去。**不能靠「取第一個
@@ -164,6 +185,7 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
     potentialSum: Object.values(state?.origin.potential ?? {}).reduce((a, b) => a + b, 0),
     awardCodes: (state?.awards ?? []).map((a) => a.code),
     reachedTop: summary.leagues.length > 0,
+    peakSta: Math.max(peakSta, state?.ability['sta'] ?? 0),
   };
 }
 
@@ -184,26 +206,96 @@ function pct(part: number, whole: number): string {
  * 人永遠比分位數多。作法是把「已經被保底送進這一帶或更高」的人先挑掉，剩下
  * 的人才用分數排序去填滿剩餘的名額。
  */
-function suggestThresholds(results: readonly CareerResult[]): readonly number[] {
+/** 一條門檻的建議值，或是「門檻救不回來」的診斷。 */
+type Suggestion =
+  | { readonly kind: 'ok'; readonly value: number }
+  /**
+   * 光是被獎項保底送上來的人就填爆了配額。門檻**無論訂多高都沒有用**——那些人
+   * 不是靠分數進來的。這種時候要改的是獎項取得率或保底規則，不是門檻。
+   */
+  | { readonly kind: 'overflow'; readonly floored: number; readonly quota: number };
+
+function suggestThresholds(results: readonly CareerResult[]): readonly Suggestion[] {
   // 累進目標：名人堂 2%、含明星 10%、含每日 35%、含替補 75%
   const cumulative = [0.02, 0.1, 0.35, 0.75];
   const total = results.length;
+  const floorOf = (r: CareerResult) =>
+    applyTierFloors(Number.MAX_SAFE_INTEGER, new Set(r.awardCodes));
 
   return cumulative.map((target, tier) => {
-    const floorOf = (r: CareerResult) =>
-      applyTierFloors(Number.MAX_SAFE_INTEGER, new Set(r.awardCodes));
-
     // 被保底送進這一帶（或更高）的人，不管門檻訂多少都會在這裡。
-    const free = results.filter((r) => floorOf(r) <= tier).length;
-    const slots = Math.round(target * total) - free;
-    if (slots <= 0) return Number.NaN;
+    const floored = results.filter((r) => floorOf(r) <= tier).length;
+    const quota = Math.round(target * total);
+    if (quota - floored <= 0) return { kind: 'overflow', floored, quota };
 
     const rest = results
       .filter((r) => floorOf(r) > tier)
       .map((r) => r.summary.leagues[0]?.score ?? 0)
       .sort((a, b) => b - a);
-    return Math.round(rest[Math.min(rest.length - 1, slots - 1)] ?? 0);
+    const value = Math.round(rest[Math.min(rest.length - 1, quota - floored - 1)] ?? 0);
+    return { kind: 'ok', value };
   });
+}
+
+/**
+ * 累積型獎項的門檻線 vs 實際的份額分佈。
+ *
+ * 取得率本身看不出線該往哪動。這條線是 `base × 場次比例 × (1 ± band)` 的**常數**，
+ * 沒有對手在裡面——所以只要成績模型整體平移，取得率就會跟著跑掉，而報表要能
+ * 當場指出「線落在分佈的哪個分位」，才知道要移多少。
+ *
+ * 靶：這類獎是「聯盟第一名」。一個聯盟一年一座，所以**線該落在單季分佈的極右端**。
+ */
+function reportAwardLines(results: readonly CareerResult[]): void {
+  console.log('\n── 累積型獎項的線 vs 單季份額分佈');
+  console.log('  ※ 這類獎是「聯盟第一名」，線該落在單季分佈的極右端（p99 附近）。');
+
+  const specs = [
+    {
+      name: 'batter_of_year',
+      base: awardsCfg.batter_of_year.base,
+      band: awardsCfg.batter_of_year.band,
+      // 只看打擊那一段，與 game.ts 交給獎項判定的 battingWinShares 同一個口徑。
+      pick: (s: SeasonRecord) => (s.batting === null ? null : s.shares.batting.win),
+    },
+    {
+      name: 'mvp',
+      base: awardsCfg.mvp.base,
+      band: awardsCfg.mvp.band,
+      pick: (s: SeasonRecord) =>
+        s.shares.batting.win + s.shares.pitching.win + s.shares.fielding.win,
+    },
+  ];
+
+  for (const spec of specs) {
+    // 線是按聯盟場次等比放大的，所以份額也換算回 162 場的尺才能放在一起比。
+    const vals: number[] = [];
+    for (const r of results) {
+      for (const s of r.summary.seasons) {
+        const v = spec.pick(s);
+        if (v === null) continue;
+        vals.push((v * 162) / gamesOf(s.level));
+      }
+    }
+    if (vals.length === 0) continue;
+    vals.sort((a, b) => a - b);
+
+    const lo = spec.base * (1 - spec.band);
+    const hi = spec.base * (1 + spec.band);
+    const over = (line: number) => vals.filter((v) => v >= line).length / vals.length;
+    console.log(
+      `  ${spec.name.padEnd(16)} 線 ${lo.toFixed(1)}～${hi.toFixed(1)}（base ${spec.base}）` +
+        `　單季份額 p50 ${quantile(vals, 0.5).toFixed(1)}` +
+        `　p90 ${quantile(vals, 0.9).toFixed(1)}` +
+        `　p99 ${quantile(vals, 0.99).toFixed(1)}` +
+        `　max ${(vals.at(-1) ?? 0).toFixed(1)}`,
+    );
+    console.log(
+      `  ${' '.repeat(16)} 跨過下緣的球季佔 ${(over(lo) * 100).toFixed(1)}%` +
+        `　跨過上緣 ${(over(hi) * 100).toFixed(1)}%` +
+        `　→ 落在 p${((1 - over(spec.base)) * 100).toFixed(1)}`,
+    );
+  }
 }
 
 /** 產出校準報表。 */
@@ -235,10 +327,23 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   console.log('\n── 建議門檻');
   const naive = [0.98, 0.9, 0.65, 0.25].map((p) => Math.round(quantile(scores, p)));
   console.log(`  純分位數     ${naive.join(' / ')}`);
-  console.log(`  考慮保底後   ${suggestThresholds(withPro).join(' / ')}`);
+  const suggested = suggestThresholds(withPro);
+  console.log(
+    `  考慮保底後   ${suggested
+      .map((s) => (s.kind === 'ok' ? String(s.value) : '　—　'))
+      .join(' / ')}`,
+  );
   console.log(`  現行         ${hallOfFame.tier_thresholds.values.join(' / ')}`);
   console.log('  ※ 純分位數會系統性偏低——保底規則把人從下面推上來，因此實際落在該帶的');
   console.log('     人永遠比分位數多。要用的是「考慮保底後」那一組。');
+  suggested.forEach((s, i) => {
+    if (s.kind !== 'overflow') return;
+    console.log(
+      `  ※「${labels[i]}」以上算不出門檻：光保底就 ${s.floored} 人，` +
+        `配額只有 ${s.quota} 人（超額 ${s.floored - s.quota}）。` +
+        `\n     這一帶**調門檻沒有用**，那些人不是靠分數進來的。要改獎項取得率或保底規則。`,
+    );
+  });
   console.log(
     `  評價分分位　p10 ${quantile(scores, 0.1).toFixed(0)}` +
       `　p50 ${quantile(scores, 0.5).toFixed(0)}` +
@@ -263,6 +368,8 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
     '  ※ 獎項保底規則會直接決定分級分佈——拿過 MVP 或年度最佳投手就保到明星帶。',
   );
   console.log('     明星帶超標時要先看這裡，不是先調門檻。');
+
+  reportAwardLines(withPro);
 
   console.log('\n── 份額三分量佔比（靶：打擊 50%／投球 35%／守備 15%）');
   const parts = { batting: 0, pitching: 0, fielding: 0 };
@@ -317,6 +424,216 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
   console.log('');
 }
 
+
+/**
+ * 單季極值的對照表：**人類在一個球季裡做到過的最高值**，換算到 162 場。
+ *
+ * 存在的理由是分級門檻在調之前，得先確認量出來的成績像不像真的球員成績——
+ * 門檻是把分佈切段，切錯段的前提是分佈本身可信。這張表是那把尺。
+ *
+ * `cap` 是設計上限（能力全滿、162 場時的產出），`record` 是人類實際紀錄。
+ * cap 略高於 record 是刻意的：紀錄是被打破過的東西，天花板該留一點餘裕。
+ */
+const SEASON_CAPS = {
+  batting: {
+    pa: { cap: 780, record: 778, of: (b: BattingLine) => b.pa },
+    hits: { cap: 280, record: 262, of: (b: BattingLine) => b.hits },
+    double: { cap: 70, record: 67, of: (b: BattingLine) => b.double },
+    triple: { cap: 40, record: 36, of: (b: BattingLine) => b.triple },
+    hr: { cap: 80, record: 73, of: (b: BattingLine) => b.hr },
+    rbi: { cap: 180, record: 191, of: (b: BattingLine) => b.rbi },
+    runs: { cap: 160, record: 198, of: (b: BattingLine) => b.runs },
+    bb: { cap: 160, record: 232, of: (b: BattingLine) => b.bb },
+    ibb: { cap: 120, record: 120, of: (b: BattingLine) => b.ibb },
+    so: { cap: 240, record: 223, of: (b: BattingLine) => b.so },
+    sb: { cap: 80, record: 130, of: (b: BattingLine) => b.sb },
+  },
+  pitching: {
+    // 出賽與先發是**互斥**的極值：96 場是後援的極限，36 場先發是輪值的極限，
+    // 沒有人同時逼近兩者。因此這兩列超標與否要分開看，不能當成同一種球員。
+    games: { cap: 96, record: 106, of: (p: PitchingLine) => p.games },
+    starts: { cap: 36, record: 36, of: (p: PitchingLine) => p.starts },
+    局數: { cap: 240, record: 376, of: (p: PitchingLine) => p.outs / 3 },
+    wins: { cap: 26, record: 27, of: (p: PitchingLine) => p.wins },
+    losses: { cap: 22, record: 29, of: (p: PitchingLine) => p.losses },
+    saves: { cap: 70, record: 62, of: (p: PitchingLine) => p.saves },
+    holds: { cap: 50, record: 41, of: (p: PitchingLine) => p.holds },
+    so: { cap: 400, record: 383, of: (p: PitchingLine) => p.so },
+    bb: { cap: 130, record: 208, of: (p: PitchingLine) => p.bb },
+    hits: { cap: 260, record: 373, of: (p: PitchingLine) => p.hits },
+  },
+} as const;
+
+/**
+ * 自責分是**下限**型的上限：它的極致是小，不是大，所以不能跟上面那些一起量。
+ *
+ * 基準是 220 局 40 分（ERA 1.64）。要比較的是**同樣的投球量**下失了多少分，
+ * 因此量的是率不是量——只看投滿 150 局以上的球季，低於那個投球量的 ERA 是
+ * 後援投手的量綱，混進來會假性刷新紀錄。人類紀錄取 Gibson 1968 的 1.12。
+ */
+const ER_FLOOR = { innings: 220, er: 40, era: (40 / 220) * 9, record: 1.12 } as const;
+
+/** 某層級的球季場次。用來把不同聯盟的成績換算到同一把尺上。 */
+function gamesOf(level: string): number {
+  return leagues.levels[level]?.games ?? 162;
+}
+
+/**
+ * 成績現實性報表。
+ *
+ * 分級分佈是「把成績切段」的結果，因此在動門檻之前必須先確認成績本身可信。
+ * 這一段量三件事：率定數據的**離散度**（真實棒球裡強打者與巧打者差很多，
+ * 若模擬把所有人擠在同一帶，那分級就只是在切雜訊）、換算到 162 場的**單季
+ * 極值**（對照人類紀錄），以及**出賽率與生涯長度**（累積型的評價分對這兩者
+ * 極度敏感——每個人都打滿十五年的話，人人都是名人堂）。
+ */
+function reportRealism(results: readonly CareerResult[]): void {
+  const seasons = results.flatMap((r) => r.summary.seasons);
+  const bat = seasons.filter((s) => s.batting !== null && s.batting.pa >= 200);
+  const pit = seasons.filter((s) => s.pitching !== null && s.pitching.outs >= 150);
+
+  console.log('\n── 成績現實性');
+
+  const row = (name: string, vals: readonly number[], digits: number, real: string): void => {
+    if (vals.length === 0) return;
+    const sorted = [...vals].sort((a, b) => a - b);
+    const cells = [0.1, 0.5, 0.9, 0.99]
+      .map((p) => quantile(sorted, p).toFixed(digits).padStart(8))
+      .join('');
+    console.log(`  ${name.padEnd(9)}${cells}${(sorted.at(-1) ?? 0).toFixed(digits).padStart(8)}   ${real}`);
+  };
+
+  if (bat.length > 0) {
+    console.log(`\n  打者單季率定（PA≥200，${bat.length} 季）`);
+    console.log(`  ${''.padEnd(9)}${['p10', 'p50', 'p90', 'p99', 'max'].map((h) => h.padStart(8)).join('')}   真實對照`);
+    const per600 = (pick: (b: ProBattingLine) => number) =>
+      bat.map((s) => (pick(s.batting!) / s.batting!.pa) * 600);
+    row('AVG', bat.map((s) => s.batting!.avg), 3, 'p10 .230 p50 .265 p90 .310');
+    row('OPS', bat.map((s) => s.batting!.obp + s.batting!.slg), 3, 'p10 .650 p50 .740 p90 .880');
+    row('HR/600', per600((b) => b.hr), 1, 'p10 3 p50 15 p90 33 max 73');
+    row('BB/600', per600((b) => b.bb), 1, 'p10 30 p50 50 p90 85');
+    row('SO/600', per600((b) => b.so), 1, 'p10 60 p50 110 p90 170');
+    row('2B/600', per600((b) => b.double), 1, 'p10 15 p50 26 p90 40');
+    row('SB/600', per600((b) => b.sb), 1, 'p10 1 p50 6 p90 28');
+  }
+
+  // 換算到 162 場的單季極值。只取夠格的球季——出賽 20 場的成績乘上八倍不是
+  // 預測，是雜訊放大。
+  //
+  // **打者與投手的「夠格」不是同一件事。** 打者看出賽數佔球季的比例；投手不能
+  // 這樣看，先發一年只上場三十幾場，用出賽過半去篩會把先發全部濾掉、只留後援
+  // ——`starts` 那一欄就會整排是 0，看起來像引擎不會產生先發投手。投手的投球量
+  // 記在局數上，所以投手的門檻是局數。
+  const project = <L>(
+    lines: readonly { level: string; line: L; qualifies: (leagueGames: number) => boolean }[],
+    spec: Readonly<Record<string, { cap: number; record: number; of: (l: L) => number }>>,
+    title: string,
+  ): void => {
+    const full = lines.filter((x) => x.qualifies(gamesOf(x.level)));
+    if (full.length === 0) return;
+    console.log(`\n  ${title}（換算 162 場，出賽過半的 ${full.length} 季）`);
+    console.log(`  ${''.padEnd(9)}${['模擬p99', '模擬max', '設計上限', '人類紀錄'].map((h) => h.padStart(10)).join('')}`);
+    for (const [name, s] of Object.entries(spec)) {
+      const vals = full.map((x) => s.of(x.line) * (162 / gamesOf(x.level))).sort((a, b) => a - b);
+      const p99 = quantile(vals, 0.99);
+      const max = vals.at(-1) ?? 0;
+      const flag = max > s.cap ? '  ← 破設計上限' : '';
+      console.log(
+        `  ${name.padEnd(9)}${[p99, max, s.cap, s.record].map((v) => v.toFixed(0).padStart(10)).join('')}${flag}`,
+      );
+    }
+  };
+
+  project(
+    bat.map((s) => ({
+      level: s.level,
+      line: s.batting!,
+      qualifies: (g: number) => s.batting!.games >= g * 0.5,
+    })),
+    SEASON_CAPS.batting,
+    '打者單季極值（門檻：出賽過半）',
+  );
+  project(
+    pit.map((s) => ({
+      level: s.level,
+      line: s.pitching!,
+      // 每場球季 0.6 局，162 場即 100 局。後援投手也過得了這條線。
+      qualifies: (g: number) => s.pitching!.outs >= g * 0.6 * 3,
+    })),
+    SEASON_CAPS.pitching,
+    '投手單季極值（門檻：每場球季 0.6 局）',
+  );
+
+  // 自責分是反向的：極致是小。單獨一列。
+  const eras = pit
+    .filter((s) => s.pitching!.outs >= 450)
+    .map((s) => (s.pitching!.er * 27) / s.pitching!.outs)
+    .sort((a, b) => a - b);
+  if (eras.length > 0) {
+    console.log(`\n  ERA 下限（投滿 150 局的 ${eras.length} 季）`);
+    console.log(
+      `    p01 ${quantile(eras, 0.01).toFixed(2)}　min ${(eras[0] ?? 0).toFixed(2)}　` +
+        `設計下限 ${ER_FLOOR.era.toFixed(2)}（${ER_FLOOR.innings} 局 ${ER_FLOOR.er} 分）　` +
+        `人類紀錄 ${ER_FLOOR.record.toFixed(2)}`,
+    );
+  }
+
+  // 出賽率：累積型的評價分吃的是這個數字，而不是率定數據。
+  //
+  // **健康季與傷缺季一定要分開量。** 混在一起的中位數同時被兩件事壓低——體力
+  // 曲線與傷病頻率——而這兩件事該用不同的旋鈕修。拿混合後的數字去調
+  // `stamina_factor`，等於把傷病的帳算到體力頭上。
+  const rateRow = (label: string, pool: typeof bat, note: string): void => {
+    const rates = pool.map((s) => (s.batting!.games / gamesOf(s.level)) * 100).sort((a, b) => a - b);
+    if (rates.length === 0) return;
+    console.log(
+      `    ${label.padEnd(6)}p10 ${quantile(rates, 0.1).toFixed(0)}%　` +
+        `p50 ${quantile(rates, 0.5).toFixed(0)}%　p90 ${quantile(rates, 0.9).toFixed(0)}%　` +
+        `max ${(rates.at(-1) ?? 0).toFixed(0)}%　${note}`,
+    );
+  };
+  const healthy = bat.filter((s) => s.seasonFactor >= 1);
+  const hurt = bat.filter((s) => s.seasonFactor < 1);
+  // 注意母體：這裡沿用 PA≥200 的濾網，所以賽季提前報銷的大傷根本不在裡面，
+  // 「傷缺」這一列其實只有小傷。要看傷病的完整殺傷力得看生涯長度，不是這裡。
+  console.log(`\n  出賽率（佔球季場次，PA≥200）　其中傷缺季佔 ${pct(hurt.length, bat.length)}`);
+  rateRow('健康', healthy, '真實先發球員 p50 約 90%　← stamina_factor 只該對這一列負責');
+  rateRow('傷缺', hurt, '');
+  rateRow('全體', bat, '');
+
+  // 出賽率上不去的時候，**先看有沒有人練到飽和點再動曲線**。sta 70 之後 staF
+  // 停在 1.0，若樣本連 70 都摸不到，那出賽率低是配點的帳，不是體力曲線的帳。
+  const stas = results.map((r) => r.peakSta).sort((a, b) => a - b);
+  // 飽和點從設定檔讀，不要抄成常數——這個數字調過一次了（70 → 65），寫死的話
+  // 報表會繼續拿舊的門檻算佔比，然後說謊。
+  const anchors = seasonCfg.playing_time.stamina_factor.anchors;
+  const sat = anchors[anchors.length - 1]!.sta;
+  console.log(
+    `\n  生涯最高 sta（全樣本）　p50 ${quantile(stas, 0.5).toFixed(0)}　` +
+      `p90 ${quantile(stas, 0.9).toFixed(0)}　max ${(stas.at(-1) ?? 0).toFixed(0)}　` +
+      `　飽和點 ${sat}（之後改換免傷）　達標佔比 ${pct(stas.filter((s) => s >= sat).length, stas.length)}`,
+  );
+
+  // 生涯長度。**這一項對分級分佈的影響遠大於任何率定數據**——累積型的分數
+  // 裡，年資本身就是分數。真實 MLB 約半數的登板者打不到三季。
+  // 同一年可能有兩列（季中轉隊、升降級），所以數的是**不重複的年份**而不是列數。
+  const proYears = results
+    .filter((r) => r.summary.seasons.length > 0)
+    .map((r) => new Set(r.summary.seasons.map((s) => s.year)).size)
+    .sort((a, b) => a - b);
+  if (proYears.length > 0) {
+    console.log('\n  職業生涯年數（母體：有職業出賽紀錄）');
+    console.log(
+      `    p10 ${quantile(proYears, 0.1).toFixed(0)}　p50 ${quantile(proYears, 0.5).toFixed(0)}　` +
+        `p90 ${quantile(proYears, 0.9).toFixed(0)}　max ${proYears.at(-1)}`,
+    );
+    for (const b of [3, 5, 10, 15, 20]) {
+      const n = proYears.filter((x) => x >= b).length;
+      const real = { 3: '~50%', 5: '~35%', 10: '~20%', 15: '~5%', 20: '~1%' }[b];
+      console.log(`    ≥${String(b).padStart(2)} 季 ${pct(n, proYears.length).padStart(7)}　真實 MLB ${real}`);
+    }
+  }
+}
 
 /**
  * 跨聯盟的報表。
@@ -523,8 +840,13 @@ describe('校準', () => {
               seed: `calib-${policy}-${i}`,
               name: '校準員',
               // 起始守位輪流換，避免整批樣本都是同一種球員——除非策略綁死了守位。
+              //
+              // **野手策略的輪替不能含 P。** 起始守位是 P 就會被上面那條強制換成投手
+              // 配點（見 runCareer），因此舊的五格輪替讓 balanced／slugger／glove 三份
+              // 樣本各有五分之一其實是投手。打者的成績分佈是拿八成打者混兩成投手量
+              // 出來的，兩邊的量綱根本不同。投手有自己的一支策略，不必混進來。
               startPosition:
-                POLICY_POSITION[policy] ?? (['SS', 'CF', 'C', '1B', 'P'] as const)[i % 5]!,
+                POLICY_POSITION[policy] ?? (['SS', 'CF', 'C', '2B', '1B'] as const)[i % 5]!,
               throws: 'R',
               bats: 'R',
             },
@@ -534,6 +856,7 @@ describe('校準', () => {
         );
       }
     report(results, policy, runs);
+    reportRealism(results);
     if (overseas) reportLeagues(results);
     reportDifficulty();
   });

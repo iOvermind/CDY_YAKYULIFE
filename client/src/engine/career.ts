@@ -62,6 +62,14 @@ export interface SeasonRecord {
   readonly difficulty: number;
   /** 頂級聯盟代碼；非頂級層級為 null。評價分只看有值的那些。 */
   readonly top: string | null;
+  /**
+   * 這一季的出賽係數，1 為健康、< 1 為傷缺。
+   *
+   * 評價分不讀它——傷病早就乘進出賽量裡了，再讀一次是重複計算。它留在這裡是
+   * 為了讓校準能把「傷缺季」與「健康季」分開量：出賽率偏低到底是體力曲線太
+   * 苛還是傷病太頻繁，混在一起是分不出來的。
+   */
+  readonly seasonFactor: number;
 }
 
 /**

@@ -120,13 +120,7 @@ export function gamesPlayed(
   const par = standardOf(standards, level).par;
   const pt = cfg.playing_time;
 
-  const staF = clamp(
-    pt.stamina_factor.value_at +
-      ((ability[pt.stamina_factor.ability] ?? pt.stamina_factor.at) - pt.stamina_factor.at) *
-        pt.stamina_factor.per_point,
-    pt.stamina_factor.min,
-    pt.stamina_factor.max,
-  );
+  const staF = staminaFactor(ability[pt.stamina_factor.ability] ?? 0, info.games);
 
   // 守位勞損：捕手是斷層級懲罰，因此移防是延長單季出賽壽命的真實手段。
   const posF = pt.position_factor[position] ?? 1.0;
@@ -138,6 +132,46 @@ export function gamesPlayed(
   return Math.round(Math.min(info.games, info.games * load * perfF * noise));
 }
 
+/**
+ * 體力健康係數 staF：由 `sta` 換算成「能撐住整季的幾成」。
+ *
+ * 錨點表分段線性內插，兩端各自壓平。**曲線不是直線**——40→55 的斜率是
+ * 55→65 的三倍，因為前半段買的是「從輪替變成先發」，後半段買的是「從先發
+ * 變成鐵人」。用單一斜率去配這兩件事，一定有一頭是錯的。
+ *
+ * 上限刻意大於 1.0：SS 的 `position_factor` 是 0.95，要讓「sta 65 的游擊手
+ * 打滿整季」成立，staF 就得補得回那 5%。
+ */
+export function staminaFactor(sta: number, leagueGames = cfg.playing_time.stamina_factor.reference_games): number {
+  const s = cfg.playing_time.stamina_factor;
+  const pts = s.anchors;
+  const first = pts[0]!;
+  const last = pts[pts.length - 1]!;
+
+  // 短賽季比較不操，所以門檻要跟著降——但**要沿能力軸降，不是沿 staF 軸降**。
+  //
+  // 曲線是凹的，兩種降法差很多：中職 120 場是大聯盟的 74%，若拿 staF 打
+  // 0.74 折，需求會直接掉到底限，體力在中職完全不影響出賽場數——而中職正是
+  // 校準的主樣本，等於把旋鈕在主樣本上關掉。沿能力軸內插則是
+  // `40 + (55−40) × 0.74 = 51`，體力仍然分得出高下。
+  //
+  // 實作上等價於把底限之上的能力距離拉長，再餵回同一條曲線。
+  const scale = leagueGames / s.reference_games;
+  const adj = scale > 0 ? first.sta + (sta - first.sta) / scale : sta;
+
+  if (adj <= first.sta) return clamp(first.value, s.min, s.max);
+  if (adj >= last.sta) return clamp(last.value, s.min, s.max);
+  for (let i = 1; i < pts.length; i++) {
+    const lo = pts[i - 1]!;
+    const hi = pts[i]!;
+    if (adj <= hi.sta) {
+      const t = (adj - lo.sta) / (hi.sta - lo.sta);
+      return clamp(lo.value + t * (hi.value - lo.value), s.min, s.max);
+    }
+  }
+  return clamp(last.value, s.min, s.max);
+}
+
 /** 教練信任度：打不好會被下放替補，打得好會被塞滿出賽。 */
 export function trustFactor(overall: number, par: number): number {
   const t = cfg.playing_time.trust_factor;
@@ -145,9 +179,21 @@ export function trustFactor(overall: number, par: number): number {
 }
 
 /**
+ * 每場打席數——棒次的代理值。
+ *
+ * 能力越高排得越前面，一場就多站一次打擊區。**刻意不走 `trustFactor`**：那條
+ * 係數 d ≥ +5 就飽和到 1.0，會把所有站得住腳的打者壓成同一個 PA/場，於是單季
+ * 打席永遠摸不到設計上限。棒次要的正是 trust 拒絕提供的那段解析度。
+ */
+export function paPerGame(overall: number, par: number): number {
+  const p = cfg.playing_time.pa_per_game;
+  return clamp(p.at_par + (overall - par) * p.per_point, p.min, p.max);
+}
+
+/**
  * 賽季打席數。
  *
- * `PA = G × (4.0~4.3) × noise + random(-G/8, +G/8)`
+ * `PA = G × paPerGame(d) × noise + random(-G/8, +G/8)`
  *
  * 絕對噪音除以場次而非用固定值——這讓隨機性隨出賽動態縮放，只打 20 場的人
  * 不會因為一個固定的 ±40 打席而數據崩壞。
@@ -156,10 +202,7 @@ export function plateAppearances(world: World, games: number, overall: number, p
   const rng = world.stream('season');
   const pt = cfg.playing_time;
 
-  // 信任度高的人排在前段棒次，打席自然多——基數係數因此掛在信任度上。
-  const trust = trustFactor(overall, par);
-  const span = pt.pa_per_game.max - pt.pa_per_game.min;
-  const perGame = pt.pa_per_game.min + span * normalize(trust, pt.trust_factor.min, pt.trust_factor.max);
+  const perGame = paPerGame(overall, par);
 
   const mult = pt.pa_noise.min + rng.next() * (pt.pa_noise.max - pt.pa_noise.min);
   const abs = games / pt.pa_absolute_noise_divisor.value;
@@ -449,10 +492,4 @@ export function positionName(position: string): string {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
-}
-
-/** 把值映射到 [0,1]，供「係數轉比例」使用。 */
-function normalize(v: number, lo: number, hi: number): number {
-  if (hi <= lo) return 0;
-  return clamp((v - lo) / (hi - lo), 0, 1);
 }

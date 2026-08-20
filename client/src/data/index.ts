@@ -968,9 +968,10 @@ export interface SeasonData {
   readonly playing_time: {
     readonly stamina_factor: {
       readonly ability: string;
-      readonly at: number;
-      readonly value_at: number;
-      readonly per_point: number;
+      /** 錨點是以幾場的賽季為尺量出來的。場次較少的聯盟依比例下調門檻。 */
+      readonly reference_games: number;
+      /** 錨點表，依 `sta` 遞增。段與段之間線性內插，兩端壓平。 */
+      readonly anchors: readonly { readonly sta: number; readonly value: number }[];
       readonly min: number;
       readonly max: number;
     };
@@ -978,7 +979,7 @@ export interface SeasonData {
     readonly position_factor: Readonly<Record<string, number>>;
     readonly position_factor_clamp: Range;
     readonly games_noise: Range;
-    readonly pa_per_game: Range;
+    readonly pa_per_game: { readonly at_par: number; readonly per_point: number } & Range;
     readonly pa_noise: Range;
     readonly pa_absolute_noise_divisor: { readonly value: number };
   };

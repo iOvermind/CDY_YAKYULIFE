@@ -9,6 +9,7 @@ import {
   playSeason,
   proBattingLine,
   proPitchingLine,
+  staminaFactor,
   trustFactor,
 } from './season.ts';
 import { pitcherRating, type Abilities } from './rating.ts';
@@ -84,6 +85,64 @@ describe('gamesPlayed', () => {
 
   it('相同種子產生相同結果', () => {
     expect(play('a', flat(50))).toBe(play('a', flat(50)));
+  });
+});
+
+// 這一組釘的是**設計決定**，不是實作細節。四句話：sta 40 打 75%、DH 55 打滿、
+// SS 65 打滿、再高不多打（改成免傷）。任何一條被下一次調參悄悄改掉都算迴歸。
+describe('staminaFactor', () => {
+  const pos = cfg.playing_time.position_factor;
+
+  it('sta 40 是底限，打 75% 的球季', () => {
+    expect(staminaFactor(40)).toBeCloseTo(0.75);
+  });
+
+  it('40 以下不再少打——那一段改用受傷率懲罰', () => {
+    expect(staminaFactor(20)).toBeCloseTo(staminaFactor(40));
+    expect(staminaFactor(0)).toBeCloseTo(staminaFactor(40));
+  });
+
+  it('DH（守位無勞損）sta 55 剛好打滿整季', () => {
+    expect(staminaFactor(55) * pos['DH']!).toBeGreaterThanOrEqual(1.0);
+    expect(staminaFactor(54) * pos['DH']!).toBeLessThan(1.0);
+  });
+
+  it('SS sta 65 剛好打滿整季——守位勞損要補得回來', () => {
+    expect(staminaFactor(65) * pos['SS']!).toBeGreaterThanOrEqual(1.0);
+    expect(staminaFactor(64) * pos['SS']!).toBeLessThan(1.0);
+  });
+
+  it('捕手就算體力頂天也打不滿——斷層級懲罰是刻意的', () => {
+    expect(staminaFactor(80) * pos['C']!).toBeLessThan(1.0);
+  });
+
+  // 精確門檻是 40 + (55−40) × 120/162 ＝ 51.11，所以「保證」要 52。51 算出
+  // 0.9975，乘 120 場是 119.7——**四捨五入之後仍然是 120 場**，實際打得滿。
+  it('短賽季門檻依比例下調——中職 120 場的 DH 練到 52 保證打滿', () => {
+    expect(staminaFactor(52, 120) * pos['DH']!).toBeGreaterThanOrEqual(1.0);
+    expect(Math.round(120 * staminaFactor(51, 120) * pos['DH']!)).toBe(120);
+    expect(Math.round(120 * staminaFactor(48, 120) * pos['DH']!)).toBeLessThan(120);
+  });
+
+  it('下調是沿能力軸，不是把 staF 打折——中職 40 不該就打滿', () => {
+    // 沿 staF 軸打 0.74 折的話這裡會是 1.0，體力在主樣本上完全失效。
+    expect(staminaFactor(40, 120) * pos['DH']!).toBeLessThan(1.0);
+  });
+
+  it('65 之後不再上升，超額體力改換免傷', () => {
+    expect(staminaFactor(80)).toBeCloseTo(staminaFactor(65));
+  });
+
+  it('曲線遞減：前半段每點比後半段值錢', () => {
+    expect(staminaFactor(50) - staminaFactor(49)).toBeGreaterThan(
+      staminaFactor(60) - staminaFactor(59),
+    );
+  });
+
+  it('夾具不能吃掉曲線頂端', () => {
+    expect(cfg.playing_time.position_factor_clamp.max).toBeGreaterThanOrEqual(
+      staminaFactor(65) * pos['SS']!,
+    );
   });
 });
 

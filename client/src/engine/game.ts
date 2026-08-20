@@ -2794,6 +2794,7 @@ export class Game {
       },
       difficulty: difficultyOf(now.par),
       top: info.top ?? null,
+      seasonFactor: this.#seasonFactor,
     });
   }
 
