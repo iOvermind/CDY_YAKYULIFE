@@ -77,8 +77,9 @@ export function proBaselineAt(level: string, d: number): Baseline {
  * 勝利份額問的是**總量**，那需要打席數，而打席數本身就是能力的函數——排得越
  * 前面站得越多次。所以這裡把整條成績單交出去，率型的那支反過來用它。
  *
- * 不含得分、打點、三振、盜壘：那些不是「能力 × 打席」算得出來的。打點吃隊友
- * 上壘，盜壘吃跑壘企圖模型，都要另外的機制。
+ * 打點、盜壘、得分、三振也在裡面。`playSeason` 算這四項時沒有另外的機制——
+ * 打點是安打與全壘打的線性組合，盜壘是上壘數乘企圖率再乘成功率，全都是同一
+ * 組率吃同一個 d。既然那邊算得出來，這邊就算得出來，只是少了亂數而已。
  */
 export function proLineAt(d: number, pa: number): BattingLine {
   const b = cfg.batting;
@@ -89,7 +90,27 @@ export function proLineAt(d: number, pa: number): BattingLine {
   const rest = hits - hr;
   const double = rest * rateAt(b.extra_base.double_rate, d);
   const triple = rest * rateAt(b.extra_base.triple_rate, d);
-  return { pa, ab, bb, ibb: 0, hits, double, triple, hr } as unknown as BattingLine;
+
+  const rbi = hits * b.rbi_per_hit + hr * b.rbi_per_hr_extra;
+  const onBase = hits + bb;
+  const sb = onBase * rateAt(b.steal.attempt_rate, d) * rateAt(b.steal.success_rate, d);
+  const runs = onBase * rateAt(b.runs_per_time_on_base, d);
+  const so = ab * rateAt(b.strikeout_rate, d);
+
+  return {
+    pa,
+    ab,
+    bb,
+    ibb: 0,
+    hits,
+    double,
+    triple,
+    hr,
+    rbi,
+    sb,
+    runs,
+    so,
+  } as unknown as BattingLine;
 }
 
 /**

@@ -124,6 +124,27 @@ function rateOf(base: Baseline, stat: string): number | null {
 }
 
 /**
+ * 一條推導成績單上的累積項。回 null 代表這項還推導不出來——投手的三振、救援、
+ * 中繼都在這一邊，它們要的是投手版的 `proLineAt`，而那條還沒建。
+ */
+function countingOf(line: BattingLine, stat: string): number | null {
+  switch (stat) {
+    case 'hr':
+      return line.hr;
+    case 'rbi':
+      return line.rbi;
+    case 'sb':
+      return line.sb;
+    case 'runs':
+      return line.runs;
+    case 'hits':
+      return line.hits;
+    default:
+      return null;
+  }
+}
+
+/**
  * 這一年拿下這項獎需要的成績。
  *
  * 率型：`聯盟平均 + (門檻 − 聯盟平均) × (1 ± band)`。**波動加在超出聯盟平均
@@ -164,8 +185,13 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
     return total * swing;
   }
 
-  if (award.pool !== undefined && d !== undefined && award.stat === 'hr') {
-    return proLineAt(d, proPaAt(d, games)).hr * swing;
+  // 累積型：門檻線就是「那個等級的球員在這個聯盟打這麼多場，會累積到多少」。
+  // 場次已經在 proPaAt 裡了，所以短季聯盟不必再乘一次比例——那正是寫死 base
+  // 的那條路的老問題：它照場次縮線，卻沒照聯盟水準縮，結果短季反而好拿。
+  if (d !== undefined) {
+    const line = proLineAt(d, proPaAt(d, games));
+    const value = countingOf(line, award.stat);
+    if (value !== null) return value * swing;
   }
 
   if (award.base === undefined) return null;

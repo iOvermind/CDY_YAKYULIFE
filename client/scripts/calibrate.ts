@@ -38,10 +38,18 @@ import {
   type SeasonRecord,
 } from '../src/engine/career.ts';
 import type { BattingLine, PitchingLine } from '../src/engine/amateurStats.ts';
-import type { AwardRecord } from '../src/engine/awards.ts';
+import { annualAwards, type AwardRecord } from '../src/engine/awards.ts';
+import { fieldingResponsibility, positionAverage } from '../src/engine/defense.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
-import { battingShares, proBaseline, responsibilityOf, winPct } from '../src/engine/metrics.ts';
-import type { Abilities } from '../src/engine/rating.ts';
+import {
+  battingShares,
+  fieldingShares,
+  proBaseline,
+  responsibilityOf,
+  winPct,
+} from '../src/engine/metrics.ts';
+import { abilitySpread, zQuantile } from '../src/engine/rivalPool.ts';
+import { defenseScore, type Abilities } from '../src/engine/rating.ts';
 import { World } from '../src/engine/rng.ts';
 import { playSeason } from '../src/engine/season.ts';
 
@@ -764,6 +772,175 @@ function uniformAbility(value: number): Abilities {
 }
 
 /**
+ * 單季得獎率的直接量測。
+ *
+ * 生涯模擬量不到靶。600 局只跑出 7 個大聯盟球季（而且那兩個人的份額勝率低於
+ * 替代水準），可是靶偏偏訂在大聯盟——「真正難得的獎項應該以 MLB 為主」。用
+ * 那 7 季去調 alpha 等於在調雜訊。
+ *
+ * 所以改成不經生涯路徑：直接在每個聯盟造一批指定能力的球員各打一整季，走
+ * **完整的正式發獎路徑**（`annualAwards`），數他們跨過幾次。
+ *
+ * 這量的是「一個 par＋d 的球員在這個聯盟一年拿到某獎的機率」，不是玩家實際會
+ * 遇到的難度——後者還要乘上他能不能長到那個 d。但要調的旋鈕（門檻線）只跟前
+ * 者有關，混進生涯長度只會讓訊號變糊。
+ *
+ * 用 `annualAwards` 而不是自己比對 `winningLine`，是為了不讓校準跟正式路徑分岔：
+ * 資格閘、投打分流、球隊勝率校正全都在那支函式裡，重寫一份遲早會對不起來。
+ */
+/** 造一個能力 par+d 的野手，讓他在該聯盟打一季，回傳他拿到的獎。 */
+function awardsAtD(
+  world: World,
+  level: string,
+  info: { org: string; games: number; par: number },
+  spread: number,
+  d: number,
+  year: number,
+): readonly string[] {
+  const POS = 'CF';
+  const overall = info.par + d;
+  const ability = uniformAbility(overall);
+  const line = playSeason(world, {
+    level, ability, position: POS, overall, better: 'fielder', twoWay: false,
+    standards: null,
+  });
+  if (line.batting === null) return [];
+
+  const batting = battingShares(line.batting, proBaseline(level), null);
+  const average = positionAverage(POS, level, null);
+  const fielding = average === null ? null : fieldingShares({
+    defenseScore: defenseScore(ability, POS),
+    positionAverage: average,
+    positionShare: fieldingResponsibility(POS),
+    leagueGames: info.games,
+    gamesShare: line.batting.games / info.games,
+  });
+
+  return annualAwards(world, {
+    year, org: info.org, level, leagueGames: info.games, spread, d,
+    team: '樣本', rookie: false,
+    batting: line.batting, pitching: null, role: null,
+    position: POS,
+    fieldingWinPct: fielding === null ? null : winPct(fielding),
+    winShares: batting.win + (fielding?.win ?? 0),
+    battingWinShares: batting.win,
+  }).map((a) => a.code);
+}
+
+/**
+ * 聯盟母體的單季得獎率。
+ *
+ * 固定 d 的掃描量的是「能力剛好 par+d 的人」，那不是靶。ADR 0015 的靶是**整個
+ * 聯盟的球員**每季有多少比例拿到獎，所以要拿能力分佈去加權。
+ *
+ * 分佈不是另外假設的，是 `abilitySpread` 自己的定義反推：它把 N(par, spread)
+ * 的 `replacement_quantile` 分位數壓在 `min` 上，所以聯盟球員就是這條常態在
+ * `min` 左截斷的部分。用分層抽樣掃分位數，比隨機抽的雜訊小得多。
+ */
+function reportPopulationAwardRates(): void {
+  const SAMPLES = 3000;
+  const LEVELS = ['MLB', 'NPB1', 'CPBL1', 'KBO1', 'LMB', 'ABL'];
+  const alpha = awardsCfg.rival_pool.replacement_quantile;
+
+  console.log('\n── 單季得獎率（聯盟母體加權：靶＝MLB 單項王 1–3%、明星賽 10 幾%）');
+  console.log(`  每聯盟 ${SAMPLES} 季，能力照 N(par, 離散度) 在 min 左截斷分層抽樣。`);
+
+  for (const level of LEVELS) {
+    const info = leagues.levels[level];
+    if (info === undefined || info.top === undefined) continue;
+    const spread = abilitySpread(level, null);
+    const world = new World(`awardpop-${level}`);
+    const tally = new Map<string, number>();
+
+    for (let i = 0; i < SAMPLES; i++) {
+      const p = alpha + ((i + 0.5) / SAMPLES) * (1 - alpha);
+      const d = spread * zQuantile(p);
+      for (const code of awardsAtD(world, level, info, spread, d, 2000 + i)) {
+        tally.set(code, (tally.get(code) ?? 0) + 1);
+      }
+    }
+
+    const line = [...tally]
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, n]) => `${code} ${((n / SAMPLES) * 100).toFixed(1)}%`);
+    console.log(
+      `  ${info.name}（${level}）　${line.length === 0 ? '（一座都沒有）' : line.join('　')}`,
+    );
+  }
+  console.log('  ※ 只跑野手（CF、不投球），投手獎與救援中繼不會出現在這裡。');
+}
+
+function reportAwardRates(): void {
+  const SAMPLES = 500;
+  const LEVELS = ['MLB', 'NPB1', 'CPBL1', 'KBO1', 'LMB', 'ABL'];
+  // 靶講的是「一個夠好的球員」。par 上下都掃一遍，才看得出線的斜率——只量一
+  // 個 d 值的話，率對了也可能是線的形狀錯了剛好抵銷。
+  const DS = [0, 6, 12, 18];
+  const POS = 'CF';
+
+  console.log('\n── 單季得獎率（直接量測：各聯盟造一批球員各打一季）');
+  console.log(`  每格 ${SAMPLES} 季，守位 ${POS}，走正式的 annualAwards 路徑。`);
+  console.log('  靶：MLB 的單項王 1–3%、明星賽 10 幾%。其餘聯盟照設計本來就該更寬鬆。');
+
+  for (const level of LEVELS) {
+    const info = leagues.levels[level];
+    if (info === undefined || info.top === undefined) continue;
+    const spread = abilitySpread(level, null);
+
+    console.log(
+      `\n  ${info.name}（${level}｜par ${info.par}｜${info.games} 場｜離散度 ${spread.toFixed(2)}）`,
+    );
+    for (const d of DS) {
+      const overall = info.par + d;
+      const ability = uniformAbility(overall);
+      const world = new World(`awardrate-${level}-${d}`);
+      const tally = new Map<string, number>();
+
+      for (let i = 0; i < SAMPLES; i++) {
+        const line = playSeason(world, {
+          level, ability, position: POS, overall, better: 'fielder', twoWay: false,
+          standards: null,
+        });
+        if (line.batting === null) continue;
+
+        const batting = battingShares(line.batting, proBaseline(level), null);
+        const average = positionAverage(POS, level, null);
+        const fielding = average === null ? null : fieldingShares({
+          defenseScore: defenseScore(ability, POS),
+          positionAverage: average,
+          positionShare: fieldingResponsibility(POS),
+          leagueGames: info.games,
+          gamesShare: line.batting.games / info.games,
+        });
+
+        for (const a of annualAwards(world, {
+          year: 2000 + i, org: info.org, level, leagueGames: info.games, spread, d,
+          team: '樣本', rookie: false,
+          batting: line.batting, pitching: null, role: null,
+          position: POS,
+          fieldingWinPct: fielding === null ? null : winPct(fielding),
+          winShares: batting.win + (fielding?.win ?? 0),
+          battingWinShares: batting.win,
+        })) {
+          tally.set(a.code, (tally.get(a.code) ?? 0) + 1);
+        }
+      }
+
+      const line = [...tally]
+        .sort((a, b) => b[1] - a[1])
+        .map(([code, n]) => {
+          const rate = (n / SAMPLES) * 100;
+          return `${code} ${rate.toFixed(1)}%`;
+        });
+      console.log(
+        `    d＝${String(d).padStart(2)}　${line.length === 0 ? '（一座都沒有）' : line.join('　')}`,
+      );
+    }
+  }
+  console.log('\n  ※ 只跑野手（CF、不投球），所以投手獎與救援中繼不會出現在這裡。');
+}
+
+/**
  * 難度係數的實驗。
  *
  * 這是唯一乾淨的量法：**同一個能力值，在每個頂級聯盟各打一批球季**。生涯樣本
@@ -919,6 +1096,8 @@ describe('校準', () => {
     report(results, policy, runs);
     reportRealism(results);
     if (overseas) reportLeagues(results);
+    reportPopulationAwardRates();
+    reportAwardRates();
     reportDifficulty();
   });
 });

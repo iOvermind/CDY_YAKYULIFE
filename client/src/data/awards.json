@@ -56,7 +56,7 @@
         "stat": "hr",
         "kind": "counting",
         "pool": "batter",
-        "band": 0.15,
+        "band": 0.35,
         "min_pa": 300
       },
       {
@@ -65,8 +65,8 @@
         "side": "batter",
         "stat": "rbi",
         "kind": "counting",
-        "base": 95,
-        "band": 0.15,
+        "pool": "batter",
+        "band": 0.2,
         "min_pa": 300
       },
       {
@@ -75,7 +75,7 @@
         "side": "batter",
         "stat": "sb",
         "kind": "counting",
-        "base": 35,
+        "pool": "batter",
         "band": 0.2,
         "min_pa": 300
       },
