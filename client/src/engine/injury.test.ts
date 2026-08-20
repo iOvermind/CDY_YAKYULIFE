@@ -43,6 +43,79 @@ describe('受傷機率', () => {
     expect(injuryChance({ age: 25, traits: iron, extraRisk: 20 })).toBe(plain + 20);
   });
 
+  it('省略體力時這一項不計——舊呼叫端的行為不變', () => {
+    expect(injuryChance({ age: 25, traits: none, stamina: undefined })).toBe(
+      injuryChance({ age: 25, traits: none }),
+    );
+  });
+
+  it('體力 40 以下加受傷率——那一段不再少打，改成容易壞', () => {
+    const at40 = injuryChance({ age: 25, traits: none, stamina: 40 });
+    expect(injuryChance({ age: 25, traits: none, stamina: 30 })).toBeGreaterThan(at40);
+    expect(injuryChance({ age: 25, traits: none, stamina: 20 })).toBeGreaterThan(
+      injuryChance({ age: 25, traits: none, stamina: 30 }),
+    );
+  });
+
+  it('打滿標準以下、40 以上沒有修正——那一段的回報全在出賽場數上', () => {
+    const plain = injuryChance({ age: 25, traits: none });
+    for (const sta of [40, 48, 55]) {
+      expect(injuryChance({ age: 25, traits: none, stamina: sta, position: 'DH' })).toBe(plain);
+    }
+  });
+
+  it('超過打滿標準的體力折成免傷——體力從來不是白練的', () => {
+    const plain = injuryChance({ age: 25, traits: none });
+    expect(injuryChance({ age: 25, traits: none, stamina: 64, position: 'DH' })).toBeLessThan(plain);
+  });
+
+  it('免傷的零點是守位自己的——同樣 sta 60，DH 換得到、游擊換不到', () => {
+    const dh = injuryChance({ age: 25, traits: none, stamina: 60, position: 'DH' });
+    const ss = injuryChance({ age: 25, traits: none, stamina: 60, position: 'SS' });
+    expect(dh).toBeLessThan(ss);
+    expect(ss).toBe(injuryChance({ age: 25, traits: none }));
+  });
+
+  it('捕手的零點釘在 70，不是反解出來的 76.5', () => {
+    const plain = injuryChance({ age: 25, traits: none });
+    expect(injuryChance({ age: 25, traits: none, stamina: 70, position: 'C' })).toBe(plain);
+    expect(injuryChance({ age: 25, traits: none, stamina: 76, position: 'C' })).toBeLessThan(plain);
+  });
+
+  it('短賽季的零點跟著降——中職的 DH 比大聯盟的早換到免傷', () => {
+    const short = injuryChance({ age: 25, traits: none, stamina: 55, position: 'DH', leagueGames: 120 });
+    const long = injuryChance({ age: 25, traits: none, stamina: 55, position: 'DH', leagueGames: 162 });
+    expect(short).toBeLessThan(long);
+  });
+
+  // 體力可以買到魔鬼筋肉人給的東西，不能買到比它更多的——否則特性就不是特性了。
+  it('體力折滿正好落在魔鬼筋肉人的上限上，不越過它', () => {
+    const maxed = injuryChance({ age: 25, traits: none, stamina: 99, position: 'DH' });
+    expect(maxed).toBe(cfg.chance.traits.iron.cap);
+    expect(maxed).toBe(cfg.chance.base - cfg.chance.stamina.max_cut);
+  });
+
+  it('折扣有上限——再練下去不會歸零', () => {
+    expect(injuryChance({ age: 25, traits: none, stamina: 200, position: 'DH' })).toBe(
+      injuryChance({ age: 25, traits: none, stamina: 99, position: 'DH' }),
+    );
+  });
+
+  it('印在卡片上的數字是整數', () => {
+    for (const sta of [37, 61, 63, 71, 73]) {
+      for (const p of ['DH', 'SS', 'C']) {
+        expect(injuryChance({ age: 25, traits: none, stamina: sta, position: p })).toBe(
+          Math.round(injuryChance({ age: 25, traits: none, stamina: sta, position: p })),
+        );
+      }
+    }
+  });
+
+  it('體力算在體質的上下限裡面，不像事件卡那樣穿透魔鬼筋肉人', () => {
+    const iron = new Set(['iron']);
+    expect(injuryChance({ age: 38, traits: iron, stamina: 20 })).toBe(cfg.chance.traits.iron.cap);
+  });
+
   it('永遠在上下限之內', () => {
     expect(injuryChance({ age: 44, traits: new Set(['glass']), extraRisk: 300 })).toBe(
       cfg.chance.clamp.max,

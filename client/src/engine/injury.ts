@@ -13,6 +13,7 @@
 
 import { injury as cfg } from '../data/index.ts';
 import type { World } from './rng.ts';
+import { fullSeasonSta, staThresholdForLeague } from './season.ts';
 
 /** 一次傷病的結果。 */
 export interface Injury {
@@ -40,6 +41,44 @@ const HEALTHY: Injury = {
 };
 
 /**
+ * 體力折在受傷機率上的部分。
+ *
+ * **體力有兩種貨幣。**第一種是出賽場數，但那一側每個守位都有到頂的地方——DH 55、
+ * SS 65、捕手 80——到頂之後再練，場數上一分錢也拿不到。第二種就是這裡：超過
+ * 「打滿標準」的體力改折成免傷。體力從來不是白練的。
+ *
+ * 零點是**各守位自己的**打滿標準，由 {@link fullSeasonSta} 反解，不是手寫的。
+ * 捕手反解出 76.5 而實測沒有人到得了 65，所以用 `zero_point_cap` 壓到 70——70 是
+ * 捕手蹲到 144 場的地方。
+ *
+ * 另一頭：`floor_sta` 40 以下反過來加風險。那是 `stamina_factor` 的底限，再低不會
+ * 少打，改成容易壞。
+ */
+function staminaRisk(options: {
+  readonly stamina?: number | undefined;
+  readonly position?: string | undefined;
+  readonly leagueGames?: number | undefined;
+}): number {
+  const s = cfg.chance.stamina;
+  const sta = options.stamina;
+  if (sta === undefined) return 0;
+
+  if (sta < s.floor_sta) {
+    return Math.round(Math.min(s.max_add, (s.floor_sta - sta) * s.per_point_below));
+  }
+
+  // cap 先套在 162 場的尺上再換算到本聯盟，順序反過來的話短賽季的捕手會拿到
+  // 比長賽季更高的零點——反解已經隨場次降下去，cap 卻沒有。
+  const zero = staThresholdForLeague(
+    Math.min(s.zero_point_cap, fullSeasonSta(options.position ?? 'DH')),
+    options.leagueGames,
+  );
+  if (sta <= zero) return 0;
+  // 取整：這個數字會原樣印在健康回報卡上。
+  return -Math.round(Math.min(s.max_cut, (sta - zero) * s.per_point_above));
+}
+
+/**
  * 這一季的受傷機率。
  *
  * 順序要緊：先套年齡與逃學威龍的加減，再套魔鬼筋肉人／帕瓦諾的上下限，**最後才加事件
@@ -50,6 +89,12 @@ export function injuryChance(options: {
   readonly traits: ReadonlySet<string>;
   /** 事件卡等自找的額外風險。 */
   readonly extraRisk?: number;
+  /** 體力。省略時這一項不計。 */
+  readonly stamina?: number | undefined;
+  /** 守位，決定免傷的零點。省略時以 DH 計。 */
+  readonly position?: string | undefined;
+  /** 聯盟場次，短賽季的零點跟著下調。 */
+  readonly leagueGames?: number | undefined;
 }): number {
   const c = cfg.chance;
   let p = c.base;
@@ -60,6 +105,8 @@ export function injuryChance(options: {
       break;
     }
   }
+
+  p += staminaRisk(options);
 
   const t = c.traits;
   if (options.traits.has('academy') && options.age < t.academy.before_age) p += t.academy.add;
@@ -86,6 +133,9 @@ export function rollInjury(
     readonly age: number;
     readonly traits: ReadonlySet<string>;
     readonly extraRisk?: number;
+    readonly stamina?: number | undefined;
+    readonly position?: string | undefined;
+    readonly leagueGames?: number | undefined;
   },
 ): Injury {
   const rng = world.stream('health');

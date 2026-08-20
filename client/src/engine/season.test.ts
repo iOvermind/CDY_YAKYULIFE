@@ -10,6 +10,7 @@ import {
   proBattingLine,
   proPitchingLine,
   staminaFactor,
+  fullSeasonSta,
   trustFactor,
 } from './season.ts';
 import { pitcherRating, type Abilities } from './rating.ts';
@@ -112,8 +113,22 @@ describe('staminaFactor', () => {
     expect(staminaFactor(64) * pos['SS']!).toBeLessThan(1.0);
   });
 
-  it('捕手就算體力頂天也打不滿——斷層級懲罰是刻意的', () => {
-    expect(staminaFactor(80) * pos['C']!).toBeLessThan(1.0);
+  // 與 ADR 0013 的「中職 DH 51 打得滿、52 保證打滿」是同一個分別：76.5 是
+  // load 剛好到 1.0 的地方，80 是連 games_noise 的下緣都吃得住的地方——曲線
+  // 頂點訂在 80 是為了後者。
+  it('捕手 76.5 蹲得滿、80 才保證蹲滿——斷層級懲罰是刻意的', () => {
+    expect(staminaFactor(76.5) * pos['C']!).toBeGreaterThanOrEqual(1.0);
+    expect(staminaFactor(76) * pos['C']!).toBeLessThan(1.0);
+    expect(staminaFactor(80) * pos['C']!).toBeCloseTo(
+      cfg.playing_time.position_factor_clamp.max,
+      3,
+    );
+  });
+
+  // 這是曲線頂點存在的理由：不是要捕手真的練到 80（實測生涯最高 sta max 64），
+  // 而是 70 這個中途點要落在 144 場上，沒有 80 的錨點就撐不出那段斜率。
+  it('捕手 sta 70 蹲 144 場', () => {
+    expect(Math.round(162 * staminaFactor(70) * pos['C']!)).toBe(144);
   });
 
   // 精確門檻是 40 + (55−40) × 120/162 ＝ 51.11，所以「保證」要 52。51 算出
@@ -129,8 +144,31 @@ describe('staminaFactor', () => {
     expect(staminaFactor(40, 120) * pos['DH']!).toBeLessThan(1.0);
   });
 
-  it('65 之後不再上升，超額體力改換免傷', () => {
-    expect(staminaFactor(80)).toBeCloseTo(staminaFactor(65));
+  it('80 之後不再上升，超額體力改換免傷', () => {
+    expect(staminaFactor(95)).toBeCloseTo(staminaFactor(80));
+  });
+
+  it('每個守位的打滿門檻都是反解出來的，不是手寫的', () => {
+    for (const p of ['DH', '1B', 'LF', '3B', '2B', 'SS', 'C']) {
+      const need = fullSeasonSta(p);
+      expect(staminaFactor(need) * pos[p]!).toBeCloseTo(1.0, 3);
+    }
+  });
+
+  it('DH 55、SS 65、捕手 76.5——階梯照守位勞損排開', () => {
+    expect(fullSeasonSta('DH')).toBeCloseTo(55, 1);
+    // 1.053 是 1/0.95 四捨五入過的，所以反解回來是 64.93 不是乾淨的 65。
+    expect(fullSeasonSta('SS')).toBeCloseTo(65, 0);
+    expect(fullSeasonSta('C')).toBeCloseTo(76.5, 0);
+    expect(fullSeasonSta('C')).toBeGreaterThan(fullSeasonSta('SS'));
+    // 中間各守位單調遞增，不能有兩個守位擠在同一點。
+    const ladder = ['DH', '1B', 'LF', '3B', '2B', 'SS'].map((p) => fullSeasonSta(p));
+    for (let i = 1; i < ladder.length; i++) expect(ladder[i]!).toBeGreaterThan(ladder[i - 1]!);
+  });
+
+  it('打滿門檻跟著聯盟場次沿能力軸下調', () => {
+    expect(fullSeasonSta('DH', 120)).toBeCloseTo(51.1, 1);
+    expect(Math.round(120 * staminaFactor(fullSeasonSta('DH', 120), 120) * pos['DH']!)).toBe(120);
   });
 
   it('曲線遞減：前半段每點比後半段值錢', () => {

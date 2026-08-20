@@ -172,6 +172,58 @@ export function staminaFactor(sta: number, leagueGames = cfg.playing_time.stamin
   return clamp(last.value, s.min, s.max);
 }
 
+/**
+ * 這個守位「打滿整季」需要的 `sta`。
+ *
+ * 反解 `staminaFactor(sta) × posF = 1`。這是 {@link staminaFactor} 的逆函數，
+ * 所以它**不是另一組手寫數字**——改了錨點表或 `position_factor`，這裡自動跟著動。
+ *
+ * 得到的階梯是 DH 55、1B 57、LF 59、3B/RF 61、2B 63、SS/CF 65、C 76.5。
+ *
+ * 捕手那個 76.5 沒有人到得了（實測生涯最高 sta max 64），所以傷病那一側用
+ * `zero_point_cap` 把它壓到 70——但**那是傷病自己的取捨，不屬於這個函數**，
+ * 這裡照實回傳反解的結果。
+ */
+export function fullSeasonSta(
+  position: string,
+  leagueGames = cfg.playing_time.stamina_factor.reference_games,
+): number {
+  const s = cfg.playing_time.stamina_factor;
+  const posF = cfg.playing_time.position_factor[position] ?? 1.0;
+  const want = 1 / posF;
+  const pts = s.anchors;
+
+  let base = pts[pts.length - 1]!.sta;
+  for (let i = 1; i < pts.length; i++) {
+    const lo = pts[i - 1]!;
+    const hi = pts[i]!;
+    if (want <= hi.value) {
+      const span = hi.value - lo.value;
+      const t = span === 0 ? 0 : (want - lo.value) / span;
+      base = lo.sta + t * (hi.sta - lo.sta);
+      break;
+    }
+  }
+  if (want <= pts[0]!.value) base = pts[0]!.sta;
+
+  return staThresholdForLeague(base, leagueGames);
+}
+
+/**
+ * 把一個以 162 場為尺量出的 `sta` 門檻換算到別的聯盟。
+ *
+ * 與 {@link staminaFactor} 內部的短賽季調整是同一件事反過來走，抽出來是為了讓
+ * 傷病那一側也能沿同一條軸換算，而不是各寫各的。
+ */
+export function staThresholdForLeague(
+  sta: number,
+  leagueGames = cfg.playing_time.stamina_factor.reference_games,
+): number {
+  const s = cfg.playing_time.stamina_factor;
+  const floor = s.anchors[0]!.sta;
+  return floor + (sta - floor) * (leagueGames / s.reference_games);
+}
+
 /** 教練信任度：打不好會被下放替補，打得好會被塞滿出賽。 */
 export function trustFactor(overall: number, par: number): number {
   const t = cfg.playing_time.trust_factor;

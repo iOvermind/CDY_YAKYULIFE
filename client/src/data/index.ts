@@ -222,6 +222,19 @@ export interface InjuryData {
     readonly base: number;
     readonly age_steps: { readonly tiers: readonly { readonly from_age: number; readonly add: number }[] };
     readonly clamp: Range;
+    /**
+     * 體力折進受傷機率的部分。出賽場數那一側到頂之後，超額的體力改換這個。
+     * 零點是各守位自己的打滿標準（反解自 `stamina_factor`），捕手釘在 `zero_point_cap`。
+     */
+    readonly stamina: {
+      readonly ability: string;
+      readonly floor_sta: number;
+      readonly per_point_below: number;
+      readonly max_add: number;
+      readonly per_point_above: number;
+      readonly max_cut: number;
+      readonly zero_point_cap: number;
+    };
     readonly traits: {
       readonly academy: { readonly before_age: number; readonly add: number };
       readonly iron: { readonly cap: number };

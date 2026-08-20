@@ -1648,12 +1648,35 @@ export class Game {
     // 感情狀態雙向回饋到傷病：穩定降風險、風波升風險。與事件卡的自找風險同性質，
     // 不受魔鬼筋肉人上限保護。
     const extraRisk = this.#injuryRisk + injuryRiskModifier(this.#love);
+
+    // 體力也吃進受傷機率：40 以下加、超過這個守位的「打滿標準」減。零點是守位
+    // 自己的（DH 55、SS 65、捕手 70），所以蹲捕的免傷比 DH 難換得多。用的是
+    // **本體能力**不是當季能力——感情加成抬的是這一年的表現，不是他的身體。
+    const pro = this.#pro;
+    const player = this.#player;
+    const position =
+      pro === null || player === null
+        ? undefined
+        : (pro.position ??
+          ratingPosition(player.startPosition, { ability: this.#ability, level: pro.level }));
+    const durability = {
+      stamina: this.#ability['sta'],
+      position,
+      leagueGames: pro === null ? undefined : levelOf(pro.level).games,
+    };
+
     const result = rollInjury(this.world, {
       age: this.#age,
       traits: this.#traits,
       extraRisk,
+      ...durability,
     });
-    const chance = injuryChance({ age: this.#age, traits: this.#traits, extraRisk });
+    const chance = injuryChance({
+      age: this.#age,
+      traits: this.#traits,
+      extraRisk,
+      ...durability,
+    });
     this.#injuryRisk = 0;
     this.#seasonFactor = result.seasonFactor;
 

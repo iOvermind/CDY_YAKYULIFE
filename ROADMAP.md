@@ -199,6 +199,25 @@ grill 期間浮出、刻意延後的兩項。都屬於「測量與靶心」而�
     在調門檻之前要先確認量出來的成績像不像真的球員成績——門檻是把分佈切段，
     切錯段的前提是分佈本身可信。這一項排在門檻之前。
 
+    **進度（2026-08-21）**——這一項拆成三段，出賽量那一段做完了：
+
+    *   [x] **出賽量**：`stamina_factor` 改成錨點表，健康球季的出賽率 p50 從 74% 抬到
+        84%（真實先發球員約 90%），門檻改由聯盟 par 推導。見
+        [ADR 0013](docs/adr/0013-stamina-sets-games-played-scaled-on-the-ability-axis.md)。
+    *   [x] **能力軸上半段的死區**：門檻以上的體力原本什麼都換不到，改成折抵受傷
+        機率，零點是各守位自己的打滿門檻。見
+        [ADR 0016](docs/adr/0016-saturated-stamina-converts-to-injury-resistance.md)。
+        這一段是順手補的，不是分佈不真實的原因。
+    *   [ ] **獎項取得率**（下一步，也是真正的根因）：71% 的生涯拿過年度最佳打者、
+        平均每局 2.91 座——一個十五年的生涯裡有五分之一的年份是全聯盟最佳打者。
+        **對手模型太弱。** 獎項的線改由對手池的極值推導（[ADR 0014](docs/adr/0014-award-lines-derive-from-extreme-value-of-the-rival-pool.md)）、
+        取得率的靠點放在球季層而非生涯層（[ADR 0015](docs/adr/0015-award-rates-anchor-at-the-season-not-the-career.md)）
+        兩份決策已經寫好，**實作還沒動**。
+
+    **目前紅著的護欄**：`scripts/guardrail.test.ts` 的名人堂比例 17.6%，斷言上限
+    12%、目標 2%。那是上面第三段還沒做完的直接後果，**不要去放寬它**，它紅得
+    有道理。順序仍然是：獎項取得率 → 保底規則 → 分級門檻。
+
 ### 已修：兩個取樣毛病（記在這裡，因為它們解釋了上面的數字為何變動）
 
 *   `scripts/guardrail.test.ts` 與 `scripts/calibrate.ts` 的 balanced 能力清單全是野手側，
