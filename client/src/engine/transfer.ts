@@ -109,8 +109,9 @@ export function landingLevel(
   overall: number,
   standards: LeagueStandards | null = null,
   servedYears = 0,
+  approach: Approach = 'recruit',
 ): string | null {
-  const premium = importPremium(org, servedYears);
+  const premium = importPremium(org, servedYears, approach);
   let best: string | null = null;
   // pathOf 由低到高，因此最後一個達標的就是最高的那一層。
   for (const level of pathOf(org)) {
@@ -120,9 +121,17 @@ export function landingLevel(
 }
 
 /**
+ * 誰主動。外籍加成只在球團主動的那一邊成立——見 ADR 0012。
+ *
+ * - `recruit`：球團上門找你。挖角、入札、自由市場都是這一種。
+ * - `seek`：你上門找容身之處。尋路是這一種。
+ */
+export type Approach = 'recruit' | 'seek';
+
+/**
  * 這個人在這個體系要不要吃外籍加成。
  *
- * 兩種情況不吃：
+ * 三種情況不吃：
  *
  * - **回母國。** 外籍加成的理由是「名額有限，球團得證明簽這個人比用本地人
  *   好」，對本地人不成立——一個在日職待不下去的台灣球員回中職，他就是個中職
@@ -130,8 +139,16 @@ export function landingLevel(
  * - **在當地服務夠久。** 日職的「在籍八年視同本土」是真實規則：待滿之後不再
  *   佔用外籍名額。這個身分**留得住**——離開日職去韓職打幾年再回來，八年還是
  *   那八年，因此年資是累計的而不是連續的。
+ * - **是你去找他們。** 那個「得明顯強過本土替代人選」的論證預設了球團在挑人。
+ *   被釋出或被下放的人自己找上門時，澳職球團的替代人選不是本土明星，是沒有
+ *   人——見 ADR 0012。
  */
-export function importPremium(org: string, servedYears: number): number {
+export function importPremium(
+  org: string,
+  servedYears: number,
+  approach: Approach = 'recruit',
+): number {
+  if (approach === 'seek') return 0;
   if (org === cfg.home_org.value) return 0;
   const threshold = orgConfig(org)?.domestic_after_years;
   if (threshold !== undefined && servedYears >= threshold) return 0;
@@ -139,12 +156,17 @@ export function importPremium(org: string, servedYears: number): number {
 }
 
 /** 落地在頂級聯盟需要的能力。怪物條款與簽約金的 d 值都拿它當基準。 */
-function topLandingBar(org: string, standards: LeagueStandards | null, servedYears = 0): number {
+function topLandingBar(
+  org: string,
+  standards: LeagueStandards | null,
+  servedYears = 0,
+  approach: Approach = 'recruit',
+): number {
   const path = pathOf(org);
   const top = path[path.length - 1] ?? '';
   // 與 landingLevel 走同一個加成——先前這裡寫死 import_premium，回母國時門檻
   // 因此被高估四分，簽約金與怪物條款都連帶算錯。
-  return standardOf(standards, top).min + importPremium(org, servedYears);
+  return standardOf(standards, top).min + importPremium(org, servedYears, approach);
 }
 
 /** 抽一支球隊。走訪順序照 teams.json 的宣告順序，否則同一個種子會抽出不同結果。 */
@@ -344,6 +366,13 @@ export interface FallbackContext {
   readonly topLevelOnly?: boolean;
   /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
   readonly servedYears?: ServedYears;
+  /**
+   * 誰主動。預設是 `seek`——這個函式的主場是釋出與下放。
+   *
+   * 自由市場借用了同一份名單，但那條路是 `recruit`：**FA 問的是「誰想要你」**，
+   * 球團在挑人，外籍名額的競爭仍然成立。見 ADR 0012。
+   */
+  readonly approach?: Approach;
 }
 
 /**
@@ -357,12 +386,13 @@ export interface FallbackContext {
 export function fallbackOffers(world: World, ctx: FallbackContext): readonly TransferOffer[] {
   const out: TransferOffer[] = [];
   const tables: TableCache = new Map();
+  const approach = ctx.approach ?? 'seek';
 
   for (const org of dataKeys(cfg.orgs)) {
     if (orgConfig(org) === undefined) continue;
     if (org === ctx.currentOrg) continue;
     const served = servedIn(ctx.servedYears, org);
-    const level = landingLevel(org, ctx.overall, ctx.standards, served);
+    const level = landingLevel(org, ctx.overall, ctx.standards, served, approach);
     if (level === null) continue;
     if (ctx.topLevelOnly === true && leagues.levels[level]?.top === undefined) continue;
     if (ctx.minPar !== undefined && standardOf(ctx.standards, level).par < ctx.minPar) continue;
@@ -378,7 +408,11 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
       level,
       levelName: leagues.levels[level]?.name ?? level,
       team,
-      bonus: signingBonus(org, ctx.overall - topLandingBar(org, ctx.standards, served), odds),
+      bonus: signingBonus(
+        org,
+        ctx.overall - topLandingBar(org, ctx.standards, served, approach),
+        odds,
+      ),
       homecoming: ctx.playedOrgs.has(org),
       odds,
       years: contractLength(odds),

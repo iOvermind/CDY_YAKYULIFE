@@ -3124,6 +3124,8 @@ export class Game {
       ...fallbackOffers(this.world, {
         ...this.#transferContext,
         minPar: standardOf(this.#standards, pro.level).par,
+        // 借用尋路的名單，但這條路是球團在挑人——外籍加成照收。見 ADR 0012。
+        approach: 'recruit',
       }),
     ];
     if (offers.length === 0) {
