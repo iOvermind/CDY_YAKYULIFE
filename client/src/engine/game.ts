@@ -3389,7 +3389,11 @@ export class Game {
     pro.level = offer.level;
     pro.team = offer.team;
     pro.position = null;
-    pro.yearsAtBottom = 0;
+    // **底層年資不因換體系歸零。** 它量的是「連續在最低層級掙扎了幾季」，那是
+    // 球員的狀態，不是球團的帳。歸零的話，戰力外轉隊等於每次再送滿一次寬限期，
+    // 六個體系就能讓一個早該收山的人一直再拼一年。落腳在底層以上才算真的重新
+    // 站穩，那時才歸零。
+    pro.yearsAtBottom = pathOf(levelOf(offer.level).org)[0] === offer.level ? pro.yearsAtBottom : 0;
     pro.year = 1;
     pro.serviceYears = 0;
     pro.changedOrg = true;

@@ -105,12 +105,19 @@ export function evaluateMovement(
   }
 
   // 已經在最低層級卻仍達不到標準，且撐過了寬限期，就是戰力外。
-  if (index === 0 && options.overall < hereMin - mv.release.margin) {
+  //
+  // **這條線不吃浮動**（見 ADR 0011）。升降級用當年的 min 是對的——今年人才斷層
+  // 就該比較好卡位。但戰力外不同：浮動的 min 會跟著衰退的球員一起往下沉，等於
+  // 每年都幫他把及格線調低，於是能力掉到二軍基準線下四五分還賴得住，一路撐到
+  // 四十歲。下限用 leagues.json 的基準值，聯盟今年鬆一點可以保住你的位置，但不
+  // 可能讓一個低於基準線的人無限期留著。
+  const floor = here.min;
+  if (index === 0 && options.overall < floor - mv.release.margin) {
     if (options.yearsAtBottom >= mv.release.grace_years) {
       return {
         movement: 'release',
         level: null,
-        reason: `連續 ${options.yearsAtBottom} 季達不到${here.name}的最低標準`,
+        reason: `連續 ${options.yearsAtBottom} 季達不到${here.name}的最低標準（綜合 ${options.overall}／下限 ${floor}）`,
       };
     }
   }
