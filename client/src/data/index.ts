@@ -500,8 +500,13 @@ export interface LeaderAward {
    * 率型（avg / obp / era）的門檻寫成 d 值，因此會自動跟著成績模型走；
    * 累積型（hr / rbi / sb / so / sv）寫成絕對值，依球季場次等比放大。
    */
-  readonly kind: 'rate' | 'counting';
-  /** 率型的門檻：相對聯盟平均的能力差。 */
+  readonly kind: 'rate' | 'counting' | 'shares';
+  /**
+   * 對手池代碼。給了就由 `rival_pool` 推導門檻，`d` / `base` 一律忽略。
+   * 見 ADR 0017。
+   */
+  readonly pool?: string;
+  /** 率型的門檻：相對聯盟平均的能力差。**有 `pool` 的獎不再需要它。** */
   readonly d?: number;
   /** 累積型的門檻，以 reference_games 場的聯盟為準。 */
   readonly base?: number;
@@ -524,8 +529,15 @@ export interface FieldingAward extends AwardChance {
 export interface AwardsData {
   readonly thresholds: {
     readonly reference_games: number;
-    readonly games: Readonly<Record<string, number>>;
-    readonly default_games: number;
+  };
+  /** 「聯盟第一名」型獎項的門檻推導。見 ADR 0017。 */
+  readonly rival_pool: {
+    /** 替代水準在能力分佈的哪個下尾分位。整套模型唯一的自由參數。 */
+    readonly replacement_quantile: number;
+    /** 每隊有幾個人在爭這座獎，依獎項的對手池分類。 */
+    readonly per_team: Readonly<Record<string, number>>;
+    /** 查不到隊數時的隊數。 */
+    readonly default_teams: number;
   };
   readonly titles: { readonly list: readonly LeaderAward[] };
   readonly pitcher_of_year: LeaderAward;

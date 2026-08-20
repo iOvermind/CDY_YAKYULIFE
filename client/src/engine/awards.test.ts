@@ -4,16 +4,23 @@ import type { BattingLine } from './amateurStats.ts';
 import {
   annualAwards,
   countAwards,
-  leagueGamesOf,
   winningLine,
   type AwardContext,
   type AwardRecord,
 } from './awards.ts';
 import { proBaseline, proBaselineAt } from './metrics.ts';
+import { winnerAbilityFrom } from './rivalPool.ts';
 import { World } from './rng.ts';
 import type { ProPitchingLine } from './season.ts';
 
-const GAMES = leagueGamesOf('CPBL');
+const SPREAD = 8.4;
+/** 場次來自 leagues.json 的 level.games，不再有第二份副本。 */
+const CPBL1_GAMES = 120;
+const MLB_GAMES = 162;
+const GAMES = CPBL1_GAMES;
+/** 美職的體系代碼是 MiLB，MLB 只是最高的那一層——見 teams.json 的 _key_note。 */
+const MLB = { level: 'MLB', org: 'MiLB', leagueGames: MLB_GAMES, spread: SPREAD };
+const CPBL = { level: 'CPBL1', org: 'CPBL', leagueGames: CPBL1_GAMES, spread: SPREAD };
 const BASE = proBaseline('CPBL1');
 
 /** 找出某項獎的設定。 */
@@ -37,6 +44,7 @@ const ctx = (over: Partial<AwardContext> = {}): AwardContext => ({
   org: 'CPBL',
   level: 'CPBL1',
   leagueGames: GAMES,
+  spread: SPREAD,
   d: 3,
   team: '某隊',
   rookie: false,
@@ -61,11 +69,13 @@ function rate(over: Partial<AwardContext>, code: string, runs = 400): number {
 
 describe('winningLine', () => {
   const batting = titleOf('batting_king');
+  /** 門檻線的 d 不再寫死，是從對手池推出來的——見 ADR 0017。 */
+  const dOf = (a: { pool?: string }, org: string) => winnerAbilityFrom(SPREAD, org, a.pool!);
 
   it('波動加在超出聯盟平均的幅度上，不是加在絕對值上', () => {
-    const low = winningLine(batting, 'CPBL1', 'CPBL', 0)!;
-    const high = winningLine(batting, 'CPBL1', 'CPBL', 1)!;
-    const target = proBaselineAt('CPBL1', batting.d!).avg;
+    const low = winningLine(batting, CPBL, 0)!;
+    const high = winningLine(batting, CPBL, 1)!;
+    const target = proBaselineAt('CPBL1', dOf(batting, 'CPBL')).avg;
     const excess = target - BASE.avg;
     expect(low).toBeCloseTo(BASE.avg + excess * (1 - batting.band), 10);
     expect(high).toBeCloseTo(BASE.avg + excess * (1 + batting.band), 10);
@@ -74,31 +84,39 @@ describe('winningLine', () => {
   });
 
   it('抽到中間值時就是門檻本身', () => {
-    expect(winningLine(batting, 'CPBL1', 'CPBL', 0.5)).toBeCloseTo(
-      proBaselineAt('CPBL1', batting.d!).avg,
+    expect(winningLine(batting, CPBL, 0.5)).toBeCloseTo(
+      proBaselineAt('CPBL1', dOf(batting, 'CPBL')).avg,
       10,
     );
   });
 
   it('率型門檻由 d 值推導，因此高於聯盟平均', () => {
-    expect(winningLine(batting, 'CPBL1', 'CPBL', 0.5)!).toBeGreaterThan(BASE.avg);
+    expect(winningLine(batting, CPBL, 0.5)!).toBeGreaterThan(BASE.avg);
   });
 
   it('累積型門檻依球季場次等比放大', () => {
+    // 盜壘王還沒接上對手池，仍走 base × 場次比例——這條就是在守那個比例。
+    const sb = titleOf('steal_king');
+    const cpbl = winningLine(sb, CPBL, 0.5)!;
+    const mlb = winningLine(sb, MLB, 0.5)!;
+    expect(mlb / cpbl).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 6);
+  });
+
+  it('全壘打王已改由對手池推導，不再是場次的線性放大', () => {
     const hr = titleOf('hr_king');
-    const cpbl = winningLine(hr, 'CPBL1', 'CPBL', 0.5)!;
-    const mlb = winningLine(hr, 'MLB', 'MLB', 0.5)!;
-    expect(mlb / cpbl).toBeCloseTo(leagueGamesOf('MLB') / leagueGamesOf('CPBL'), 6);
+    const ratio = winningLine(hr, MLB, 0.5)! / winningLine(hr, CPBL, 0.5)!;
+    // 大聯盟對手池更深（30 隊 × 9 人），門檻抬得比單純的場次比例更凶。
+    expect(ratio).toBeGreaterThan(MLB_GAMES / CPBL1_GAMES);
   });
 
   it('防禦率的門檻低於聯盟平均——越低越好', () => {
-    expect(winningLine(cfg.pitcher_of_year, 'CPBL1', 'CPBL', 0.5)!).toBeLessThan(BASE.era);
+    expect(winningLine(cfg.pitcher_of_year, CPBL, 0.5)!).toBeLessThan(BASE.era);
   });
 });
 
 describe('單項王', () => {
   const batting = titleOf('batting_king');
-  const lineAt = (roll: number) => winningLine(batting, 'CPBL1', 'CPBL', roll)!;
+  const lineAt = (roll: number) => winningLine(batting, CPBL, roll)!;
 
   it('低於波動下緣一定拿不到', () => {
     expect(rate({ batting: bat({ avg: lineAt(0) - 0.001 }) }, 'batting_king')).toBe(0);
@@ -123,7 +141,7 @@ describe('單項王', () => {
   });
 
   it('救援王限終結者——中繼投手拿的是中繼王', () => {
-    const sv = Math.ceil(winningLine(titleOf('save_king'), 'CPBL1', 'CPBL', 1)!) + 5;
+    const sv = Math.ceil(winningLine(titleOf('save_king'), CPBL, 1)!) + 5;
     expect(
       rate({ pitching: pit({ role: 'CL', saves: sv }), role: 'CL' }, 'save_king'),
     ).toBeGreaterThan(0);
@@ -132,7 +150,7 @@ describe('單項王', () => {
   });
 
   it('中繼王限中繼投手', () => {
-    const hld = Math.ceil(winningLine(titleOf('hold_king'), 'CPBL1', 'CPBL', 1)!) + 5;
+    const hld = Math.ceil(winningLine(titleOf('hold_king'), CPBL, 1)!) + 5;
     expect(
       rate({ pitching: pit({ role: 'RP', holds: hld }), role: 'RP' }, 'hold_king'),
     ).toBeGreaterThan(0);
@@ -157,7 +175,7 @@ describe('單項王', () => {
 
 describe('年度最佳投手', () => {
   const a = cfg.pitcher_of_year;
-  const lineAt = (roll: number) => winningLine(a, 'CPBL1', 'CPBL', roll)!;
+  const lineAt = (roll: number) => winningLine(a, CPBL, roll)!;
 
   it('限先發——後援投手拿不到', () => {
     const era = lineAt(0) - 0.5;
@@ -216,7 +234,7 @@ describe('新人王', () => {
 });
 
 describe('年度 MVP', () => {
-  const lineAt = (roll: number) => winningLine(cfg.mvp, 'CPBL1', 'CPBL', roll)!;
+  const lineAt = (roll: number) => winningLine(cfg.mvp, CPBL, roll)!;
 
   /** MVP 問的是「他今年打得多好」，不是「他多強」——因此看份額不看 d 值。 */
   it('份額低於最寬鬆的那條線就一定拿不到', () => {
@@ -247,7 +265,7 @@ describe('年度 MVP', () => {
   });
 
   it('門檻依球季場次等比放大', () => {
-    expect(winningLine(cfg.mvp, 'MLB', 'MLB', 0.5)!).toBeGreaterThan(lineAt(0.5));
+    expect(winningLine(cfg.mvp, MLB, 0.5)!).toBeGreaterThan(lineAt(0.5));
   });
 });
 

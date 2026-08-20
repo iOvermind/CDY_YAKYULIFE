@@ -4,17 +4,22 @@
   "_note": "年度獎項。單項王與年度最佳投手用「當年的門檻線 ± 波動」判定——那條線是「今年聯盟第一名打到哪」，本來就該年年不同。明星賽、新人王與 MVP 是票選或選拔，維持機率判定。",
   "_calibration_note": "率型門檻寫成 d 值（相對聯盟平均的能力差），因此會自動跟著成績模型走——調了 hit_rate 的斜率，門檻跟著變，不會默默失準。累積型門檻是絕對值，依球季場次等比放大。",
   "thresholds": {
-    "_note": "各聯盟的球季場次。累積型門檻依它等比放大——中職 120 場的 130 次三振，到大聯盟 162 場就是 176 次。率型門檻不需要它（d 值本來就與場次無關）。",
-    "reference_games": 120,
-    "games": {
-      "CPBL": 120,
-      "NPB": 143,
-      "KBO": 144,
-      "LMB": 90,
-      "ABL": 40,
-      "MLB": 162
+    "_note": "累積型門檻的正規化基準。實際場次一律由呼叫端從 `leagues.json` 的 level.games 取得，門檻按 leagueGames / reference_games 等比放大——中職一軍 120 場的 130 次三振，到大聯盟 162 場就是 176 次。率型門檻不需要它（d 值本來就與場次無關）。這裡曾另存一份 org 為鍵的場次表，但 org 與 level 混用導致美職與所有二軍都拿到錯的場次，已刪除；場次只有 leagues.json 一個來源。",
+    "reference_games": 120
+  },
+  "rival_pool": {
+    "_note": "「聯盟第一名」型獎項的門檻，由對手池推導，不手寫。線 = par + σ × z(1 − 1/n)，σ = (par − min) / |z(replacement_quantile)|，n = 隊數 × per_team。見 ADR 0017。",
+    "_quantile_note": "**這是整套模型唯一的自由參數。** min 是替代水準（混不下去被換掉的那條線），把它放在能力分佈的下尾第 36 分位，就定出了這個聯盟的能力標準差——這個值是反推出來的：它讓新模型重現 ADR 0014 手寫的那批 d 值（打擊王 0.371、上壘王 0.348、年度投手 0.365，取整為 0.36），所以遷移當下得獎率不會跳動。得獎率整體偏高就調小（尺變大、線變高），偏低就調大——不要改回去逐獎手寫 d 值。",
+    "replacement_quantile": 0.36,
+    "_per_team_note": "每隊有幾個人在爭這座獎。數量級的旋鈕，不是精調的旋鈕：z(1 − 1/n) 對 n 是對數級的鈍，池大小翻倍只換到幾個百分點。真正吃到效果的是「打者 9 人 vs 終結者 1 人」這種數量級差異——救援王因此天生比打擊王好拿，這是對的。",
+    "per_team": {
+      "batter": 9,
+      "starter": 5,
+      "reliever": 2.5,
+      "closer": 1,
+      "all": 17.5
     },
-    "default_games": 120
+    "default_teams": 8
   },
   "_fallback_league": "CPBL",
   "titles": {
@@ -30,7 +35,7 @@
         "side": "batter",
         "stat": "avg",
         "kind": "rate",
-        "d": 19,
+        "pool": "batter",
         "band": 0.12,
         "min_pa": 350
       },
@@ -40,7 +45,7 @@
         "side": "batter",
         "stat": "obp",
         "kind": "rate",
-        "d": 16,
+        "pool": "batter",
         "band": 0.12,
         "min_pa": 350
       },
@@ -50,7 +55,7 @@
         "side": "batter",
         "stat": "hr",
         "kind": "counting",
-        "base": 28,
+        "pool": "batter",
         "band": 0.15,
         "min_pa": 300
       },
@@ -101,18 +106,10 @@
     "name": "年度MVP",
     "_note": "年度最有價值球員。判定看**那一季的勝利份額**，不看 d 值——d 值是「他多強」，不是「他今年打得多好」。用份額判定會自動把出賽時間、守位價值、投打合計與球隊戰績一起算進去，而那正是 MVP 這個獎的意思。",
     "_line_note": "與單項王同一套「當年門檻線 ± 波動」的判定。門檻依球季場次等比放大——120 場的聯盟拿 20 份，162 場的聯盟就要 27 份。",
-    "aliases": {
-    "_note": "**聯盟獨有的獎項名稱。** 同一個獎在不同聯盟有不同的名字——那不只是換皮，那是這個獎在那個聯盟的歷史。鍵是體系代碼，值是獎項代碼到名稱的對照；查不到就用獎項自己的預設名稱。",
-    "_scope_note": "只改顯示名稱，判定與計分完全共用同一套規則。新增聯盟時不寫這裡也不會壞，只是沿用預設名。",
-    "NPB": { "pitcher_of_year": "澤村賞" },
-    "KBO": { "pitcher_of_year": "崔東源獎" },
-    "MLB": { "pitcher_of_year": "賽揚獎", "batter_of_year": "漢克阿倫獎" },
-    "ABL": { "mvp": "海姆斯獎" }
-  },
-  "_two_way_note": "二刀流的投打份額本來就相加，因此他在 MVP 這個獎上有結構性的優勢。那是對的：一個投打都達到聯盟前段的球員，本來就該是那年最有價值的人。",
+    "_two_way_note": "二刀流的投打份額本來就相加，因此他在 MVP 這個獎上有結構性的優勢。那是對的：一個投打都達到聯盟前段的球員，本來就該是那年最有價值的人。",
     "stat": "win_shares",
-    "kind": "counting",
-    "base": 21,
+    "kind": "shares",
+    "pool": "all",
     "band": 0.15,
     "qualify": {
       "_note": "出場量的門檻。再有價值也要先站上場。",
@@ -188,8 +185,8 @@
     "name": "年度最佳打者",
     "side": "batter",
     "stat": "batting_win_shares",
-    "kind": "counting",
-    "base": 13,
+    "kind": "shares",
+    "pool": "batter",
     "band": 0.15,
     "min_pa": 350
   },
@@ -200,7 +197,7 @@
     "side": "pitcher",
     "stat": "era",
     "kind": "rate",
-    "d": 16,
+    "pool": "starter",
     "band": 0.12,
     "requires_role": "SP",
     "min_ip_equals_games": true

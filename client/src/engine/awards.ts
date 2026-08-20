@@ -23,7 +23,16 @@
 
 import { awards as cfg, type FieldingAward, type LeaderAward } from '../data/index.ts';
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
-import { proBaseline, proBaselineAt, type Baseline } from './metrics.ts';
+import {
+  battingShares,
+  positionPlayerShares,
+  proBaseline,
+  proBaselineAt,
+  proLineAt,
+  proPaAt,
+  type Baseline,
+} from './metrics.ts';
+import { winnerAbilityFrom } from './rivalPool.ts';
 import type { World } from './rng.ts';
 import type { PitcherRole } from './season.ts';
 
@@ -72,11 +81,28 @@ export interface AwardContext {
   readonly winShares: number;
   /** 只有打擊那一段的勝利份額。年度最佳打者看它。 */
   readonly battingWinShares: number;
+  /**
+   * 當年這個層級的能力離散度，單位與 d 值相同。「聯盟第一名」型的門檻由它推導。
+   *
+   * 由球季那一側算好帶進來——獎項模組不該去翻聯盟標準。見 ADR 0017。
+   */
+  readonly spread: number;
 }
 
-/** 該體系的球季場次。累積型門檻依它等比放大。 */
-export function leagueGamesOf(org: string): number {
-  return cfg.thresholds.games[org] ?? cfg.thresholds.default_games;
+/**
+ * 畫一條門檻線需要知道的一切。`AwardContext` 天生就滿足它，所以實際發獎時
+ * 直接把 ctx 傳進來即可；校正腳本則自己湊一個。
+ *
+ * 場次一律由呼叫端給——來源是 `leagues.json` 的 level.games，那是唯一基準。
+ * 這裡曾經自己用 org 查一份 `thresholds.games` 副本，但那份表的鍵混了 org 與
+ * level（`MLB` 是 level，其餘是 org），於是美職查不到、二軍全部沿用一軍的場
+ * 次——只有五個聯盟的一軍是對的。見 ADR 0017。
+ */
+export interface LineInput {
+  readonly level: string;
+  readonly org: string;
+  readonly leagueGames: number;
+  readonly spread: number;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -111,20 +137,39 @@ function rateOf(base: Baseline, stat: string): number | null {
  * 越難拿**——率型越高越好的獎（打擊率、上壘率）線往上抬，防禦率這種越低越好
  * 的則往下壓。方向雖然相反，語意是一致的。
  */
-export function winningLine(award: LeaderAward, level: string, org: string, roll: number): number | null {
+export function winningLine(award: LeaderAward, at: LineInput, roll: number): number | null {
+  const { level, org, spread } = at;
   const swing = 1 + (roll * 2 - 1) * award.band;
+  const games = at.leagueGames;
+  // 有對手池就用推導的 d，沒有就用寫死的——後者正在退場，見 ADR 0017。
+  const d = award.pool === undefined ? award.d : winnerAbilityFrom(spread, org, award.pool);
 
   if (award.kind === 'rate') {
-    if (award.d === undefined) return null;
+    if (d === undefined) return null;
     const average = rateOf(proBaseline(level), award.stat);
-    const target = rateOf(proBaselineAt(level, award.d), award.stat);
+    const target = rateOf(proBaselineAt(level, d), award.stat);
     if (average === null || target === null) return null;
     return average + (target - average) * swing;
   }
 
+  if (award.kind === 'shares') {
+    if (d === undefined) return null;
+    const line = proLineAt(d, proPaAt(d, games));
+    const shares = battingShares(line, proBaseline(level), null);
+    // 球隊勝率傳 null：門檻線問的是「這種等級的球員能打出多少份額」，不是
+    // 「他在哪一隊」。球隊調整留給實際球員那一側，否則強隊的人門檻反而更高。
+    const batting = shares.win;
+    // MVP 吃全部三本帳，年度最佳打者只吃打擊那一本。
+    const total = award.stat === 'win_shares' ? positionPlayerShares(batting) : batting;
+    return total * swing;
+  }
+
+  if (award.pool !== undefined && d !== undefined && award.stat === 'hr') {
+    return proLineAt(d, proPaAt(d, games)).hr * swing;
+  }
+
   if (award.base === undefined) return null;
-  const scale = leagueGamesOf(org) / cfg.thresholds.reference_games;
-  return award.base * scale * swing;
+  return award.base * (games / cfg.thresholds.reference_games) * swing;
 }
 
 /** 這項獎的成績是不是越低越好。目前只有防禦率。 */
@@ -191,7 +236,7 @@ function winsLeaderAward(ctx: AwardContext, award: LeaderAward, roll: number): b
   if (!qualifies(ctx, award)) return false;
   const value = statValue(ctx, award.stat);
   if (value === null) return false;
-  const line = winningLine(award, ctx.level, ctx.org, roll);
+  const line = winningLine(award, ctx, roll);
   if (line === null) return false;
   return lowerIsBetter(award.stat) ? value <= line : value >= line;
 }
@@ -298,7 +343,7 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
   // ---- 年度 MVP
   {
     const roll = rng.next();
-    const line = winningLine(cfg.mvp, ctx.level, ctx.org, roll);
+    const line = winningLine(cfg.mvp, ctx, roll);
     if (qualifiesForMvp(ctx) && line !== null && ctx.winShares >= line) {
       add(cfg.mvp.code, cfg.mvp.name, 'both');
     }

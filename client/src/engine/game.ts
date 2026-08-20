@@ -194,6 +194,7 @@ import {
   sideOfStartPosition,
   type Abilities,
 } from './rating.ts';
+import { abilitySpread } from './rivalPool.ts';
 import { World } from './rng.ts';
 
 
@@ -2860,6 +2861,7 @@ export class Game {
       org: info.org,
       level: pro.level,
       leagueGames: info.games,
+      spread: abilitySpread(pro.level, this.#standards),
       d: (r?.overall ?? 0) - par,
       team: pro.team,
       // 第一年就在頂級聯盟才算新人年——在二軍待過幾年再上來的人不是新人。

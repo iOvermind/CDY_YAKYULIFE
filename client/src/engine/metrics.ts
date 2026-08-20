@@ -56,8 +56,32 @@ export function proBaseline(level: string): Baseline {
  * 就是一個剛好卡在降級線上的球員。生涯評價分的零點定在那裡（ADR 0003）。
  */
 export function proBaselineAt(level: string, d: number): Baseline {
+  const line = proLineAt(d, 600);
+  return build(
+    line.pa,
+    line.ab,
+    line.bb,
+    line.hits,
+    line.double,
+    line.triple,
+    line.hr,
+    rateAt(cfg.pitching.era, d),
+    levelOf(level).name,
+  );
+}
+
+/**
+ * 能力比聯盟平均高 `d` 點的球員，在給定打席數下的成績單。
+ *
+ * `proBaselineAt` 只回傳率，因為它的用途是「跟聯盟平均比」。但累積型的獎項與
+ * 勝利份額問的是**總量**，那需要打席數，而打席數本身就是能力的函數——排得越
+ * 前面站得越多次。所以這裡把整條成績單交出去，率型的那支反過來用它。
+ *
+ * 不含得分、打點、三振、盜壘：那些不是「能力 × 打席」算得出來的。打點吃隊友
+ * 上壘，盜壘吃跑壘企圖模型，都要另外的機制。
+ */
+export function proLineAt(d: number, pa: number): BattingLine {
   const b = cfg.batting;
-  const pa = 600;
   const bb = pa * rateAt(b.walk_rate, d);
   const ab = pa - bb;
   const hits = ab * rateAt(b.hit_rate, d);
@@ -65,7 +89,26 @@ export function proBaselineAt(level: string, d: number): Baseline {
   const rest = hits - hr;
   const double = rest * rateAt(b.extra_base.double_rate, d);
   const triple = rest * rateAt(b.extra_base.triple_rate, d);
-  return build(pa, ab, bb, hits, double, triple, hr, rateAt(cfg.pitching.era, d), levelOf(level).name);
+  return { pa, ab, bb, ibb: 0, hits, double, triple, hr } as unknown as BattingLine;
+}
+
+/**
+ * 野手的總份額，由打擊份額反推。
+ *
+ * 野手拿打擊與守備兩本帳，投球那本是 0。三本帳的責任額比例是固定的，所以
+ * 「打擊份額 ÷ 打擊佔比 × (打擊 + 守備)」就是一個守備中庸的野手該有的總數。
+ * MVP 的門檻線要的是總份額，而我們只推導得出打擊那本，缺口靠這裡補。
+ */
+export function positionPlayerShares(battingWin: number): number {
+  const s = cfg.advanced.shares.split;
+  return (battingWin * (s.batting + s.fielding)) / s.batting;
+}
+
+/** 能力比聯盟平均高 `d` 點的球員，一季站幾次打擊區。 */
+export function proPaAt(d: number, leagueGames: number): number {
+  const s = cfg.playing_time.pa_per_game;
+  const per = Math.max(s.min, Math.min(s.max, s.at_par + d * s.per_point));
+  return per * leagueGames;
 }
 
 /** 一條率在 d 值下的值，套上該率自己的上下限。 */
