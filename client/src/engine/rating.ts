@@ -10,7 +10,7 @@
  * 本模組是純函式，不抽任何亂數。
  */
 
-import { abilities, amateur, positions, season, type AbilityKey } from '../data/index.ts';
+import { abilities, amateur, leagues, positions, season, type AbilityKey } from '../data/index.ts';
 
 /**
  * 二刀流特性名。
@@ -207,17 +207,34 @@ export function sideOfStartPosition(startPosition: string): 'pitcher' | 'fielder
  * `level` 決定門檻高低。還沒進職業時傳頂級聯盟的入門層級即可——養成期沒有
  * 正式登錄守位，這裡算的是「以現在的守備能力，職業上得了哪個守位」。
  */
-export function fieldingPosition(ability: Abilities, level: string): string {
-  const thresholds = positions.defense_thresholds;
+/**
+ * 守這個守位的門檻基準線：該層級的 par 加上守位位移。**不含年齡折扣**。
+ *
+ * 只有頂級聯盟設限——二軍與小聯盟不挑守位，能上場就讓你上，因此回傳 null。
+ * 這個判斷看的是 `levels` 有沒有 `top`，不是「門檻表裡查不查得到」：後者曾
+ * 讓 KBO 一軍、墨西哥聯盟、澳職三個頂級聯盟因為漏填而無條件放行，守備零分
+ * 的人照樣登錄為游擊手（見 ADR 0010）。缺資料不該長得像沒有要求。
+ *
+ * 定義在 rating.ts 而非 defense.ts，是因為 defense.ts 依賴本模組，反向 import
+ * 會成環——與檔首 TWO_WAY_TRAIT 的處理同一個理由。
+ */
+export function baseThreshold(position: string, level: string): number | null {
+  const offset = positions.defense_offsets[position];
+  if (offset === undefined) return null;
+  const info = leagues.levels[level];
+  if (info === undefined || info.top === undefined) return null;
+  return info.par + offset;
+}
 
+export function fieldingPosition(ability: Abilities, level: string): string {
   // 內野與外野的光譜合起來掃，取「守得動的最高階守位」——門檻越高的守位越
   // 難守，也越有價值。掃不到任何一個就落到 DH。
   const candidates = [...positions.scan_order.IF, ...positions.scan_order.OF, 'C'];
   let best: { position: string; required: number } | null = null;
 
   for (const position of candidates) {
-    const required = thresholds[position]?.[level];
-    if (required === undefined) continue;
+    const required = baseThreshold(position, level);
+    if (required === null) continue;
     if (defenseScore(ability, position) < required) continue;
     if (best === null || required > best.required) best = { position, required };
   }

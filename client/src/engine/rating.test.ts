@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilities, ALL_ABILITIES, positions } from '../data/index.ts';
 import {
+  baseThreshold,
   battingRating,
   defenseScore,
   fieldingPosition,
@@ -266,9 +267,9 @@ describe('fieldingPosition', () => {
   it('取的是守得動的最高階守位，不是守備分最高的守位', () => {
     // 門檻越高的守位越難守也越有價值——這是 scan_order 的定義
     const pos = fieldingPosition(flat(80), LEVEL);
-    const required = positions.defense_thresholds[pos]?.[LEVEL] ?? 0;
+    const required = baseThreshold(pos, LEVEL) ?? 0;
     for (const other of [...positions.scan_order.IF, ...positions.scan_order.OF]) {
-      const otherReq = positions.defense_thresholds[other]?.[LEVEL] ?? 0;
+      const otherReq = baseThreshold(other, LEVEL) ?? 0;
       if (otherReq <= required) continue;
       // 更高階的守位一定是守不動才沒被選
       expect(defenseScore(flat(80), other)).toBeLessThan(otherReq);
@@ -277,7 +278,7 @@ describe('fieldingPosition', () => {
 
   it('守備能力越好，守得動的守位越高階', () => {
     const req = (v: number) =>
-      positions.defense_thresholds[fieldingPosition(flat(v), LEVEL)]?.[LEVEL] ?? 0;
+      baseThreshold(fieldingPosition(flat(v), LEVEL), LEVEL) ?? 0;
     expect(req(80)).toBeGreaterThan(req(45));
   });
 
@@ -285,7 +286,7 @@ describe('fieldingPosition', () => {
     const mid = flat(52);
     const cpbl = fieldingPosition(mid, 'CPBL1');
     const mlb = fieldingPosition(mid, 'MLB');
-    const rank = (p: string) => positions.defense_thresholds[p]?.['CPBL1'] ?? 0;
+    const rank = (p: string) => baseThreshold(p, 'CPBL1') ?? 0;
     expect(rank(mlb)).toBeLessThanOrEqual(rank(cpbl));
   });
 

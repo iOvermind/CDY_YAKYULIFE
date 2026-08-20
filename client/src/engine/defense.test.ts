@@ -12,7 +12,7 @@ import {
   DH,
 } from './defense.ts';
 import { advanceStandards, initStandards, standardOf } from './league.ts';
-import { defenseScore, type Abilities } from './rating.ts';
+import { baseThreshold, defenseScore, type Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
 /** 全部能力都是同一個值的球員，再覆寫指定幾項。 */
@@ -58,7 +58,7 @@ describe('canPlay', () => {
   });
 
   it('捕手與其他守位共用同一張門檻表，沒有平行機制', () => {
-    const bar = positions.defense_thresholds['C']!['CPBL1']!;
+    const bar = baseThreshold('C', 'CPBL1')!;
     const good = player(20, { fld: bar, cat: bar, arm: bar });
     expect(defenseScore(good, 'C')).toBeCloseTo(bar, 6);
     expect(canPlay(good, 'C', 'CPBL1', 30)).toBe(true);
@@ -75,7 +75,7 @@ describe('positionAverage', () => {
   it('平均線高於門檻——實際佔著位置的人比最低標準好一些', () => {
     for (const pos of ['C', 'SS', '2B', '3B', 'CF', 'RF', 'LF', '1B']) {
       const avg = positionAverage(pos, 'CPBL1')!;
-      expect(avg).toBeGreaterThan(positions.defense_thresholds[pos]!['CPBL1']!);
+      expect(avg).toBeGreaterThan(baseThreshold(pos, 'CPBL1')!);
     }
   });
 
@@ -180,7 +180,7 @@ describe('assignPosition', () => {
   });
 
   it('捕手蹲得住就不必掃別的光譜', () => {
-    const bar = positions.defense_thresholds['C']!['CPBL1']!;
+    const bar = baseThreshold('C', 'CPBL1')!;
     const r = assignPosition({
       ...base,
       ability: player(20, { fld: bar + 5, cat: bar + 5, arm: bar + 5 }),
@@ -202,7 +202,7 @@ describe('assignPosition', () => {
   });
 
   it('離開本壘板的捕手，接捕練回來可以重披護具', () => {
-    const bar = positions.defense_thresholds['C']!['CPBL1']!;
+    const bar = baseThreshold('C', 'CPBL1')!;
     const r = assignPosition({
       ...base,
       ability: player(20, { fld: bar + 10, cat: bar + 10, arm: bar + 10 }),

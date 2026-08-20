@@ -18,7 +18,7 @@
 
 import { leagues, positions } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
-import { defenseScore, type Abilities } from './rating.ts';
+import { baseThreshold, defenseScore, type Abilities } from './rating.ts';
 
 /** 指定打擊。掃不到任何守位時的去處，不產生守備分。 */
 export const DH = 'DH';
@@ -47,11 +47,13 @@ export interface PositionResult {
  * 只有頂級聯盟設門檻——二軍與小聯盟不挑守位，能上場就讓你上。年輕球員吃潛力
  * 紅利，門檻略降：球團願意為一個 22 歲的游擊手多等兩年。
  *
- * 回傳 null 表示這個層級不設限（或這個守位沒有門檻資料）。
+ * 基準線由 `baseThreshold` 依該層級 par 推導，不再逐聯盟手填（ADR 0010）。
+ *
+ * 回傳 null 表示這個層級不設限（非頂級聯盟，或這個守位不在光譜上）。
  */
 export function requiredScore(position: string, level: string, age: number): number | null {
-  const base = positions.defense_thresholds[position]?.[level];
-  if (base === undefined) return null;
+  const base = baseThreshold(position, level);
+  if (base === null) return null;
   return base + youthAdjust(age);
 }
 
@@ -86,8 +88,8 @@ export function positionAverage(
   level: string,
   standards: LeagueStandards | null = null,
 ): number | null {
-  const base = positions.defense_thresholds[position]?.[level];
-  if (base === undefined) return null;
+  const base = baseThreshold(position, level);
+  if (base === null) return null;
   const drift = standardOf(standards, level).par - (leagues.levels[level]?.par ?? 0);
   return base + positions.defense_average.margin + drift;
 }

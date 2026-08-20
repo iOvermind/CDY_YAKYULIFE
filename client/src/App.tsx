@@ -1282,9 +1282,22 @@ function Board({
   //
   // 進了頂級聯盟就寫**現在登錄的守位**，不是起始守位：移防之後那兩者會分岔，
   // 而右欄已經不另外列一格了，這裡停在舊守位的話就沒有地方看得到現況。
+  //
+  // 還沒登錄守位時（養成期，或人在二軍——二軍不挑守位，見 defense.ts）依**當下
+  // 守備能力**現算，不退回起始守位：那是十三歲的選擇，拿它冒充球團的登錄結果，
+  // 守備沒點的人會被顯示成蹲捕。現算至少反映真實能力，也預告了升上去守得動哪裡。
+  //
+  // 參考層級取所屬體系的頂級聯盟——問的是「升上去會被排哪裡」，所以要用那個
+  // 聯盟的門檻，不是隨便一個。還沒進職業就用二刀流的那個參考層級。
+  const referenceLevel =
+    (state.pro === null
+      ? undefined
+      : leagues.paths[leagues.levels[state.pro.level]?.org ?? '']?.at(-1)) ??
+    TWO_WAY_REFERENCE_LEVEL;
+  const scoutedPosition = fieldingPosition(state.ability, referenceLevel);
   const roleLabel = state.traits.has('two_way')
-    ? `P＋${state.pro?.position ?? fieldingPosition(state.ability, TWO_WAY_REFERENCE_LEVEL)}`
-    : (state.pro?.position ?? player.startPosition);
+    ? `P＋${state.pro?.position ?? scoutedPosition}`
+    : (state.pro?.position ?? scoutedPosition);
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>

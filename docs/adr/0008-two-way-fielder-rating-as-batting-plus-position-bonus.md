@@ -50,7 +50,7 @@ fielderRating(二刀流) = 純打擊 + 守位加分
 
 - 基準是**指定打擊**（加分為 0）。二刀流的野手側底線就是他的打擊。
 - 守位加分**依守位難度固定給，不看守備分高低**。「守不守得動」已經由
-  `positions.json` 的 `defense_thresholds` 把關；過了那一關就是過了，評價不再
+  `positions.json` 的 `defense_offsets` 把關；過了那一關就是過了，評價不再
   問第二次。
 - 責任占比直接取 `positions.json` 的 `fielding_responsibility`——那份表已經是
   守備份額、守備分權重與守位身價次序的唯一依據（ADR 0003），不另立一份。

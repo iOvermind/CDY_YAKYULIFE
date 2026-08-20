@@ -556,7 +556,8 @@ export interface PositionsData {
   readonly positions: Readonly<Record<string, string>>;
   /** 各守位的能力權重。資格判定與守備分共用同一組，見該檔的 _deviation。 */
   readonly ability_weights: Readonly<Record<string, Readonly<Record<AbilityKey, number>>>>;
-  readonly defense_thresholds: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** 守位門檻相對於該層級 par 的位移。門檻 = par + 位移，只在頂級聯盟生效。 */
+  readonly defense_offsets: Readonly<Record<string, number>>;
   /** 年輕球員的門檻折扣，依年齡取第一個符合的區間。 */
   readonly youth_adjust: {
     readonly tiers: readonly { readonly max_age: number; readonly adjust: number }[];
