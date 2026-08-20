@@ -140,10 +140,11 @@ describe('重播', () => {
   });
 
   it('不同的選擇走出不同的能力分佈', () => {
+    // 兩項都在野手側：起始守位是 SS，投手側的能力已經不能加點了。
     const a = started();
     a.choose('alloc:pow');
     const b = started();
-    b.choose('alloc:ctl');
+    b.choose('alloc:con');
     expect(a.state?.ability).not.toEqual(b.state?.ability);
   });
 
@@ -633,7 +634,7 @@ describe('配點的復原與確認', () => {
     const game = toAllocation();
     game.choose('alloc:sta');
     game.choose('alloc:undo');
-    game.choose('alloc:vel');
+    game.choose('alloc:pow');
     while (game.flow.prompt !== null) {
       const options = game.flow.prompt.options;
       const pick = options.find((o) => o.disabled !== true);

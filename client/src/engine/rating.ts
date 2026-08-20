@@ -10,7 +10,15 @@
  * 本模組是純函式，不抽任何亂數。
  */
 
-import { abilities, positions, season, type AbilityKey } from '../data/index.ts';
+import { abilities, amateur, positions, season, type AbilityKey } from '../data/index.ts';
+
+/**
+ * 二刀流特性名。
+ *
+ * 這裡直接讀資料而不從 draft.ts 取 TWO_WAY_TRAIT：draft.ts 依賴 rating.ts，
+ * 反向 import 會成環。
+ */
+const TWO_WAY_TRAIT = amateur.two_way_talent.trait;
 
 /** 一組能力值。 */
 export type Abilities = Readonly<Record<AbilityKey, number>>;
@@ -118,14 +126,43 @@ export function battingRating(ability: Abilities): number {
 }
 
 /**
+ * 二刀流的守位加分。
+ *
+ * `加分 = scale × 守位責任占比 × 出賽比重`
+ *
+ * 依守位難度固定給，不看守備分高低——「守不守得動」由 defense_thresholds 把
+ * 關，評價不再問第二次。指定打擊不加分，他就是基準。
+ *
+ * fieldingShare 反映投球日不能守備，與守備份額用同一個量（ADR 0003）。省略時
+ * 視為 1，即「若能天天守」的上限。
+ */
+export function twoWayPositionBonus(position: string, fieldingShare = 1): number {
+  const scale = abilities.overall.fielder.two_way_position_bonus.scale;
+  const responsibility = positions.fielding_responsibility[position] ?? 0;
+  return responsibility * scale * fieldingShare;
+}
+
+/**
  * 野手側評價：打擊與守備依守位的守備權重合成。
  *
  * position 是用於評價的守位。尚未登錄守備位置時，呼叫端應先用
  * ratingPosition() 依起始守位推定一個。
+ *
+ * 二刀流走另一套：**以純打擊為基準，守位是加分**。合成制對他不成立——那會逼
+ * 一個打擊好、守備差的二刀流站在對自己不利的位置上，而他明明可以退回指定打擊
+ * 拿滿打擊分。見 ADR 0008。
  */
-export function fielderRating(ability: Abilities, position: string): number {
+export function fielderRating(
+  ability: Abilities,
+  position: string,
+  options: { readonly twoWay?: boolean; readonly fieldingShare?: number } = {},
+): number {
   const cfg = abilities.overall.fielder;
   const offense = battingRating(ability);
+
+  if (options.twoWay === true) {
+    return offense + twoWayPositionBonus(position, options.fieldingShare ?? 1);
+  }
 
   const dh = cfg.dh_defense_penalty;
   const defense =
@@ -147,6 +184,18 @@ export function isSideVisible(key: string, locked: 'pitcher' | 'fielder' | null)
   if (locked === null) return true;
   if (abilities.ability_groups.shared.includes(key as AbilityKey)) return true;
   return abilities.ability_groups[locked].includes(key as AbilityKey);
+}
+
+/**
+ * 起始守位屬於哪一側。UTIL 不屬於任何一側，回傳 null。
+ *
+ * 養成期就靠這個決定哪些能力能加點：選了投手就不再練打擊守備，選了守位就不再
+ * 練投球。**UTIL 因此成為二刀流的唯一入口**——其他起點的另一側從開局就不成長，
+ * 畢業時的二刀流判定對他們不可能成立。見 ADR 0009。
+ */
+export function sideOfStartPosition(startPosition: string): 'pitcher' | 'fielder' | null {
+  if (startPosition === 'UTIL') return null;
+  return startPosition === 'P' ? 'pitcher' : 'fielder';
 }
 
 /**
@@ -175,10 +224,33 @@ export function fieldingPosition(ability: Abilities, level: string): string {
   return best?.position ?? positions.scan_order.fallback;
 }
 
-/** 依起始守位推定一個用於評價的守位。正式守位要進入頂級聯盟後才登錄。 */
-export function ratingPosition(startPosition: string): string {
+/**
+ * 對應表裡代表「依守備能力自動推定」的哨兵值。
+ *
+ * 只有 UTIL 用它——「守位不定」本來就沒有固定守位可對應。
+ */
+const AUTO_POSITION = 'AUTO';
+
+/**
+ * 依起始守位推定一個用於評價的守位。正式守位要進入頂級聯盟後才登錄。
+ *
+ * **這個結果不只用於評價**：沒登錄守位的球季（二軍、還沒進頂級聯盟）也拿它當
+ * 守位跑模擬，因此它同時決定守備勝利份額的責任額。把人推到 DH 等於宣告他不
+ * 守備，要有理由才做。
+ *
+ * `auto` 供 UTIL 使用：沒帶的話只能退回 DH，帶了就依當下的守備能力推定。
+ */
+export function ratingPosition(
+  startPosition: string,
+  auto?: { readonly ability: Abilities; readonly level: string },
+): string {
   const map = abilities.overall.fielder.default_position;
-  return map[startPosition] ?? map['default'] ?? 'SS';
+  // 退路是指定打擊而非游擊：認不出來的起始守位不該被當成守得住游擊。
+  const mapped = map[startPosition] ?? map['default'] ?? 'DH';
+  if (mapped !== AUTO_POSITION) return mapped;
+  return auto === undefined
+    ? positions.scan_order.fallback
+    : fieldingPosition(auto.ability, auto.level);
 }
 
 export interface Rating {
@@ -198,6 +270,10 @@ export interface Rating {
  * 整體取兩側較高者。另一側目前不計入——二刀流的價值在於「能同時貢獻兩種
  * 角色」，那要等賽季模擬能讓同一個人既投又打時才體現得出來，硬塞一個加成
  * 進評價只是憑空編數字。這是 abilities.json 記錄的待校準項。
+ *
+ * 但二刀流的**野手側內部**算法不同：以純打擊為基準、守位為加分，見
+ * fielderRating() 與 ADR 0008。那不是「把投球加進打擊」，是修正一套對他不
+ * 成立的合成公式。
  */
 export function rate(
   ability: Abilities,
@@ -206,11 +282,18 @@ export function rate(
     readonly traits?: ReadonlySet<string>;
     /** 這一季的投手角色。省略時取兩套權重較高者。 */
     readonly role?: PitcherRole | null;
+    /** 二刀流實際能守備的比重：投球日不能守。省略時視為 1。 */
+    readonly fieldingShare?: number;
   } = {},
 ): Rating {
-  const position = options.position ?? 'SS';
+  // 退路是指定打擊而非游擊，理由同 ratingPosition()。
+  const position = options.position ?? 'DH';
+  const twoWay = options.traits?.has(TWO_WAY_TRAIT) === true;
   const pitcher = pitcherRating(ability, options.role ?? null);
-  const fielder = fielderRating(ability, position);
+  const fielder = fielderRating(ability, position, {
+    twoWay,
+    fieldingShare: options.fieldingShare ?? 1,
+  });
 
   let overall = Math.max(pitcher, fielder);
   const traits = options.traits;

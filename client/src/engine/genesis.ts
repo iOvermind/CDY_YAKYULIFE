@@ -38,7 +38,7 @@ export interface NewPlayer {
   readonly year: number;
   /**
    * 投球慣用手。二刀流模型下每位球員都有，因為任何人都可能上場投球。
-   * 不會擲出 S：雙手投列為隱藏特性（traits.json 的 switch_pitcher）。
+   * 不會擲出 S：左右開投列為隱藏特性（traits.json 的 switch_pitcher）。
    */
   readonly throws: Hand;
   /** 打擊慣用手。S 為左右開弓，永遠取得反邊優勢。 */

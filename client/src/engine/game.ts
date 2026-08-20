@@ -191,6 +191,7 @@ import {
   isSideVisible,
   rate,
   ratingPosition,
+  sideOfStartPosition,
   type Abilities,
 } from './rating.ts';
 import { World } from './rng.ts';
@@ -329,6 +330,15 @@ export interface PlayerState {
    * 意義所在。尚未畢業或已取得二刀流時為 null。
    */
   readonly lockedSide: 'pitcher' | 'fielder' | null;
+  /**
+   * 目前該顯示哪一側的能力。
+   *
+   * 與 `lockedSide` 分成兩個欄位，因為它們回答不同的問題：`lockedSide` 是
+   * 「畢業時定位確立了沒」，屬於劇情與職業邏輯；這個是「畫面現在該畫什麼」，
+   * 畢業前就已經有答案——起始守位一選定，另一側就不再出現（見 ADR 0009）。
+   * 介面請用這個，不要用 `lockedSide` 判斷顯示。
+   */
+  readonly visibleSide: 'pitcher' | 'fielder' | null;
 }
 
 /**
@@ -455,7 +465,7 @@ export class Game {
   #seasonDefenseRuns = 0;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
-  /** 生涯大傷次數。玻璃人的解鎖條件與合約年限都看它。 */
+  /** 生涯大傷次數。帕瓦諾的解鎖條件與合約年限都看它。 */
   #majorInjuries = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
   #rehabYear = false;
@@ -465,7 +475,7 @@ export class Game {
   #weddingYear: number | null = null;
   /** 第一次被徵召的年份。列管期從這裡算。 */
   #intlLockedSince: number | null = null;
-  /** 打進國際賽冠亞軍的次數。國際賽之鬼的解鎖條件看它。 */
+  /** 打進國際賽冠亞軍的次數。東亞功夫的解鎖條件看它。 */
   #intlPodiums = 0;
   /** 國際賽累積的總評價分。與生涯里程碑同一個桶。 */
   #intlScore = 0;
@@ -572,7 +582,7 @@ export class Game {
    * 那時再算會用到衰退後的能力，把一個剛打完生涯年的三十歲球員算成下坡。
    */
   #lastD = 0;
-  /** 公開抱怨過幾次。第二次會被貼上「氣氛大師」的標籤。 */
+  /** 公開抱怨過幾次。第二次會被貼上「我不是針對你」的標籤。 */
   #complains = 0;
   /** 否決交易的餘波還剩幾年。影響下一張合約的係數。 */
   #tradeRefuseYears = 0;
@@ -681,6 +691,7 @@ export class Game {
       statsByStage: this.#statsByStage,
       pro: this.#proState,
       lockedSide: this.#lockedSide,
+      visibleSide: this.#activeSide,
     };
   }
 
@@ -746,7 +757,10 @@ export class Game {
   get rating() {
     if (this.#player === null) return null;
     return rate(this.#ability, {
-      position: ratingPosition(this.#player.startPosition),
+      position: ratingPosition(this.#player.startPosition, {
+        ability: this.#ability,
+        level: TWO_WAY_REFERENCE_LEVEL,
+      }),
       traits: this.#traits,
     });
   }
@@ -880,7 +894,7 @@ export class Game {
       if (honorRanks.has(result.rank)) {
         this.#addHonor(`${prefix}${result.tournament}${result.rank}`);
       }
-      this.#pool += result.points;
+      this.#grantPoints(result.points);
       // 只有國際賽冠軍給訓練骰加成，且記的是拿下時所處的階段。
       if (result.rankIndex === 0) this.#lastChampionships.push(this.#stage);
 
@@ -1059,7 +1073,10 @@ export class Game {
     const season = playCups(this.world, {
       stage: this.#stage,
       ability: this.#ability,
-      position: ratingPosition(player.startPosition),
+      position: ratingPosition(player.startPosition, {
+        ability: this.#ability,
+        level: TWO_WAY_REFERENCE_LEVEL,
+      }),
       traits: this.#traits,
       schoolTier: this.#schoolTier,
     });
@@ -1124,13 +1141,7 @@ export class Game {
     if (academyUnlocked(this.#stage, season)) this.#traits.add(amateur.cups.academy_trigger.trait);
 
     this.#lastCupSeason = season;
-    this.#pool += season.points;
-    // 同樣要插隊——年度結束的步驟已經排在佇列裡了。
-    this.#allocHistory = [];
-    this.flow.unshift(
-      () => this.#allocationPhase('pool'),
-      () => this.#allocationConfirm('pool'),
-    );
+    this.#grantPoints(season.points);
   }
 
 
@@ -1512,7 +1523,8 @@ export class Game {
 
     // 登錄守位優先——那才是他這一季真正站的位置。沒登錄（二軍、或還沒進頂級
     // 聯盟）才退回用起始守位推定的那個，出賽勞損總得有個依據。
-    const position = pro.position ?? ratingPosition(player.startPosition);
+    const position =
+      pro.position ?? ratingPosition(player.startPosition, { ability: this.#ability, level: pro.level });
     const line = playSeason(this.world, {
       level: pro.level,
       // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。
@@ -1634,7 +1646,7 @@ export class Game {
     }
 
     // 感情狀態雙向回饋到傷病：穩定降風險、風波升風險。與事件卡的自找風險同性質，
-    // 不受鐵人上限保護。
+    // 不受魔鬼筋肉人上限保護。
     const extraRisk = this.#injuryRisk + injuryRiskModifier(this.#love);
     const result = rollInjury(this.world, {
       age: this.#age,
@@ -1675,7 +1687,7 @@ export class Game {
     ) {
       this.#unlockTrait(
         'glass',
-        '玻璃人',
+        '帕瓦諾',
         '生涯第二次大傷。從此傷病如影隨形——<b class="dn">往後每季的受傷機率都有一個下限</b>。',
         'bad',
       );
@@ -1883,7 +1895,7 @@ export class Game {
     if (love.datedTimes >= loveCfg.dating.confidante.dated_times && love.kids === 0) {
       this.#unlockTrait(
         loveCfg.dating.confidante.trait,
-        '閨中密友',
+        '啦啦隊殺手',
         '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
       );
     }
@@ -2055,7 +2067,7 @@ export class Game {
       return;
     }
 
-    const other = pickPartner(this.world, this.#pro !== null ? 'pro' : 'school', love.partner);
+    const other = pickPartner(this.world, this.#pro !== null ? 'pro' : 'school', love.partner, true);
     const married = love.status === 'married';
     this.flow.ask(
       {
@@ -2107,7 +2119,7 @@ export class Game {
     );
   }
 
-  /** 被抓到。第二次起解鎖渣男，而那個量級與一次大傷相同——是刻意的。 */
+  /** 被抓到。第二次起解鎖花樣年華，而那個量級與一次大傷相同——是刻意的。 */
   #affairCaught(next: () => void): void {
     const love = this.#love;
     const c = loveCfg.affair.caught;
@@ -2120,7 +2132,7 @@ export class Game {
       if (love.caught >= c.scum.caught_times) {
         this.#unlockTrait(
           c.scum.trait,
-          '渣男',
+          '花樣年華',
           `第二次被逮個正著。從今以後你在球迷心中的形象定型了——<b class="dn">每次被抓到，全能力 −${c.scum.all_ability_loss}</b>。`,
           'bad',
         );
@@ -2131,7 +2143,7 @@ export class Game {
           );
         }
         this.#settleCarry();
-        extra = `<br><b class="dn">全能力 −${c.scum.all_ability_loss}</b>（渣男的代價）。`;
+        extra = `<br><b class="dn">全能力 −${c.scum.all_ability_loss}</b>（花樣年華的代價）。`;
       }
       this.flow.card(
         'bad',
@@ -2439,7 +2451,7 @@ export class Game {
     if (isPodium(result.rankIndex)) this.#intlPodiums++;
 
     this.#accumulateNationalStats();
-    this.#pool += result.points;
+    this.#grantPoints(result.points);
     // 一屆賽會打完，下季的受傷風險上升。國家隊不是免費的榮耀。
     this.#injuryRisk += result.injuryNextSeason;
     // 奪冠的隔年多擲訓練骰，與養成期的大賽同一套。
@@ -2467,7 +2479,7 @@ export class Game {
     if (unlocksAce({ caps: this.#counts.internationalCaps, podiums: this.#intlPodiums, traits: this.#traits })) {
       this.#unlockTrait(
         intl.intlace_effect.trait,
-        '國際賽之鬼',
+        '東亞功夫',
         '只要穿上那件球衣，你的痛覺就會消失——你是為大場面而生的男人。' +
           '<b class="hl">國際賽不再增加受傷風險，而且每次徵召的能力點有保底</b>。',
       );
@@ -2493,7 +2505,8 @@ export class Game {
     const r = this.rating;
     if (pro === null || player === null || r === null) return;
 
-    const position = pro.position ?? ratingPosition(player.startPosition);
+    const position =
+      pro.position ?? ratingPosition(player.startPosition, { ability: this.#ability, level: pro.level });
     // 用一個 par 相當於國際賽水準的層級當尺——場次另外指定，因此層級只借它的
     // 「一季有幾場」來換算比例。
     const level = pro.level;
@@ -2631,7 +2644,7 @@ export class Game {
           if (this.#complains >= r.ambience.complains) {
             this.#unlockTrait(
               r.ambience.trait,
-              '氣氛大師',
+              '我不是針對你',
               '你又一次對媒體大吐苦水。球團高層看在眼裡——這種選手，留著也是不定時炸彈。' +
                 '<b class="dn">往後被交易的機率永久提高</b>。',
               'bad',
@@ -3985,7 +3998,7 @@ export class Game {
     if (this.#schoolTier === cfg.small_school.school_tier) {
       this.#unlockTrait(
         cfg.small_school.trait,
-        '小學校之光',
+        '國產凌凌漆',
         '當年那所沒沒無聞的小學校，走出了一個站上頂級舞台的男人。你證明了：出身，從來不是天花板。',
       );
     }
@@ -3994,7 +4007,7 @@ export class Game {
     if (potential > 0 && potential <= cfg.grinder.provisional_sum) {
       this.#unlockTrait(
         cfg.grinder.trait,
-        '努力仔',
+        '包龍星',
         '天賦平庸的球員千千萬萬，能走到這裡的卻寥寥無幾。你不是天選之人，你是把汗水熬成天賦的那種人。',
       );
     }
@@ -4101,7 +4114,27 @@ export class Game {
     );
   }
 
-  /** 分配一顆訓練骰。 */
+  /**
+   * 發能力點，並當場排進配點關卡。
+   *
+   * **給點與配點必須綁在一起**。這兩件事原本分開寫，靠呼叫端記得配對，於是三個
+   * 給點的地方漏了兩個：職業期的國際賽只加不減，點數永遠花不掉（介面上唯一能花
+   * 掉點數的入口是配點提問本身）；養成期的國際賽排在大賽**之後**，點數要等隔年
+   * 的大賽才花得到，違反下面那條「沒有先留著」。包成一個入口之後，漏排配點在結
+   * 構上就不可能發生——沒有別的路徑能加到 `#pool`。
+   *
+   * 一律用 unshift：呼叫端都在某個年度步驟裡，而年度結束早就排在佇列上了，用
+   * push 會讓配點跑到球季之後。
+   */
+  #grantPoints(points: number): void {
+    if (points <= 0) return;
+    this.#pool += points;
+    this.#allocHistory = [];
+    this.flow.unshift(
+      () => this.#allocationPhase('pool'),
+      () => this.#allocationConfirm('pool'),
+    );
+  }
 
   /**
    * 配點階段。
@@ -4250,13 +4283,23 @@ export class Game {
   }
 
   /**
+   * 目前生效的側別：畢業前看起始守位，畢業後看定位鎖定。
+   *
+   * 兩者其實是同一件事的兩個階段，因此收在一個地方。二刀流的 `#lockedSide` 是
+   * null，而他的起始守位必定是 UTIL（也推導出 null），所以兩側始終都在。
+   */
+  get #activeSide(): 'pitcher' | 'fielder' | null {
+    return this.#lockedSide ?? sideOfStartPosition(this.setup.startPosition);
+  }
+
+  /**
    * 目前還能加點的能力。
    *
-   * 定位鎖定之後，另一側的能力不再出現在選項裡——留著只會讓玩家把點數倒進
-   * 一個永遠用不到的地方。共用能力（體力）兩邊都留。
+   * 另一側的能力不出現在選項裡——留著只會讓玩家把點數倒進一個永遠用不到的
+   * 地方。共用能力（體力）兩邊都留：投手要撐局數、野手要撐出賽數。
    */
   get #allocatableAbilities(): readonly AbilityKey[] {
-    return ALL_ABILITIES.filter((key) => isSideVisible(key, this.#lockedSide));
+    return ALL_ABILITIES.filter((key) => isSideVisible(key, this.#activeSide));
   }
 
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */

@@ -99,20 +99,20 @@ describe('successChances', () => {
     expect(c.normal).toBeGreaterThan(c.bold);
   });
 
-  it('天才提升全部三種應對的成功率', () => {
+  it('練武奇才提升全部三種應對的成功率', () => {
     const plain = successChances(new Set());
     const genius = successChances(new Set(['genius']));
     expect(genius.normal).toBeGreaterThan(plain.normal);
     expect(genius.bold).toBeGreaterThan(plain.bold);
   });
 
-  it('薪水小倫降低成功率', () => {
+  it('何金銀降低成功率', () => {
     expect(successChances(new Set(['thief'])).normal).toBeLessThan(
       successChances(new Set()).normal,
     );
   });
 
-  it('大心臟讓豪賭不再有懲罰——那正是這個特性的意義', () => {
+  it('今晚打老虎讓豪賭不再有懲罰——那正是這個特性的意義', () => {
     const clutch = successChances(new Set(['clutch']));
     expect(clutch.bold).toBe(clutch.normal);
   });
@@ -129,7 +129,7 @@ describe('magnitudeFactor', () => {
     expect(magnitudeFactor('normal', true, t)).toBeGreaterThan(magnitudeFactor('safe', true, t));
   });
 
-  it('大心臟的豪賭：上檔更高、下檔更軟', () => {
+  it('今晚打老虎的豪賭：上檔更高、下檔更軟', () => {
     const clutch = new Set(['clutch']);
     const plain = new Set<string>();
     expect(magnitudeFactor('bold', true, clutch)).toBeGreaterThan(
@@ -148,7 +148,7 @@ describe('injuryMagnitude', () => {
     expect(injuryMagnitude('normal', t)).toBeGreaterThan(injuryMagnitude('safe', t));
   });
 
-  it('大心臟把豪賭的受傷風險降到普通級', () => {
+  it('今晚打老虎把豪賭的受傷風險降到普通級', () => {
     expect(injuryMagnitude('bold', new Set(['clutch']))).toBe(
       injuryMagnitude('normal', new Set()),
     );

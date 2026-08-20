@@ -145,12 +145,12 @@ export function tournamentScore(rank: string, mvp: boolean): number {
   return (cfg.score.by_rank[rank] ?? 0) + (mvp ? cfg.score.mvp : 0);
 }
 
-/** 打進冠亞軍。國際賽之鬼的解鎖條件看它。 */
+/** 打進冠亞軍。東亞功夫的解鎖條件看它。 */
 export function isPodium(rankIndex: number): boolean {
   return rankIndex <= 1;
 }
 
-/** 國際賽之鬼的解鎖：徵召夠多次，而且真的站上過頒獎台。 */
+/** 東亞功夫的解鎖：徵召夠多次，而且真的站上過頒獎台。 */
 export function unlocksAce(options: {
   readonly caps: number;
   readonly podiums: number;

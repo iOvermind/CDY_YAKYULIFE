@@ -25,8 +25,17 @@ import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import type { CareerSummary } from '../src/engine/career.ts';
 
-/** 與校準腳本的 balanced 策略一致——護欄與校準必須看同一種玩家。 */
-const BALANCED = ['sta', 'con', 'rng', 'pow', 'fld', 'eye'];
+/**
+ * 與校準腳本的 balanced 策略一致——護欄與校準必須看同一種玩家。
+ *
+ * **必須依起始守位分兩份**。自從養成期依起始守位鎖側（見 ADR 0009）之後，P 起點
+ * 的玩家只加得動 `sta`，其餘五項全被擋下、點數等於丟掉。在鎖側之前這個破洞是靜
+ * 悄悄的：P 起點照樣把點加進 con/rng/pow/fld，畢業時野手側較高，`lockedSide` 判
+ * 成野手——也就是說這套取樣**從來沒產生過投手**，校準報表上「投手 目標 35%／實際
+ * 0.0%」就是這麼來的。鎖側只是把靜靜地變成野手，換成明顯地跑不到職業。
+ */
+const BALANCED_FIELDER = ['sta', 'con', 'rng', 'pow', 'fld', 'eye'];
+const BALANCED_PITCHER = ['sta', 'vel', 'ctl', 'swp', 'drp'];
 
 const RUNS = 120;
 
@@ -34,11 +43,19 @@ function runCareer(seed: string, startPosition: GameSetup['startPosition']): Car
   const game = new Game({ seed, name: '護欄', startPosition, throws: 'R', bats: 'R' }).start();
   let guard = 0;
   let cursor = 0;
+  const balanced = startPosition === 'P' ? BALANCED_PITCHER : BALANCED_FIELDER;
   while (game.flow.prompt !== null && guard++ < 8000) {
     const options = game.flow.prompt.options;
-    const rotated = [...BALANCED.slice(cursor % BALANCED.length), ...BALANCED];
+    const rotated = [...balanced.slice(cursor % balanced.length), ...balanced];
     // 與校準腳本的策略必須一致——護欄與校準要看同一種玩家。
     const pick =
+      // **身體開口的那一年就掛靴**——與校準腳本同一條規則。這裡原本漏了它，於是
+      // 代理一路硬撐到年齡上限，生涯長度中位數 27 個球季。生涯評價分是累積 Win
+      // Shares，打三十年當然進名人堂：名人堂帶因此虛胖成 16.7%，補上這條之後是
+      // 8.3%，與校準報表的 8.1% 對得上。護欄與校準必須看同一種玩家。
+      (options.some((o) => o.id === 'retire:push')
+        ? options.find((o) => o.id === 'retire:quit')
+        : undefined) ??
       options.find((o) => o.id === 'retire:stay') ??
       options.find((o) => o.id === 'transfer:stay') ??
       options.find((o) => o.id === 'term:long') ??
@@ -147,7 +164,16 @@ describe('平衡護欄', () => {
     expect(summaries).toHaveLength(RUNS);
   });
 
-  /** 名人堂要稀有到值得截圖，但不能稀有到跑一百局都碰不到。 */
+  /**
+   * 名人堂要稀有到值得截圖，但不能稀有到跑一百局都碰不到。
+   *
+   * 這條線曾為了 `#grantPoints()` 暫放到 13%，現已收回 12%——當時的破線其實是
+   * 取樣策略的毛病（代理從不引退、且沒有真正的投手樣本），修好之後是 8.3%。
+   *
+   * 8.3% 對「目標 2%」仍然偏高，但那是**分級門檻**的事（現行 191/146/104/41，
+   * 校準建議 274/217/154/64），不是護欄的事。護欄只擋崩壞，不擋漂移。
+   * 見 ROADMAP.md「最後批次：校準與分級門檻」。
+   */
   it('名人堂的比例落在 0–12%', () => {
     expect(share(0)).toBeLessThanOrEqual(0.12);
   });

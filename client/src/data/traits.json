@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "_source": "承接原 traits.json（7 筆宣告式規則），其餘 20 筆的名稱、分類與效果文案抽取自 index_legacy.html TRAIT_KEYS / TRAIT_N / TRAIT_FX / traitName() / traitTagStyle()",
   "_completeness_note": "本檔目前是**混合狀態**，這是刻意的，不是漏抽：rules_complete 為 true 的 7 筆帶有可執行的 conditions / effects；為 false 的 20 筆只有名稱、分類與效果文案，其觸發條件仍散在 index_legacy.html 的流程程式碼裡，尚未資料化。原因是現階段不做 Rules Engine（公式形狀留在程式碼）。要判斷一筆能不能被規則引擎執行，一律看 rules_complete，不要靠有沒有 conditions 欄位推測。",
-  "_naming_note": "combo 在原 traits.json 寫作「無巧不工」，但 index_legacy.html:612 為「大巧不工」。後者是成語的正確寫法，此處採用之。",
+  "_naming_note": "combo 在原 traits.json 寫作「無巧不工」，但 index_legacy.html:612 為「黯然銷魂飯」。後者是成語的正確寫法，此處採用之。",
   "categories": {
     "_note": "顯示順序即此處的陣列順序。",
     "positive": [
@@ -113,7 +113,7 @@
       "id": "goldcloth",
       "tone": "good",
       "rules_complete": false,
-      "name": "黃金聖衣",
+      "name": "全台主場",
       "effect_text": "效力台中猛瑪滿十年，主場的信仰",
       "trigger_note": "在台中猛瑪效力滿 10 年"
     },
@@ -130,28 +130,28 @@
       "id": "confidante",
       "tone": "good",
       "rules_complete": false,
-      "name": "閨中密友",
+      "name": "啦啦隊殺手",
       "effect_text": "紅粉知己遍佈，情場的隱藏稱號"
     },
     {
       "id": "genius",
       "tone": "good",
       "rules_complete": false,
-      "name": "天才",
+      "name": "練武奇才",
       "effect_text": "訓練骰永久 4 點起，事件卡好結果機率 70%"
     },
     {
       "id": "iron",
       "tone": "good",
       "rules_complete": false,
-      "name": "鐵人",
+      "name": "魔鬼筋肉人",
       "effect_text": "受傷機率上限 10%"
     },
     {
       "id": "late",
       "tone": "good",
       "rules_complete": true,
-      "name": "大器晚成",
+      "name": "十里坡劍神",
       "effect_text": "訓練骰永久 3 點起，事件卡好結果機率 70%",
       "desc": "長年的沉潛與摸索終於開花結果，你的棒球人生下半場才正要開始——<b class=\"hl\">季初擲骰進階至「3~6」</b>，基礎受傷率下降。",
       "conditions": {
@@ -200,9 +200,9 @@
       "id": "disc",
       "tone": "good",
       "rules_complete": true,
-      "name": "自律狂",
+      "name": "斷水流",
       "effect_text": "衰退曲線整體延後兩年",
-      "desc": "你見過凌晨四點的洛杉磯嗎？——年紀輕輕就把身體當成聖殿經營，沒有派對、沒有酒精，只有重訓室的鐵片聲：<b class=\"hl\">整條衰退曲線延後兩年</b>，你的巔峰比同梯更長。",
+      "desc": "其實董事會這次請我從日本回來，是要我重組中心。我認為啊，重訓室是世界上最強的鍛練了。所以我覺得訓練中心裡面，應該就只有重訓室的存在，其他應該廢除：<b class=\"hl\">衰退曲線延後兩年</b>，你的巔峰期更長。",
       "conditions": {
         "operator": "AND",
         "rules": [
@@ -239,7 +239,7 @@
       "id": "academy",
       "tone": "good",
       "rules_complete": false,
-      "name": "學院派",
+      "name": "逃學威龍",
       "effect_text": "25 歲前受傷率 −5%、季初擲骰期望值提升",
       "trigger_note": "大學階段拿下任一大賽冠軍（index_legacy.html:1765）"
     },
@@ -247,23 +247,23 @@
       "id": "intlace",
       "tone": "good",
       "rules_complete": false,
-      "name": "國際賽之鬼",
+      "name": "東亞功夫",
       "effect_text": "國際賽不增加受傷風險，每次徵召能力點保底 +2"
     },
     {
       "id": "franchise",
       "tone": "good",
       "rules_complete": false,
-      "name": "神主牌",
+      "name": "重案組之虎",
       "effect_text": "母隊續約年薪係數固定 ≥×1.2，引退評價加成"
     },
     {
       "id": "clutch",
       "tone": "good",
       "rules_complete": true,
-      "name": "大心臟",
-      "effect_text": "全力一搏成功率天才級、成功 +4／失敗僅 −2、受傷風險降級",
-      "desc": "經歷了無數次的豪賭，你的心態堅毅無比，無論甚麼事情都不可能讓你心驚膽跳，從此以後，賭得更多，得到更多，輸得更少。——<b class=\"hl\">「全力一搏」成功率提升至天才級、成功加成 +4、失敗只 −2、受傷風險降到普通級</b>，總冠軍與國際賽 MVP 機率提升。",
+      "name": "今晚打老虎",
+      "effect_text": "所有應對成功率天才級；全力一搏不受懲罰、成功幅度加倍、失敗不加重、受傷風險降級",
+      "desc": "經歷了無數次的豪賭，你的心態堅毅無比，無論甚麼事情都不可能讓你心驚膽跳，從此以後，賭得更多，得到更多，輸得更少。——<b class=\"hl\">事件的成功率全面提升至天才級；「全力一搏」另外免除成功率懲罰、成功幅度加倍、失敗幅度不加重、受傷風險降到普通級</b>，總冠軍與國際賽 MVP 機率提升。",
       "conditions": {
         "operator": "AND",
         "rules": [
@@ -306,42 +306,42 @@
       "id": "phoenix",
       "tone": "good",
       "rules_complete": false,
-      "name": "浴火重生",
-      "effect_text": "玻璃人懲罰解除，受傷率恢復正常"
+      "name": "浴火鳳凰",
+      "effect_text": "帕瓦諾懲罰解除，受傷率恢復正常"
     },
     {
       "id": "rubber",
       "tone": "good",
       "rules_complete": false,
-      "name": "橡膠手臂",
+      "name": "橡膠果實",
       "effect_text": "TJ 量表上限翻倍、打針成功率翻倍"
     },
     {
       "id": "onetool",
       "tone": "good",
       "rules_complete": false,
-      "name": "只會這個",
+      "name": "善良之槍",
       "effect_text": "只剩一項武器的替補奇兵，出賽數銳減"
     },
     {
       "id": "smallschool",
       "tone": "good",
       "rules_complete": false,
-      "name": "小學校之光",
+      "name": "國產凌凌漆",
       "effect_text": "小學校出身，站上頂級舞台"
     },
     {
       "id": "grinder",
       "tone": "good",
       "rules_complete": false,
-      "name": "努力仔",
+      "name": "包龍星",
       "effect_text": "平庸天賦，靠汗水熬成的生涯"
     },
     {
       "id": "combo",
       "tone": "good",
       "rules_complete": true,
-      "name": "大巧不工",
+      "name": "黯然銷魂飯",
       "effect_text": "季初自動擲 1 顆骰，加在專精的能力上",
       "desc": "連續三年，你把所有汗水都澆在同一個工具上——<b class=\"hl\">季初擲骰永久多 1 顆</b>。專精者的複利。",
       "conditions": {
@@ -365,9 +365,9 @@
       "id": "switch_pitcher",
       "tone": "good",
       "rules_complete": false,
-      "name": "雙手投",
+      "name": "左右開投",
       "effect_text": "左右開弓的投手，永遠取得同邊優勢",
-      "trigger_note": "刻意不進開局擲骰。真實棒球史上的雙手投投手只有個位數，放進常規機率會讓投手看起來一堆怪物；當成生涯中觸發的隱藏稱號才是亮點。觸發條件待定。"
+      "trigger_note": "刻意不進開局擲骰。真實棒球史上的左右開投投手只有個位數，放進常規機率會讓投手看起來一堆怪物；當成生涯中觸發的隱藏稱號才是亮點。觸發條件待定。"
     },
     {
       "id": "rainbow",
@@ -387,21 +387,21 @@
       "id": "glass",
       "tone": "bad",
       "rules_complete": false,
-      "name": "玻璃人",
+      "name": "帕瓦諾",
       "effect_text": "受傷機率下限 40%"
     },
     {
       "id": "scum",
       "tone": "bad",
       "rules_complete": false,
-      "name": "渣男",
+      "name": "花樣年華",
       "effect_text": "每次外遇被抓到，全能力 −5"
     },
     {
       "id": "yips",
       "tone": "bad",
       "rules_complete": false,
-      "name": "失憶症",
+      "name": "巧克力",
       "effect_text": "系統評價 −3，升上更高層級或奪得年度獎項可解除"
     },
     {
@@ -443,7 +443,7 @@
       "id": "cancer",
       "tone": "bad",
       "rules_complete": true,
-      "name": "更衣室毒瘤",
+      "name": "烏鴉",
       "effect_text": "季中被交易機率大增、續約條件惡化",
       "desc": "教練受夠了你的不可控，隊友對你的新聞指指點點。比起成績，球團現在更想清理休息室的氣氛——<b class=\"dn\">季中被交易機率大增、續約條件惡化</b>。",
       "conditions": {
@@ -476,16 +476,16 @@
       "id": "ambience",
       "tone": "bad",
       "rules_complete": false,
-      "name": "氣氛大師",
+      "name": "我不是針對你",
       "effect_text": "轉隊機率永久提高"
     },
     {
       "id": "thief",
       "tone": "bad",
       "rules_complete": true,
-      "name": "薪水小倫",
+      "name": "何金銀",
       "effect_text": "事件卡失敗率永久 +10%",
-      "desc": "拒絕下放後，你的成績依然沒有起色。球迷開始在社群叫你「薪水小倫」——<b class=\"dn\">事件卡失敗率永久 +10%</b>，這個名聲跟著你到退休。",
+      "desc": "拒絕下放後，你的成績依然沒有起色。球迷開始在社群叫你「何金銀」——<b class=\"dn\">事件卡失敗率永久 +10%</b>，這個名聲跟著你到退休。",
       "conditions": {
         "operator": "AND",
         "rules": [

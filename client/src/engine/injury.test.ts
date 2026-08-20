@@ -14,7 +14,7 @@ describe('受傷機率', () => {
     expect(old).toBeGreaterThan(mid);
   });
 
-  it('學院派只在 25 歲之前有效', () => {
+  it('逃學威龍只在 25 歲之前有效', () => {
     const t = new Set(['academy']);
     const before = cfg.chance.traits.academy.before_age - 1;
     expect(injuryChance({ age: before, traits: t })).toBeLessThan(
@@ -24,7 +24,7 @@ describe('受傷機率', () => {
     expect(injuryChance({ age: after, traits: t })).toBe(injuryChance({ age: after, traits: none }));
   });
 
-  it('鐵人是上限、玻璃人是下限', () => {
+  it('魔鬼筋肉人是上限、帕瓦諾是下限', () => {
     expect(injuryChance({ age: 38, traits: new Set(['iron']) })).toBe(cfg.chance.traits.iron.cap);
     expect(injuryChance({ age: 22, traits: new Set(['glass']) })).toBe(
       cfg.chance.traits.glass.floor,
@@ -37,7 +37,7 @@ describe('受傷機率', () => {
     );
   });
 
-  it('事件卡自找的風險不受鐵人上限保護', () => {
+  it('事件卡自找的風險不受魔鬼筋肉人上限保護', () => {
     const iron = new Set(['iron']);
     const plain = injuryChance({ age: 25, traits: iron });
     expect(injuryChance({ age: 25, traits: iron, extraRisk: 20 })).toBe(plain + 20);
@@ -56,7 +56,7 @@ describe('受傷機率', () => {
 describe('傷勢', () => {
   it('健康的一年出賽係數是 1，而且不留損失', () => {
     const world = new World('healthy');
-    // 鐵人 + 年輕 = 機率壓到很低，多跑幾次一定抽得到健康的年份。
+    // 魔鬼筋肉人 + 年輕 = 機率壓到很低，多跑幾次一定抽得到健康的年份。
     let healthy = 0;
     for (let i = 0; i < 200; i++) {
       const r = rollInjury(world, { age: 22, traits: new Set(['iron']) });
@@ -113,7 +113,7 @@ describe('傷勢', () => {
   });
 });
 
-describe('玻璃人的解鎖', () => {
+describe('帕瓦諾的解鎖', () => {
   const g = cfg.glass_unlock;
 
   it('生涯第二次大傷才貼標籤', () => {
@@ -125,7 +125,7 @@ describe('玻璃人的解鎖', () => {
     expect(unlocksGlass({ majorInjuries: 5, age: g.before_age, traits: none })).toBe(false);
   });
 
-  it('已經是玻璃人就不再重複貼', () => {
+  it('已經是帕瓦諾就不再重複貼', () => {
     expect(unlocksGlass({ majorInjuries: 5, age: 25, traits: new Set([g.trait]) })).toBe(false);
   });
 });

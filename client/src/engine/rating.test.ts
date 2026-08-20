@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { abilities, ALL_ABILITIES, positions } from '../data/index.ts';
 import {
+  battingRating,
   defenseScore,
   fieldingPosition,
   fielderRating,
   pitcherRating,
   rate,
   ratingPosition,
+  twoWayPositionBonus,
 } from './rating.ts';
 
 const build = (base: number, over: Record<string, number> = {}) => ({
@@ -137,7 +139,7 @@ describe('rate', () => {
     expect(r.overall).toBe(r.fielder);
   });
 
-  it('失憶症讓系統評價下降', () => {
+  it('巧克力讓系統評價下降', () => {
     const ability = build(50);
     const plain = rate(ability, { position: 'SS' });
     const yips = rate(ability, { position: 'SS', traits: new Set(['yips']) });
@@ -160,18 +162,91 @@ describe('rate', () => {
 });
 
 describe('ratingPosition', () => {
-  it('外野的起始守位推定為中外野', () => {
-    expect(ratingPosition('LF')).toBe('CF');
-    expect(ratingPosition('RF')).toBe('CF');
+  it('真實守位一律對應自己', () => {
+    for (const p of ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF']) {
+      expect(ratingPosition(p)).toBe(p);
+    }
   });
 
-  it('捕手維持捕手', () => {
-    expect(ratingPosition('C')).toBe('C');
+  it('沒有登錄守位的人以指定打擊為基準', () => {
+    expect(ratingPosition('P')).toBe('DH');
+    expect(ratingPosition('UTIL')).toBe('DH');
+    expect(ratingPosition('DH')).toBe('DH');
   });
 
-  it('其餘一律推定為游擊', () => {
-    expect(ratingPosition('UTIL')).toBe('SS');
-    expect(ratingPosition('P')).toBe('SS');
+  it('認不出來的起始守位不會被當成守得住游擊', () => {
+    expect(ratingPosition('無此守位')).toBe('DH');
+  });
+
+  it('工具人依守備能力推定，不是一律指定打擊', () => {
+    const glove = build(80);
+    const auto = { ability: glove, level: 'CPBL1' };
+    expect(ratingPosition('UTIL', auto)).toBe(fieldingPosition(glove, 'CPBL1'));
+    expect(ratingPosition('UTIL', auto)).not.toBe('DH');
+  });
+
+  it('守備真的很差的工具人才落到指定打擊', () => {
+    const stone = build(15);
+    expect(ratingPosition('UTIL', { ability: stone, level: 'CPBL1' })).toBe('DH');
+  });
+
+  it('投手不受影響——他本來就不站守位', () => {
+    const glove = build(80);
+    expect(ratingPosition('P', { ability: glove, level: 'CPBL1' })).toBe('DH');
+  });
+});
+
+describe('二刀流的野手側', () => {
+  const TWO_WAY = new Set(['two_way']);
+  // 打擊好、守備爛：合成制對他最不利的那種人。
+  const slugger = build(30, { con: 70, pow: 70, eye: 65, spd: 60 });
+
+  it('以純打擊為基準，指定打擊不加分', () => {
+    const batting = battingRating(slugger);
+    expect(fielderRating(slugger, 'DH', { twoWay: true })).toBeCloseTo(batting, 10);
+  });
+
+  it('守位只會往上加，永遠不會扣分', () => {
+    const batting = battingRating(slugger);
+    for (const p of ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF']) {
+      expect(fielderRating(slugger, p, { twoWay: true })).toBeGreaterThan(batting);
+    }
+  });
+
+  it('加分依守位難度排序，捕手最高、一壘最低', () => {
+    expect(twoWayPositionBonus('C')).toBeCloseTo(6, 10);
+    expect(twoWayPositionBonus('SS')).toBeCloseTo(5, 10);
+    expect(twoWayPositionBonus('1B')).toBeCloseTo(0.75, 10);
+    expect(twoWayPositionBonus('DH')).toBe(0);
+  });
+
+  it('加分依出賽比重折算——投球日不能守備', () => {
+    expect(twoWayPositionBonus('SS', 0.8)).toBeCloseTo(4, 10);
+    expect(twoWayPositionBonus('SS', 0)).toBe(0);
+  });
+
+  it('守備爛的二刀流不會因為站上游擊而變差', () => {
+    // 純野手走合成制，守備爛就會被稀釋；二刀流不該重蹈覆轍。
+    const pure = fielderRating(slugger, 'SS');
+    const twoWay = fielderRating(slugger, 'SS', { twoWay: true });
+    expect(pure).toBeLessThan(battingRating(slugger));
+    expect(twoWay).toBeGreaterThan(pure);
+  });
+
+  it('rate() 依二刀流特性自動切換算法', () => {
+    const withTrait = rate(slugger, { position: 'SS', traits: TWO_WAY });
+    const without = rate(slugger, { position: 'SS' });
+    expect(withTrait.fielder).toBeGreaterThan(without.fielder);
+    expect(withTrait.fielder).toBe(
+      Math.round(battingRating(slugger) + twoWayPositionBonus('SS')),
+    );
+  });
+
+  it('純野手的評價不受影響', () => {
+    const pure = build(50, { con: 60, rng: 55 });
+    expect(rate(pure, { position: 'SS' }).fielder).toBe(
+      Math.round(fielderRating(pure, 'SS')),
+    );
   });
 });
 

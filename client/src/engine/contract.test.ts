@@ -101,7 +101,7 @@ describe('termOptions', () => {
     );
   });
 
-  it('神主牌的係數有保底', () => {
+  it('重案組之虎的係數有保底', () => {
     const plain = termOptions({ d: -5, age: 30, side: 'fielder' });
     const franchise = termOptions({
       d: -5,
@@ -112,7 +112,7 @@ describe('termOptions', () => {
     expect(franchise.shortMult).toBeGreaterThan(plain.shortMult);
   });
 
-  it('更衣室毒瘤的係數有上限', () => {
+  it('烏鴉的係數有上限', () => {
     const plain = termOptions({ d: 10, age: 26, side: 'fielder' });
     const cancer = termOptions({ d: 10, age: 26, side: 'fielder', traits: new Set(['cancer']) });
     expect(cancer.shortMult).toBeLessThan(plain.shortMult);

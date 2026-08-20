@@ -28,11 +28,11 @@ export interface LoveState {
   /** 交往年數。求婚可行之後才累計——見 `breakupChance`。 */
   datingYears: number;
   kids: number;
-  /** 交往過幾段。閨中密友看它。 */
+  /** 交往過幾段。啦啦隊殺手看它。 */
   datedTimes: number;
   /** 外遇次數（含沒被抓到的）。外務纏身看它。 */
   affairs: number;
-  /** 被抓次數。渣男看它。 */
+  /** 被抓次數。花樣年華看它。 */
   caught: number;
   /** 離過幾次婚。 */
   divorces: number;
@@ -192,10 +192,24 @@ export function isChildhoodSweetheart(love: LoveState): boolean {
   return love.status === 'married' && love.fromSchool;
 }
 
-/** 從名單裡挑一個對象。走訪順序照資料的宣告順序，否則同一個種子會挑出不同的人。 */
-export function pickPartner(world: World, pool: 'school' | 'pro', exclude: string | null): string {
-  const list = cfg.names[pool].filter((n) => n !== exclude);
-  const source = list.length > 0 ? list : cfg.names[pool];
+/**
+ * 從名單裡挑一個對象。走訪順序照資料的宣告順序，否則同一個種子會挑出不同的人。
+ *
+ * `excludeSafe` 用於外遇：安全名單上的名字**永遠不會**成為外遇對象。它們仍然
+ * 是正常的交往與結婚人選——差別只在這一個抽選點。連耗盡名單時的退路也要排除，
+ * 不然「永遠不會」就變成「幾乎不會」。
+ */
+export function pickPartner(
+  world: World,
+  pool: 'school' | 'pro',
+  exclude: string | null,
+  excludeSafe = false,
+): string {
+  const safe = new Set(excludeSafe ? cfg.names.safe : []);
+  const usable = cfg.names[pool].filter((n) => !safe.has(n));
+  const list = usable.filter((n) => n !== exclude);
+  const source = list.length > 0 ? list : usable;
+  if (source.length === 0) return '';
   return source[world.stream('career').int(0, source.length - 1)] ?? '';
 }
 

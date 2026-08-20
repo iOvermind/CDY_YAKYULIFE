@@ -74,7 +74,11 @@ interface CareerResult {
 
 /** 跑完一局，回傳結算結果。 */
 function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): CareerResult {
-  const order = POLICIES[policy];
+  // **起始守位是投手就一定投手側投點**，不管策略名字叫什麼。養成期依起始守位鎖側
+  // 之後（見 ADR 0009），P 起點只加得動 `sta`，其餘全被擋下；照策略表投野手能力
+  // 等於把點數丟進水裡，那一局跑不到職業。鎖側之前這個破洞是靜悄悄的——P 起點照
+  // 樣練野手能力，畢業時被判成野手——所以報表上的「投手 35%」長年顯示 0.0%。
+  const order = setup.startPosition === 'P' ? POLICIES.pitcher : POLICIES[policy];
   const game = new Game(setup).start();
 
   let guard = 0;

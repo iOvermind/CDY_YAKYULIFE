@@ -234,7 +234,7 @@ describe('rollTrainingDice', () => {
     }
   });
 
-  it('天才的骰面下限被墊高', () => {
+  it('練武奇才的骰面下限被墊高', () => {
     const genius = new Set(['genius']);
     for (let i = 0; i < 200; i++) {
       for (const v of roll(`s${i}`, genius).values) {
@@ -243,7 +243,7 @@ describe('rollTrainingDice', () => {
     }
   });
 
-  it('天才優先於大器晚成——兩者同時擁有時用天才的區間', () => {
+  it('練武奇才優先於十里坡劍神——兩者同時擁有時用練武奇才的區間', () => {
     const both = new Set(['genius', 'late']);
     const geniusMin = abilities.training_dice.faces['genius']?.min ?? 0;
     for (let i = 0; i < 200; i++) {

@@ -202,6 +202,8 @@ export interface AbilitiesData {
       readonly defense_weight: Readonly<Record<string, number>>;
       readonly dh_defense_penalty: { readonly base_position: string; readonly penalty: number };
       readonly default_position: Readonly<Record<string, string>>;
+      /** 二刀流野手側的守位加分。基準是純打擊，守 DH 以外的守位才往上加。 */
+      readonly two_way_position_bonus: { readonly scale: number };
     };
     readonly trait_modifiers: Readonly<Record<string, number>>;
   };
@@ -309,7 +311,12 @@ export interface LoveData {
   };
   readonly divorce: { readonly base_ratio: number; readonly per_kid_ratio: number };
   readonly childhood_sweetheart: { readonly trait: string; readonly name: string };
-  readonly names: { readonly school: readonly string[]; readonly pro: readonly string[] };
+  readonly names: {
+    readonly school: readonly string[];
+    readonly pro: readonly string[];
+    /** 安全名單。與 school/pro 共用名字池，只在外遇抽選時排除。 */
+    readonly safe: readonly string[];
+  };
 }
 
 /** 成就與成就點數（AP）。跨局的 Meta-progression，見 CONTEXT.md。 */

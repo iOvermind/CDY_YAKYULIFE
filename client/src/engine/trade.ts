@@ -6,11 +6,11 @@
  *
  * 三條路徑，差別在球員有多少話語權：
  *
- * - **更衣室毒瘤**不必問。球團受夠了休息室的氣氛，直接打包。
+ * - **烏鴉**不必問。球團受夠了休息室的氣氛，直接打包。
  * - **明星**有否決權。留下來要付代價，但那件球衣他留住了。
  * - **其他人**只有抱怨或沉默。那個差別本身就是資訊——夠強的人才有得選。
  *
- * 還有一條不會動的：神主牌與球隊代名詞是城市的象徵，他隊來問，高層連會議
+ * 還有一條不會動的：重案組之虎與球隊代名詞是城市的象徵，他隊來問，高層連會議
  * 都不開。
  */
 import { season as cfg, teams as teamsData } from '../data/index.ts';
@@ -20,7 +20,7 @@ import type { ProPitchingLine } from './season.ts';
 
 const trade = cfg.trade;
 
-/** 被交易的機率。特性把它推高——毒瘤與氣氛大師都是球團想清掉的人。 */
+/** 被交易的機率。特性把它推高——毒瘤與我不是針對你都是球團想清掉的人。 */
 export function tradeChance(traits: ReadonlySet<string>): number {
   let p = trade.chance.base;
   for (const [id, bonus] of Object.entries(trade.chance.trait_bonus)) {

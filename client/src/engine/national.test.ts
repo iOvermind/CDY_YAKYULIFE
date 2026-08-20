@@ -89,7 +89,7 @@ describe('一屆賽會', () => {
     expect(strong).toBeLessThan(0.5);
   });
 
-  it('國際賽之鬼有能力點保底，而且不增加受傷風險', () => {
+  it('東亞功夫有能力點保底，而且不增加受傷風險', () => {
     const world = new World('ace');
     const ace = new Set([cfg.intlace_effect.trait]);
     for (let i = 0; i < 200; i++) {
@@ -106,7 +106,7 @@ describe('一屆賽會', () => {
     );
   });
 
-  it('大心臟讓 MVP 機率加倍', () => {
+  it('今晚打老虎讓 MVP 機率加倍', () => {
     const rate = (traits: ReadonlySet<string>) => {
       const world = new World('mvp');
       let mvp = 0;
@@ -148,7 +148,7 @@ describe('榮譽與計分', () => {
 });
 
 describe('特性的解鎖', () => {
-  it('國際賽之鬼要徵召夠多次，而且真的站上過頒獎台', () => {
+  it('東亞功夫要徵召夠多次，而且真的站上過頒獎台', () => {
     const a = cfg.intlace_effect;
     expect(unlocksAce({ caps: a.min_caps, podiums: a.min_podiums - 1, traits: none })).toBe(false);
     expect(unlocksAce({ caps: a.min_caps - 1, podiums: a.min_podiums, traits: none })).toBe(false);

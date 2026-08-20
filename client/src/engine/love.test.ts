@@ -180,4 +180,33 @@ describe('對象名單', () => {
       expect(other).not.toBe(cfg.names.pro[0]);
     }
   });
+
+  it('安全名單可以交往，卻永遠不會成為外遇對象', () => {
+    const world = new World('safe');
+    const safe = cfg.names.safe;
+    expect(safe.length).toBeGreaterThan(0);
+
+    // 前提：她本來就在名單裡，否則這條規則沒有意義。
+    for (const n of safe) {
+      expect(cfg.names.school).toContain(n);
+      expect(cfg.names.pro).toContain(n);
+    }
+
+    let seenAsPartner = false;
+    for (let i = 0; i < 400; i++) {
+      if (safe.includes(pickPartner(world, 'pro', null))) seenAsPartner = true;
+      expect(safe).not.toContain(pickPartner(world, 'pro', null, true));
+      expect(safe).not.toContain(pickPartner(world, 'school', null, true));
+    }
+    expect(seenAsPartner).toBe(true);
+  });
+
+  it('名單被現任耗盡時，退路仍然排除安全名單', () => {
+    const world = new World('safe-fallback');
+    // 只剩安全名單與現任可選時，寧可回空字串也不能把她推去外遇。
+    for (const n of cfg.names.pro) {
+      if (cfg.names.safe.includes(n)) continue;
+      expect(cfg.names.safe).not.toContain(pickPartner(world, 'pro', n, true));
+    }
+  });
 });

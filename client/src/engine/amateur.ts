@@ -250,7 +250,7 @@ export function playYouthTournament(world: World, code: string, overall: number)
 }
 
 /**
- * 判斷這一季是否觸發學院派——大學階段拿下任一大賽冠軍即解鎖。
+ * 判斷這一季是否觸發逃學威龍——大學階段拿下任一大賽冠軍即解鎖。
  *
  * 這是目前唯一在資料層描述完整的養成期特性觸發；其餘特性的條件仍在
  * traits.json 標為 rules_complete: false。

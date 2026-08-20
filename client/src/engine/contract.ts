@@ -101,7 +101,7 @@ function baseMultiplier(d: number): number {
 /**
  * 這次談判能拿到的兩個方案。
  *
- * `traits` 用來套用神主牌（係數保底）與更衣室毒瘤（係數設上限）。兩個特性
+ * `traits` 用來套用重案組之虎（係數保底）與烏鴉（係數設上限）。兩個特性
  * 目前都不會被授予，因此暫時不會觸發。
  */
 export function termOptions(options: {

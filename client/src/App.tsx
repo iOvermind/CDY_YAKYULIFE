@@ -619,13 +619,13 @@ function StatsPanel({
           <span>{summary !== null ? '生涯' : state.pro === null ? '學年' : '職涯'}</span>
         </div>
         {/* 可分配點只寫在左側記分板。同一個數字寫兩次，玩家會以為是兩件事。 */}
-        {state.lockedSide !== 'fielder' && (
+        {state.visibleSide !== 'fielder' && (
           <div className="stat-cell">
             <b>{rating?.pitcher ?? 0}</b>
             <span>投手側</span>
           </div>
         )}
-        {state.lockedSide !== 'pitcher' && (
+        {state.visibleSide !== 'pitcher' && (
           <div className="stat-cell">
             <b>{rating?.fielder ?? 0}</b>
             <span>野手側</span>
@@ -1406,9 +1406,10 @@ function AbilityPanel({
     <>
       {display.order.map((group) => {
         const keys = display.members[group] ?? [];
-        // 定位鎖定之後整組收起來，不是變灰。留著一組永遠動不了的數字只會佔
-        // 版面，也會讓玩家一直以為還有機會補回來。體力兩側共用，永遠顯示。
-        if (!isSideVisible(keys[0] ?? '', state.lockedSide)) return null;
+        // 另一側整組收起來，不是變灰。留著一組永遠動不了的數字只會佔版面，也會
+        // 讓玩家一直以為還有機會補回來。體力兩側共用，永遠顯示。
+        // 用 visibleSide 而非 lockedSide：起始守位一選定就該收起來，不必等畢業。
+        if (!isSideVisible(keys[0] ?? '', state.visibleSide)) return null;
         return (
           <AbilityBlock
             key={group}

@@ -237,7 +237,7 @@
       "per_season": true
     },
     "academy_trigger": {
-      "_note": "大學階段拿下任一大賽冠軍即解鎖「學院派」。",
+      "_note": "大學階段拿下任一大賽冠軍即解鎖「逃學威龍」。",
       "stage": "U",
       "rank": "冠軍",
       "trait": "academy"
@@ -687,7 +687,7 @@
       "values": ["冠軍", "亞軍", "季軍"]
     },
     "mvp": {
-      "_note": "賽會 MVP。只有打進冠亞軍才有機會，冠軍隊的機率高得多。大心臟加倍——那個特性的效果就是「大場面」。",
+      "_note": "賽會 MVP。只有打進冠亞軍才有機會，冠軍隊的機率高得多。今晚打老虎加倍——那個特性的效果就是「大場面」。",
       "by_rank": { "冠軍": 30, "亞軍": 8 },
       "clutch_multiplier": 2,
       "clutch_trait": "clutch",
@@ -703,7 +703,7 @@
     },
     "injury_next_season": 10,
     "intlace_effect": {
-      "_note": "「國際賽之鬼」的效果：不增加下季受傷機率，且能力點保底。",
+      "_note": "「東亞功夫」的效果：不增加下季受傷機率，且能力點保底。",
       "trait": "intlace",
       "injury_next_season": 0,
       "min_points": 2,
