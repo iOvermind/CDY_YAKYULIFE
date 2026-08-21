@@ -95,11 +95,14 @@ describe('winningLine', () => {
   });
 
   it('累積型門檻依球季場次等比放大', () => {
-    // 盜壘王還沒接上對手池，仍走 base × 場次比例——這條就是在守那個比例。
+    // 只能在同一個 org 內比：盜壘王已接上對手池（ADR 0017），org 不同 →
+    // 競爭者人數不同 → d 不同，跨聯盟的門檻本來就不該是純場次等比。
     const sb = titleOf('steal_king');
-    const cpbl = winningLine(sb, CPBL, 0.5)!;
-    const mlb = winningLine(sb, MLB, 0.5)!;
-    expect(mlb / cpbl).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 6);
+    const short = winningLine(sb, CPBL, 0.5)!;
+    const long = winningLine(sb, { ...CPBL, leagueGames: MLB_GAMES }, 0.5)!;
+    // 不是嚴格等比：上壘數含敬遠，而敬遠數是整數（`intentionalWalksFrom` 取整），
+    // 在兩個球季長度上各自捨入 → 殘留千分之二左右的偏差。
+    expect(long / short).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 2);
   });
 
   it('全壘打王已改由對手池推導，不再是場次的線性放大', () => {

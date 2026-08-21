@@ -34,7 +34,7 @@ import {
 } from './metrics.ts';
 import { winnerAbilityFrom } from './rivalPool.ts';
 import type { World } from './rng.ts';
-import type { PitcherRole } from './season.ts';
+import { levelOf, type PitcherRole } from './season.ts';
 
 /**
  * 一座獎。
@@ -175,7 +175,7 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
 
   if (award.kind === 'shares') {
     if (d === undefined) return null;
-    const line = proLineAt(d, proPaAt(d, games));
+    const line = proLineAt(d, proPaAt(d, games), levelOf(level).par);
     const shares = battingShares(line, proBaseline(level), null);
     // 球隊勝率傳 null：門檻線問的是「這種等級的球員能打出多少份額」，不是
     // 「他在哪一隊」。球隊調整留給實際球員那一側，否則強隊的人門檻反而更高。
@@ -189,7 +189,7 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
   // 場次已經在 proPaAt 裡了，所以短季聯盟不必再乘一次比例——那正是寫死 base
   // 的那條路的老問題：它照場次縮線，卻沒照聯盟水準縮，結果短季反而好拿。
   if (d !== undefined) {
-    const line = proLineAt(d, proPaAt(d, games));
+    const line = proLineAt(d, proPaAt(d, games), levelOf(level).par);
     const value = countingOf(line, award.stat);
     if (value !== null) return value * swing;
   }

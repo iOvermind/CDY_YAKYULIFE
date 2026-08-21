@@ -11,7 +11,7 @@
 import { amateur, season as cfg } from '../data/index.ts';
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
-import { levelOf } from './season.ts';
+import { dominanceAt, intentionalWalksFrom, levelOf } from './season.ts';
 
 /** 聯盟平均：一名平均球員的打擊率、上壘率、長打率與防禦率。 */
 export interface Baseline {
@@ -56,11 +56,12 @@ export function proBaseline(level: string): Baseline {
  * 就是一個剛好卡在降級線上的球員。生涯評價分的零點定在那裡（ADR 0003）。
  */
 export function proBaselineAt(level: string, d: number): Baseline {
-  const line = proLineAt(d, 600);
+  const line = proLineAt(d, 600, levelOf(level).par);
   return build(
     line.pa,
     line.ab,
     line.bb,
+    line.ibb,
     line.hits,
     line.double,
     line.triple,
@@ -80,11 +81,18 @@ export function proBaselineAt(level: string, d: number): Baseline {
  * 打點、盜壘、得分、三振也在裡面。`playSeason` 算這四項時沒有另外的機制——
  * 打點是安打與全壘打的線性組合，盜壘是上壘數乘企圖率再乘成功率，全都是同一
  * 組率吃同一個 d。既然那邊算得出來，這邊就算得出來，只是少了亂數而已。
+ *
+ * **故意四壞也一樣得算。** 它曾經被寫死成 0，於是門檻線少了一整塊上壘——打擊
+ * 率不受影響（IBB 同時退出分子與分母），上壘率卻被系統性低估，而且敬遠是打者
+ * 越強給越多，偏差隨 d 放大。結果就是上壘王的門檻形同虛設。這正是 `par` 出現
+ * 在參數列的唯一理由：Dom 的門檻吃絕對能力值，光有 d 算不出來。
  */
-export function proLineAt(d: number, pa: number): BattingLine {
+export function proLineAt(d: number, pa: number, par: number): BattingLine {
   const b = cfg.batting;
   const bb = pa * rateAt(b.walk_rate, d);
-  const ab = pa - bb;
+  // 期望值取 noise 區間的中點——這條線本來就不抽亂數。
+  const ibb = intentionalWalksFrom(dominanceAt(par + d, par), pa, () => 0.5);
+  const ab = pa - bb - ibb;
   const hits = ab * rateAt(b.hit_rate, d);
   const hr = ab * rateAt(b.hr_rate, d);
   const rest = hits - hr;
@@ -92,7 +100,7 @@ export function proLineAt(d: number, pa: number): BattingLine {
   const triple = rest * rateAt(b.extra_base.triple_rate, d);
 
   const rbi = hits * b.rbi_per_hit + hr * b.rbi_per_hr_extra;
-  const onBase = hits + bb;
+  const onBase = hits + bb + ibb;
   const sb = onBase * rateAt(b.steal.attempt_rate, d) * rateAt(b.steal.success_rate, d);
   const runs = onBase * rateAt(b.runs_per_time_on_base, d);
   const so = ab * rateAt(b.strikeout_rate, d);
@@ -101,7 +109,7 @@ export function proLineAt(d: number, pa: number): BattingLine {
     pa,
     ab,
     bb,
-    ibb: 0,
+    ibb,
     hits,
     double,
     triple,
@@ -151,13 +159,15 @@ export function amateurBaseline(): Baseline {
   const rest = hits - hr;
   const double = rest * b.double_rate.base;
   const triple = rest * b.triple_rate.base;
-  return build(pa, ab, bb, hits, double, triple, hr, amateur.amateur_stats.pitching.era.base, '');
+  // 業餘沒有敬遠機制（`amateur.json` 裡沒有 intentional_walk），IBB 恆為 0。
+  return build(pa, ab, bb, 0, hits, double, triple, hr, amateur.amateur_stats.pitching.era.base, '');
 }
 
 function build(
   pa: number,
   ab: number,
   bb: number,
+  ibb: number,
   hits: number,
   double: number,
   triple: number,
@@ -170,7 +180,7 @@ function build(
   const line = {
     hits,
     bb,
-    ibb: 0,
+    ibb,
     double,
     triple,
     hr,
@@ -178,7 +188,8 @@ function build(
   } as unknown as BattingLine;
   return {
     avg: ab === 0 ? 0 : hits / ab,
-    obp: pa === 0 ? 0 : (hits + bb) / pa,
+    // 與 `season.ts` 的 obp 同一條式子：IBB 本來就在 BB 裡面。
+    obp: pa === 0 ? 0 : (hits + bb + ibb) / pa,
     slg: ab === 0 ? 0 : totalBases / ab,
     era,
     runsCreatedPerPa: pa === 0 ? 0 : runsCreated(line) / pa,

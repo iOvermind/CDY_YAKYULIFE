@@ -267,17 +267,65 @@ export function plateAppearances(world: World, games: number, overall: number, p
  * `Dom = (pow + con + eye - spd/4) / 180`，只有 Dom > 1 的極端打者才會被敬遠。
  * 速度是扣分項——敬遠快腿等於免費送他上二壘，沒有教練會這麼做。
  */
-export function intentionalWalks(world: World, ability: Abilities, pa: number): number {
+export function intentionalWalks(
+  world: World,
+  ability: Abilities,
+  pa: number,
+  par: number,
+): number {
   const rng = world.stream('season');
-  const ibb = cfg.batting.intentional_walk;
+  return intentionalWalksFrom(
+    dominanceOf((key) => ability[key] ?? 0, par),
+    pa,
+    () => rng.next(),
+  );
+}
 
+/**
+ * 恐懼值：各項能力照設定的權重加總，除以除數。速度的權重是負的。
+ *
+ * **能力先平移到基準聯盟**（見 `season.json` 的 `_reference_par_note`）。平移後
+ * Dom 只是 d 的函數，跟 `proLineAt` 裡其他每一條率的立場一致：一個 d=+6 的打者
+ * 在中職和大聯盟被敬遠的頻率相同。若不平移，敬遠會只存在於大聯盟——par 44 的
+ * 中職連聯盟第一名都構不到 1.0。
+ *
+ * 平移量是權重和本身，不是新的自由參數：全能力齊平在 par 的球員，任何聯盟都
+ * 必須拿到同一個 Dom。
+ */
+function dominanceOf(valueOf: (key: string) => number, par: number): number {
+  const ibb = cfg.batting.intentional_walk;
+  const shift = par - ibb.reference_par;
   let sum = 0;
-  for (const [key, w] of Object.entries(ibb.abilities)) sum += (ability[key] ?? 0) * w;
-  const dom = sum / ibb.divisor;
+  for (const [key, w] of Object.entries(ibb.abilities)) sum += (valueOf(key) - shift) * w;
+  return sum / ibb.divisor;
+}
+
+/**
+ * 全能力齊平在 `overall` 的球員的恐懼值。
+ *
+ * 門檻線那側要的就是這種假想球員——`proLineAt` 的每一條率都假設「相關能力都
+ * 在 par+d」，敬遠沒有理由自己一套。
+ */
+export function dominanceAt(overall: number, par: number): number {
+  return dominanceOf(() => overall, par);
+}
+
+/**
+ * 給定恐懼值與打席數的故意四壞數。
+ *
+ * 門檻是寫死的 1.0，且因為 Dom 只吃 d，全聯盟共用同一條觸發線 d > +6.5
+ * （見 {@link dominanceOf}）。
+ *
+ * `noise` 是延後求值的 0–1 抽取；**只有真的會被敬遠時才會抽**。這個順序不能
+ * 改——提早抽會讓每一個 Dom 不到門檻的普通打者都多消耗一次亂數，同一顆種子
+ * 就會給出不同的球季（ADR 0002）。門檻線那側傳 `() => 0.5` 取期望值。
+ */
+export function intentionalWalksFrom(dom: number, pa: number, noise: () => number): number {
+  const ibb = cfg.batting.intentional_walk;
   if (dom <= ibb.threshold) return 0;
 
-  const noise = ibb.noise.min + rng.next() * (ibb.noise.max - ibb.noise.min);
-  return Math.round((pa * Math.pow(dom, ibb.exponent)) / ibb.rate_divisor * noise);
+  const n = ibb.noise.min + noise() * (ibb.noise.max - ibb.noise.min);
+  return Math.round((pa * Math.pow(dom, ibb.exponent)) / ibb.rate_divisor * n);
 }
 
 /** 打出一季職業打擊成績。 */
@@ -301,7 +349,7 @@ export function proBattingLine(
   const pa = plateAppearances(world, games, overall, par);
 
   const bb = Math.round(pa * rateOf(b.walk_rate, ability, par) * noise());
-  const ibb = intentionalWalks(world, ability, pa);
+  const ibb = intentionalWalks(world, ability, pa, par);
   const ab = Math.max(0, pa - bb - ibb);
 
   const hits = Math.min(ab, Math.round(ab * rateOf(b.hit_rate, ability, par) * noise()));

@@ -113,15 +113,17 @@
       "ability": "eye"
     },
     "intentional_walk": {
-      "_note": "故意四壞採指數型恐懼值。對手只敬遠重砲手，不敬遠快腿——敬遠快腿等於免費送他上二壘，所以 spd 是扣分項。",
-      "formula": "Dom = (pow + con + eye - spd/4) / 180",
+      "_note": "故意四壞採指數型恐懼值。對手只敬遠重砲手，不敬遠快腿——敬遠快腿等於免費送他上二壘，所以 spd 是扣分項。能力先平移到基準聯盟，見 reference_par。",
+      "formula": "Dom = ((pow + con + eye - spd/4) - Σ權重 × (par - reference_par)) / 180",
       "abilities": {
         "pow": 1,
         "con": 1,
         "eye": 1,
         "spd": -0.25
       },
+      "_reference_par_note": "能力先平移到基準聯盟再算恐懼值，因此 IBB 和 proLineAt 裡其他所有率一樣只吃 d（能力與聯盟平均的差），不吃絕對 par。若除數寫死不平移，敬遠就只存在於大聯盟——par 44 的中職連聯盟第一名（能力約 62）都構不到 180，整條機制在低階聯盟消失。平移量用權重和（1+1+1-0.25=2.75）自己導出，不是新的自由參數；基準錨在 par 59 因此大聯盟數字一動也沒動。結果是全聯盟共用同一條觸發線 d > +6.5，這也是唯一能讓「同一批球員只換球季長度，累積型門檻等比放大」成立的形式。",
       "divisor": 180,
+      "reference_par": 59,
       "threshold": 1.0,
       "exponent": 2,
       "rate_divisor": 16,

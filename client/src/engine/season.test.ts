@@ -219,18 +219,29 @@ describe('plateAppearances', () => {
 });
 
 describe('intentionalWalks', () => {
+  const MLB_PAR = 59;
+
   it('一般球員不會被敬遠', () => {
-    expect(intentionalWalks(new World('a'), flat(50), 600)).toBe(0);
+    expect(intentionalWalks(new World('a'), flat(50), 600, MLB_PAR)).toBe(0);
   });
 
   it('極端重砲才會被敬遠', () => {
-    expect(intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80 }), 600)).toBeGreaterThan(0);
+    expect(
+      intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80 }), 600, MLB_PAR),
+    ).toBeGreaterThan(0);
   });
 
   it('速度是扣分項——沒有教練會敬遠快腿', () => {
-    const slow = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 20 }), 600);
-    const fast = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 80 }), 600);
+    const slow = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 20 }), 600, MLB_PAR);
+    const fast = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 80 }), 600, MLB_PAR);
     expect(fast).toBeLessThan(slow);
+  });
+
+  it('門檻隨聯盟 par 縮放——低階聯盟的相對怪物也會被敬遠', () => {
+    // 能力 62 在大聯盟（par 59）只是稍微高於平均，在中職（par 44）是聯盟第一名。
+    const monster = with_(62, {});
+    expect(intentionalWalks(new World('a'), monster, 600, MLB_PAR)).toBe(0);
+    expect(intentionalWalks(new World('a'), monster, 600, CPBL1.par)).toBeGreaterThan(0);
   });
 });
 

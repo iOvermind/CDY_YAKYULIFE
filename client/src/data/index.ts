@@ -1013,6 +1013,8 @@ export interface SeasonData {
     readonly intentional_walk: {
       readonly abilities: Readonly<Record<string, number>>;
       readonly divisor: number;
+      /** 能力先平移到這個 par 再算恐懼值，因此 Dom 只吃 d，不吃絕對 par。 */
+      readonly reference_par: number;
       readonly threshold: number;
       readonly exponent: number;
       readonly rate_divisor: number;
