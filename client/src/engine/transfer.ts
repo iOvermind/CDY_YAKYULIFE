@@ -420,11 +420,37 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
     });
   }
 
-  return out
-    .sort(
-      (a, b) => standardOf(ctx.standards, b.level).par - standardOf(ctx.standards, a.level).par,
-    )
-    .slice(0, cfg.fallback.max_offers);
+  const sorted = out.sort(
+    (a, b) => standardOf(ctx.standards, b.level).par - standardOf(ctx.standards, a.level).par,
+  );
+  return keepHomeOrg(sorted, cfg.fallback.max_offers);
+}
+
+/**
+ * 取前 n 筆，但**母國體系永遠佔得到一格**。
+ *
+ * 排序是依落地層級的 par 由高到低，母國因此是最容易被切掉的那一個——中職一軍
+ * 的 par 44 低於墨聯 45、韓職 46、日職 47。扣掉現在所在的體系還有五個候選，
+ * `max_offers` 4 剛好會把它擠出去。
+ *
+ * 但落葉歸根不是「第五好的選項」，它是那條**永遠在的**退路：能被下放的人理論
+ * 上進得了中職，而「回台灣先發」對一段生涯的意義不是 par 排得出來的。同樣的
+ * 道理已經寫在 `topLevelOnly` 上（不比水準高低，只問哪裡有一軍的位置），這裡
+ * 是它的延伸——排序仍然用 par，但不讓 par 把家的門關上。
+ *
+ * 母國沒有進到名單裡（能力不夠、被 `minPar` 濾掉、或人就在母國）時什麼都不做。
+ */
+function keepHomeOrg(
+  sorted: readonly TransferOffer[],
+  limit: number,
+): readonly TransferOffer[] {
+  const head = sorted.slice(0, limit);
+  if (limit <= 0) return head;
+  if (head.some((o) => o.org === cfg.home_org.value)) return head;
+  const home = sorted.find((o) => o.org === cfg.home_org.value);
+  if (home === undefined) return head;
+  // 擠掉 par 最低的那一個——它排在最後。
+  return [...head.slice(0, limit - 1), home];
 }
 
 /**

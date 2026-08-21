@@ -393,4 +393,23 @@ describe('下放時的退路', () => {
       expect(leagues.levels[o.level]?.top).toBeDefined();
     }
   });
+
+  /**
+   * 落葉歸根不是「第五好的選項」。排序依 par 由高到低，而中職一軍的 44 是所有
+   * 頂級聯盟裡最低的——候選一多它就會被 `max_offers` 擠出去。從澳職被下放、
+   * 能力又高到連大聯盟都收得下的人正好踩到這格：MLB 59／日職 53／韓職 50／
+   * 墨聯 48 剛好填滿四格。
+   */
+  it('母國永遠佔得到一格，不會被 par 排序擠掉', () => {
+    const offers = fallbackOffers(new World('home-guarantee'), {
+      overall: 60,
+      currentOrg: 'ABL',
+      currentTeam: '某隊',
+      playedOrgs: new Set(['CPBL', 'ABL']),
+      standards: null,
+      topLevelOnly: true,
+    });
+    expect(offers.map((o) => o.org)).toContain('CPBL');
+    expect(offers.length).toBeLessThanOrEqual(4);
+  });
 });
