@@ -217,3 +217,18 @@ export function pickPartner(
 export function afterBreakup(love: LoveState): LoveStatus {
   return love.divorces > 0 ? 'divorced' : 'single';
 }
+
+/**
+ * 啦啦隊殺手：三段戀情**都以分手收場**，而且從未結過婚。
+ *
+ * **只在戀情結束的那一刻判定。** 呼叫點在 `game.ts` 的兩條分手路徑上，而且離婚那
+ * 條要排除——見 ADR 0024。原本寫在開始交往的地方，於是在「剛在一起」的那一刻就
+ * 宣告「還是走到了同樣的結局」，這段有沒有走到婚姻根本還沒發生。
+ *
+ * `divorces === 0` 就是「從未結過婚」：婚姻只有分手那個出口，那裡必定累加
+ * `divorces`。孩子不必另外擋——`kids` 只在婚後的生產分支累加，沒結婚本身就擋掉了。
+ */
+export function earnsConfidante(love: LoveState): boolean {
+  if (love.divorces > 0) return false;
+  return love.datedTimes >= cfg.dating.confidante.dated_times;
+}

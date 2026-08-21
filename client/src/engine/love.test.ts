@@ -8,6 +8,7 @@ import {
   childbirthChance,
   confessionChance,
   divorceCost,
+  earnsConfidante,
   hasPartner,
   injuryRiskModifier,
   isChildhoodSweetheart,
@@ -208,5 +209,30 @@ describe('對象名單', () => {
       if (cfg.names.safe.includes(n)) continue;
       expect(cfg.names.safe).not.toContain(pickPartner(world, 'pro', n, true));
     }
+  });
+});
+
+
+describe('啦啦隊殺手', () => {
+  const after = (over: Partial<ReturnType<typeof newLoveState>>) => ({ ...newLoveState(), ...over });
+  const threshold = cfg.dating.confidante.dated_times;
+
+  it('三段戀情都以分手收場才給', () => {
+    for (let n = 0; n < threshold; n++) {
+      expect(earnsConfidante(after({ datedTimes: n }))).toBe(false);
+    }
+    expect(earnsConfidante(after({ datedTimes: threshold }))).toBe(true);
+  });
+
+  it('結過婚的人永遠拿不到——離婚之後再交往幾段都一樣', () => {
+    // 交往 A → 結婚 → 離婚 → 交往 B → 交往 C。段數湊得到，但他明明結過婚。
+    expect(earnsConfidante(after({ datedTimes: threshold, divorces: 1 }))).toBe(false);
+    expect(earnsConfidante(after({ datedTimes: threshold + 10, divorces: 1 }))).toBe(false);
+  });
+
+  it('孩子不必另外擋：沒結過婚的人不可能有孩子', () => {
+    // `kids` 只在婚後的生產分支累加，所以 kids > 0 蘊含 divorces > 0（婚姻結束時）
+    // 或者根本還在婚姻中（那就不會走到分手判定）。這條在 game.ts 側由呼叫點保證。
+    expect(earnsConfidante(after({ datedTimes: threshold, kids: 2, divorces: 1 }))).toBe(false);
   });
 });

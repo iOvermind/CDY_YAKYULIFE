@@ -123,6 +123,7 @@ import {
 } from './national.ts';
 import {
   afterBreakup,
+  earnsConfidante,
   cadenceChance,
   canPropose,
   childbirthChance,
@@ -1980,15 +1981,16 @@ export class Game {
         ? `放學後的河堤，你們並肩走了很久。${esc(partner)}說：「我一直都有在看你比賽。」——${gain}`
         : `<b class="hl">${esc(partner)}</b> 在社群發出十指緊扣的照片：「謝謝大家的祝福。」——${gain}`,
     );
+  }
 
-    // 第三段戀情仍未走到婚姻、且沒有孩子。
-    if (love.datedTimes >= loveCfg.dating.confidante.dated_times && love.kids === 0) {
-      this.#unlockTrait(
-        loveCfg.dating.confidante.trait,
-        '啦啦隊殺手',
-        '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
-      );
-    }
+  /** 啦啦隊殺手。條件與判定時機見 `earnsConfidante()`。 */
+  #confidante(): void {
+    if (!earnsConfidante(this.#love)) return;
+    this.#unlockTrait(
+      loveCfg.dating.confidante.trait,
+      '啦啦隊殺手',
+      '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
+    );
   }
 
   /** 交往中的一年：風波 → 分手判定 → 插曲 → 求婚。 */
@@ -2312,6 +2314,8 @@ export class Game {
       wasMarried ? '離婚' : '分手',
       `${reason}<br><b class="hl">${esc(ex)}</b> 從此不在你的生活裡了。${money}`,
     );
+
+    if (!wasMarried) this.#confidante();
   }
 
   /** 平淡但溫暖的一年。感情線多數的年份都是這種。 */
@@ -2395,6 +2399,8 @@ export class Game {
       `${esc(label)}的那個夏天，<b class="hl">${esc(ex)}</b> 說：「我們可能不會再見面了吧。」` +
         '<br><span class="sub">沒有人做錯什麼，只是路不同了。</span>',
     );
+
+    this.#confidante();
   }
 
   /**
