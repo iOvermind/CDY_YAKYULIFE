@@ -776,9 +776,12 @@ export class Game {
   /** 事件系統需要的情境。 */
   get #eventContext(): EventContext {
     return {
-      startPosition: this.#player?.startPosition ?? 'UTIL',
+      side: this.#activeSide,
       professional: this.#pro !== null,
       traits: this.#traits,
+      // 加點看得到哪些能力，事件卡就只動得了哪些（ADR 0022）。同一份清單，
+      // 不另外長一套「事件專用的能力表」。
+      abilities: this.#allocatableAbilities,
     };
   }
 
@@ -994,13 +997,15 @@ export class Game {
 
   /** 解算事件卡並套用結果。 */
   #resolveEventCard(event: GameEvent, mode: EventMode): void {
+    const ctx = this.#eventContext;
     const outcome = resolveEvent(
       this.world,
       event,
       mode,
-      this.#eventContext,
-      ALL_ABILITIES,
-      PITCH_FAMILIES,
+      ctx,
+      // rand 從他自己練得到的能力裡挑；投不到球的人不抽球系。
+      ctx.abilities ?? ALL_ABILITIES,
+      this.#activeSide === 'fielder' ? [] : PITCH_FAMILIES,
     );
 
     const lines: string[] = [];

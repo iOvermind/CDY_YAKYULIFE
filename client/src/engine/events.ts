@@ -73,32 +73,76 @@ export function cardsPerYear(stage: string): number {
 const DEFAULT_WEIGHT = 100;
 
 export interface EventContext {
-  /** 起始守位。用於判斷投手限定與野手限定的事件。 */
-  readonly startPosition: string;
+  /**
+   * 目前生效的側別。用於判斷投手限定與野手限定的事件。
+   *
+   * null 是「兩側都在」——UTIL 起家還沒定位、或已經取得二刀流的人。這種人兩
+   * 邊的牌都抽得到，因為兩邊的能力他都真的在練（ADR 0022）。
+   */
+  readonly side: 'pitcher' | 'fielder' | null;
   /** 是否已進入職業階段。 */
   readonly professional: boolean;
   readonly traits: ReadonlySet<string>;
+  /**
+   * 這位球員練得到的能力。事件卡只動得了這些——見 ADR 0022。
+   *
+   * 沒給就是不過濾，測試與舊呼叫端可以省略。
+   */
+  readonly abilities?: readonly AbilityKey[];
+}
+
+/**
+ * 這張卡對這位球員有沒有可能產生能力變化。
+ *
+ * 「宣告了效果、但整組都被濾掉」才算無效——本來就沒宣告效果的那一面（例如
+ * 好結果只給聲望）不受影響。好壞任一面變成空的就整張退出牌堆：留著會變成
+ * 「賭贏沒獎、賭輸照扣」，那是玩家看不見、也解釋不了的不對稱。
+ */
+function affects(event: GameEvent, allowed: ReadonlySet<string> | null): boolean {
+  if (allowed === null) return true;
+  for (const side of [event.good_effects, event.bad_effects]) {
+    if (side === undefined) continue;
+    const keys = Object.keys(side);
+    if (keys.length === 0) continue;
+    if (!keys.some((k) => allowed.has(k))) return false;
+  }
+  return true;
 }
 
 /** 這位球員這個階段抽得到的事件。 */
 export function eventPool(ctx: EventContext): readonly GameEvent[] {
-  const isPitcher = ctx.startPosition === 'P';
+  const allowed = allowedKeys(ctx);
   return data.events.filter((e) => {
+    if (!affects(e, allowed)) return false;
     switch (e.for) {
       case '*':
         return true;
       case 'P':
-        return isPitcher;
+        return ctx.side !== 'fielder';
       // A 與 B 在舊版是冗餘的，兩者都只判斷「非投手」。
       case 'A':
       case 'B':
-        return !isPitcher;
+        return ctx.side !== 'pitcher';
       case 'PRO':
         return ctx.professional;
       default:
         return false;
     }
   });
+}
+
+/**
+ * 這位球員身上「動得了」的鍵：他練得到的能力，加上所有非能力的特殊效果。
+ *
+ * `rand` 一定動得了（它從他自己的能力裡挑），`pitch` 只有投得到球的人動得了
+ * ——`effect_keys` 的說明本來就寫著「非投手抽到帶此鍵的事件時應視為無效果」。
+ */
+function allowedKeys(ctx: EventContext): ReadonlySet<string> | null {
+  if (ctx.abilities === undefined) return null;
+  const set = new Set<string>(ctx.abilities);
+  for (const key of SPECIAL_KEYS) set.add(key);
+  if (ctx.side === 'fielder') set.delete('pitch');
+  return set;
 }
 
 /** 依權重抽一張事件卡。 */
@@ -208,6 +252,9 @@ export function resolveEvent(
   const deltas: AbilityDelta[] = [];
   const special: Record<string, number | boolean> = {};
   let injury = 0;
+  // 事件卡動不了他練不到的能力——正負兩側一律如此。野手被加控球是無感的獎勵，
+  // 野手被扣控球則是免費的懲罰，兩者一樣糟（ADR 0022）。
+  const allowed = allowedKeys(ctx);
 
   // 鍵的走訪順序必須穩定——rand 與 pitch 會抽亂數，順序一變結果就變。
   for (const key of Object.keys(effects).sort()) {
@@ -227,6 +274,9 @@ export function resolveEvent(
       continue;
     }
     if (key === 'pitch') {
+      // 投不到球的人這一鍵無效，連骰都不抽——抽一顆丟掉會讓同一個種子在改版
+      // 前後對不起來，而這顆亂數本來就不該屬於他（ADR 0002）。
+      if (allowed !== null && !allowed.has('pitch')) continue;
       deltas.push({ key: rng.pick(pitchFamilies), points: scale(raw, factor) });
       continue;
     }
@@ -234,13 +284,16 @@ export function resolveEvent(
       special[key] = raw;
       continue;
     }
+    if (allowed !== null && !allowed.has(key)) continue;
     deltas.push({ key, points: scale(raw, factor) });
   }
 
   const ceilings: AbilityDelta[] = [];
   for (const key of Object.keys(ceilingEffects).sort()) {
     const raw = ceilingEffects[key];
-    if (raw !== undefined) ceilings.push({ key, points: scale(raw, factor) });
+    if (raw === undefined) continue;
+    if (allowed !== null && !allowed.has(key)) continue;
+    ceilings.push({ key, points: scale(raw, factor) });
   }
 
   return {

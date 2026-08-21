@@ -1,0 +1,6 @@
+=== pitcher ===
+event_8    *    靠背差點被當沙包砸              dead=['good_effects']  {"good_effects": {"spd": 2}}
+event_22   *    上古神獸的私下開示              dead=['good_effects']  {"good_effects": {"eye": 4, "cat": 4}}
+event_24   *    底褲被看光的情蒐外流             dead=['good_effects']  {"good_effects": {"cat": 2, "eye": 2}}
+event_45   *    去做雷射近視手術               dead=['good_effects', 'bad_effects']  {"good_effects": {"eye": 3}, "bad_effects": {"eye": -2}}
+=== fielder ===

@@ -13,7 +13,7 @@ import {
 import { World } from './rng.ts';
 
 const ctx = (over: Partial<EventContext> = {}): EventContext => ({
-  startPosition: 'SS',
+  side: 'fielder',
   professional: false,
   traits: new Set(),
   ...over,
@@ -21,10 +21,8 @@ const ctx = (over: Partial<EventContext> = {}): EventContext => ({
 
 /** 找一張事件卡，不管它屬於哪個對象——測試要能指定任何一張。 */
 const findEvent = (id: string) => {
-  for (const pos of ['P', 'SS']) {
-    const found = eventPool(ctx({ startPosition: pos, professional: true })).find(
-      (e) => e.id === id,
-    );
+  for (const side of ['pitcher', 'fielder', null] as const) {
+    const found = eventPool(ctx({ side, professional: true })).find((e) => e.id === id);
     if (found !== undefined) return found;
   }
   throw new Error(`找不到事件 ${id}`);
@@ -40,7 +38,7 @@ describe('eventPool', () => {
   });
 
   it('投手抽不到野手限定的事件', () => {
-    const pool = eventPool(ctx({ startPosition: 'P' }));
+    const pool = eventPool(ctx({ side: 'pitcher' }));
     expect(pool.every((e) => e.for !== 'A' && e.for !== 'B')).toBe(true);
   });
 
@@ -53,8 +51,8 @@ describe('eventPool', () => {
   });
 
   it('通用事件人人抽得到', () => {
-    for (const pos of ['P', 'SS', 'C']) {
-      expect(eventPool(ctx({ startPosition: pos })).some((e) => e.for === '*')).toBe(true);
+    for (const side of ['pitcher', 'fielder', null] as const) {
+      expect(eventPool(ctx({ side })).some((e) => e.for === '*')).toBe(true);
     }
   });
 });
@@ -204,7 +202,7 @@ describe('resolveEvent', () => {
     // event_3 牛棚加練：好結果是 pitch（隨機一個球系），壞結果是 ctl
     let seen = false;
     for (let i = 0; i < 200; i++) {
-      const r = resolve(`s${i}`, 'event_3', 'normal', { startPosition: 'P' });
+      const r = resolve(`s${i}`, 'event_3', 'normal', { side: 'pitcher' });
       if (!r.good) continue;
       for (const d of r.deltas) {
         expect(PITCH_FAMILIES).toContain(d.key);
@@ -269,5 +267,71 @@ describe('resolveEvent', () => {
     };
     expect(rate('bold')).toBeLessThan(rate('normal'));
     expect(rate('normal')).toBeLessThan(rate('safe'));
+  });
+});
+
+describe('事件卡只動得了這位球員練得到的能力（ADR 0022）', () => {
+  const FIELDER = ALL_ABILITIES.filter((k) => k !== 'vel' && k !== 'ctl' && !PITCH_FAMILIES.includes(k as never));
+  const PITCHER = ['sta', 'vel', 'ctl', ...PITCH_FAMILIES] as const;
+
+  const resolveFor = (
+    seed: string,
+    id: string,
+    mode: EventMode,
+    over: Partial<EventContext>,
+    abilityPool: readonly string[],
+    families: readonly string[],
+  ) =>
+    resolveEvent(
+      new World(seed),
+      findEvent(id),
+      mode,
+      ctx(over),
+      abilityPool as never,
+      families as never,
+    );
+
+  it('野手抽到的通用卡不會加到控球——那是無感的獎勵', () => {
+    // event_17 衰到流湯的大低潮：好結果 eye+ctl+sta，壞結果 con+pitch+sta
+    let sawGood = false;
+    for (let i = 0; i < 100; i++) {
+      const r = resolveFor(`f${i}`, 'event_17', 'bold', { side: 'fielder', abilities: FIELDER }, FIELDER, []);
+      if (r.good) sawGood = true;
+      expect(r.deltas.map((d) => d.key)).not.toContain('ctl');
+    }
+    expect(sawGood).toBe(true);
+  });
+
+  it('扣分那一側一樣擋掉——免費的懲罰跟無感的獎勵一樣糟', () => {
+    let sawBad = false;
+    for (let i = 0; i < 100; i++) {
+      const r = resolveFor(`f${i}`, 'event_35', 'safe', { side: 'fielder', abilities: FIELDER }, FIELDER, []);
+      if (!r.good) sawBad = true;
+      expect(r.deltas.map((d) => d.key)).not.toContain('ctl');
+    }
+    expect(sawBad).toBe(true);
+  });
+
+  it('野手抽到帶 pitch 的卡不會拿到球系，也不會多抽一顆骰', () => {
+    const a = resolveFor('same', 'event_17', 'bold', { side: 'fielder', abilities: FIELDER }, FIELDER, []);
+    const b = resolveFor('same', 'event_17', 'bold', { side: 'fielder', abilities: FIELDER }, FIELDER, []);
+    expect(a.deltas).toEqual(b.deltas);
+    for (const d of a.deltas) expect(PITCH_FAMILIES).not.toContain(d.key);
+  });
+
+  it('好結果整組被濾光的卡不會發給他', () => {
+    // event_45 去做雷射近視手術：兩面都只給選球，純投手拿它等於白抽一張
+    const pool = eventPool(ctx({ side: 'pitcher', professional: true, abilities: PITCHER }));
+    expect(pool.map((e) => e.id)).not.toContain('event_45');
+    // 沒有能力清單時不過濾——舊呼叫端與測試維持原行為
+    expect(eventPool(ctx({ side: 'pitcher', professional: true })).map((e) => e.id)).toContain(
+      'event_45',
+    );
+  });
+
+  it('兩側都在的人（UTIL／二刀流）兩邊的牌都抽得到', () => {
+    const pool = eventPool(ctx({ side: null, professional: true }));
+    expect(pool.some((e) => e.for === 'P')).toBe(true);
+    expect(pool.some((e) => e.for === 'A' || e.for === 'B')).toBe(true);
   });
 });
