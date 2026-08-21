@@ -33,8 +33,12 @@ describe('requiredScore', () => {
     expect(young).toBeLessThan(old);
   });
 
-  it('非頂級聯盟不設門檻', () => {
-    expect(requiredScore('SS', 'CPBL2', 25)).toBeNull();
+  it('二軍借同體系頂級聯盟的尺——門檻與一軍同一把（ADR 0021）', () => {
+    expect(requiredScore('SS', 'CPBL2', 25)).toBe(requiredScore('SS', 'CPBL1', 25));
+  });
+
+  it('沒有頂級聯盟可借的層級才真的沒有門檻', () => {
+    expect(requiredScore('SS', '', 25)).toBeNull();
   });
 
   it('越難守的守位門檻越高', () => {
@@ -45,8 +49,8 @@ describe('requiredScore', () => {
 });
 
 describe('canPlay', () => {
-  it('二軍不挑守位——守備再差也守得動', () => {
-    expect(canPlay(glove(20, 20, 20), 'SS', 'CPBL2', 28)).toBe(true);
+  it('二軍守不動游擊的人也一樣擋下來——尺是同一把（ADR 0021）', () => {
+    expect(canPlay(glove(20, 20, 20), 'SS', 'CPBL2', 28)).toBe(false);
   });
 
   it('一軍守不動游擊的人，被門檻擋下來', () => {

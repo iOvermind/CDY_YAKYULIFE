@@ -189,7 +189,9 @@ import {
   type LeagueTable,
 } from './teams.ts';
 import {
+  benchmarkLevelOf,
   defenseScore,
+  homeBenchmarkLevel,
   isSideVisible,
   rate,
   ratingPosition,
@@ -309,6 +311,17 @@ export interface PlayerState {
   /** 本季累積的受傷機率增幅。 */
   readonly injuryRisk: number;
   /** 當年成績。尚未打完大賽時為 null。 */
+  /**
+   * 目前的守備位置代碼。頂級聯盟是**登錄守位**，養成期與二軍是**暫定守位**
+   * （見 CONTEXT.md）。純投手為 null。
+   */
+  readonly position: string | null;
+  /** 守位的中文名。 */
+  readonly positionName: string | null;
+  /** 這個守位是不是暫定的——沒有登錄、不寫進生涯紀錄、每年重算。 */
+  readonly positionTentative: boolean;
+  /** 這一季走不走野手側。純投手為 false，他們的守位欄只是打席的落點。 */
+  readonly playsField: boolean;
   readonly seasonBatting: BattingLine | null;
   readonly seasonPitching: PitchingLine | null;
   /** 這一季的守備分。守備沒有別的欄位，因此它掛在野手那張表上。 */
@@ -697,6 +710,10 @@ export class Game {
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
       injuryRisk: this.#injuryRisk,
+      position: this.#fieldPosition,
+      positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),
+      positionTentative: this.#pro?.position == null,
+      playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
       seasonPitching: this.#seasonPitching,
@@ -1486,6 +1503,45 @@ export class Game {
     );
   }
 
+  /**
+   * 算守位時該拿哪一把尺。
+   *
+   * 一律是所屬體系的**頂級聯盟**：問的是「他守不守得動游擊」，那是對上這項
+   * 運動的標準，不是對上他這季剛好待在哪一層（ADR 0021）。還沒進職業就用母國
+   * 體系的頂級聯盟。
+   */
+  get #benchmarkLevel(): string {
+    const pro = this.#pro;
+    if (pro === null) return homeBenchmarkLevel();
+    return benchmarkLevelOf(pro.level) ?? homeBenchmarkLevel();
+  }
+
+  /**
+   * 目前實際站的守備位置：登錄守位優先，沒登錄就用**暫定守位**。
+   *
+   * 暫定守位每次讀取都現算——養成期與二軍的守備能力天天在動，而它沒有登錄
+   * 這道手續把數字釘住。掃描規則與登錄完全一樣（同一把尺、同一條光譜），差別
+   * 只在不登錄、不寫進生涯紀錄、不經球員選擇。
+   *
+   * 純投手回傳 null：他們走先發／後援那條線，不進守位系統。
+   */
+  get #fieldPosition(): string | null {
+    if (this.#player === null) return null;
+    const registered = this.#pro?.position ?? null;
+    if (registered !== null) return registered;
+    // 純投手：養成期照樣站打席（學生棒球沒有一輩子不打擊的投手），守位掛 DH，
+    // 打擊成績才有位置可標；進了職業就真的不打了，回 null——那裡的純投手不該
+    // 有野手成績。
+    if (!this.#playsField) return this.#pro === null ? DH : null;
+    return assignPosition({
+      ability: this.#ability,
+      current: null,
+      level: this.#benchmarkLevel,
+      age: this.#age,
+      startPosition: this.#player.startPosition,
+    }).position;
+  }
+
   /** 這一季要不要打野手側。投手側單獨鎖定的球員不守備。 */
   get #playsField(): boolean {
     if (this.isTwoWay) return true;
@@ -1533,10 +1589,9 @@ export class Game {
     const r = this.rating;
     if (pro === null || player === null || r === null) return;
 
-    // 登錄守位優先——那才是他這一季真正站的位置。沒登錄（二軍、或還沒進頂級
-    // 聯盟）才退回用起始守位推定的那個，出賽勞損總得有個依據。
-    const position =
-      pro.position ?? ratingPosition(player.startPosition, { ability: this.#ability, level: pro.level });
+    // 登錄守位優先，二軍與養成期用暫定守位——兩者都是同一把尺掃出來的，出賽
+    // 勞損與守備分吃的都是這個位置（ADR 0021）。
+    const position = this.#fieldPosition ?? DH;
     const line = playSeason(this.world, {
       level: pro.level,
       // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。
@@ -2540,8 +2595,7 @@ export class Game {
     const r = this.rating;
     if (pro === null || player === null || r === null) return;
 
-    const position =
-      pro.position ?? ratingPosition(player.startPosition, { ability: this.#ability, level: pro.level });
+    const position = this.#fieldPosition ?? DH;
     // 用一個 par 相當於國際賽水準的層級當尺——場次另外指定，因此層級只借它的
     // 「一季有幾場」來換算比例。
     const level = pro.level;

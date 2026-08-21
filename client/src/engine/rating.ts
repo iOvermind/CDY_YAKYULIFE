@@ -208,17 +208,60 @@ export function sideOfStartPosition(startPosition: string): 'pitcher' | 'fielder
  * 正式登錄守位，這裡算的是「以現在的守備能力，職業上得了哪個守位」。
  */
 /**
- * 守這個守位的門檻基準線：該層級的 par 加上守位位移。**不含年齡折扣**。
+ * 這個層級算守位時該拿哪一把尺：所屬體系的**頂級聯盟**。
  *
- * 只有頂級聯盟設限——二軍與小聯盟不挑守位，能上場就讓你上，因此回傳 null。
- * 這個判斷看的是 `levels` 有沒有 `top`，不是「門檻表裡查不查得到」：後者曾
- * 讓 KBO 一軍、墨西哥聯盟、澳職三個頂級聯盟因為漏填而無條件放行，守備零分
- * 的人照樣登錄為游擊手（見 ADR 0010）。缺資料不該長得像沒有要求。
+ * 二軍與小聯盟不自己訂門檻，一律借上面那把（見 ADR 0021）。一個人守不守得動
+ * 游擊，是他的守備能力對上這項運動的標準，不是對上他這季剛好待在哪一層；
+ * 二軍用二軍的低標會讓同一個人下放後突然「守得動游擊」，升上來又守不動。
+ *
+ * 路徑的最後一段就是該體系的頂級聯盟。認不出來的層級回傳 null。
+ */
+export function benchmarkLevelOf(level: string): string | null {
+  if (leagues.levels[level]?.top !== undefined) return level;
+  for (const path of Object.values(leagues.paths)) {
+    if (path.includes(level)) return path[path.length - 1] ?? null;
+  }
+  return null;
+}
+
+/** 母國體系的頂級聯盟。養成期還沒有所屬層級，守位就拿這把尺量。 */
+export function homeBenchmarkLevel(): string {
+  const path = leagues.paths[leagues.transfer.home_org.value];
+  return path?.[path.length - 1] ?? 'CPBL1';
+}
+
+/**
+ * 守這個守位的門檻基準線：該體系**頂級聯盟**的 par 加上守位位移。**不含年齡
+ * 折扣**。
+ *
+ * 層級先過 `benchmarkLevelOf`，因此二軍與小聯盟拿到的是同一組數字——暫定守位
+ * 與登錄守位用同一套門檻，差別只在登不登錄（ADR 0021）。
+ *
+ * 認不出來的層級回傳 null，而不是無條件放行：後者曾讓 KBO 一軍、墨西哥聯盟、
+ * 澳職三個頂級聯盟因為漏填而放行，守備零分的人照樣登錄為游擊手（見 ADR
+ * 0010）。缺資料不該長得像沒有要求。
  *
  * 定義在 rating.ts 而非 defense.ts，是因為 defense.ts 依賴本模組，反向 import
  * 會成環——與檔首 TWO_WAY_TRAIT 的處理同一個理由。
  */
 export function baseThreshold(position: string, level: string): number | null {
+  const offset = positions.defense_offsets[position];
+  if (offset === undefined) return null;
+  const benchmark = benchmarkLevelOf(level);
+  if (benchmark === null) return null;
+  const info = leagues.levels[benchmark];
+  if (info === undefined) return null;
+  return info.par + offset;
+}
+
+/**
+ * 同一條門檻線，但**不借尺**：只有自己設門檻的層級（頂級聯盟）才有值。
+ *
+ * 守備分的比較基準用它，不用 `baseThreshold`。判定「守不守得動」該用全運動
+ * 的標準（所以借尺），但「守得好不好」必須跟同一層的人比——拿一軍的平均去
+ * 量二軍球員，會讓整個二軍的守備份額變成一片負數。
+ */
+export function localBaseThreshold(position: string, level: string): number | null {
   const offset = positions.defense_offsets[position];
   if (offset === undefined) return null;
   const info = leagues.levels[level];

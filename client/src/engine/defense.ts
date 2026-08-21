@@ -18,7 +18,7 @@
 
 import { leagues, positions } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
-import { baseThreshold, defenseScore, type Abilities } from './rating.ts';
+import { baseThreshold, defenseScore, localBaseThreshold, type Abilities } from './rating.ts';
 
 /** 指定打擊。掃不到任何守位時的去處，不產生守備分。 */
 export const DH = 'DH';
@@ -88,7 +88,7 @@ export function positionAverage(
   level: string,
   standards: LeagueStandards | null = null,
 ): number | null {
-  const base = baseThreshold(position, level);
+  const base = localBaseThreshold(position, level);
   if (base === null) return null;
   const drift = standardOf(standards, level).par - (leagues.levels[level]?.par ?? 0);
   return base + positions.defense_average.margin + drift;
