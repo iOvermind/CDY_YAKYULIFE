@@ -1,6 +1,2 @@
-=== pitcher ===
-event_8    *    靠背差點被當沙包砸              dead=['good_effects']  {"good_effects": {"spd": 2}}
-event_22   *    上古神獸的私下開示              dead=['good_effects']  {"good_effects": {"eye": 4, "cat": 4}}
-event_24   *    底褲被看光的情蒐外流             dead=['good_effects']  {"good_effects": {"cat": 2, "eye": 2}}
-event_45   *    去做雷射近視手術               dead=['good_effects', 'bad_effects']  {"good_effects": {"eye": 3}, "bad_effects": {"eye": -2}}
-=== fielder ===
+home_org: {"_note": "球員的母國體系。**回這裡不算外籍，因此不收 import_premium。** 那個加成的理由是「外籍名額有限，球團得證明簽這個人比用本地人好」——對本地人不成立。落地門檻因此是中職二軍 30、中職一軍 41，而不是 34 與 45。", "_scope_note": "挖角、尋路、自由市場三條路都適用：回家就是回家，不看是怎麼回去的。", "value": "CPBL"}
+paths: {"_note": "各體系的升遷路徑，由低到高。KBO 為新架構的擴充聯盟；LMB 與 ABL 為單層級，無二軍。", "CPBL": ["CPBL2", "CPBL1"], "NPB": ["NPB2", "NPB1"], "KBO": ["KBO2", "KBO1"], "LMB": ["LMB"], "ABL": ["ABL"], "MiLB": ["R", "A1", "A2", "A3", "MLB"]}

@@ -241,14 +241,6 @@ export interface CareerProgress {
 /** 沒有帳號時的進度：每一局都是第一段人生，每一項都算新解鎖。 */
 export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Set<string>() };
 
-/**
- * 判定二刀流野手側守位時參照的聯盟層級。
- *
- * 養成期沒有正式登錄守位，但介面仍要說出「他守得動什麼」。用職業的入門層級
- * 當基準，答案才有意義——「以現在的守備能力，職業上得了哪個守位」。
- */
-export const TWO_WAY_REFERENCE_LEVEL = 'CPBL1';
-
 /** 目前引擎版本。重播日誌帶著它，跨版本一律拒絕重播（ADR 0002）。 */
 export const ENGINE_VERSION = 1;
 
@@ -789,9 +781,12 @@ export class Game {
   get rating() {
     if (this.#player === null) return null;
     return rate(this.#ability, {
+      // 評價用的守位要拿**他現在這個體系**的尺去量（ADR 0021 的 `#benchmarkLevel`）。
+      // 原本這裡硬寫中職一軍，於是旅外的二刀流會用中職的門檻判定守得動游擊，
+      // 守位加分因此給高了——人在大聯盟，量他的卻是中職那把尺。
       position: ratingPosition(this.#player.startPosition, {
         ability: this.#ability,
-        level: TWO_WAY_REFERENCE_LEVEL,
+        level: this.#benchmarkLevel,
       }),
       traits: this.#traits,
     });
@@ -1109,7 +1104,7 @@ export class Game {
       ability: this.#ability,
       position: ratingPosition(player.startPosition, {
         ability: this.#ability,
-        level: TWO_WAY_REFERENCE_LEVEL,
+        level: this.#benchmarkLevel,
       }),
       traits: this.#traits,
       schoolTier: this.#schoolTier,
