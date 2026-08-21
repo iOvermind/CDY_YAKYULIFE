@@ -155,6 +155,20 @@ export function importPremium(
   return cfg.import_premium.value;
 }
 
+/**
+ * 一軍年資夠不夠格拒絕下放。
+ *
+ * MLB 的五年年資條款：服務滿五年的球員不能被無條件下放到小聯盟。這是真實規
+ * 則，也只有那一個體系有——日職與中職的下放是球團說了算，年資只換來 FA。
+ *
+ * 年資用的是**這個體系的一軍年份**，與外籍身分同一個計數口徑（`#orgYears`）：
+ * 拿的是在那個聯盟站穩了多久，不是在球界混了多久。
+ */
+export function canRefuseDemotion(org: string, servedYears: number): boolean {
+  const threshold = orgConfig(org)?.refuse_demotion_after_years;
+  return threshold !== undefined && servedYears >= threshold;
+}
+
 /** 落地在頂級聯盟需要的能力。怪物條款與簽約金的 d 值都拿它當基準。 */
 function topLandingBar(
   org: string,

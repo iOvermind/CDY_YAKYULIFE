@@ -383,6 +383,8 @@
       "MiLB": {
         "_note": "美職。窗口最緊——他們要的是可以養的年輕人，不是即戰力。",
         "_monster_note": "28 歲之後只剩怪物條款：能力超過落地門檻夠多的人仍有微弱機會。",
+        "_refuse_note": "MLB 的5 年年資條款：一軍服務滿五年的球員可以拒絕下放。拒絕不是免費的——球團可以直接釋出你。只有這個體系有這條規則，其他體系的下放是球團說了算。",
+        "refuse_demotion_after_years": 5,
         "scouts": true,
         "scout_min_overall": 57,
         "scout_chance": 30,

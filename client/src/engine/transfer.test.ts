@@ -4,6 +4,7 @@ import { pathOf } from './pro.ts';
 import { World } from './rng.ts';
 import {
   amateurOverseasOffers,
+  canRefuseDemotion,
   canRequestPosting,
   fallbackOffers,
   hasOverseasFreeAgency,
@@ -411,5 +412,22 @@ describe('下放時的退路', () => {
     });
     expect(offers.map((o) => o.org)).toContain('CPBL');
     expect(offers.length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('canRefuseDemotion', () => {
+  // MLB 的五年年資條款只有那一個體系有。這是規則差異，不是平衡調整——
+  // 日職與中職沒有對應制度，年資在那裡只換來 FA。
+  it('美職滿五年一軍年資才有拒絕權', () => {
+    expect(canRefuseDemotion('MiLB', 5)).toBe(true);
+    expect(canRefuseDemotion('MiLB', 9)).toBe(true);
+    expect(canRefuseDemotion('MiLB', 4)).toBe(false);
+    expect(canRefuseDemotion('MiLB', 0)).toBe(false);
+  });
+
+  it('其他體系不管幾年都不能拒絕', () => {
+    for (const org of ['CPBL', 'NPB', 'KBO', 'LMB', 'ABL']) {
+      expect(canRefuseDemotion(org, 20)).toBe(false);
+    }
   });
 });

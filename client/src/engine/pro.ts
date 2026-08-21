@@ -22,6 +22,14 @@ export interface MovementResult {
   readonly level: string | null;
   /** 給玩家看的一句話理由。 */
   readonly reason: string;
+  /**
+   * 這次下放判定用的機率（百分比，`rng.chance` 的口徑），只有 `demote` 會帶。
+   *
+   * 有資格拒絕下放的老將（見 ADR 0020）把它當作硬留在一軍的代價：球團越想把
+   * 你送下去，拒絕之後被直接釋出的機率就越高。**不長第二個旋鈕**——同一個
+   * 數字換一個位置用，缺口多大、壓力多大，是同一件事。
+   */
+  readonly pressure?: number;
 }
 
 /** 這個體系的升遷路徑，由低到高。 */
@@ -109,11 +117,13 @@ export function evaluateMovement(
 
   if (shortfall > 0 && index > 0) {
     const below = path[index - 1];
-    if (below !== undefined && rng.chance(chanceOf(mv.demote.chance, shortfall))) {
+    const pressure = chanceOf(mv.demote.chance, shortfall);
+    if (below !== undefined && rng.chance(pressure)) {
       return {
         movement: 'demote',
         level: below,
         reason: `跟不上${here.name}的水準（綜合 ${options.overall}／門檻 ${hereMin}${noteAt(options.level)}）`,
+        pressure,
       };
     }
   }

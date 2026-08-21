@@ -913,6 +913,12 @@ export interface TransferOrg {
    * 缺席表示這個體系沒有這條規則。日職是 8——「在籍八年視同本土」。
    */
   readonly domestic_after_years?: number;
+  /**
+   * 一軍服務滿幾年之後可以拒絕下放（見 ADR 0020）。
+   *
+   * 缺席表示這個體系的下放是球團說了算。MLB 是 5——五年年資條款。
+   */
+  readonly refuse_demotion_after_years?: number;
   /** 入札制度的目的地。null 表示這個體系沒有入札。 */
   readonly posting: { readonly to: string } | null;
   readonly age_window: AgeWindow | null;

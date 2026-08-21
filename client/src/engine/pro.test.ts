@@ -237,6 +237,31 @@ describe('applyAging', () => {
   });
 });
 
+describe('拒絕下放的代價（ADR 0020）', () => {
+  it('下放結果帶著判定用的機率，拒絕下放要拿它當代價', () => {
+    // pressure 必須就是那一次判定的機率——ADR 0020 的釋出風險直接用它，
+    // 兩者對不上就等於偷偷長出了第二個旋鈕。
+    let pressure = 0;
+    let hit = 0;
+    const n = 400;
+    for (let i = 0; i < n; i++) {
+      const move = evaluateMovement(new World(`pressure${i}`), {
+        level: 'CPBL1',
+        overall: CPBL1.min - 6,
+        yearsAtBottom: 0,
+      });
+      if (move.movement === 'demote') {
+        hit++;
+        pressure = move.pressure ?? 0;
+      }
+    }
+    // 機率是百分比（rng.chance 的口徑），不是 0–1。
+    expect(pressure).toBeGreaterThan(0);
+    expect(pressure).toBeLessThanOrEqual(100);
+    expect(Math.abs(hit / n - pressure / 100)).toBeLessThan(0.08);
+  });
+});
+
 describe('shouldRetire', () => {
   it('只剩年齡上限會不由分說地結束生涯', () => {
     expect(shouldRetire({ age: cfg.retirement.max_age }).retire).toBe(true);

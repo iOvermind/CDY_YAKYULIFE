@@ -151,6 +151,7 @@ import { fmtMoney, postingFee, salaryFor } from './salary.ts';
 import {
   amateurOverseasOffers,
   canRequestPosting,
+  canRefuseDemotion,
   fallbackOffers,
   importPremium,
   orgLabel,
@@ -597,6 +598,15 @@ export class Game {
    * 換體系的唯一出口是 #moveTo，在那裡清掉就一次補齊所有路徑。
    */
   #demotedTo: string | null = null;
+  /**
+   * 被下放前所在的層級，以及那次下放判定的機率。
+   *
+   * 有年資的球員可以拒絕下放（ADR 0020），拒絕成功就要把人放回原本的層級——
+   * 升降級在球季結算時就已經寫進 `pro.level`，年末才問玩家，因此得記著回頭
+   * 路。機率則是拒絕的代價：球團越想送你下去，硬留下來被釋出的機率越高。
+   */
+  #demotedFrom: string | null = null;
+  #demotePressure = 0;
   /**
    * 生涯累積收入，單位萬元。
    *
@@ -2958,6 +2968,7 @@ export class Game {
 
     let released = false;
     this.#demotedTo = null;
+    this.#demotedFrom = null;
     if (move.movement === 'release') {
       released = true;
       this.flow.card('bad', '戰力外', `球團通知你不再續約——${esc(move.reason)}。`);
@@ -2965,7 +2976,11 @@ export class Game {
       const to = levelOf(move.level);
       // 下放的卡片交給 #demotionOffers 說——那裡才知道有沒有別的邀請，
       // 在這裡先講一次會變成同一件事講兩遍。
-      if (move.movement === 'demote') this.#demotedTo = to.name;
+      if (move.movement === 'demote') {
+        this.#demotedTo = to.name;
+        this.#demotedFrom = pro.level;
+        this.#demotePressure = move.pressure ?? 0;
+      }
       else {
         this.flow.card(
           'gold',
@@ -3435,6 +3450,7 @@ export class Game {
     // **換了體系就不算被下放了。** 沒清掉的話，接下來會跳出「你被送回中職
     // 二軍，要接受下放還是掛靴」——而他人已經在墨西哥了。
     this.#demotedTo = null;
+    this.#demotedFrom = null;
 
     // **用報價帶來的那一份戰力表**，不重抽——報價單上寫的奪冠機率必須就是簽下去
     // 之後真正面對的格局，重抽等於讓玩家看到的數字與拿到的球隊是兩回事。
@@ -3630,7 +3646,12 @@ export class Game {
       ...this.#transferContext,
       topLevelOnly: true,
     });
-    if (offers.length === 0) {
+    // 年資夠的人可以行使拒絕權（ADR 0020）——一個沒有任何邀請的老將也該有這
+    // 個選項，所以要在「沒有邀請」的早退之前先算。
+    const org = levelOf(pro.level).org;
+    const canRefuse =
+      this.#demotedFrom !== null && canRefuseDemotion(org, this.#orgYears.get(org) ?? 0);
+    if (offers.length === 0 && !canRefuse) {
       // 沒有別的邀請時仍要說一聲——不然下放會無聲發生。
       this.flow.card(
         'bad',
@@ -3649,13 +3670,27 @@ export class Game {
         note: `${Game.#terms(o)}${o.homecoming ? '｜落葉歸根' : ''}`,
       })),
     ];
+    if (canRefuse) {
+      options.push({
+        id: 'demote:refuse',
+        label: '行使年資權利，拒絕下放',
+        note: '球團可以直接釋出你——成績越差，風險越高',
+        role: 'warn',
+      });
+    }
 
     this.flow.card(
       'bad',
       '降級通知',
-      `成績未達標，球團打算把你送回 <b class="dn">${esc(demotedTo)}</b>——但消息一出，其他聯盟的邀請也到了。`,
+      `成績未達標，球團打算把你送回 <b class="dn">${esc(demotedTo)}</b>${
+        offers.length === 0 ? '。' : '——但消息一出，其他聯盟的邀請也到了。'
+      }`,
     );
     this.flow.ask({ title: '接受下放，還是換個舞台？', options }, (choice) => {
+      if (choice === 'demote:refuse') {
+        this.#refuseDemotion(next);
+        return;
+      }
       const picked = offers[Number(choice.split(':')[1])];
       if (picked !== undefined) {
         this.#payBuyout('player');
@@ -3663,6 +3698,46 @@ export class Game {
       }
       next();
     });
+  }
+
+  /**
+   * 行使拒絕下放的權利。
+   *
+   * 拒絕不是白拿的：球團不能送你去二軍，但可以不要你。**釋出機率就是下放判定
+   * 那一個機率**——球團越想把你送下去，你越留不住。跟不上得越多，這個選項越
+   * 像是逼球團在「忍受你」與「放掉你」之間選一個，而現實裡他們常選後者。
+   */
+  #refuseDemotion(next: () => void): void {
+    const pro = this.#pro;
+    const from = this.#demotedFrom;
+    if (pro === null || from === null) {
+      next();
+      return;
+    }
+    this.#demotedTo = null;
+    this.#demotedFrom = null;
+
+    if (this.world.stream('career').chance(this.#demotePressure)) {
+      // 被 DFA。與一般戰力外走同一條路：球團主動終止付全額，再問別的體系。
+      this.flow.card(
+        'bad',
+        '讓渡名單',
+        '你拒絕下放，球團也就不再為你留位置——當天你被放進讓渡名單。',
+      );
+      this.#payBuyout('club');
+      this.flow.push(() => this.#fallback('拒絕下放後遭到釋出'));
+      return;
+    }
+
+    pro.level = from;
+    // 留在原本的層級就不是體系最底層了，寬限期歸零——結算時已經加過一次。
+    pro.yearsAtBottom = pathOf(levelOf(from).org)[0] === from ? pro.yearsAtBottom : 0;
+    this.flow.card(
+      'gold',
+      '留在一軍',
+      `你行使了年資賦予的權利，球團收回下放通知——<b class="hl">${esc(levelOf(from).name)}</b>的位置還是你的。`,
+    );
+    next();
   }
 
   /** 引退的兩個選擇點。 */
