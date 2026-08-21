@@ -3415,7 +3415,7 @@ export class Game {
             label: `${o.orgName}　${o.team}（${o.levelName}）`,
             note:
               Game.#terms(o) +
-              (o.homecoming ? '｜回到熟悉的聯盟' : '') +
+              (o.homecoming ? '｜回到熟悉的體系' : '') +
               (levelOf(o.level).top === undefined ? '｜先從小聯盟出發' : ''),
           })),
           { id: 'transfer:stay', label: `留在${orgLabel(ctx.currentOrg)}`, role: 'main' as const },
@@ -3521,7 +3521,7 @@ export class Game {
       headline,
       `與 <b class="hl">${esc(offer.team)}</b> 簽約，從 <b class="hl">${esc(offer.levelName)}</b> 出發。` +
         `簽約金 <b class="hl">${fmtMoney(offer.bonus)}</b>，約期 <b class="hl">${offer.years}</b> 年。` +
-        (offer.homecoming ? '<br>回到熟悉的聯盟，看台上有人記得你的名字。' : ''),
+        (offer.homecoming ? '<br>回到熟悉的體系，看台上有人記得你的名字。' : ''),
     );
   }
 
@@ -3649,7 +3649,7 @@ export class Game {
           ...bids.map((b, i) => ({
             id: `posting:${i}`,
             label: `${b.orgName}　${b.team}（${b.levelName}）`,
-            note: `簽約金 ${fmtMoney(b.bonus)}${b.homecoming ? '｜回到熟悉的聯盟' : ''}`,
+            note: `簽約金 ${fmtMoney(b.bonus)}${b.homecoming ? '｜回到熟悉的體系' : ''}`,
           })),
           { id: 'posting:cancel', label: '反悔，留在原隊', role: 'warn' as const },
         ],

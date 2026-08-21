@@ -33,7 +33,13 @@ export interface TransferOffer {
   readonly team: string;
   /** 簽約金，單位萬元。 */
   readonly bonus: number;
-  /** 是不是回到曾經效力過的體系。落葉歸根的敘述要看它。 */
+  /**
+   * 是不是**回到**曾經效力過的體系。落葉歸根的敘述要看它。
+   *
+   * 單位是體系不是聯盟：待過 1A 之後被 3A 找上不算回鄉，那從頭到尾都是同一個
+   * 體系；離開美職幾年之後再收到 3A 的邀約才算。人還在這個體系裡的時候一律
+   * 為 false——沒離開過就沒有回來這回事。
+   */
   readonly homecoming: boolean;
   /** 這支球隊今年的奪冠機率。簽約金與年限都看它。 */
   readonly odds: number;
@@ -270,6 +276,20 @@ export type ServedYears = ReadonlyMap<string, number>;
 
 const servedIn = (served: ServedYears | undefined, org: string): number => served?.get(org) ?? 0;
 
+/**
+ * 落葉歸根：待過、而且**現在不在**那裡。
+ *
+ * 「現在不在」這一條是必要的——同一個體系裡換層級（1A 升 3A）會讓
+ * `playedOrgs.has()` 為真，但那不是回鄉，人根本沒走。
+ */
+function homecomingTo(
+  playedOrgs: ReadonlySet<string>,
+  currentOrg: string | null,
+  org: string,
+): boolean {
+  return org !== currentOrg && playedOrgs.has(org);
+}
+
 export interface ScoutContext {
   readonly overall: number;
   readonly age: number;
@@ -337,7 +357,7 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
         levelName: leagues.levels[level]?.name ?? level,
         team,
         bonus: signingBonus(org, overBar, odds),
-        homecoming: ctx.playedOrgs.has(org),
+        homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
         odds,
         years: contractLength(odds),
         table,
@@ -427,7 +447,7 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
         ctx.overall - topLandingBar(org, ctx.standards, served, approach),
         odds,
       ),
-      homecoming: ctx.playedOrgs.has(org),
+      homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
       odds,
       years: contractLength(odds),
       table,
@@ -515,6 +535,7 @@ export function postingConsentChance(options: {
 }
 
 export interface OverseasContext {
+  /** **目前**所屬體系。入札與海外 FA 都是從這裡出去的。 */
   readonly org: string;
   readonly overall: number;
   readonly age: number;
@@ -564,7 +585,7 @@ function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOf
       levelName: leagues.levels[level]?.name ?? level,
       team,
       bonus: signingBonus(target, overBar, odds),
-      homecoming: ctx.playedOrgs.has(target),
+      homecoming: homecomingTo(ctx.playedOrgs, ctx.org, target),
       odds,
       years: contractLength(odds),
       table,

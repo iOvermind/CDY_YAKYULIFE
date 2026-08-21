@@ -431,3 +431,32 @@ describe('canRefuseDemotion', () => {
     }
   });
 });
+
+describe('落葉歸根只算「離開之後再回來」（#17）', () => {
+  it('報價名單裡沒有現在待的體系——homecoming 因此永遠代表「離開過」', () => {
+    // #17 的誤會出在文案（「聯盟」寫成了「體系」該說的事），不在判定：
+    // 待過 1A、收到 3A 邀約時人已經不在美職了，那確實是回鄉。
+    const offers = fallbackOffers(new World('milb-internal'), {
+      overall: 55,
+      currentOrg: 'MiLB',
+      currentTeam: '某隊',
+      playedOrgs: new Set(['MiLB']),
+      standards: null,
+    });
+    expect(offers.some((o) => o.org === 'MiLB')).toBe(false);
+    expect(offers.length).toBeGreaterThan(0);
+  });
+
+  it('離開之後再收到同一個體系的邀約才算回鄉', () => {
+    const offers = fallbackOffers(new World('milb-internal'), {
+      overall: 55,
+      currentOrg: 'CPBL1',
+      currentTeam: '某隊',
+      playedOrgs: new Set(['MiLB']),
+      standards: null,
+    });
+    const milb = offers.filter((o) => o.org === 'MiLB');
+    expect(milb.length).toBeGreaterThan(0);
+    expect(milb.every((o) => o.homecoming)).toBe(true);
+  });
+});
