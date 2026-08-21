@@ -152,6 +152,7 @@ import {
   amateurOverseasOffers,
   canRequestPosting,
   fallbackOffers,
+  importPremium,
   orgLabel,
   overseasFaOffers,
   postingBids,
@@ -2945,11 +2946,14 @@ export class Game {
 
     // ---- 升降級
     const r = this.rating;
+    const org = levelOf(pro.level).org;
     const move = evaluateMovement(this.world, {
       level: pro.level,
       overall: r?.overall ?? 0,
       yearsAtBottom: pro.yearsAtBottom,
       standards: this.#standards,
+      // 一軍的位置有外籍名額擋著，直到在籍年資讓你視同本土為止（ADR 0019）。
+      importPremium: importPremium(org, this.#orgYears.get(org) ?? 0),
     });
 
     let released = false;

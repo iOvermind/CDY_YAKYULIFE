@@ -55,6 +55,10 @@ function chanceOf(
  *
  * `yearsAtBottom` 是在最低層級連續待了幾季——戰力外需要寬限期，一個剛簽約的
  * 新人不該因為第一季達不到二軍標準就被釋出。
+ *
+ * `importPremium` 是外籍名額的擠壓（見 ADR 0019）：一軍的位置有限，球團不會拿
+ * 一個剛好及格的外籍去佔，他必須明顯強過本土的替代人選。傳 0 表示本土身分——
+ * 是不是本土由呼叫端算（`transfer.importPremium`），這裡只收結論。
  */
 export function evaluateMovement(
   world: World,
@@ -64,25 +68,35 @@ export function evaluateMovement(
     readonly yearsAtBottom: number;
     /** 當年的聯盟水準。null 表示用基準值。 */
     readonly standards?: LeagueStandards | null;
+    /** 一軍門檻要額外加的分數。本土為 0。 */
+    readonly importPremium?: number;
   },
 ): MovementResult {
   const rng = world.stream('career');
   const { path, index } = indexOf(options.level);
   const mv = cfg.movement;
   const standards = options.standards ?? null;
+  const premium = options.importPremium ?? 0;
+  // **只加在一軍。** 外籍名額限的是一軍的出場登録，二軍沒有這個限制——現實裡
+  // 支配下登録不分國籍。加在二軍會變成「外籍連二軍都待不住」，那不是名額擠壓，
+  // 那是把人趕出球界。
+  const barAt = (level: string): number =>
+    leagues.levels[level]?.top !== undefined ? premium : 0;
+  /** 門檻被外籍名額墊高時，理由要說出來——不然玩家只會看到一個對不上的數字。 */
+  const noteAt = (level: string): string => (barAt(level) > 0 ? '，外籍名額' : '');
 
   const above = index >= 0 && index < path.length - 1 ? path[index + 1] : undefined;
   if (above !== undefined) {
     const target = leagues.levels[above];
     if (target !== undefined) {
       // 門檻用當年的值：人才斷層的年份比較好擠上去，這正是浮動該有的效果。
-      const targetMin = Math.round(standardOf(standards, above).min);
+      const targetMin = Math.round(standardOf(standards, above).min) + barAt(above);
       const d = options.overall - (targetMin + mv.promote.margin);
       if (d >= 0 && rng.chance(chanceOf(mv.promote.chance, d))) {
         return {
           movement: 'promote',
           level: above,
-          reason: `能力達到${target.name}的標準（綜合 ${options.overall}／門檻 ${targetMin}）`,
+          reason: `能力達到${target.name}的標準（綜合 ${options.overall}／門檻 ${targetMin}${noteAt(above)}）`,
         };
       }
     }
@@ -90,7 +104,7 @@ export function evaluateMovement(
 
   const here = leagues.levels[options.level];
   if (here === undefined) throw new Error(`未知的聯盟層級：${options.level}`);
-  const hereMin = Math.round(standardOf(standards, options.level).min);
+  const hereMin = Math.round(standardOf(standards, options.level).min) + barAt(options.level);
   const shortfall = hereMin + mv.demote.margin - options.overall;
 
   if (shortfall > 0 && index > 0) {
@@ -99,7 +113,7 @@ export function evaluateMovement(
       return {
         movement: 'demote',
         level: below,
-        reason: `跟不上${here.name}的水準（綜合 ${options.overall}／門檻 ${hereMin}）`,
+        reason: `跟不上${here.name}的水準（綜合 ${options.overall}／門檻 ${hereMin}${noteAt(options.level)}）`,
       };
     }
   }

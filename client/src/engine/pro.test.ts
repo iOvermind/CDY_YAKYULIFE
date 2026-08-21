@@ -33,6 +33,15 @@ describe('evaluateMovement', () => {
   const move = (seed: string, level: string, overall: number, yearsAtBottom = 0) =>
     evaluateMovement(new World(seed), { level, overall, yearsAtBottom });
 
+  /** 帶外籍名額擠壓的版本（ADR 0019）。 */
+  const moveAsImport = (seed: string, level: string, overall: number, premium = 4) =>
+    evaluateMovement(new World(seed), {
+      level,
+      overall,
+      yearsAtBottom: 0,
+      importPremium: premium,
+    });
+
   const rateOf = (fn: (seed: string) => boolean, n = 300) => {
     let hit = 0;
     for (let i = 0; i < n; i++) if (fn(`s${i}`)) hit++;
@@ -59,6 +68,55 @@ describe('evaluateMovement', () => {
     const near = rateOf((s) => move(s, 'CPBL1', CPBL1.min - 2).movement === 'demote');
     const far = rateOf((s) => move(s, 'CPBL1', CPBL1.min - 10).movement === 'demote');
     expect(far).toBeGreaterThan(near);
+  });
+
+  it('外籍名額把一軍的升級門檻墊高，剛好及格的外籍上不去', () => {
+    // 本土在 min+1 有機會上，外籍在同一個能力被名額擋住。
+    const local = rateOf((s) => move(s, 'CPBL2', CPBL1.min + 1).movement === 'promote');
+    expect(local).toBeGreaterThan(0);
+    for (let i = 0; i < 200; i++) {
+      expect(moveAsImport(`s${i}`, 'CPBL2', CPBL1.min + 1).movement).not.toBe('promote');
+    }
+  });
+
+  it('外籍明顯強過本土替代人選就照樣升上一軍', () => {
+    const rate = rateOf((s) => moveAsImport(s, 'CPBL2', CPBL1.min + 14).movement === 'promote');
+    expect(rate).toBeGreaterThan(0.7);
+  });
+
+  it('外籍名額只加在一軍，二軍的去留判定一模一樣', () => {
+    // 二軍不是 top，名額不擠壓——現實裡支配下登録不限國籍。加在這裡會變成
+    // 「外籍連二軍都待不住」，那不是名額擠壓，那是把人趕出球界。
+    for (let i = 0; i < 200; i++) {
+      const local = evaluateMovement(new World(`s${i}`), {
+        level: 'CPBL2',
+        overall: CPBL2.min - 6,
+        yearsAtBottom: 3,
+      });
+      const asImport = evaluateMovement(new World(`s${i}`), {
+        level: 'CPBL2',
+        overall: CPBL2.min - 6,
+        yearsAtBottom: 3,
+        importPremium: 4,
+      });
+      expect(asImport).toEqual(local);
+    }
+  });
+
+  it('待滿在籍年數視同本土後，同一個能力就升得上去', () => {
+    const blocked = rateOf((s) => moveAsImport(s, 'CPBL2', CPBL1.min + 3).movement === 'promote');
+    const domestic = rateOf(
+      (s) => moveAsImport(s, 'CPBL2', CPBL1.min + 3, 0).movement === 'promote',
+    );
+    expect(blocked).toBe(0);
+    expect(domestic).toBeGreaterThan(0);
+  });
+
+  it('守不住加成後門檻的外籍會被擠下二軍', () => {
+    const local = rateOf((s) => move(s, 'CPBL1', CPBL1.min + 2).movement === 'demote');
+    const asImport = rateOf((s) => moveAsImport(s, 'CPBL1', CPBL1.min + 2).movement === 'demote');
+    expect(local).toBe(0);
+    expect(asImport).toBeGreaterThan(0.3);
   });
 
   it('達標的一軍球員留在原地', () => {
