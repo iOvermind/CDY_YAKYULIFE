@@ -1316,6 +1316,59 @@ describe('跨聯盟轉會', () => {
     throw new Error('四十局都沒有人旅外');
   });
 
+  /**
+   * 海外的邀請必須排在母隊談約之前——否則掌控期的球團續約權先跑完，報價到
+   * 的時候人已經被綁住，跳約還要自付買斷。見 ADR 0027。
+   */
+  it('海外球團遞出合約問在母隊續約之前', () => {
+    let seen = 0;
+    for (let i = 0; i < 60; i++) {
+      const game = new Game({
+        seed: `abroad-order-${i}`,
+        name: '旅外',
+        startPosition: 'P',
+        throws: 'R',
+        bats: 'R',
+      }).start();
+      let sinceSeason: string[] = [];
+      let idx = 0;
+      let guard = 0;
+      let k = 0;
+      while (game.flow.prompt !== null && guard++ < 6000) {
+        for (; idx < game.flow.log.length; idx++) {
+          const entry = game.flow.log[idx];
+          if (entry?.kind !== 'card') continue;
+          const title = entry.title ?? '';
+          if (title.endsWith('球季成績')) sinceSeason = [];
+          else sinceSeason.push(title);
+        }
+        const options = game.flow.prompt.options;
+        if ((game.flow.prompt.title ?? '') === '海外球團遞出合約') {
+          seen++;
+          expect(sinceSeason.filter((t) => /續約|減薪合約|合約買斷/.test(t))).toEqual([]);
+        }
+        // 一律留下，才走得完一整條有多次報價的生涯。
+        const rot = [...PITCHER.slice(k % PITCHER.length), ...PITCHER];
+        const pick =
+          options.find((o) => o.id === 'transfer:stay') ??
+          options.find((o) => o.id === 'fa:stay') ??
+          options.find((o) => o.id === 'term:long') ??
+          options.find((o) => o.id === 'term:short') ??
+          options.find((o) => o.id === 'demote:accept') ??
+          options.find((o) => o.id === 'retire:stay') ??
+          rot
+            .map((key) => options.find((o) => o.id === `alloc:${key}`))
+            .find((o) => o !== undefined) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options[0];
+        if (pick === undefined) break;
+        if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+        game.choose(pick.id);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
   /** 六個體系的資料與名人堂長期是死碼——這條看著它們真的到得了。 */
   it('中職以外的體系到得了', () => {
     const seen = new Set<string>();

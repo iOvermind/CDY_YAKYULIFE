@@ -3089,22 +3089,21 @@ export class Game {
       return;
     }
 
-    // 合約處理排在升降級之後、引退選擇之前——談約要先知道自己在哪一層。
-    this.flow.push(() => this.#contractPhase());
+    // 記帳排在升降級之後——年資與合約倒數要先知道自己在哪一層。
+    this.#seasonLedger();
+    this.flow.push(() => this.#endOfYearChoices());
   }
 
   /**
-   * 年度的合約處理：倒數 → 延長續約 → 到期。
+   * 年度記帳：在隊年數、服務年資、合約倒數。
    *
-   * 到期之後分兩條路：**掌控期內由球團行使續約權**（球員沒有選擇），**取得
-   * FA 資格則由球員自己談**。那正是掌控期的意義——選秀球隊用一個順位賭了你，
-   * 就先擁有你幾年。
+   * **與談約分開**。這一段沒有任何選擇，每年必跑；談約則要等海外的邀請都攤在
+   * 桌上之後才問（見 ADR 0027）。
    */
-  #contractPhase(): void {
+  #seasonLedger(): void {
     const pro = this.#pro;
     if (pro === null) return;
     const info = levelOf(pro.level);
-    const top = info.top !== undefined;
 
     const tally = this.#teamYears.get(pro.team);
     if (tally === undefined) this.#teamYears.set(pro.team, { org: info.org, years: 1 });
@@ -3112,18 +3111,36 @@ export class Game {
     this.#careerTraits();
 
     // 服務年資只在頂級聯盟累積——二軍的年份不算進掌控期。
-    if (top) {
+    if (info.top !== undefined) {
       pro.serviceYears++;
       // 外籍身分只算一軍年份，與掌控期同一個計數口徑。
-      const org = levelOf(pro.level).org;
-      this.#orgYears.set(org, (this.#orgYears.get(org) ?? 0) + 1);
+      this.#orgYears.set(info.org, (this.#orgYears.get(info.org) ?? 0) + 1);
     }
+
+    pro.contract = { ...pro.contract, years: pro.contract.years - 1 };
+  }
+
+  /**
+   * 年度的談約：延長續約 → 到期。
+   *
+   * 到期之後分兩條路：**掌控期內由球團行使續約權**（球員沒有選擇），**取得
+   * FA 資格則由球員自己談**。那正是掌控期的意義——選秀球隊用一個順位賭了你，
+   * 就先擁有你幾年。
+   *
+   * **排在海外挖角之後**。掌控期那條路球員一句話都插不上，如果它先跑完，海外
+   * 報價來的時候人已經被續約綁住，跳約還要自付買斷——那不是取捨，是罰款。
+   */
+  #contractTalks(next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null) {
+      next();
+      return;
+    }
+    const top = levelOf(pro.level).top !== undefined;
     const eligible = isFreeAgentEligible({
       serviceYears: pro.serviceYears,
       changedOrg: pro.changedOrg,
     });
-
-    pro.contract = { ...pro.contract, years: pro.contract.years - 1 };
 
     if (offersExtension({ contract: pro.contract, topLevel: top, freeAgentEligible: eligible, d: this.#lastD })) {
       this.#askTerms(
@@ -3140,19 +3157,19 @@ export class Game {
             `與 <b class="hl">${esc(pro.team)}</b> 達成延長協議，追加 <b class="hl">${years} 年</b>` +
               `（年薪係數 ×${mult.toFixed(2)}）。`,
           );
-          this.#endOfYearChoices();
+          next();
         },
         () => {
           pro.contract = { ...pro.contract, extensionOffered: true };
           this.flow.card('info', '婉拒延長', '你婉拒了母隊的提前延長，選擇打完現有合約再說。');
-          this.#endOfYearChoices();
+          next();
         },
       );
       return;
     }
 
     if (pro.contract.years > 0) {
-      this.#endOfYearChoices();
+      next();
       return;
     }
 
@@ -3165,7 +3182,7 @@ export class Game {
         mult: opt.multiplier,
         extensionOffered: false,
       };
-      this.#endOfYearChoices();
+      next();
       return;
     }
 
@@ -3182,11 +3199,11 @@ export class Game {
         `你仍在選秀球隊的掌控期（服務 ${pro.serviceYears}／${seasonCfg.contract.control.years} 年），` +
           `球團行使續約權——續 <b class="hl">${pro.contract.years} 年</b>，薪資照層級基數。`,
       );
-      this.#endOfYearChoices();
+      next();
       return;
     }
 
-    this.#freeAgency();
+    this.#freeAgency(next);
   }
 
   /**
@@ -3199,7 +3216,7 @@ export class Game {
    * 收得下你」而不是「誰想要你」。旅外球員因此在這裡自然拿得到返台的選項——
    * 落葉歸根不必特別寫。
    */
-  #freeAgency(): void {
+  #freeAgency(next: () => void): void {
     const pro = this.#pro;
     if (pro === null) return;
 
@@ -3218,7 +3235,7 @@ export class Game {
       },
       (choice) => {
         if (choice === 'fa:market') {
-          this.#faMarket();
+          this.#faMarket(next);
           return;
         }
         this.#askTerms(`與 ${pro.team} 續約 · 選擇合約類型`, (years, mult) => {
@@ -3229,14 +3246,14 @@ export class Game {
             `與 <b class="hl">${esc(pro.team)}</b> 完成 <b class="hl">${years} 年</b>續約` +
               `（年薪係數 ×${mult.toFixed(2)}）。`,
           );
-          this.#endOfYearChoices();
+          next();
         });
       },
     );
   }
 
   /** 自由市場。沒有人開價時的兩個結局：減薪回原隊，或就此引退。 */
-  #faMarket(): void {
+  #faMarket(next: () => void): void {
     const pro = this.#pro;
     if (pro === null) return;
 
@@ -3291,7 +3308,7 @@ export class Game {
             '減薪合約',
             `低著頭回到 <b class="hl">${esc(pro.team)}</b>，年薪打折。`,
           );
-          this.#endOfYearChoices();
+          next();
         },
       );
       return;
@@ -3316,12 +3333,12 @@ export class Game {
         this.#askTerms(`與 ${pro.team} 續約 · 選擇合約類型`, (years, mult) => {
           pro.contract = { years, mult, extensionOffered: false };
           this.flow.card('info', '續約', `重回 <b class="hl">${esc(pro.team)}</b>。`);
-          this.#endOfYearChoices();
+          next();
         });
         return;
       }
       this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
-      this.#endOfYearChoices();
+      next();
     });
   }
 
@@ -3694,20 +3711,37 @@ export class Game {
   }
 
   /**
-   * 年末的引退選擇。合約處理完、挖角與入札問過才輪到它——先知道明年有沒有球
-   * 打、在哪裡打，再決定要不要走。
+   * 年末的一連串選擇。順序就是「先知道有誰要你，再談約」：
+   *
+   * ```
+   * 挖角 → 談約 → 入札 → 下放遞約 → 引退選擇
+   * ```
+   *
+   * **海外挖角排在談約之前**（見 ADR 0027）。掌控期內的球團續約權球員插不上
+   * 話，談約先跑等於每年都在報價到達前先把人綁住。挖角成功就換了體系，那份
+   * 合約由 `#moveTo` 重新開，這一年的談約自然不必再問。
+   *
+   * 引退選擇留在最後——先知道明年有沒有球打、在哪裡打，再決定要不要走。
    */
   #endOfYearChoices(): void {
-    this.#scouting(() =>
-      this.#posting(() => {
-        const demotedTo = this.#demotedTo;
-        if (demotedTo === null) {
-          this.#retirementChoices();
-          return;
-        }
-        this.#demotionOffers(demotedTo, () => this.#retirementChoices());
-      }),
-    );
+    const teamBefore = this.#pro?.team ?? '';
+    this.#scouting(() => {
+      const rest = () =>
+        this.#posting(() => {
+          const demotedTo = this.#demotedTo;
+          if (demotedTo === null) {
+            this.#retirementChoices();
+            return;
+          }
+          this.#demotionOffers(demotedTo, () => this.#retirementChoices());
+        });
+      // 已經簽去別的體系了，母隊的約無從談起。
+      if ((this.#pro?.team ?? '') !== teamBefore) {
+        rest();
+        return;
+      }
+      this.#contractTalks(rest);
+    });
   }
 
   /**
