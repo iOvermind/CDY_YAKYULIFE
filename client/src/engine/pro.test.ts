@@ -64,6 +64,36 @@ describe('evaluateMovement', () => {
     expect(rate).toBeGreaterThan(0.5);
   });
 
+  it('下放門檻不吃浮動——聯盟今年變強不該把達到基準的球員踢下去', () => {
+    // 浮動把 CPBL1 的 min 拉高 10 分，但基準值沒動。踩在基準線上的人一律留下。
+    const floated = new Map([['CPBL1', { par: CPBL1.par + 10, min: CPBL1.min + 10 }]]);
+    for (let i = 0; i < 200; i++) {
+      const r = evaluateMovement(new World(`s${i}`), {
+        level: 'CPBL1',
+        overall: CPBL1.min,
+        yearsAtBottom: 0,
+        standards: floated,
+      });
+      expect(r.movement).not.toBe('demote');
+    }
+  });
+
+  it('升級門檻照吃浮動——人才斷層那年比較好擠上去', () => {
+    // 降級不吃浮動是為了不懲罰進步的人；升級吃浮動是機會，兩件事不對稱是刻意的。
+    const thin = new Map([['CPBL1', { par: CPBL1.par - 6, min: CPBL1.min - 6 }]]);
+    const base = rateOf((s) => move(s, 'CPBL2', CPBL1.min - 3).movement === 'promote');
+    const easy = rateOf(
+      (s) =>
+        evaluateMovement(new World(s), {
+          level: 'CPBL2',
+          overall: CPBL1.min - 3,
+          yearsAtBottom: 0,
+          standards: thin,
+        }).movement === 'promote',
+    );
+    expect(easy).toBeGreaterThan(base);
+  });
+
   it('差距越大越容易被下放', () => {
     const near = rateOf((s) => move(s, 'CPBL1', CPBL1.min - 2).movement === 'demote');
     const far = rateOf((s) => move(s, 'CPBL1', CPBL1.min - 10).movement === 'demote');

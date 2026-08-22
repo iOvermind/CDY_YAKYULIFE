@@ -1593,6 +1593,30 @@ describe('季中交易', () => {
 
 describe('下放與換體系', () => {
   /**
+   * 降級卡必須報引擎判定用的那一句，不是展示層自己編的說法。
+   *
+   * 舊版一律寫「成績未達標」——但下放看的是能力對門檻，不是成績；玩家因此看著
+   * 綜合 60、聯盟水準 55 被送去 3A，而卡片給的理由與判定依據毫無關係，他連自
+   * 己是怎麼掉下去的都算不出來（見 ADR 0029）。
+   */
+  it('降級通知報的是實際的綜合與門檻，不是編出來的成績說法', () => {
+    let seen = 0;
+    for (let i = 0; i < 60; i++) {
+      const game = playToEnd(started({ seed: `demote-why-${i}` }));
+      for (const entry of game.flow.log) {
+        if (entry.kind !== 'card') continue;
+        if ((entry.title ?? '') !== '降級通知') continue;
+        seen++;
+        const body = entry.body ?? '';
+        expect(body).toContain('綜合');
+        expect(body).toContain('門檻');
+        expect(body).not.toContain('成績未達標');
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  /**
    * 「你被送回 X」的 X 必須等於他現在所在的層級。
    *
    * 從判定下放到問這句話之間隔著挖角、入札、下放遞約三個入口，任何一個成交

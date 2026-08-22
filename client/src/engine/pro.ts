@@ -61,6 +61,12 @@ function chanceOf(
  * 判定順序是升級 → 降級 → 戰力外。先問升級是刻意的：一個能力已經超過上一層
  * 級門檻的人，不該因為還在最低層級而被同一輪判定拉去問「要不要放掉他」。
  *
+ * **只有升級吃浮動門檻，降級與戰力外都不吃**（ADR 0011、ADR 0029）。今年人才
+ * 斷層就該比較好擠上去——那是機會，浮動放在這裡是對的。但拿浮動去踢人不是同一
+ * 回事：能力漲了一分、聯盟水準漲了兩分，於是進步的球員被下放，而他做對的每一
+ * 件事都沒有回報。降級與戰力外一律對 `leagues.json` 的基準值，那條線只跟你自己
+ * 有關。
+ *
  * `yearsAtBottom` 是在最低層級連續待了幾季——戰力外需要寬限期，一個剛簽約的
  * 新人不該因為第一季達不到二軍標準就被釋出。
  *
@@ -112,7 +118,8 @@ export function evaluateMovement(
 
   const here = leagues.levels[options.level];
   if (here === undefined) throw new Error(`未知的聯盟層級：${options.level}`);
-  const hereMin = Math.round(standardOf(standards, options.level).min) + barAt(options.level);
+  // 基準值，不吃浮動——見函式開頭與 ADR 0029。
+  const hereMin = here.min + barAt(options.level);
   const shortfall = hereMin + mv.demote.margin - options.overall;
 
   if (shortfall > 0 && index > 0) {

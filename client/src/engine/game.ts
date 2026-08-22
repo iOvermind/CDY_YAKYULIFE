@@ -634,6 +634,13 @@ export class Game {
   #demotedFrom: string | null = null;
   #demotePressure = 0;
   /**
+   * 下放的實際理由，原封不動來自 `evaluateMovement`。
+   *
+   * 卡片一律報這一句，不要在展示層另外編一個說法——玩家看到的理由和引擎判定的
+   * 依據必須是同一件事，否則他無從對帳（ADR 0029）。
+   */
+  #demoteReason = '';
+  /**
    * 生涯累積收入，單位萬元。
    *
    * 含簽約金與逐季年薪。它是玩家會在意的數字，也是將來天梯的排序依據之一
@@ -2984,8 +2991,10 @@ export class Game {
   /**
    * 職業年度結束：老化 → 升降級 → 引退判定。
    *
-   * 順序不能換。老化先跑，因為升降級看的是**這一季結束後**的能力；引退最後
-   * 跑，因為被釋出是引退判定的輸入之一。
+   * 順序不能換。老化先跑，因為升降級看的是**這一季結束後**的能力——球團決定的
+   * 是明年還要不要用你，而衰退卡當場就把新數字報給玩家了，不是黑箱。反過來，
+   * 聯盟水準的推進排在升降級**之後**，因為那是明年的聯盟，不該拿來審今年的球季
+   * （ADR 0029）。引退最後跑，因為被釋出是引退判定的輸入之一。
    */
   #proEndYear(): void {
     const pro = this.#pro;
@@ -2996,11 +3005,6 @@ export class Game {
     pro.year++;
     // 否決交易的餘波會過去。球團記得那件事，但不是記一輩子。
     if (this.#tradeRefuseYears > 0) this.#tradeRefuseYears--;
-
-    // 聯盟水準推進一年。人才有興衰，同一個聯盟在不同年代不是同一個聯盟。
-    if (this.#standards !== null) {
-      this.#standards = advanceStandards(this.world, this.#standards);
-    }
 
     // 聯盟推進一年。玩家的貢獻只加在自己的球隊上——棒球是九個人的運動，
     // 再強的球員也翻不了一支爛隊，因此上限壓得很窄。
@@ -3047,9 +3051,19 @@ export class Game {
       importPremium: importPremium(org, this.#orgYears.get(org) ?? 0),
     });
 
+    // 聯盟水準推進一年。人才有興衰，同一個聯盟在不同年代不是同一個聯盟。
+    //
+    // 排在升降級**之後**：這一季的去留要用這一季的聯盟水準審，不能用明年的
+    // （ADR 0029）。往下的合約、自由市場、挖角看到的則是新的一年——那些談的
+    // 本來就是明年的事。
+    if (this.#standards !== null) {
+      this.#standards = advanceStandards(this.world, this.#standards);
+    }
+
     let released = false;
     this.#demotedTo = null;
     this.#demotedFrom = null;
+    this.#demoteReason = '';
     if (move.movement === 'release') {
       released = true;
       this.flow.card('bad', '戰力外', `球團通知你不再續約——${esc(move.reason)}。`);
@@ -3061,6 +3075,7 @@ export class Game {
         this.#demotedTo = to.name;
         this.#demotedFrom = pro.level;
         this.#demotePressure = move.pressure ?? 0;
+        this.#demoteReason = move.reason;
       }
       else {
         // 「一軍」是頂級聯盟的專稱（見 CONTEXT.md 詞條），而且只有中日韓那三個
@@ -3797,7 +3812,7 @@ export class Game {
       this.flow.card(
         'bad',
         '降級通知',
-        `成績未達標，被送回 <b class="dn">${esc(demotedTo)}</b>。`,
+        `${esc(this.#demoteReason)}，被送回 <b class="dn">${esc(demotedTo)}</b>。`,
       );
       next();
       return;
@@ -3823,7 +3838,7 @@ export class Game {
     this.flow.card(
       'bad',
       '降級通知',
-      `成績未達標，球團打算把你送回 <b class="dn">${esc(demotedTo)}</b>${
+      `${esc(this.#demoteReason)}，球團打算把你送回 <b class="dn">${esc(demotedTo)}</b>${
         offers.length === 0 ? '。' : '——但消息一出，其他聯盟的邀請也到了。'
       }`,
     );
