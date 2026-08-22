@@ -316,7 +316,7 @@ export interface PlayerState {
   readonly position: string | null;
   /** 守位的中文名。 */
   readonly positionName: string | null;
-  /** 這個守位是不是暫定的——沒有登錄、不寫進生涯紀錄、每年重算。 */
+  /** 這個守位是不是暫定的——沒有登錄、每年重算，但仍會存進生涯紀錄。 */
   readonly positionTentative: boolean;
   /** 這一季走不走野手側。純投手為 false，他們的守位欄只是打席的落點。 */
   readonly playsField: boolean;
@@ -1155,6 +1155,8 @@ export class Game {
       stage: this.#stage,
       stageName: stageOf(this.#stage).name,
       school: this.#school,
+      // 當下就存：暫定守位每年重算，引退時回頭問只會拿到最後一年的答案。
+      position: this.#fieldPosition,
       batting: line.batting,
       pitching: line.pitching,
     });
@@ -1543,7 +1545,10 @@ export class Game {
    *
    * 暫定守位每次讀取都現算——養成期與二軍的守備能力天天在動，而它沒有登錄
    * 這道手續把數字釘住。掃描規則與登錄完全一樣（同一把尺、同一條光譜），差別
-   * 只在不登錄、不寫進生涯紀錄、不經球員選擇。
+   * 只在不登錄、不經球員選擇、不會發「守位會議」卡。
+   *
+   * 生涯紀錄**會**存它：那張表問的是「這個人當年站哪裡」，二軍那幾年留白等於
+   * 在說他沒上場。存的是當季結算那一刻的值，不是引退時回算。
    *
    * 純投手回傳 null：他們走先發／後援那條線，不進守位系統。
    */
@@ -2884,7 +2889,8 @@ export class Game {
       level: pro.level,
       levelName: info.name,
       team,
-      position: pro.position,
+      // 登錄守位優先，二軍沒登錄就寫暫定守位——生涯表問的是他站哪裡。
+      position: this.#fieldPosition,
       batting,
       pitching,
       defenseRuns: defense,

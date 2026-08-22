@@ -1021,6 +1021,30 @@ describe('引退與結算', () => {
     }
   });
 
+  it('生涯表的守位欄不留白——養成與二軍寫暫定守位', () => {
+    // 暫定守位（ADR 0021）本來只活在畫面上，沒有存進生涯紀錄，生涯表那幾列
+    // 因此永遠是「—」。守住的是「野手在每一列都站得到某個位置」。
+    let checked = 0;
+    for (let i = 0; i < 40; i++) {
+      const game = playToRetire(`pos-${i}`);
+      const summary = game.summary;
+      if (summary === null) continue;
+      // 純投手不進守位系統，他們的 null 是對的；這裡只驗野手。
+      if (!(game.state?.playsField ?? false)) continue;
+      expect(summary.amateurSeasons.length).toBeGreaterThan(0);
+      for (const a of summary.amateurSeasons) {
+        expect(a.position, `${a.year} 年的養成列沒有守位`).not.toBeNull();
+      }
+      const minorRows = summary.seasons.filter((s) => s.top === null);
+      for (const s of minorRows) {
+        expect(s.position, `${s.year} 年的 ${s.levelName} 沒有守位`).not.toBeNull();
+      }
+      checked++;
+      if (checked >= 3) return;
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('引退之後不再有任何提問——流程真的結束了', () => {
     const game = playToRetire('done-1');
     expect(game.flow.prompt).toBeNull();

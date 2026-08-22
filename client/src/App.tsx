@@ -1126,7 +1126,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     team: a.school,
     // 學制不寫——校名已經說了那是國中還是高中。
     note: null,
-    position: null,
+    position: a.position,
     batting: a.batting,
     pitching: a.pitching,
     defenseRuns: 0,
