@@ -393,7 +393,7 @@ function GameScreen({
     <div id="game">
       <div id="col-left">
         {state && (
-          <Board state={state} rating={game.rating?.overall ?? 0} seed={game.setup.seed} />
+          <Board state={state} rating={game.rating} seed={game.setup.seed} />
         )}
         {state && (
           <div id="panel-abilities">
@@ -410,7 +410,7 @@ function GameScreen({
       </div>
 
       <div id="col-right">
-        {state && <StatsPanel state={state} rating={game.rating} summary={game.summary} />}
+        {state && <StatsPanel state={state} summary={game.summary} />}
         <EventLog entries={game.flow.log} />
         <div id="panel-act">
           {prompt !== null ? (
@@ -588,76 +588,23 @@ function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } 
 /** 當年數據與生涯數據。 */
 function StatsPanel({
   state,
-  rating,
   summary,
 }: {
   state: PlayerState;
-  rating: Rating | null;
   summary: CareerSummary | null;
 }) {
-  const def = stageOf(state.stage);
-  // 進職業之後 stage 仍停在 HS、stageYear 繼續累加，直接沿用會顯示「高中4」。
-  // 職業改用體系名加年資，與養成期的「國中1」是同一種寫法。
-  // 生涯結束之後不寫學年也不寫職涯年——沒打上職業的人會一路數到「高中4」，
-  // 那個數字在他離開棒球之後不代表任何東西。
-  const yearLabel = summary !== null
-    ? '退休'
-    : state.pro === null
-      ? (def.year_labels[state.stageYear - 1] ?? `${def.name}${state.stageYear}`)
-      : `${state.pro.orgName}${state.pro.year}`;
-
-
   return (
     <div id="panel-stats">
       <h4>當年數據</h4>
-      <div className="stat-grid">
-        {/* 年份與年齡只寫在左側記分板。同一個數字寫兩次，玩家會以為是兩件事
-            ——可分配點與登錄守位先前也是為了同樣的理由收掉的。 */}
-        <div className="stat-cell">
-          <b>{yearLabel}</b>
-          <span>{summary !== null ? '生涯' : state.pro === null ? '學年' : '職涯'}</span>
-        </div>
-        {/* 可分配點只寫在左側記分板。同一個數字寫兩次，玩家會以為是兩件事。 */}
-        {state.visibleSide !== 'fielder' && (
-          <div className="stat-cell">
-            <b>{rating?.pitcher ?? 0}</b>
-            <span>投手側</span>
-          </div>
-        )}
-        {state.visibleSide !== 'pitcher' && (
-          <div className="stat-cell">
-            <b>{rating?.fielder ?? 0}</b>
-            <span>野手側</span>
-          </div>
-        )}
-        {/* 登錄守位寫在左側記分板的姓名那一行，守備分寫在「最近一季」那張表的
-            最後一欄——兩件事都已經有地方了，這裡不再重複一次。 */}
-        {/* 當年的聯盟水準，不是 leagues.json 的基準值——它逐年浮動。 */}
-        {state.pro !== null && (
-          <div className="stat-cell">
-            <b>{state.pro.par.toFixed(1)}</b>
-            <span>聯盟水準</span>
-          </div>
-        )}
-        {state.pro !== null && (
-          <div className="stat-cell">
-            <b>{fmtMoneyShort(state.pro.salary)}</b>
-            <span>年薪</span>
-          </div>
-        )}
-        {state.pro !== null && (
-          <div className="stat-cell">
-            <b>{state.pro.contractYears}</b>
-            <span>合約</span>
-          </div>
-        )}
-        {state.earnings > 0 && (
-          <div className="stat-cell">
-            <b>{fmtMoneyShort(state.earnings)}</b>
-            <span>生涯收入</span>
-          </div>
-        )}
-      </div>
+      {/* 這裡不再放方格。
+
+          年份、年齡、綜合、可分配點左側記分板都有；年薪、合約、生涯收入已經併
+          進記分板底下那一行。聯盟水準整格刪掉——升降級卡片現在一律報「綜合 X／
+          門檻 Y」（ADR 0029），而下放的門檻用的是基準值不是浮動值，一個常駐的
+          浮動 par 解釋不了任何一次判定，只會讓玩家拿它去對一條不存在的線。
+
+          動機是手機：右欄在窄螢幕上要一路捲到底才看得到成績表，方格佔掉的正是
+          最上面那一屏。 */}
 
       {/* 生涯進行中只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡
           放的還是去年的成績，寫當年是騙人的。
@@ -1268,7 +1215,7 @@ function Board({
   seed,
 }: {
   state: PlayerState;
-  rating: number;
+  rating: Rating | null;
   seed: string;
 }) {
   const player = state.origin;
@@ -1307,6 +1254,10 @@ function Board({
       <h4 className="board-title">球員</h4>
       <div id="bd-top">
         <span id="bd-name">
+          {/* 合約剩餘年數放在姓名上方——那塊空白本來就對著隊名側的奪冠機率，
+              兩邊各自佔一行。它是「我還剩幾年安穩」，屬於處境，不是能力，因此
+              不進下面的方格。 */}
+          {state.pro !== null && <small className="deal">約 {state.pro.contractYears} 年</small>}
           {player.name}
           <small>
             {roleLabel}·投{hand(player.throws)}打{hand(player.bats)}
@@ -1335,15 +1286,36 @@ function Board({
           <b>{state.age}</b>
           <span>年齡</span>
         </div>
-        <div className="bd-cell">
-          <b>{rating}</b>
-          <span>綜合</span>
-        </div>
+        {/* 二刀流寫兩個數字：他是兩種球員，一個數字說不完，而右欄那兩格
+            「投手側／野手側」已經收掉了，這裡不寫就沒有地方看得到。
+            單邊的人仍寫 overall——那才是升降級判定吃的那個數字（含 yips 之類的
+            特性修正），寫成側評價會跟卡片上的「綜合 X」對不起來（ADR 0029）。 */}
+        {state.visibleSide === null ? (
+          <div className="bd-cell">
+            <b>
+              {rating?.pitcher ?? 0} / {rating?.fielder ?? 0}
+            </b>
+            <span>投／野</span>
+          </div>
+        ) : (
+          <div className="bd-cell">
+            <b>{rating?.overall ?? 0}</b>
+            <span>綜合</span>
+          </div>
+        )}
         <div className="bd-cell">
           <b>{state.pool}</b>
           <span>可分配點</span>
         </div>
       </div>
+      {/* 年薪與生涯收入併成一行。兩個都是錢，分成兩格只是把同一件事切開；
+          斜線左邊是今年拿多少，右邊是這輩子拿過多少。 */}
+      {state.pro !== null && (
+        <div id="bd-money">
+          {fmtMoneyShort(state.pro.salary)}
+          {state.earnings > 0 && <span> / {fmtMoneyShort(state.earnings)}</span>}
+        </div>
+      )}
       <div id="lamps">
         <span className="lamp on">
           <i />
