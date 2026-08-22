@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abilities, amateur, leagues, season as seasonData } from '../data/index.ts';
+import { abilities, amateur, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 
@@ -1562,5 +1562,40 @@ describe('天賦', () => {
     const replayed = Game.replay(log);
     replayed.dispose();
     expect(JSON.stringify(replayed.flow.log)).toBe(JSON.stringify(original.flow.log));
+  });
+});
+
+describe('感情風波的敘事', () => {
+  const kinds = love.turmoil.kinds.map((k) => k.text);
+
+  /**
+   * 風波的文案曾經只塞在提問標題裡——那是 12px 的小標，而且不會進事件記錄。
+   * 只讀卡片的人會看到「沒有問出口」卻不知道發生過什麼事（#22／#28）。
+   */
+  it('風波的結果卡片一定帶著當年抽到的那一則敘事', () => {
+    let seen = false;
+    for (let i = 0; i < 60; i++) {
+      const game = playToEnd(started({ seed: `turmoil-${i}` }));
+      for (const entry of game.flow.log) {
+        if (entry.kind !== 'card') continue;
+        if (entry.title !== '沒有問出口') continue;
+        seen = true;
+        expect(kinds.some((t) => entry.body.includes(t))).toBe(true);
+      }
+    }
+    expect(seen).toBe(true);
+  });
+
+  it('敘事不再當成提問標題', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = new Game({ ...setup, seed: `turmoil-title-${i}` }).start();
+      while (game.flow.prompt !== null) {
+        const title = game.flow.prompt.title ?? '';
+        expect(kinds).not.toContain(title);
+        const pick = defaultPick(game);
+        if (pick === undefined) break;
+        game.choose(pick);
+      }
+    }
   });
 });

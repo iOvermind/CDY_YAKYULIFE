@@ -2111,9 +2111,12 @@ export class Game {
     }
 
     love.turmoilThisYear = true;
+    // 標籤留在提問區，敘事留給卡片——提問區的 .title 是 12px 的小標，長文案在
+    // 那裡等於沒寫，而且不會進事件記錄。只讀卡片的人會看到「沒有問出口」卻不
+    // 知道發生過什麼事（#22／#28）。
     this.flow.ask(
       {
-        title: kind.text,
+        title: '感情出現裂痕 · 你要怎麼處理？',
         options: [
           {
             id: 'love:swallow',
@@ -2135,14 +2138,15 @@ export class Game {
           this.flow.card(
             'bad',
             '沒有問出口',
-            `你把話吞了回去。那天之後你們還是一起吃飯、一起睡覺，只是有些話再也沒有提起。` +
+            `${kind.text}<br><br>` +
+              `你把話吞了回去。那天之後你們還是一起吃飯、一起睡覺，只是有些話再也沒有提起。` +
               `<br><span class="sub">裂痕 ${love.cracks} 道——往後的日子會越來越不平靜。</span>`,
           );
           next();
           return;
         }
         this.#loseAbility(loveCfg.turmoil.leave.ability_loss, (line) => {
-          this.#breakup(`你問了，她也答了。然後你們都知道結束了。${line}`);
+          this.#breakup(`${kind.text}<br><br>你問了，她也答了。然後你們都知道結束了。${line}`);
         });
         next();
       },
