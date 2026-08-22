@@ -59,11 +59,6 @@
       "cat"
     ]
   },
-  "ability_group_names": {
-    "shared": "體力",
-    "pitcher": "投手",
-    "fielder": "野手"
-  },
   "pitch_families": {
     "_note": "投手的四大球系，取代舊版單一的 brk（變化球）。見 docs/design/simulation_math.md §5——各系有獨特的數學特性，不是同一個數值的四種皮膚。代碼沿用全部能力皆 3 字母的慣例；刻意避開 spc（Specialty），因為它與既有的 spd（速度）只差一字，程式碼裡看錯的成本太高。",
     "swp": {

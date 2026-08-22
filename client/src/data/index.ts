@@ -81,8 +81,6 @@ export type Hand = 'R' | 'L' | 'S';
 /** 四大球系的代碼。取代舊版單一的 brk，見 simulation_math.md §5。 */
 export type PitchFamily = 'swp' | 'drp' | 'chg' | 'gim';
 
-export const PITCH_FAMILIES: readonly PitchFamily[] = ['swp', 'drp', 'chg', 'gim'];
-
 /** 慣用手的抽樣權重，鍵為 Hand，值為相對權重（不必加總為 100）。 */
 export type HandWeights = Readonly<Partial<Record<Hand, number>>>;
 
@@ -122,11 +120,6 @@ export interface AbilitiesData {
     readonly shared: readonly AbilityKey[];
     readonly pitcher: readonly AbilityKey[];
     readonly fielder: readonly AbilityKey[];
-  };
-  readonly ability_group_names: {
-    readonly shared: string;
-    readonly pitcher: string;
-    readonly fielder: string;
   };
   /**
    * 介面用的能力分組。
@@ -1234,11 +1227,25 @@ export interface Trait {
   readonly name: string | null;
   readonly dynamic_name?: boolean;
   readonly effect_text: string;
+  /** 同一支球隊的年數門檻（mrteam）。 */
+  readonly threshold?: number;
+  /** 各聯盟的球隊數門檻，超過才觸發（rainbow）。沒列到的聯盟不會觸發。 */
+  readonly thresholds?: Readonly<Record<string, number>>;
 }
 
 export interface TraitsData {
   readonly categories: { readonly positive: readonly string[]; readonly negative: readonly string[] };
   readonly traits: readonly Trait[];
+  /**
+   * 依生涯內容組出來的顯示名稱。
+   *
+   * 鍵為特性 id，只涵蓋 `dynamic_name` 為 true 的那幾個。`pattern` 裡的
+   * `{...}` 佔位符由取得特性的當下填入——聯盟名、球隊代表詞這種東西在
+   * 資料檔裡寫不死。
+   */
+  readonly dynamic_names: Readonly<
+    Record<string, { readonly pattern: string; readonly source: string }>
+  >;
 }
 
 export const abilities = abilitiesJson as unknown as AbilitiesData;
@@ -1263,6 +1270,27 @@ export const traits = traitsJson as unknown as TraitsData;
 /** 依 id 取特性。找不到回傳 undefined——未知的 id 不該假裝有名字。 */
 export function traitOf(id: string): Trait | undefined {
   return traits.traits.find((t) => t.id === id);
+}
+
+/**
+ * 特性的顯示名稱。**這是唯一來源。**
+ *
+ * 名稱曾經同時寫在兩個地方：發特性時傳進卡片的字串，與 `traits.json` 的
+ * `name`。兩份不會自己對齊——`legend` 的卡片寫「歷史級球星」，資料檔卻是
+ * null，於是特性面板把它整個濾掉了。玩家看得到卡片，看不到特性。
+ *
+ * `dynamic_name` 的三個沒有固定字串，要靠 `fill` 補上生涯內容；缺 `fill`
+ * 是呼叫端的錯，寧可炸掉也不要靜靜生出一個半截的名字。
+ */
+export function traitName(id: string, fill?: string): string {
+  const def = traitOf(id);
+  if (def === undefined) throw new Error(`未知的特性：${id}`);
+  if (def.name !== null) return def.name;
+
+  const dynamic = traits.dynamic_names[id];
+  if (dynamic === undefined) throw new Error(`特性 ${id} 沒有名字，也沒有 dynamic_names`);
+  if (fill === undefined) throw new Error(`特性 ${id} 的名稱要靠生涯內容組出來，呼叫端沒有給`);
+  return dynamic.pattern.replace(/\{[a-z_]+\}/g, fill);
 }
 export const teams = teamsJson as unknown as TeamsData;
 export const leagues = leaguesJson as unknown as LeaguesData;
@@ -1296,3 +1324,14 @@ export function dataKeys<T>(map: Readonly<Record<string, T>>): readonly string[]
 
 /** 全部能力代碼，順序穩定（依 abilities.json 的宣告順序）。 */
 export const ALL_ABILITIES: readonly AbilityKey[] = Object.keys(abilities.abilities);
+
+/**
+ * 四大球系的代碼。
+ *
+ * 從 `abilities.json` 推出來，不再手寫第二份——手寫的那份與資料檔一起活了
+ * 很久，四個系的中文名與球種清單就這樣躺在資料裡沒人讀。護欄測試盯著它與
+ * `ability_groups.pitcher` 的關係。
+ */
+export const PITCH_FAMILIES: readonly PitchFamily[] = dataKeys(
+  abilities.pitch_families,
+) as readonly PitchFamily[];

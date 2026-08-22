@@ -15,11 +15,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   abilities,
+  amateur as amateurCfg,
+  awards as awardsCfg,
   dataKeys,
   hallOfFame,
+  injury as injuryCfg,
   leagues as leaguesData,
+  love as loveCfg,
+  PITCH_FAMILIES,
   season as seasonCfg,
   teams as teamsData,
+  traitOf,
+  traits as traitsData,
 } from '../src/data/index.ts';
 import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
@@ -254,5 +261,65 @@ describe('球隊清單涵蓋所有體系', () => {
     for (const org of dataKeys(leaguesData.paths)) {
       expect((teamsData.leagues[org] ?? []).length).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+/**
+ * 特性的名稱通道。
+ *
+ * `sweetheart` 曾經在 `love.json` 裡被指名發放，`traits.json` 卻沒有這個 id——
+ * 玩家看得到「隱藏特性：青梅竹馬」的卡片，特性面板卻永遠不顯示它，因為那裡
+ * 查不到定義就默默跳過。同一個時期 `legend` 也因為 `name` 是 null 被濾掉。
+ *
+ * 兩件事的根源一樣：**發放端與顯示端各有一份名單，沒有人比對過。**
+ */
+describe('特性資料', () => {
+  /** 走訪任何 JSON，蒐集所有 `trait` 欄位——那就是「會被發出來的 id」。 */
+  function referencedIds(node: unknown, out: string[] = []): readonly string[] {
+    if (Array.isArray(node)) {
+      for (const v of node) referencedIds(v, out);
+    } else if (node !== null && typeof node === 'object') {
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (k === 'trait' && typeof v === 'string') out.push(v);
+        else referencedIds(v, out);
+      }
+    }
+    return out;
+  }
+
+  const referenced = new Set(
+    [amateurCfg, awardsCfg, hallOfFame, injuryCfg, loveCfg, seasonCfg].flatMap((cfg) =>
+      referencedIds(cfg),
+    ),
+  );
+
+  it('每個被資料指名發放的特性都在 traits.json 裡', () => {
+    expect([...referenced].filter((id) => traitOf(id) === undefined)).toEqual([]);
+  });
+
+  it('每個特性都排進了顯示分類，不多不少', () => {
+    const cats = [...traitsData.categories.positive, ...traitsData.categories.negative].sort();
+    expect(cats).toEqual(traitsData.traits.map((t) => t.id).sort());
+  });
+
+  it('沒有名字的特性一定有組名規則，反之亦然', () => {
+    const nameless = traitsData.traits.filter((t) => t.name === null).map((t) => t.id);
+    expect(nameless.sort()).toEqual(dataKeys(traitsData.dynamic_names).sort());
+  });
+});
+
+/**
+ * 球系常數與資料檔。
+ *
+ * 常數一度手寫在 `index.ts`，於是資料檔裡四個系的中文名與球種清單躺了很久
+ * 沒人讀，也沒有任何測試會發現兩份不一致。
+ */
+describe('球系', () => {
+  it('球系常數就是資料檔的鍵', () => {
+    expect([...PITCH_FAMILIES]).toEqual(dataKeys(abilities.pitch_families));
+  });
+
+  it('每個球系都是一項投手能力', () => {
+    for (const f of PITCH_FAMILIES) expect(abilities.ability_groups.pitcher).toContain(f);
   });
 });

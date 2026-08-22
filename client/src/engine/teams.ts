@@ -26,6 +26,22 @@ export interface TeamSeason {
 export type LeagueTable = ReadonlyMap<string, TeamSeason>;
 
 /**
+ * 球隊的代表詞，用於「◯◯先生」這類稱號。
+ *
+ * 大多數隊名是「地名＋代表詞」（台中猛瑪 → 猛瑪），少數整個隊名就是代表詞
+ * （東京大人）。`teams.json` 只在後者標了 nick，其餘照 `nick_fallback` 取
+ * 末兩字——把每一隊都列一次只會多一份會過期的資料。
+ */
+export function teamNick(name: string): string {
+  for (const org of Object.keys(teamsData.leagues)) {
+    for (const team of teamsData.leagues[org] ?? []) {
+      if (team.name === name) return team.nick ?? name.slice(-2);
+    }
+  }
+  return name.slice(-2);
+}
+
+/**
  * 開局：為一個聯盟的每支球隊抽出基準勝率。
  *
  * 基準抽一次就固定成為該隊的「體質」。沒有這個錨，幾年之後所有球隊都會回歸

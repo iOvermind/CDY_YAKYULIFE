@@ -20,6 +20,8 @@ import {
   love as loveCfg,
   season as seasonCfg,
   PITCH_FAMILIES,
+  traitName,
+  traitOf,
   type AbilityKey,
   type Hand,
   type SchoolStage,
@@ -187,6 +189,7 @@ import {
   championshipOdds,
   initLeague,
   playerEffect,
+  teamNick,
   type LeagueTable,
 } from './teams.ts';
 import {
@@ -262,6 +265,8 @@ export interface PlayerState {
   readonly carry: Readonly<Record<AbilityKey, number>>;
   /** 已取得的隱藏特性。 */
   readonly traits: ReadonlySet<string>;
+  /** 依生涯內容組出來的特性名稱，鍵為特性 id。其餘特性的名字在 traits.json。 */
+  readonly traitNames: ReadonlyMap<string, string>;
   readonly age: number;
   readonly year: number;
   /** 目前的養成階段。 */
@@ -569,6 +574,21 @@ export class Game {
   /** 待過的體系。回到其中之一算落葉歸根。 */
   #playedOrgs = new Set<string>();
   /**
+   * 已解析的特性顯示名稱。
+   *
+   * 只有 `dynamic_name` 的三個需要——它們的名字裡有聯盟或球隊，取得的當下
+   * 是什麼就永遠是什麼。後來轉隊了，「猛瑪先生」也還是猛瑪先生。
+   */
+  #traitNames = new Map<string, string>();
+  /**
+   * 逐隊年資與它所屬的體系。
+   *
+   * `#orgYears` 記的是體系（中職／日職），這裡記的是**球隊**——「同一支球隊
+   * 十五年」與「同一聯盟待過幾支球隊」都要這個顆粒度。二軍的年份照算：在同一
+   * 個組織熬十五年就是熬了十五年，不因為其中幾年在二軍就不算。
+   */
+  #teamYears = new Map<string, { readonly org: string; years: number }>();
+  /**
    * 各體系的累計一軍年資。外籍身分看它——日職在籍八年視同本土。
    *
    * **與 pro.serviceYears 分開記**：那一個換體系就歸零（掌控期是新東家的事），
@@ -682,6 +702,7 @@ export class Game {
       ability: this.#ability,
       carry: this.#carry,
       traits: this.#traits,
+      traitNames: this.#traitNames,
       age: this.#age,
       year: this.#year,
       stage: this.#stage,
@@ -1778,9 +1799,7 @@ export class Game {
     ) {
       this.#unlockTrait(
         'glass',
-        '帕瓦諾',
         '生涯第二次大傷。從此傷病如影隨形——<b class="dn">往後每季的受傷機率都有一個下限</b>。',
-        'bad',
       );
     } else if (result.kind === 'major' && this.#majorInjuries >= 2 && !this.#traits.has('glass')) {
       // 32 歲以後的大傷是歲月的損耗，不是體質問題。
@@ -1988,7 +2007,6 @@ export class Game {
     if (!earnsConfidante(this.#love)) return;
     this.#unlockTrait(
       loveCfg.dating.confidante.trait,
-      '啦啦隊殺手',
       '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
     );
   }
@@ -2056,7 +2074,6 @@ export class Game {
         if (isChildhoodSweetheart(love)) {
           this.#unlockTrait(
             loveCfg.childhood_sweetheart.trait,
-            loveCfg.childhood_sweetheart.name,
             '十五歲那年放學後的河堤，一路走到了主場的本壘板。中間有幾次差點走散，但你們都熬過來了。',
           );
         }
@@ -2228,9 +2245,7 @@ export class Game {
       if (love.caught >= c.scum.caught_times) {
         this.#unlockTrait(
           c.scum.trait,
-          '花樣年華',
           `第二次被逮個正著。從今以後你在球迷心中的形象定型了——<b class="dn">每次被抓到，全能力 −${c.scum.all_ability_loss}</b>。`,
-          'bad',
         );
         for (const key of ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide))) {
           this.#ability[key] = Math.max(
@@ -2579,7 +2594,6 @@ export class Game {
     if (unlocksAce({ caps: this.#counts.internationalCaps, podiums: this.#intlPodiums, traits: this.#traits })) {
       this.#unlockTrait(
         intl.intlace_effect.trait,
-        '東亞功夫',
         '只要穿上那件球衣，你的痛覺就會消失——你是為大場面而生的男人。' +
           '<b class="hl">國際賽不再增加受傷風險，而且每次徵召的能力點有保底</b>。',
       );
@@ -2587,7 +2601,6 @@ export class Game {
     if (unlocksTaiwan({ caps: this.#counts.internationalCaps, traits: this.#traits })) {
       this.#unlockTrait(
         intl.taiwan_trigger.trait,
-        'Team Taiwan',
         '永遠把國家榮耀放在比職涯更高的位子。台灣球迷心中永遠有一幅畫：你在球場上向全場比劃著胸口，那是你心中最榮耀的地方。',
       );
     }
@@ -2743,10 +2756,8 @@ export class Game {
           if (this.#complains >= r.ambience.complains) {
             this.#unlockTrait(
               r.ambience.trait,
-              '我不是針對你',
               '你又一次對媒體大吐苦水。球團高層看在眼裡——這種選手，留著也是不定時炸彈。' +
                 '<b class="dn">往後被交易的機率永久提高</b>。',
-              'bad',
             );
           }
         }
@@ -3090,6 +3101,11 @@ export class Game {
     if (pro === null) return;
     const info = levelOf(pro.level);
     const top = info.top !== undefined;
+
+    const tally = this.#teamYears.get(pro.team);
+    if (tally === undefined) this.#teamYears.set(pro.team, { org: info.org, years: 1 });
+    else tally.years++;
+    this.#careerTraits();
 
     // 服務年資只在頂級聯盟累積——二軍的年份不算進掌控期。
     if (top) {
@@ -4151,6 +4167,39 @@ export class Game {
   }
 
   /**
+   * 吃生涯軌跡的兩個特性：一支球隊待到底，或在同一個聯盟輾轉過太多隊。
+   *
+   * 兩者都在球季結束當下判，不等結算——「效力滿十五年」是那一年發生的事，
+   * 卡片就該落在那一年。等到引退才一起跳，那個時刻就沒了。
+   */
+  #careerTraits(): void {
+    const mrteam = traitOf('mrteam');
+    const longest = [...this.#teamYears.entries()].sort((a, b) => b[1].years - a[1].years)[0];
+    if (mrteam?.threshold !== undefined && longest !== undefined && longest[1].years >= mrteam.threshold) {
+      this.#unlockTrait(
+        'mrteam',
+        `同一件球衣穿了 ${longest[1].years} 年。球迷提到這支球隊就會想到你，提到你就會想到這支球隊——<b class="hl">你成了它的代名詞</b>。`,
+        teamNick(longest[0]),
+      );
+    }
+
+    const rainbow = traitOf('rainbow');
+    if (rainbow?.thresholds === undefined) return;
+    const perOrg = new Map<string, number>();
+    for (const { org } of this.#teamYears.values()) perOrg.set(org, (perOrg.get(org) ?? 0) + 1);
+    for (const [org, count] of perOrg) {
+      const limit = rainbow.thresholds[org];
+      if (limit === undefined || count <= limit) continue;
+      this.#unlockTrait(
+        'rainbow',
+        `同一個聯盟裡待過 ${count} 支球隊。你的球衣收藏拼得出一道彩虹——<b class="hl">而那不全是你自己選的</b>。`,
+        orgLabel(org),
+      );
+      return;
+    }
+  }
+
+  /**
    * 只在結算時才判定得了的三個特性。
    *
    * 它們的觸發條件全部要等生涯結束才知道結果，離開這裡就沒有別的地方能判。
@@ -4158,11 +4207,12 @@ export class Game {
   #settlementTraits(summary: CareerSummary, ballots: readonly BallotResult[]): void {
     const cfg = hallOfFame.settlement_traits;
 
-    if (ballots.some((b) => b.firstBallot)) {
+    const firstBallot = ballots.find((b) => b.firstBallot);
+    if (firstBallot !== undefined) {
       this.#unlockTrait(
         cfg.legend.trait,
-        '歷史級球星',
         '第一年投票就披上名人堂金袍——你不只是進了殿堂，你<b class="hl">定義了一個時代</b>。',
+        firstBallot.leagueName,
       );
     }
 
@@ -4173,7 +4223,6 @@ export class Game {
     if (this.#schoolTier === cfg.small_school.school_tier) {
       this.#unlockTrait(
         cfg.small_school.trait,
-        '國產凌凌漆',
         '當年那所沒沒無聞的小學校，走出了一個站上頂級舞台的男人。你證明了：出身，從來不是天花板。',
       );
     }
@@ -4182,17 +4231,25 @@ export class Game {
     if (potential > 0 && potential <= cfg.grinder.provisional_sum) {
       this.#unlockTrait(
         cfg.grinder.trait,
-        '包龍星',
         '天賦平庸的球員千千萬萬，能走到這裡的卻寥寥無幾。你不是天選之人，你是把汗水熬成天賦的那種人。',
       );
     }
   }
 
-  /** 取得一個特性並跳卡。已經有了就不重複。 */
-  #unlockTrait(id: string, name: string, text: string, tone: 'gold' | 'bad' = 'gold'): void {
+  /**
+   * 取得一個特性並跳卡。已經有了就不重複。
+   *
+   * 名稱與配色一律向 `traits.json` 要——這裡曾經自己帶一份字串進來，於是
+   * 卡片與特性面板各說各話。`fill` 只有 `dynamic_name` 的三個用得到。
+   */
+  #unlockTrait(id: string, text: string, fill?: string): void {
     if (this.#traits.has(id)) return;
+    const def = traitOf(id);
+    if (def === undefined) throw new Error(`未知的特性：${id}`);
+    const name = traitName(id, fill);
     this.#traits.add(id);
-    this.flow.card(tone, `隱藏特性：${name}`, text);
+    if (def.name === null) this.#traitNames.set(id, name);
+    this.flow.card(def.tone === 'bad' ? 'bad' : 'gold', `隱藏特性：${name}`, text);
   }
 
   /**

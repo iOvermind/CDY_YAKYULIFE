@@ -11,6 +11,7 @@
       "taiwan",
       "goldcloth",
       "mrteam",
+      "sweetheart",
       "confidante",
       "genius",
       "iron",
@@ -96,7 +97,7 @@
     {
       "id": "legend",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": null,
       "dynamic_name": true,
       "effect_text": "名人堂首輪入選的歷史級評價"
@@ -120,11 +121,20 @@
     {
       "id": "mrteam",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": null,
       "dynamic_name": true,
       "effect_text": "同一支球隊十五年，球隊的代名詞",
-      "trigger_note": "同一支球隊效力滿 15 年（index_legacy.html:2115）"
+      "trigger_note": "同一支球隊效力滿 15 年（index_legacy.html:2115）",
+      "threshold": 15
+    },
+    {
+      "id": "sweetheart",
+      "tone": "good",
+      "rules_complete": true,
+      "name": "青梅竹馬",
+      "effect_text": "十五歲認識、一路走到婚姻的那個人",
+      "trigger_note": "養成期交往的對象最後結婚（love.childhood_sweetheart）"
     },
     {
       "id": "confidante",
@@ -372,7 +382,7 @@
     {
       "id": "rainbow",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": null,
       "dynamic_name": true,
       "effect_text": "同一聯盟效力球隊數爆表",

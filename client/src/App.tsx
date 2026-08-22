@@ -673,7 +673,7 @@ function StatsPanel({
       )}
 
       {summary !== null && <CareerTable summary={summary} />}
-      <TraitList traits={state.traits} />
+      <TraitList traits={state.traits} names={state.traitNames} />
     </div>
   );
 }
@@ -758,12 +758,21 @@ function HonorBoard({
   );
 }
 
-function TraitList({ traits: owned }: { traits: ReadonlySet<string> }) {
+function TraitList({
+  traits: owned,
+  names,
+}: {
+  traits: ReadonlySet<string>;
+  names: ReadonlyMap<string, string>;
+}) {
   const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
+  // 名稱以取得當下解析的為準；沒有動態名稱的就用資料檔的固定名。這裡曾經
+  // 把 name 為 null 的整個濾掉，於是三個動態命名的特性拿得到卻永遠看不到。
   const shown = order
     .filter((id) => owned.has(id))
     .map((id) => traitOf(id))
-    .filter((t): t is NonNullable<typeof t> => t !== undefined && t.name !== null);
+    .filter((t): t is NonNullable<typeof t> => t !== undefined)
+    .map((t) => ({ ...t, label: names.get(t.id) ?? t.name ?? t.id }));
 
   return (
     <>
@@ -781,7 +790,7 @@ function TraitList({ traits: owned }: { traits: ReadonlySet<string> }) {
               title={t.effect_text}
               style={{ marginRight: 4, ...(t.tone === 'bad' ? BAD_TAG : {}) }}
             >
-              {t.name}
+              {t.label}
             </span>
           ))}
         </p>
