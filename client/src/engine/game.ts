@@ -3227,20 +3227,28 @@ export class Game {
     const pro = this.#pro;
     if (pro === null) return;
 
+    const options: Option[] = [
+      { id: 'fa:stay', label: `與 ${pro.team} 續約`, note: '接著選擇長約或短約', role: 'main' },
+      {
+        id: 'fa:market',
+        label: '跳出合約，測試自由市場',
+        note: '可能乏人問津，那時只剩減薪回原隊或引退',
+        role: 'warn',
+      },
+    ];
+    const quit = this.#retireOption('fa:quit');
+    if (quit !== null) options.push(quit);
+
     this.flow.ask(
       {
         title: `合約到期 · 取得自由球員資格（服務 ${pro.serviceYears} 年）`,
-        options: [
-          { id: 'fa:stay', label: `與 ${pro.team} 續約`, note: '接著選擇長約或短約', role: 'main' },
-          {
-            id: 'fa:market',
-            label: '跳出合約，測試自由市場',
-            note: '可能乏人問津，那時只剩減薪回原隊或引退',
-            role: 'warn',
-          },
-        ],
+        options,
       },
       (choice) => {
+        if (choice === 'fa:quit') {
+          this.#quitHere('合約到期，不再續約');
+          return;
+        }
         if (choice === 'fa:market') {
           this.#faMarket(next);
           return;
@@ -3403,8 +3411,14 @@ export class Game {
     if (onReject !== undefined) {
       options.push({ id: 'term:reject', label: '婉拒，維持現狀', role: 'warn' });
     }
+    const quit = this.#retireOption('term:retire');
+    if (quit !== null) options.push(quit);
 
     this.flow.ask({ title, options }, (choice) => {
+      if (choice === 'term:retire') {
+        this.#quitHere('談約談到一半決定不簽了');
+        return;
+      }
       if (choice === 'term:reject') {
         onReject?.();
         return;
@@ -3946,6 +3960,37 @@ export class Game {
       '合約買斷',
       `剩餘 ${pro.contract.years - 1} 年的合約以 <b class="hl">${fmtMoney(cost)}</b> 結清。`,
     );
+  }
+
+  /**
+   * 掛在合約問句上的那條退路。
+   *
+   * 自主引退已經有獨立的問句排在季末最前面（ADR 0028），但那一問一年只出現
+   * 一次；談約談到一半才發現「我不想再簽了」是真的會發生的事，而那時候玩家
+   * 手上只有簽或不簽兩個鍵。合約問句因此永遠掛一個引退選項。
+   *
+   * 年齡門檻與獨立問句同一條：年輕人不給一鍵結束生涯的按鈕，他們還有再拚一次
+   * 的餘地。回 `null` 就是這一問不掛。
+   */
+  #retireOption(id: string): Option | null {
+    if (this.#age < seasonCfg.retirement.voluntary_from_age) return null;
+    return {
+      id,
+      label: `不簽了，${this.#year} 年宣布引退`,
+      note: '談約談到一半也可以就此收手',
+      role: 'warn',
+    };
+  }
+
+  /**
+   * 從合約問句直接引退。
+   *
+   * 照樣走買斷：延長合約那一問是在**約還沒到期**時談的，中途走人要付七成；
+   * 續約與減薪回原隊那兩問的約已經到期，`#payBuyout` 算出來是 0，不會多收。
+   */
+  #quitHere(reason: string): void {
+    this.#payBuyout('player');
+    this.flow.push(() => this.#retire(reason));
   }
 
   /** 問玩家要不要就此引退。選擇本身會寫進重播日誌。 */

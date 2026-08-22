@@ -1350,6 +1350,48 @@ describe('合約', () => {
     expect(both).toBeGreaterThan(0);
   });
 
+  it('老將的合約問句永遠掛著引退這條退路', () => {
+    // 自主引退一年只問一次；談約談到一半才反悔的人，手上不能只有簽或不簽兩個鍵。
+    let seen = 0;
+    let quit = 0;
+    for (let i = 0; i < 60; i++) {
+      const game = new Game({
+        seed: `quit-${i}`,
+        name: '顧客',
+        startPosition: 'SS',
+        throws: 'R',
+        bats: 'R',
+      }).start();
+      let guard = 0;
+      let took = false;
+      while (game.flow.prompt !== null && guard++ < 8000) {
+        const prompt = game.flow.prompt;
+        const ids = prompt.options.map((o) => o.id);
+        const escape = ids.find((id) => id === 'term:retire' || id === 'fa:quit');
+        if (escape !== undefined) {
+          seen++;
+          // 走這條路，生涯就該在這裡結束——不是回到明年春訓。
+          game.choose(escape);
+          took = true;
+          break;
+        }
+        const usable = prompt.options.filter((o) => o.disabled !== true && o.id !== 'alloc:undo');
+        const pick =
+          usable.find((o) => o.id === 'retire:stay') ??
+          usable.find((o) => o.id === 'alloc:confirm') ??
+          usable[0];
+        if (pick === undefined) break;
+        game.choose(pick.id);
+      }
+      if (!took) continue;
+      quit++;
+      const log = JSON.stringify(game.flow.log);
+      expect(log, `seed quit-${i} 選了引退卻沒有引退`).toContain('引退');
+    }
+    expect(seen, '六十條生涯裡沒有任何一次合約問句掛出引退選項').toBeGreaterThan(0);
+    expect(quit).toBe(seen);
+  });
+
   it('相同種子加相同選擇，合約結果完全相同', () => {
     expect(playWithContracts('ct-replay').flow.log).toEqual(
       playWithContracts('ct-replay').flow.log,
