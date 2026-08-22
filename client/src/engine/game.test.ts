@@ -467,18 +467,22 @@ describe('職業階段的狀態', () => {
   });
 
   it('在二軍與一軍之間來回不會把生涯數據拆成兩份', () => {
+    // 這裡的關鍵字必須是流程真的寫得出來的字：降級通知寫「打算把你送回…」，
+    // 升級卡片寫「升上中職一軍」。先前這條找的是「下放二軍」——那個字串從來
+    // 沒出現過，於是二十顆種子全部 continue，測試空轉了一場也沒斷言到。
+    let checked = 0;
     for (let i = 0; i < 20; i++) {
       const game = playToEnd(started({ seed: `split-${i}` }));
       const log = JSON.stringify(game.flow.log);
-      if (!log.includes('下放二軍') || !log.includes('升上一軍')) continue;
-      const cpbl = game.state?.statsByStage['CPBL'];
-      expect(cpbl).toBeDefined();
+      if (!log.includes('送回') || !log.includes('升上中職一軍')) continue;
+      checked++;
+      expect(game.state?.statsByStage['CPBL']).toBeDefined();
       // 上上下下之後仍然只有一份中職紀錄
       expect(Object.keys(game.state?.statsByStage ?? {}).filter((k) => k.startsWith('CPBL'))).toEqual(
         ['CPBL'],
       );
-      return;
     }
+    expect(checked).toBeGreaterThan(0);
   });
 });
 
@@ -1461,6 +1465,36 @@ describe('下放與換體系', () => {
     // 樣本裡必須真的出現過這兩件事，否則這條測試什麼都沒驗到。
     expect(sawMove).toBe(true);
     expect(sawDemotionPrompt).toBe(true);
+  });
+
+  /**
+   * 升級卡片報的是實際升到的層級，不是一律寫「升上一軍」。
+   *
+   * 「一軍」是頂級聯盟的專稱，而且只有中日韓那三個體系這樣叫。舊版把標題寫死
+   * 成「升上一軍」，於是小聯盟 R→1A、1A→2A、2A→3A 也是這句，連升上大聯盟
+   * 都被叫成升上一軍。
+   */
+  it('升級卡片報實際的層級，不是一律寫「升上一軍」', () => {
+    let seen = 0;
+    for (let i = 0; i < 60; i++) {
+      const game = playToEnd(started({ seed: `promote-${i}` }));
+      for (const entry of game.flow.log) {
+        if (entry.kind !== 'card') continue;
+        const title = entry.title ?? '';
+        if (!title.startsWith('升上')) continue;
+        seen++;
+        const levelName = title.slice('升上'.length);
+        const level = Object.values(leagues.levels).find((l) => l.name === levelName);
+        // 標題裡的層級名必須是真的層級，而且卡片內文講的是同一個
+        expect(level, title).toBeDefined();
+        expect(entry.body ?? '').toContain(levelName);
+        // 只有名字裡真的有「一軍」的層級才能這樣講
+        expect(levelName.includes('一軍')).toBe(title.includes('一軍'));
+        // 登上頂級才是里程碑，農場裡的每一階不是
+        expect(entry.tone, title).toBe(level?.top !== undefined ? 'gold' : 'good');
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
   });
 });
 

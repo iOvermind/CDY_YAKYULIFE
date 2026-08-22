@@ -1111,7 +1111,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
 
       <TotalsTable title="各聯盟通算" rows={leagueTotals(summary)} />
       {summary.leagues.length > 1 && (
-        <TotalsTable title="一軍通算" rows={[topTotalRow(summary)]} />
+        <TotalsTable title="頂級聯盟通算" rows={[topTotalRow(summary)]} />
       )}
     </div>
   );
@@ -1166,7 +1166,7 @@ function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
   }));
 }
 
-/** 所有一軍加起來的一列。只有跨過聯盟的人才需要它——單一聯盟的話它等於上一張表。 */
+/** 所有頂級聯盟加起來的一列。只有跨過聯盟的人才需要它——單一聯盟的話它等於上一張表。 */
 function topTotalRow(summary: CareerSummary): TotalRow {
   return {
     label: '通算',

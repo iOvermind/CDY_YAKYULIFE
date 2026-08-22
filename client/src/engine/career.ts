@@ -9,7 +9,7 @@
  * 1. **只算頂級聯盟。** 二軍與小聯盟的成績照樣逐年顯示與通算，但不進任何評價
  *    分——與 legacy 一致（`endGame()` 的 `if(b!=='MINOR')`）。
  * 2. **每個頂級聯盟各算一份。** 三個聯盟的名人堂是三件事，一個人可以同時進入
- *    多個。「所有一軍通算」只是顯示用的一列，不參與判定。
+ *    多個。「所有頂級聯盟通算」只是顯示用的一列，不參與判定。
  * 3. **零點在替代水準。** `k` 由該層級當年的 `min` 與 `par` 推導，不是自由
  *    參數——卡在留隊邊緣的球員，生涯評價分原地踏步。
  *
@@ -159,9 +159,9 @@ export interface CareerSummary {
   readonly leagues: readonly LeagueCareer[];
   /** 非頂級層級的通算，依層級代碼排序。 */
   readonly minors: readonly MinorCareer[];
-  /** 所有一軍通算。純顯示，不參與任何判定。 */
+  /** 所有頂級聯盟通算。純顯示，不參與任何判定。 */
   readonly topTotal: { readonly batting: BattingLine | null; readonly pitching: PitchingLine | null };
-  /** 所有二軍通算。 */
+  /** 所有二軍與小聯盟通算。 */
   readonly minorTotal: {
     readonly batting: BattingLine | null;
     readonly pitching: PitchingLine | null;

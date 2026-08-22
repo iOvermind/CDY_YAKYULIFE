@@ -3057,9 +3057,13 @@ export class Game {
         this.#demotePressure = move.pressure ?? 0;
       }
       else {
+        // 「一軍」是頂級聯盟的專稱（見 CONTEXT.md 詞條），而且只有中日韓那三個
+        // 體系這樣叫——墨聯、澳職、大聯盟都不是。標題一律報實際的層級名。
+        // 登上頂級才是里程碑（gold）；農場裡的每一階是進度，不是終點（good）。
+        const top = to.top !== undefined;
         this.flow.card(
-          'gold',
-          '升上一軍',
+          top ? 'gold' : 'good',
+          `升上${to.name}`,
           `${esc(move.reason)}，被叫上<b class="hl">${esc(to.name)}</b>。`,
         );
       }
@@ -3814,7 +3818,9 @@ export class Game {
     pro.yearsAtBottom = pathOf(levelOf(from).org)[0] === from ? pro.yearsAtBottom : 0;
     this.flow.card(
       'gold',
-      '留在一軍',
+      // 拒絕下放的權利只有美職那個體系給（`refuse_demotion_after_years`），所以
+      // 這張卡的「一軍」以前永遠是錯的——那裡叫大聯盟。報實際的層級名。
+      `留在${levelOf(from).name}`,
       `你行使了年資賦予的權利，球團收回下放通知——<b class="hl">${esc(levelOf(from).name)}</b>的位置還是你的。`,
     );
     next();
@@ -4008,13 +4014,16 @@ export class Game {
 
     // 兩份通算只有在真的分成好幾段時才有意義——單一聯盟的生涯，通算等於上面
     // 那張表，再印一次是噪音。
+    //
+    // 標題不寫「一軍／二軍」：`topTotal` 收的是所有頂級聯盟，包含大聯盟與墨聯，
+    // 那些地方沒有「一軍」這個講法；`minorTotal` 同理收了 1A 到 3A。
     if (summary.leagues.length > 1) {
       const body = line(summary.topTotal.batting, summary.topTotal.pitching);
-      if (body !== '') this.flow.card('gold', '所有一軍通算', body);
+      if (body !== '') this.flow.card('gold', '所有頂級聯盟通算', body);
     }
     if (summary.minors.length > 1) {
       const body = line(summary.minorTotal.batting, summary.minorTotal.pitching);
-      if (body !== '') this.flow.card('info', '所有二軍通算', body);
+      if (body !== '') this.flow.card('info', '所有二軍與小聯盟通算', body);
     }
   }
 
