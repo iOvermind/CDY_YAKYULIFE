@@ -1297,6 +1297,59 @@ describe('合約', () => {
     }
   });
 
+  it('自主引退問在合約與挖角之前', () => {
+    // 「要不要繼續打」是先對自己回答的問題。舊順序讓玩家簽完約、談完挖角才被
+    // 問要不要走，那時候答案已經沒有意義了（見 ADR 0028）。
+    //
+    // 排在後面的只有「被下放，不願接受」那一問——它要先知道自己被送去哪一層，
+    // 靠標題認出來，不算違規。
+    //
+    // 兩種問句同一年一起出現的機會不高（引退問句要 35 歲以後，合約問句要那年
+    // 剛好約滿或有人來挖），因此 `both` 一併斷言：樣本掃不到就等於沒測到。
+    const LATER = ['fa:', 'term:', 'market:', 'transfer:', 'posting:', 'demote:'];
+    let both = 0;
+    for (let i = 0; i < 120; i++) {
+      const game = new Game({
+        seed: `ro-${i}`,
+        name: '順序',
+        startPosition: 'SS',
+        throws: 'R',
+        bats: 'R',
+      }).start();
+      let guard = 0;
+      // 每一年記下問句出現的先後：R = 自主引退、L = 合約／挖角。
+      const byYear = new Map<number, string[]>();
+      while (game.flow.prompt !== null && guard++ < 8000) {
+        const prompt = game.flow.prompt;
+        const year = game.state?.year ?? 0;
+        const ids = prompt.options.map((o) => o.id);
+        const seq = byYear.get(year) ?? [];
+        if (
+          ids.some((id) => id.startsWith('retire:')) &&
+          !(prompt.title ?? '').includes('你被送回')
+        ) {
+          seq.push('R');
+        }
+        if (ids.some((id) => LATER.some((p) => id.startsWith(p)))) seq.push('L');
+        byYear.set(year, seq);
+        // 一律選「再拚一年」：真的退了就看不到後面幾年的順序。
+        const pick =
+          prompt.options.find((o) => o.id === 'retire:stay' && o.disabled !== true)?.id ??
+          defaultPick(game);
+        if (pick === undefined) break;
+        game.choose(pick);
+      }
+      for (const [year, seq] of byYear) {
+        if (!seq.includes('R') || !seq.includes('L')) continue;
+        both++;
+        expect(seq.indexOf('R'), `${year} 年的問句順序是 ${seq.join(',')}`).toBeLessThan(
+          seq.indexOf('L'),
+        );
+      }
+    }
+    expect(both).toBeGreaterThan(0);
+  });
+
   it('相同種子加相同選擇，合約結果完全相同', () => {
     expect(playWithContracts('ct-replay').flow.log).toEqual(
       playWithContracts('ct-replay').flow.log,

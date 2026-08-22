@@ -3097,7 +3097,8 @@ export class Game {
 
     // 記帳排在升降級之後——年資與合約倒數要先知道自己在哪一層。
     this.#seasonLedger();
-    this.flow.push(() => this.#endOfYearChoices());
+    // 自主引退是季末的第一個問句，排在挖角與談約之前（見 ADR 0028）。
+    this.flow.push(() => this.#voluntaryRetirement(() => this.#endOfYearChoices()));
   }
 
   /**
@@ -3717,17 +3718,19 @@ export class Game {
   }
 
   /**
-   * 年末的一連串選擇。順序就是「先知道有誰要你，再談約」：
+   * 年末的一連串選擇。整個季末的順序是：
    *
    * ```
-   * 挖角 → 談約 → 入札 → 下放遞約 → 引退選擇
+   * 自主引退 → 挖角 → 談約 → 入札 → 下放遞約 → 不願下放的掛靴
    * ```
+   *
+   * **自主引退排在最前面**（見 ADR 0028）：要不要繼續打是先對自己回答的問題。
    *
    * **海外挖角排在談約之前**（見 ADR 0027）。掌控期內的球團續約權球員插不上
    * 話，談約先跑等於每年都在報價到達前先把人綁住。挖角成功就換了體系，那份
    * 合約由 `#moveTo` 重新開，這一年的談約自然不必再問。
    *
-   * 引退選擇留在最後——先知道明年有沒有球打、在哪裡打，再決定要不要走。
+   * 留在最後的只剩「被下放，不願接受」——那要先知道自己被送去哪一層。
    */
   #endOfYearChoices(): void {
     const teamBefore = this.#pro?.team ?? '';
@@ -3866,25 +3869,20 @@ export class Game {
     next();
   }
 
-  /** 引退的兩個選擇點。 */
-  #retirementChoices(): void {
-    // 被下放的老將可以選擇不接受。年輕人不給這個選項——他們還有再拚一次的
-    // 餘地，讓他們在二十出頭就能一鍵結束生涯只會製造後悔。
+  /**
+   * 自主引退：季末的第一個問句。
+   *
+   * **排在所有合約與挖角之前**（見 ADR 0028）。「要不要繼續打」是一個人先對
+   * 自己回答的問題，先簽完約再問他要不要走，順序是顛倒的。
+   *
+   * 這裡不會逼退任何人：答「再拚一年」之後仍然可能沒有球團要他，那條路走
+   * `#fallback` 與 `#demotionOffers`，結局一樣是引退，但那是被決定的，不是選的。
+   */
+  #voluntaryRetirement(next: () => void): void {
     const cfg = seasonCfg.retirement;
-    // 抽取一律先做，與年齡和下放與否都無關——否則同一個種子會在生日前後讓
-    // 後面所有判定整串偏移。
+    // 抽取一律先做，與年齡無關——否則同一個種子會在生日前後讓後面所有判定
+    // 整串偏移。
     const bodyAsks = asksRetirement(this.world, this.#age);
-
-    // 讀的是**現在**的狀態：中途換了體系的人已經不算被下放。
-    const demotedTo = this.#demotedTo;
-    if (demotedTo !== null && this.#age >= cfg.refuse_demotion_from_age) {
-      this.#askRetire(
-        `你被送回${demotedTo}。要接受下放，還是就此掛靴？`,
-        '接受下放，從頭再來',
-        `不願下放，${this.#year} 年宣布引退`,
-      );
-      return;
-    }
 
     // 高齡的每季自主引退。這是玩家自己按下的那個鍵——與被系統告知「你老了」
     // 是兩種完全不同的情緒，而引退場景要承接的正是這個差別。
@@ -3892,14 +3890,38 @@ export class Game {
     // 身體發出訊號的那一年換一種問法。**那條機率原本是直接結束生涯**，現在
     // 只改變語氣：它是一個很重的暗示，但按下去的仍然是玩家。年紀還不到自主
     // 引退時，也只有身體開口的那一年才會被問。
-    if (bodyAsks || this.#age >= cfg.voluntary_from_age) {
+    if (!bodyAsks && this.#age < cfg.voluntary_from_age) {
+      next();
+      return;
+    }
+    this.#askRetire(
+      bodyAsks
+        ? '身體開始抱怨了。再拚一年，還是在這裡畫下句點？'
+        : `${this.#age} 歲了。再拚一年，還是在這裡畫下句點？`,
+      '再拚一年',
+      bodyAsks ? `${this.#year} 年宣布引退` : `功成身退，${this.#year} 年宣布引退`,
+      next,
+      bodyAsks,
+    );
+  }
+
+  /**
+   * 被下放的老將可以選擇不接受，就此掛靴。
+   *
+   * 這一條**不能**跟自主引退一起提到前面：它要先知道自己被送去哪一層、以及
+   * 有沒有別的球團接手（`#demotionOffers`），才問得出口。年輕人不給這個選項
+   * ——他們還有再拚一次的餘地，讓他們在二十出頭就能一鍵結束生涯只會製造後悔。
+   */
+  #retirementChoices(): void {
+    const cfg = seasonCfg.retirement;
+    // 讀的是**現在**的狀態：中途換了體系的人已經不算被下放。
+    const demotedTo = this.#demotedTo;
+    if (demotedTo !== null && this.#age >= cfg.refuse_demotion_from_age) {
       this.#askRetire(
-        bodyAsks
-          ? '身體開始抱怨了。再拚一年，還是在這裡畫下句點？'
-          : `${this.#age} 歲了。再拚一年，還是在這裡畫下句點？`,
-        '再拚一年',
-        bodyAsks ? `${this.#year} 年宣布引退` : `功成身退，${this.#year} 年宣布引退`,
-        bodyAsks,
+        `你被送回${demotedTo}。要接受下放，還是就此掛靴？`,
+        '接受下放，從頭再來',
+        `不願下放，${this.#year} 年宣布引退`,
+        () => this.flow.push(() => this.#proYear()),
       );
       return;
     }
@@ -3927,7 +3949,13 @@ export class Game {
   }
 
   /** 問玩家要不要就此引退。選擇本身會寫進重播日誌。 */
-  #askRetire(question: string, stay: string, quit: string, bodyAsks = false): void {
+  #askRetire(
+    question: string,
+    stay: string,
+    quit: string,
+    stayNext: () => void,
+    bodyAsks = false,
+  ): void {
     this.flow.ask(
       {
         title: question,
@@ -3946,7 +3974,7 @@ export class Game {
           this.flow.push(() => this.#retire(quit));
           return;
         }
-        this.flow.push(() => this.#proYear());
+        stayNext();
       },
     );
   }
