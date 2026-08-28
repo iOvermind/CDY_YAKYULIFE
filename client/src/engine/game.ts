@@ -4459,6 +4459,7 @@ export class Game {
       summary,
       awards: this.#awards,
       traits: this.#traits,
+      traitNames: this.#traitNames,
       honors: this.#honors,
       halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
       // 未登入時是 NO_PROGRESS：每一局都是「第一段人生」、每一項都算新解鎖。

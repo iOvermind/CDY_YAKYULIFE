@@ -903,12 +903,16 @@ interface TotalRow {
  * 「中職二軍」在球隊名旁邊只需要寫「二軍」——聯盟名已經由球隊說完了，
  * 「桃園金剛・中職二軍」裡的「中職」是贅字。小聯盟的 1A／3A 本來就沒有
  * 冠聯盟名，原樣留著。
+ *
+ * **剪完是空字串就不剪。** 美職體系的前綴是「大聯盟」，而它最高一層的名字剛好
+ * 就是「大聯盟」——照剪會剩下一個空格，年表上變成「洋基・」。層級名等於前綴時
+ * 那個名字本身就是要顯示的東西。
  */
 function shortLevelName(levelName: string, org: string): string {
   const prefix = leagues.top_league_names[org] ?? leagues.org_names[org] ?? '';
-  return prefix !== '' && levelName.startsWith(prefix)
-    ? levelName.slice(prefix.length)
-    : levelName;
+  if (prefix === '' || !levelName.startsWith(prefix)) return levelName;
+  const rest = levelName.slice(prefix.length);
+  return rest === '' ? levelName : rest;
 }
 
 /** 結算時的【人生】標籤。婚姻、孩子與離婚各記一筆。 */

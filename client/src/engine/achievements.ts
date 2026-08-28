@@ -13,7 +13,7 @@
  * 本模組是純函式：同一段生涯一定得到同一份成就清單。
  */
 
-import { achievements as cfg, amateur, leagues, traits as traitsData } from '../data/index.ts';
+import { achievements as cfg, amateur, leagues, traitName, traits as traitsData } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import type { AwardRecord } from './awards.ts';
 import type { CareerSummary } from './career.ts';
@@ -44,6 +44,14 @@ export interface AchievementContext {
   readonly summary: CareerSummary;
   readonly awards: readonly AwardRecord[];
   readonly traits: ReadonlySet<string>;
+  /**
+   * 名字由生涯內容組出來的特性，id → 已經填好的名稱。
+   *
+   * 只有 `dynamic_name` 的特性在裡面（見 traits.json）。發特性的當下才知道那個
+   * 「◯◯」是哪個聯盟、哪支球隊，所以名字記在 `PlayerState.traitNames`，成就這裡
+   * 只是接收。不在表裡的特性走 traits.json 的固定名字。
+   */
+  readonly traitNames: ReadonlyMap<string, string>;
   /** 養成期與國際賽的榮譽字串。前三名才在裡面。 */
   readonly honors: readonly string[];
   /** 名人堂入選的聯盟。 */
@@ -75,12 +83,24 @@ function traitTone(id: string): string | null {
   return null;
 }
 
-/** 這個特性的名稱。 */
-function traitName(id: string): string {
-  for (const t of traitsData.traits) {
-    if (t.id === id) return t.name ?? id;
-  }
-  return id;
+/**
+ * 這個特性在成就櫃上的一格：識別字串與顯示名稱。
+ *
+ * 三個特性的名字是**生涯內容組出來的**——`legend`（◯◯歷史級球星）、`mrteam`
+ * （◯◯先生）、`rainbow`（◯◯七彩球衣）。名字裡的那個「◯◯」是聯盟或球隊，而
+ * **聯盟／球隊不同就是不同成就**：中職的歷史級球星與日職的歷史級球星是兩件事，
+ * 跟「同一個獎在不同聯盟分開記」是同一條規則（見 evaluateAchievements 的獎項）。
+ * 所以解析後的名字要進識別字串，不能只掛一個 `trait:legend`——那樣第二個聯盟的
+ * 同名成就會被 unlocked 當成已經領過而拿不到 AP。
+ *
+ * 名字本身由 `ctx.traitNames` 提供：那是發特性的當下就記下來的字串（見 game.ts
+ * 的 `#traitNames`），因為當時才知道是哪個聯盟、哪支球隊。查不到就交給資料層的
+ * `traitName` 去炸——半截的名字比錯誤訊息難查得多。
+ */
+function traitTile(id: string, resolved: string | undefined): { id: string; name: string } {
+  return resolved === undefined
+    ? { id: `trait:${id}`, name: traitName(id) }
+    : { id: `trait:${id}:${resolved}`, name: resolved };
 }
 
 /**
@@ -164,7 +184,8 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
     const tone = traitTone(id);
     const points =
       c.trait.by_id[id] ?? (tone === null ? c.trait.default : (c.trait.by_tone[tone] ?? c.trait.default));
-    list.push({ id: `trait:${id}`, category: c.trait.name, name: traitName(id), points });
+    const tile = traitTile(id, ctx.traitNames.get(id));
+    list.push({ id: tile.id, category: c.trait.name, name: tile.name, points });
   }
 
   // ---- 養成期與國際賽的榮譽。榮譽字串裡帶著名次，直接比對。

@@ -55,6 +55,7 @@ const ctx = (over: Partial<AchievementContext> = {}): AchievementContext => ({
   summary: summary(),
   awards: [],
   traits: new Set<string>(),
+  traitNames: new Map<string, string>(),
   honors: [],
   halls: [],
   firstCareer: false,
@@ -188,6 +189,38 @@ describe('姻緣', () => {
     expect(again.list.filter((a) => a.id.startsWith('marriage:'))).toHaveLength(2);
     expect(again.newly.map((a) => a.name)).toEqual(['陳大文']);
     expect(again.points).toBe(cfg.categories.marriage.default);
+  });
+});
+
+describe('特性', () => {
+  it('名字組出來的特性，聯盟不同就是不同成就', () => {
+    const got = evaluateAchievements(
+      ctx({
+        traits: new Set(['legend']),
+        traitNames: new Map([['legend', '中職歷史級球星']]),
+      }),
+    );
+    const rows = got.list.filter((a) => a.id.startsWith('trait:'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.name).toBe('中職歷史級球星');
+    // 名字進了 id——否則日職的那一座會被當成同一項而拿不到 AP。
+    expect(rows[0]?.id).toBe('trait:legend:中職歷史級球星');
+
+    const other = evaluateAchievements(
+      ctx({
+        traits: new Set(['legend']),
+        traitNames: new Map([['legend', '日職歷史級球星']]),
+        unlocked: new Set(rows.map((a) => a.id)),
+      }),
+    );
+    expect(other.newly.map((a) => a.name)).toEqual(['日職歷史級球星']);
+  });
+
+  it('固定名字的特性照舊掛 id', () => {
+    const got = evaluateAchievements(ctx({ traits: new Set(['smallschool']) }));
+    const row = got.list.find((a) => a.id.startsWith('trait:'));
+    expect(row?.id).toBe('trait:smallschool');
+    expect(row?.name).not.toBe('smallschool');
   });
 });
 

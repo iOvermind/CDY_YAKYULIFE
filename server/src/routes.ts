@@ -122,6 +122,7 @@ export async function finishCareer(
       summary,
       awards: state?.awards ?? [],
       traits: state?.traits ?? new Set<string>(),
+      traitNames: state?.traitNames ?? new Map<string, string>(),
       honors: state?.honors ?? [],
       halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
       firstCareer: owned.length === 0,

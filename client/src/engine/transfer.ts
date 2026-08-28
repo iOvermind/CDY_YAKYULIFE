@@ -76,9 +76,18 @@ function orgConfig(org: string) {
   return cfg.orgs[org];
 }
 
-/** 這個體系的中文名。 */
+/**
+ * 這個體系的中文名。**這裡要的是體系，不是體系裡最高的那一層。**
+ *
+ * 轉會的句子講的是「你在哪個體系」——2A 的球員收到留隊詢問時，「留在旅美」是對
+ * 的，「留在大聯盟」是假的。所以先查 `org_names`（旅日／旅美），沒有才退回最高
+ * 層級的名字（韓職、墨聯、澳職這種單一聯盟的體系兩者本來就同名）。
+ *
+ * 獎項與里程碑的前綴走的是另一條路（見 career.ts 的 orgNameOf）：那裡的成績只在
+ * 頂級聯盟才拿得到，冠的就該是「大聯盟」。
+ */
 export function orgLabel(org: string): string {
-  return leagues.top_league_names[org] ?? leagues.org_names[org] ?? org;
+  return leagues.org_names[org] ?? leagues.top_league_names[org] ?? org;
 }
 
 /**

@@ -358,7 +358,13 @@ function totalLines(records: readonly SeasonRecord[]): {
   return { batting, pitching };
 }
 
-/** 這個體系的中文名。 */
+/**
+ * 這個體系在成績單上的名字——**最高層級的名字**，不是體系名。
+ *
+ * 這個字串會去冠里程碑（「大聯盟 1000 安打」）與獎項，而那些數字只有頂級聯盟才
+ * 累積得到，所以冠的是「大聯盟」而不是「旅美」。體系本身的稱呼見 transfer.ts 的
+ * orgLabel，那裡講的是「你人在哪個體系」，兩者刻意不同。
+ */
 function orgNameOf(org: string): string {
   return leagues.top_league_names[org] ?? leagues.org_names[org] ?? org;
 }

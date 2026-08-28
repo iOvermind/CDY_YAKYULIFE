@@ -129,13 +129,14 @@
       "MLB"
     ]
   },
+  "_top_league_names_note": "下面那張表的鍵是**體系代碼**（org），值是那個體系最高一層的名字——獎項、名人堂、里程碑的前綴，以及成就櫃的聯盟分區，全部拿 org 去查它。美職的體系代碼是 MiLB，這裡曾經誤寫成 MLB（那是最高層級的代碼），結果查不到、一路 fallback 到代碼本身，於是玩家看到「MiLB 明星賽」「MiLB 全壘打王」這種不存在的東西，成就櫃也分不出美職那一區。見 teams.json 的 _key_note——同一個坑踩過兩次。表本身不放註解鍵，因為它會被整個 Object.keys 拿去當聯盟清單。",
   "top_league_names": {
     "CPBL": "中職",
     "NPB": "日職",
     "KBO": "韓職",
     "LMB": "墨聯",
     "ABL": "澳職",
-    "MLB": "大聯盟"
+    "MiLB": "大聯盟"
   },
   "_expansion_note": "KBO / LMB / ABL 是新架構的擴充聯盟，index_legacy.html 沒有它們。ROADMAP 階段五的「擴充聯盟資料」即指這批。index_legacy 的線性升降級無法表達它們之間的轉會關係，需要 ROADMAP 階段五的有向圖尋路系統才能真正啟用。",
   "org_names": {

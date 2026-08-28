@@ -265,6 +265,37 @@ describe('球隊清單涵蓋所有體系', () => {
 });
 
 /**
+ * 聯盟名稱表也是掛在體系代碼上的。
+ *
+ * 同一個坑的第二次：`top_league_names` 的美職誤寫成 `MLB`（層級代碼），查不到就
+ * 一路 fallback 到代碼本身，玩家看到的是「MiLB 明星賽」「MiLB 全壘打王」這種
+ * 不存在的獎，成就櫃也分不出美職那一區。**靜默失敗**——沒有例外，只有醜字串。
+ */
+describe('聯盟名稱掛在體系代碼上', () => {
+  it('每個體系都有名字', () => {
+    for (const org of dataKeys(leaguesData.paths)) {
+      expect(leaguesData.top_league_names[org], `${org} 沒有聯盟名`).toBeDefined();
+    }
+  });
+
+  it('沒有多餘的名字掛在層級代碼上', () => {
+    const orgs = new Set(dataKeys(leaguesData.paths));
+    for (const key of dataKeys(leaguesData.top_league_names)) {
+      expect(orgs.has(key), `${key} 不是體系代碼`).toBe(true);
+    }
+    for (const key of dataKeys(leaguesData.org_names)) {
+      expect(orgs.has(key), `${key} 不是體系代碼`).toBe(true);
+    }
+  });
+
+  it('名字不是代碼本身', () => {
+    for (const org of dataKeys(leaguesData.paths)) {
+      expect(leaguesData.top_league_names[org]).not.toBe(org);
+    }
+  });
+});
+
+/**
  * 特性的名稱通道。
  *
  * `sweetheart` 曾經在 `love.json` 裡被指名發放，`traits.json` 卻沒有這個 id——
