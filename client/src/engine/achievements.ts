@@ -155,7 +155,10 @@ function cumulative(
 
     // 投球局數存的是出局數，級距寫的是玩家看得到的局數——先換算再切階。
     const total = raw / (spec.unit ?? 1);
-    const rungs = Math.min(Math.floor(total / spec.step), Math.floor(spec.max / spec.step));
+    // 階梯不封頂：打到 3500 安就顯示 3500。單一項目不會無限長高，靠的是
+    // `increment_cap` 壓住每一階的點數，而不是把階梯砍掉一截——後者等於告訴
+    // 一個打到三千五百安的人，最後那五百安不算數。
+    const rungs = Math.floor(total / spec.step);
     if (rungs <= 0) continue;
 
     const top = rungs * spec.step;

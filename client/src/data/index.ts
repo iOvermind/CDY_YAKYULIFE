@@ -368,8 +368,8 @@ export interface AchievementsData {
             readonly side: 'batter' | 'pitcher';
             /** 一個顯示單位等於幾個原始數據（投球局數存出局數，unit 3）。 */
             readonly unit?: number;
+            /** 級距。階梯不封頂——沒有 `max`，長高的是點數而不是階數，見 increment_cap。 */
             readonly step: number;
-            readonly max: number;
           }
         >
       >;
