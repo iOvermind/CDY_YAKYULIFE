@@ -174,6 +174,8 @@ export interface AbilitiesData {
     readonly count_weights: Readonly<Record<string, number>>;
     readonly count_when_injured: number;
     readonly min_count: number;
+    /** 天賦買來的固定骰數，平常是 0。不吃 min_count，傷缺的球季照給。 */
+    readonly bonus_count: number;
     readonly faces: Readonly<Record<string, Range>>;
     readonly count_modifiers: Readonly<
       Record<string, { readonly delta: number; readonly chance?: number }>
@@ -619,6 +621,9 @@ export interface TwoWayDiscount {
 export interface GrowthCurve {
   readonly tiers: readonly { readonly from: number; readonly cost: number }[];
   readonly above_ceiling_multiplier: number;
+  /** 天賦買來的全域折扣，平常是 0。在乘上倍率之後才扣。 */
+  readonly discount: number;
+  readonly min_cost: number;
 }
 
 /** 養成期投手的定位與勝敗設定。 */

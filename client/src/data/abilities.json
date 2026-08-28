@@ -507,7 +507,10 @@
           "cost": 1
         }
       ],
-      "above_ceiling_multiplier": 3
+      "above_ceiling_multiplier": 3,
+      "_discount_note": "天賦買來的全域折扣（見 talents.json 的「舉重若輕」）。**平常是 0**，存在的意義是給設定覆蓋層一個可以寫入的位置。在乘上 above_ceiling_multiplier **之後**才扣，理由同 two_way_discount：折扣是「每一級少付幾點」而不是「打幾折」，先扣的話天花板之外會被倍率放大成 −3。",
+      "discount": 0,
+      "min_cost": 1
     },
     "two_way_discount": {
       "_note": "二刀流的折扣：直接從成本扣點，不再另立一條曲線。舊做法是把整條 tiers 往後推，結果「便宜多少」得靠兩張表對照才看得出來；扣點是直接的——玩家看得到自己省了幾點。",
@@ -528,6 +531,8 @@
     },
     "count_when_injured": 2,
     "min_count": 2,
+    "_bonus_count_note": "天賦買來的固定骰數（見 talents.json 的「加練」）。**平常是 0。** 與 count_modifiers 不同，它不吃 min_count 的夾擠，也**照樣加在傷缺整季的球季上**——特性修正是那一季的境遇，天賦是玩家帶進場的東西，跟今年有沒有受傷無關（同 championship_bonus 的處理）。",
+    "bonus_count": 0,
     "faces": {
       "_note": "依特性取用，命中第一個即採用；都沒有則用 default。",
       "genius": {

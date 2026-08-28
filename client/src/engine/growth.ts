@@ -58,10 +58,14 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
 
   const aboveCeiling = current >= ceiling;
   if (aboveCeiling) cost *= curve.above_ceiling_multiplier;
-  if (!twoWay) return cost;
 
-  const d = abilities.growth_cost.two_way_discount;
-  return Math.max(d.min_cost, cost - (aboveCeiling ? d.above_ceiling : d.within_ceiling));
+  if (twoWay) {
+    const d = abilities.growth_cost.two_way_discount;
+    cost = Math.max(d.min_cost, cost - (aboveCeiling ? d.above_ceiling : d.within_ceiling));
+  }
+
+  // 天賦折扣同樣後扣：先讓倍率把天花板之外撐貴，再扣掉固定的幾點。
+  return Math.max(curve.min_cost, cost - curve.discount);
 }
 
 /**
@@ -225,6 +229,8 @@ export function rollTrainingDice(
   // 上一季奪冠的回報：多擲幾顆骰，骰面不變。傷缺的球季也照給——冠軍是去年
   // 掙來的，跟今年有沒有受傷無關。
   count += Math.max(0, options.bonusDice ?? 0);
+  // 天賦買來的骰數。理由同上：那是玩家帶進場的東西，不是那一季的境遇。
+  count += Math.max(0, cfg.bonus_count);
 
   const face = pickFaceRange(traits);
   const values: number[] = [];

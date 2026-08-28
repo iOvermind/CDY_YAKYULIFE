@@ -87,6 +87,29 @@ describe('abilityCost', () => {
     }
   });
 
+  it('天賦折扣（舉重若輕）每一級都少付，且在倍率之後才扣', () => {
+    const base = tiersOf();
+    const discounted = { curve: { ...base, discount: 2 }, twoWay: false };
+    for (let v = abilities.scale.min; v <= abilities.scale.max; v++) {
+      // 天賦之內
+      const within = abilityCost(v, abilities.scale.max, curve);
+      expect(abilityCost(v, abilities.scale.max, discounted)).toBe(
+        Math.max(base.min_cost, within - 2),
+      );
+      // 天賦之外：先乘倍率再扣，所以折扣不會被倍率放大
+      const above = abilityCost(v, v, curve);
+      expect(abilityCost(v, v, discounted)).toBe(Math.max(base.min_cost, above - 2));
+    }
+  });
+
+  it('天賦折扣不會把成本壓到 0 以下', () => {
+    const base = tiersOf();
+    const huge = { curve: { ...base, discount: 99 }, twoWay: true };
+    for (let v = abilities.scale.min; v <= abilities.scale.max; v++) {
+      expect(abilityCost(v, v, huge)).toBe(base.min_cost);
+    }
+  });
+
   it('50 以下沒有折扣——本來就是 1 點，扣不動', () => {
     for (let v = abilities.scale.min; v < 50; v++) {
       expect(abilityCost(v, 80, twoWay)).toBe(abilityCost(v, 80, curve));

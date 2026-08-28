@@ -50,6 +50,26 @@
         { "cost": 15, "effect_text": "巔峰前每季的自然成長上限 +2", "effects": [{ "path": "season.aging.growth.points.max", "op": "add", "value": 2 }] }
       ]
     },
+    {
+      "id": "extra_training",
+      "name": "加練",
+      "group": "成長",
+      "desc": "別人放假的時候你在球場。多的那一顆骰子不會憑空變大，但它每年都在。",
+      "levels": [
+        { "cost": 6, "effect_text": "季初自主訓練多擲 1 顆骰", "effects": [{ "path": "abilities.training_dice.bonus_count", "op": "add", "value": 1 }] },
+        { "cost": 16, "effect_text": "季初自主訓練多擲 2 顆骰", "effects": [{ "path": "abilities.training_dice.bonus_count", "op": "set", "value": 2 }] }
+      ]
+    },
+    {
+      "id": "light_lift",
+      "name": "舉重若輕",
+      "group": "成長",
+      "desc": "同樣爬那一級，你就是比別人少花幾點。",
+      "levels": [
+        { "cost": 7, "effect_text": "每提升一級的蓄力成本 −1", "effects": [{ "path": "abilities.growth_cost.default.discount", "op": "add", "value": 1 }] },
+        { "cost": 18, "effect_text": "每提升一級的蓄力成本 −2", "effects": [{ "path": "abilities.growth_cost.default.discount", "op": "set", "value": 2 }] }
+      ]
+    },
 
     {
       "id": "evergreen",
