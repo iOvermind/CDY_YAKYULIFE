@@ -407,6 +407,24 @@ describe('rollTrainingDice', () => {
     }
   });
 
+  it('baseCount 換掉基礎骰數，天賦與奪冠加成照樣疊上去', () => {
+    const cfg = abilities.training_dice;
+    for (let i = 0; i < 50; i++) {
+      const d = roll(`s${i}`, noTraits, { baseCount: 2, bonusDice: 1 });
+      expect(d.values.length).toBe(3 + Math.max(0, cfg.bonus_count));
+    }
+  });
+
+  it('baseCount 仍吃特性的骰面——職業期不會把墊高的下限弄丟', () => {
+    const genius = abilities.training_dice.faces['genius'];
+    const boosted = new Set(['genius']);
+    for (let i = 0; i < 50; i++) {
+      for (const v of roll(`s${i}`, boosted, { baseCount: 4 }).values) {
+        expect(v).toBeGreaterThanOrEqual(genius?.min ?? 1);
+      }
+    }
+  });
+
   it('只消耗 growth 流，不動其他流', () => {
     const world = new World('a');
     rollTrainingDice(world, noTraits);

@@ -56,8 +56,10 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
     }
   }
 
+  // 倍率可以被天賦（破繭）拉成小數，乘完無條件進位——蓄力槽是整數，
+  // 寧可貴一點也不要出現半點。
   const aboveCeiling = current >= ceiling;
-  if (aboveCeiling) cost *= curve.above_ceiling_multiplier;
+  if (aboveCeiling) cost = Math.ceil(cost * curve.above_ceiling_multiplier);
 
   if (twoWay) {
     const d = abilities.growth_cost.two_way_discount;
@@ -226,11 +228,18 @@ export interface TrainingDice {
  *
  * 骰數依權重抽，再套用特性修正；每顆骰的點數區間也依特性而異——練武奇才與大器
  * 晚成的下限被墊高，因此期望值更好。傷缺整季時骰數固定為最低值。
+ *
+ * 職業期走同一條路，只是把基礎骰數換成 `baseCount`（球季佔滿時間，骰數比養成
+ * 期少）——特性的骰面、天賦買來的骰數、奪冠加成在兩段生涯裡都照樣生效。
  */
 export function rollTrainingDice(
   world: World,
   traits: ReadonlySet<string>,
-  options: { readonly injured?: boolean; readonly bonusDice?: number } = {},
+  options: {
+    readonly injured?: boolean;
+    readonly bonusDice?: number;
+    readonly baseCount?: number;
+  } = {},
 ): TrainingDice {
   const rng = world.stream('growth');
   const cfg = abilities.training_dice;
@@ -238,6 +247,8 @@ export function rollTrainingDice(
   let count: number;
   if (options.injured === true) {
     count = cfg.count_when_injured;
+  } else if (options.baseCount !== undefined) {
+    count = options.baseCount;
   } else {
     count = Number(rng.weighted(cfg.count_weights));
     // 修正的取用順序必須穩定，否則同一個種子會擲出不同結果。

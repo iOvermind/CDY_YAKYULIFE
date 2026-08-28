@@ -1633,15 +1633,20 @@ export class Game {
     const bonus = championshipDice(this.#lastChampionships);
     this.#lastChampionships = [];
 
-    const count = proDiceCount(this.world, this.#age) + bonus;
-    const rng = this.world.stream('growth');
-    const values = Array.from({ length: count }, () => rng.int(1, 6));
+    // 走養成期的同一條路：職業只是基礎骰數比較少，特性的骰面與天賦買來的骰數
+    // 在職業期照樣生效——天賦是玩家帶進場的東西，不會因為畢業就失效。
+    const dice = rollTrainingDice(this.world, this.#traits, {
+      baseCount: proDiceCount(this.world, this.#age),
+      bonusDice: bonus,
+    });
+    const values = dice.values;
 
     this.#dice = { values, index: 0 };
 
     let msg =
       `自主訓練擲出 <b class="hl">${values.length}</b> 顆骰：` +
       values.map((v) => `<b class="hl">${v}</b>`).join('、');
+    if (dice.sixes > 0) msg += `，其中 ${dice.sixes} 顆是高標值。`;
     if (bonus > 0) {
       msg += `<br>去年的國際賽冠軍帶來更好的訓練資源與眼界，多擲 <b class="hl">${bonus}</b> 顆骰。`;
     }
