@@ -65,41 +65,42 @@ const ctx = (over: Partial<AchievementContext> = {}): AchievementContext => ({
 });
 
 describe('累積成就', () => {
-  // 階梯是等距的：`step` 一階，爬到 `max` 為止（見 ADR 0031）。
-  const hits = cfg.categories.cumulative.rungs['hits']!;
+  // 階梯就是里程碑的級距，同一份表（見 ADR 0031）。
+  const rungs = cfg.categories.cumulative.rungs['hits']!.score!;
+  const [first, second] = [rungs.career[0]!, rungs.career[1]!];
 
   it('一段真的失敗的生涯就是拿零分', () => {
     // 第一階刻意拉高：養出一個廢物不該有回報。
-    const poor = summary({ topTotal: { batting: bat({ hits: hits.step - 1 }), pitching: null } });
+    const poor = summary({ topTotal: { batting: bat({ hits: first[0] - 1 }), pitching: null } });
     const got = evaluateAchievements(ctx({ summary: poor }));
     expect(got.list.filter((a) => a.id.startsWith('cum:'))).toHaveLength(0);
     expect(got.points).toBe(0);
   });
 
   it('跨過幾階就給幾點，但清單上只列最高的那一階', () => {
-    const good = summary({ topTotal: { batting: bat({ hits: hits.step * 2 }), pitching: null } });
+    const good = summary({ topTotal: { batting: bat({ hits: second[0] }), pitching: null } });
     const rows = evaluateAchievements(ctx({ summary: good })).list.filter((a) =>
       a.id.startsWith('cum:career:hits'),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.points).toBe(2);
-    expect(rows[0]?.name).toContain(String(hits.step * 2));
+    expect(rows[0]?.points).toBe(first[1] + second[1]);
+    expect(rows[0]?.name).toContain(String(second[0]));
   });
 
   it('各聯盟各算一份，另外再算一份一軍通算', () => {
     const s = summary({
-      leagues: [league({ batting: bat({ hits: hits.step }) })],
-      topTotal: { batting: bat({ hits: hits.step }), pitching: null },
+      leagues: [league({ batting: bat({ hits: rungs.league[0]![0] }) })],
+      topTotal: { batting: bat({ hits: first[0] }), pitching: null },
     });
     const ids = evaluateAchievements(ctx({ summary: s })).list.map((a) => a.id);
-    expect(ids).toContain(`cum:CPBL:hits:${hits.step}`);
-    expect(ids).toContain(`cum:career:hits:${hits.step}`);
+    expect(ids).toContain(`cum:CPBL:hits:${rungs.league[0]![0]}`);
+    expect(ids).toContain(`cum:career:hits:${first[0]}`);
   });
 });
 
 describe('同一項成就只給一次 AP', () => {
-  const hits = cfg.categories.cumulative.rungs['hits']!;
-  const s = summary({ topTotal: { batting: bat({ hits: hits.step }), pitching: null } });
+  const hits = cfg.categories.cumulative.rungs['hits']!.score!.career[0]![0];
+  const s = summary({ topTotal: { batting: bat({ hits }), pitching: null } });
 
   it('已經領過的仍然列在清單上，但不再計分', () => {
     const first = evaluateAchievements(ctx({ summary: s }));

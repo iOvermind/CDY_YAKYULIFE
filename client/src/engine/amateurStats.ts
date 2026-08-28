@@ -120,6 +120,30 @@ export function fmtInnings(outs: number): string {
   return `${whole}.${Math.max(0, outs) % 3}`;
 }
 
+/**
+ * 從累計成績取出一項累積數據，換算成**顯示單位**。
+ *
+ * 累積成就與生涯里程碑讀的是同一批數字（安打、勝投、中繼…），因此讀法只有這
+ * 一份。兩邊各寫一個 `switch` 的話，遲早會有一邊漏掉新加的數據——中繼就是這樣
+ * 漏掉的。
+ *
+ * 投手沒有打擊成績時回傳 `null`，不是 0——0 代表「上場打了但沒打出來」。
+ * 欄位名打錯直接炸：靜靜回傳 null 的話，那一項就從成就櫃上無聲消失。
+ */
+export function statTotal(
+  stat: string,
+  side: 'batter' | 'pitcher',
+  unit: number,
+  batting: BattingLine | null,
+  pitching: PitchingLine | null,
+): number | null {
+  const line = side === 'batter' ? batting : pitching;
+  if (line === null) return null;
+  const value = (line as unknown as Record<string, number | undefined>)[stat];
+  if (typeof value !== 'number') throw new Error(`${side} 沒有 ${stat} 這項數據`);
+  return value / unit;
+}
+
 /** 每局被上壘率：被安打加保送除以局數。 */
 export function whip(line: PitchingLine): number {
   const ip = innings(line);

@@ -74,31 +74,6 @@
     ]
   },
 
-  "milestones": {
-    "_note": "累進制的成就門檻。之所以與勝利份額並存，是因為兩者衡量的不是同一件事——**打到 1999 支和 2000 支的社會意義不同，即使份額算出來一樣**。",
-    "_scaling_note": "門檻不分聯盟，一律照表面數字：**2000 安就是 2000 安**。球季長度不乘係數——賽程長本來就會讓同樣年數累積得比較多，那是球員的收穫不是他的折扣，再乘一次等於罰他去了長球季的聯盟；而且縮放過的門檻會變成「2383 安」這種沒人認得的數字，玩家看不出自己離下一座還有多遠。",
-    "_scope_note": "聯盟里程碑只加進**該聯盟**的評價分；生涯里程碑跨聯盟通算，不進任何單一聯盟的評價分，只進總評價分與成就系統。",
-    "league": [
-      { "stat": "hits", "name": "安打", "side": "batter", "steps": [1000, 1500, 2000], "points": [4, 8, 14] },
-      { "stat": "hr", "name": "全壘打", "side": "batter", "steps": [150, 250, 350], "points": [4, 8, 14] },
-      { "stat": "rbi", "name": "打點", "side": "batter", "steps": [600, 900, 1200], "points": [3, 6, 11] },
-      { "stat": "sb", "name": "盜壘", "side": "batter", "steps": [200, 350, 500], "points": [3, 6, 11] },
-      { "stat": "wins", "name": "勝投", "side": "pitcher", "steps": [80, 130, 180], "points": [4, 8, 14] },
-      { "stat": "so", "name": "奪三振", "side": "pitcher", "steps": [1000, 1750, 2500], "points": [4, 8, 14] },
-      { "stat": "saves", "name": "救援", "side": "pitcher", "steps": [100, 200, 300], "points": [4, 8, 14] }
-    ],
-    "career": [
-      { "stat": "hits", "name": "生涯安打", "side": "batter", "steps": [1500, 2000, 2500, 3000], "points": [5, 10, 16, 24] },
-      { "stat": "hr", "name": "生涯全壘打", "side": "batter", "steps": [200, 300, 400, 500], "points": [5, 10, 16, 24] },
-      { "stat": "rbi", "name": "生涯打點", "side": "batter", "steps": [800, 1200, 1600, 2000], "points": [4, 8, 13, 20] },
-      { "stat": "sb", "name": "生涯盜壘", "side": "batter", "steps": [300, 500, 700], "points": [4, 8, 13] },
-      { "stat": "wins", "name": "生涯勝投", "side": "pitcher", "steps": [100, 150, 200, 250], "points": [5, 10, 16, 24] },
-      { "stat": "so", "name": "生涯奪三振", "side": "pitcher", "steps": [1500, 2250, 3000, 3500], "points": [5, 10, 16, 24] },
-      { "stat": "saves", "name": "生涯救援", "side": "pitcher", "steps": [150, 250, 350], "points": [5, 10, 16] },
-      { "stat": "holds", "name": "生涯中繼", "side": "pitcher", "steps": [150, 250, 350], "points": [4, 8, 13] }
-    ]
-  },
-
   "halls": {
     "CPBL": { "name": "中華職棒名人堂", "wait_years": 5, "total_voters": 132, "league": "中職" },
     "NPB": { "name": "日本野球殿堂", "wait_years": 5, "total_voters": 326, "league": "日職" },

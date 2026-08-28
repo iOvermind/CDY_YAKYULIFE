@@ -14,7 +14,7 @@
  */
 
 import { achievements as cfg, amateur, leagues, traitName, traits as traitsData } from '../data/index.ts';
-import type { BattingLine, PitchingLine } from './amateurStats.ts';
+import { statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import type { AwardRecord } from './awards.ts';
 import type { CareerSummary } from './career.ts';
 import { joinName } from './naming.ts';
@@ -123,22 +123,17 @@ function rankIndexOf(byRank: Readonly<Record<string, number>>, honor: string): n
 }
 
 /**
- * 累積成就的階梯。等寬級距，第 n 階（1 起算）的增量是 `min(ceil(n/2), cap)`。
- *
- * 前段密而便宜、後段疏而貴：1,1,2,2,3,3,3…。`cap` 讓一項數據不會無限長高——
- * 一個只會累積安打的球員不該靠同一件事把 AP 拿光。
- */
-function rungIncrements(count: number, cap: number): number[] {
-  return Array.from({ length: count }, (_, i) => Math.min(Math.ceil((i + 1) / 2), cap));
-}
-
-/**
  * 累積成就：一項數據只佔清單裡的一格，顯示跨過的**最高階**，點數是每一階加總。
+ *
+ * 級距直接讀 `score[scope]`——AP 階梯與生涯里程碑是同一份表，`scope` 只決定看
+ * 聯盟欄還是生涯欄。兩邊分開寫過一次，結果就是聯盟盜壘 50 進得了成就櫃、生涯
+ * 350 卻不見蹤影。
  *
  * **第一階刻意拉高**——打 300 安就引退的人跨不過任何一階。那不是漏掉了他，是
  * 這個系統要說的話：養出一個廢物不該有回報。
  */
 function cumulative(
+  scope: 'league' | 'career',
   prefix: string,
   label: string,
   batting: BattingLine | null,
@@ -148,25 +143,26 @@ function cumulative(
   const out: Achievement[] = [];
 
   for (const [stat, spec] of Object.entries(c.rungs)) {
-    if (stat.startsWith('_')) continue;
-    const line = spec.side === 'batter' ? batting : pitching;
-    if (line === null) continue;
-    const raw = (line as unknown as Record<string, number>)[stat] ?? 0;
+    if (stat.startsWith('_') || spec.score === undefined) continue;
+    const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
+    if (value === null) continue;
 
-    // 投球局數存的是出局數，級距寫的是玩家看得到的局數——先換算再切階。
-    const total = raw / (spec.unit ?? 1);
-    // 階梯不封頂：打到 3500 安就顯示 3500。單一項目不會無限長高，靠的是
-    // `increment_cap` 壓住每一階的點數，而不是把階梯砍掉一截——後者等於告訴
-    // 一個打到三千五百安的人，最後那五百安不算數。
-    const rungs = Math.floor(total / spec.step);
-    if (rungs <= 0) continue;
+    // 同一份級距表也餵給 career.ts 的里程碑分數——階梯與里程碑是同一件事，
+    // 不是兩套各自漂移的數字。
+    let top: number | null = null;
+    let points = 0;
+    for (const [need, pts] of spec.score[scope]) {
+      if (value < need) break;
+      top = need;
+      points += pts;
+    }
+    if (top === null) continue;
 
-    const top = rungs * spec.step;
     out.push({
       id: `${prefix}:${stat}:${top}`,
       category: c.name,
       name: joinName(label, spec.name, top),
-      points: rungIncrements(rungs, c.increment_cap).reduce((sum, v) => sum + v, 0),
+      points,
     });
   }
   return out;
@@ -259,10 +255,10 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
 
   // ---- 累積：各聯盟各一份，另外再算一份一軍通算。不計養成與二軍。
   for (const league of ctx.summary.leagues) {
-    list.push(...cumulative(`cum:${league.org}`, league.orgName, league.batting, league.pitching));
+    list.push(...cumulative('league', `cum:${league.org}`, league.orgName, league.batting, league.pitching));
   }
   list.push(
-    ...cumulative('cum:career', '生涯', ctx.summary.topTotal.batting, ctx.summary.topTotal.pitching),
+    ...cumulative('career', 'cum:career', '生涯', ctx.summary.topTotal.batting, ctx.summary.topTotal.pitching),
   );
 
   // ---- 生涯分級。清單上只有最高的那一級，點數是那一級與底下每一級的增量加總。

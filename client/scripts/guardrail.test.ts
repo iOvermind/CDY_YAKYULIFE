@@ -25,6 +25,7 @@ import {
   love as loveCfg,
   PITCH_FAMILIES,
   season as seasonCfg,
+  achievements,
   teams as teamsData,
   traitOf,
   traits as traitsData,
@@ -412,4 +413,50 @@ describe('球系', () => {
   it('每個球系都是一項投手能力', () => {
     for (const f of PITCH_FAMILIES) expect(abilities.ability_groups.pitcher).toContain(f);
   });
+});
+
+/**
+ * 累積成就與生涯里程碑吃同一份 `score` 表，所以資料本身要撐住兩邊的約定。
+ *
+ * 這裡擋的是三種真的發生過的漂移：級距分岔（聯盟盜壘 50、生涯 350，中間那段
+ * 玩家什麼都拿不到）、封頂（打到 3500 安卻只顯示 3000）、以及漏項（中繼成功
+ * 整項不存在，後援投手的生涯等於白打）。
+ */
+describe('累積級距', () => {
+  const c = achievements.categories.cumulative;
+  const rungs = Object.entries(c.rungs).filter(([k]) => !k.startsWith('_'));
+
+  it('該有的累積數據一項都不能少', () => {
+    const keys = new Set(rungs.map(([k]) => k));
+    for (const stat of ['hits', 'hr', 'rbi', 'sb', 'wins', 'so', 'outs', 'saves', 'holds']) {
+      expect(keys.has(stat), `少了 ${stat}`).toBe(true);
+    }
+  });
+
+  for (const [stat, spec] of rungs) {
+    describe(stat, () => {
+      it('有級距表——沒有的話這項不會出現在成就櫃上', () => {
+        expect(spec.score).toBeDefined();
+      });
+
+      it('沒有 max 之類的封頂欄位', () => {
+        expect('max' in spec || 'step' in spec).toBe(false);
+      });
+
+      for (const scope of ['league', 'career'] as const) {
+        it(`${scope} 由低到高遞增`, () => {
+          const list = spec.score![scope];
+          expect(list.length).toBeGreaterThan(0);
+          for (let i = 1; i < list.length; i++) {
+            expect(list[i]![0]).toBeGreaterThan(list[i - 1]![0]);
+          }
+        });
+      }
+
+      it('生涯門檻一律高於同名次的聯盟門檻', () => {
+        const { league, career } = spec.score!;
+        expect(career[0]![0]).toBeGreaterThan(league[0]![0]);
+      });
+    });
+  }
 });

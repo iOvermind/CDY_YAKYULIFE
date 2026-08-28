@@ -358,18 +358,24 @@ export interface AchievementsData {
     readonly marriage: { readonly name: string; readonly default: number };
     readonly cumulative: {
       readonly name: string;
-      /** 單階點數的上限。第 n 階值 `min(ceil(n/2), increment_cap)`。 */
-      readonly increment_cap: number;
       readonly rungs: Readonly<
         Record<
           string,
           {
             readonly name: string;
+            /** 對應 BattingLine / PitchingLine 的欄位名。 */
             readonly side: 'batter' | 'pitcher';
             /** 一個顯示單位等於幾個原始數據（投球局數存出局數，unit 3）。 */
             readonly unit?: number;
-            /** 級距。階梯不封頂——沒有 `max`，長高的是點數而不是階數，見 increment_cap。 */
-            readonly step: number;
+            /**
+             * 級距，`[門檻, 分數]`，由低到高、逐級累加。成就櫃與生涯里程碑讀同一份。
+             *
+             * 沒有 `max`：走到哪一階就顯示哪一階。沒有這一欄就是這項不列入累積。
+             */
+            readonly score?: {
+              readonly league: readonly (readonly [number, number])[];
+              readonly career: readonly (readonly [number, number])[];
+            };
           }
         >
       >;
@@ -409,15 +415,6 @@ export interface FlavorData {
   readonly second_life: { readonly closing: string; readonly stories: readonly string[] };
 }
 
-/** 一項里程碑：達到 steps[i] 就拿到 points[i] 分，逐級累進。 */
-export interface Milestone {
-  readonly stat: string;
-  readonly name: string;
-  readonly side: 'batter' | 'pitcher';
-  readonly steps: readonly number[];
-  readonly points: readonly number[];
-}
-
 export interface HallOfFameData {
   readonly difficulty: { readonly reference_par: number; readonly exponent: number };
   readonly tier_thresholds: {
@@ -433,11 +430,6 @@ export interface HallOfFameData {
   };
   readonly tier_floors: {
     readonly rules: readonly { readonly codes: readonly string[]; readonly min_tier: number }[];
-  };
-  /** 門檻一律照表面數字，不依聯盟場次縮放——見 hall_of_fame.json 的 `_scaling_note`。 */
-  readonly milestones: {
-    readonly league: readonly Milestone[];
-    readonly career: readonly Milestone[];
   };
   readonly halls: Readonly<
     Record<

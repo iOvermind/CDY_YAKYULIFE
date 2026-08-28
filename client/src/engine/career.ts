@@ -16,8 +16,8 @@
  * 本模組是純函式，不抽亂數。名人堂票選要擲骰，因此在 `hall.ts`。
  */
 
-import { hallOfFame as cfg, leagues, type Milestone } from '../data/index.ts';
-import { addBatting, addPitching, type BattingLine, type PitchingLine } from './amateurStats.ts';
+import { achievements, hallOfFame as cfg, leagues } from '../data/index.ts';
+import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import type { AwardRecord } from './awards.ts';
 import { sumShares, type Shares } from './metrics.ts';
 
@@ -226,42 +226,6 @@ export function awardPoints(code: string): number {
   return cfg.award_points.by_code[code] ?? cfg.award_points.default;
 }
 
-/** 從累計成績取出某項統計。找不到回傳 null——0 會被當成真的打出這個數字。 */
-function statOf(
-  batting: BattingLine | null,
-  pitching: PitchingLine | null,
-  milestone: Milestone,
-): number | null {
-  if (milestone.side === 'batter') {
-    if (batting === null) return null;
-    switch (milestone.stat) {
-      case 'hits':
-        return batting.hits;
-      case 'hr':
-        return batting.hr;
-      case 'rbi':
-        return batting.rbi;
-      case 'sb':
-        return batting.sb;
-      default:
-        return null;
-    }
-  }
-  if (pitching === null) return null;
-  switch (milestone.stat) {
-    case 'wins':
-      return pitching.wins;
-    case 'so':
-      return pitching.so;
-    case 'saves':
-      return pitching.saves;
-    case 'holds':
-      return pitching.holds;
-    default:
-      return null;
-  }
-}
-
 /**
  * 里程碑結算。
  *
@@ -273,27 +237,27 @@ function statOf(
  * 認得的數字，看不出自己離哪一座里程碑還有多遠。
  */
 export function evaluateMilestones(
-  list: readonly Milestone[],
+  scope: 'league' | 'career',
   batting: BattingLine | null,
   pitching: PitchingLine | null,
 ): { readonly points: number; readonly reached: readonly string[] } {
   let points = 0;
   const reached: string[] = [];
 
-  for (const m of list) {
-    const value = statOf(batting, pitching, m);
+  for (const [stat, spec] of Object.entries(achievements.categories.cumulative.rungs)) {
+    if (stat.startsWith('_') || spec.score === undefined) continue;
+    const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
     if (value === null) continue;
 
     let highest: number | null = null;
-    for (let i = 0; i < m.steps.length; i++) {
-      const need = m.steps[i] ?? 0;
+    for (const [need, pts] of spec.score[scope]) {
       if (value < need) break;
-      points += m.points[i] ?? 0;
+      points += pts;
       highest = need;
     }
     // 只列最高的那一級——「1000 安、1500 安、2000 安」三行都印出來很囉唆，
     // 玩家要看的是他走到哪裡。分數則是逐級累加的。
-    if (highest !== null) reached.push(`${highest} ${m.name}`);
+    if (highest !== null) reached.push(`${highest} ${spec.name}`);
   }
   return { points, reached };
 }
@@ -421,7 +385,7 @@ export function summarizeCareer(
       own.reduce((sum, a) => sum + awardPoints(a.code), 0) +
       championships * cfg.award_points.championship.points;
 
-    const milestones = evaluateMilestones(cfg.milestones.league, lines.batting, lines.pitching);
+    const milestones = evaluateMilestones('league', lines.batting, lines.pitching);
 
     const score = sharePoints + awardTotal + milestones.points;
     const tier = applyTierFloors(tierOf(score), new Set(own.map((a) => a.code)));
@@ -470,7 +434,7 @@ export function summarizeCareer(
 
   // ---- 生涯里程碑：跨聯盟通算，只進總評價分
   const allTop = totalLines(records.filter((r) => r.top !== null));
-  const careerMilestones = evaluateMilestones(cfg.milestones.career, allTop.batting, allTop.pitching);
+  const careerMilestones = evaluateMilestones('career', allTop.batting, allTop.pitching);
 
   // ---- 總評價分：各聯盟的份額與榮譽加總，再加生涯里程碑與國際賽
   //
