@@ -293,6 +293,14 @@ npm run tauri build  # 桌面版（需要 Rust 工具鏈）
 - **原因**：`legacy.css` 的主題 b 指定 `DotGothic16`、主題 c 指定 `Noto Serif TC`，這些字體從 Google Fonts 載入。`client/index.html` 少了那兩行 `<link>`，或是離線狀態下載不到，字體就會 fallback。
 - **處置**：確認 `client/index.html` 的 `fonts.googleapis.com` 兩行還在。**桌面端離線時必然 fallback**——這是目前未解的問題，要讓離線也正確就必須把字體檔內嵌進產物。
 
+#### `Cannot find module @rollup/rollup-win32-x64-msvc`（或 `@esbuild/...`）
+
+- **症狀**：Windows 端跑 `npm run dev` 炸在 `rollup/dist/native.js`，訊息叫你刪掉 `package-lock.json` 與 `node_modules` 重裝。**照做只會讓另一邊壞掉**。
+- **原因**：專案在 `D:\Dev\CDY_YAKYULIFE`，WSL 從 `/mnt/d/...` 看到的是同一個目錄，`client/node_modules` 因此是**共用的一份**。但 rollup、esbuild 與 TypeScript 7（Go 實作）都是原生二進位，npm 只會安裝「執行 `npm i` 當下那個平台」的 optional dependency，兩邊互相覆蓋。從 WSL 跑過測試，Windows 端就找不到 `win32-x64-msvc`，反之亦然；`npm run typecheck` 則是 `Unable to resolve @typescript/typescript-linux-x64`。
+- **處置**：不用手動處理。`client/scripts/native-platform.mjs` 掛在 `predev` / `prebuild` / `pretest` / `pretest:watch` / `pretypecheck` / `precalibrate`，會偵測平台不符並自動重裝（約 5 秒）。平台正確時開銷約 30ms。
+- **注意**：**繞過 npm scripts 直接跑 `npx vite` / `npx vitest` 不會觸發偵測**，換邊後請走 `npm run dev` / `npm test`。
+- **手動修**：`cd client && npm i --os=win32 --cpu=x64`（WSL 端用 `--os=linux`）。這個指令只換原生套件，**不會改動 `package-lock.json`**——lock 本來就列出所有平台，只是安裝時二選一。
+
 #### 開發伺服器啟動失敗，說連接埠被佔用
 
 - **症狀**：`Port 1420 is already in use` 而且 Vite 直接結束，不會自動換一個連接埠

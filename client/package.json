@@ -4,13 +4,19 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/native-platform.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/native-platform.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "pretest": "node scripts/native-platform.mjs",
     "test": "vitest run",
+    "pretest:watch": "node scripts/native-platform.mjs",
     "test:watch": "vitest",
+    "pretypecheck": "node scripts/native-platform.mjs",
     "typecheck": "tsc --noEmit",
+    "precalibrate": "node scripts/native-platform.mjs",
     "calibrate": "vitest run --config vitest.calibrate.config.js"
   },
   "dependencies": {
