@@ -238,6 +238,14 @@ function StartScreen({
   const [starting, setStarting] = useState(false);
 
   /**
+   * 左投封死的守位（二、三、游）。兩個方向都要反灰：選了左投就不能選這三個位置，
+   * 已經選了這三個位置也不能改成左投——否則玩家會從一個合法組合走到一個非法組合。
+   */
+  const leftBlocked = new Set<string>(abilities.handedness.left_throw_blocked_positions.positions);
+  const posBlocked = (p: StartPosition) => throws === 'L' && leftBlocked.has(p);
+  const leftThrowBlocked = leftBlocked.has(startPosition);
+
+  /**
    * 開局。
    *
    * 登入時**先向伺服器登記**，拿回它凍結的那一組天賦——天賦可以退款，「玩家現在
@@ -305,6 +313,8 @@ function StartScreen({
                     key={p}
                     type="button"
                     className={p === startPosition ? 'on' : undefined}
+                    disabled={posBlocked(p)}
+                    title={posBlocked(p) ? '左投守不了這個位置' : undefined}
                     onClick={() => setStartPosition(p)}
                   >
                     {abilities.start_positions[p]}
@@ -323,12 +333,23 @@ function StartScreen({
                 key={h}
                 type="button"
                 className={h === throws ? 'on' : undefined}
+                disabled={h === 'L' && leftThrowBlocked}
+                title={
+                  h === 'L' && leftThrowBlocked
+                    ? `${abilities.start_positions[startPosition]}不能由左投擔任`
+                    : undefined
+                }
                 onClick={() => setThrows(h)}
               >
                 {HAND_LABEL[h]}投
               </button>
             ))}
           </div>
+          {(leftThrowBlocked || throws === 'L') && (
+            <p style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6, lineHeight: 1.6 }}>
+              左投守不了二壘、三壘、游擊——接球後往一壘的傳球得多轉半圈，職業層級不可能。
+            </p>
+          )}
         </div>
 
         <div className="field">

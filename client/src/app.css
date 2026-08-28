@@ -275,6 +275,9 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .seg button{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--dim);
   font-family:var(--sans);font-size:14.5px;font-weight:700;padding:11px 4px;cursor:pointer}
 .seg button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}
+/* 規則上不可能的組合（左投守二三游）：留在原地反灰，不要整排消失——玩家要看得出
+   「這個位置存在，只是你這隻手守不了」，而不是以為遊戲少了三個守位。 */
+.seg button:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
 /* 反灰的行動鈕：留在原地但按不動——藏起來會讓版面在配點過程中跳動。
    選擇器掛在 .btn 上而不是 #act 底下：動作區的實際 id 是 panel-act。 */
 .btn:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
