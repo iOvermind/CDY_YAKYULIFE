@@ -32,7 +32,7 @@ import {
   type CareerProgress,
   type PlayerState,
 } from './engine/game.ts';
-import { abilityCost, growthCurve } from './engine/growth.ts';
+import { abilityCost, carryGauge, growthCurve } from './engine/growth.ts';
 import {
   amateurBaseline,
   battingShares,
@@ -1594,6 +1594,14 @@ function AbilityRow({
   const carry = state.carry[abilityKey] ?? 0;
   const bonus = state.ceilingBonus[abilityKey] ?? 0;
   // 與舊版一致的表達方式：蓄力／這一級所需點數，例如 0/2。成本 1 點時不顯示。
+  // 欠點另外標一個「欠」字：分母跟著換成退一級退回來的錢，只寫負號會讀成
+  // 「存了 -1 點」。
+  const gauge = carryGauge(
+    current,
+    potential + bonus,
+    carry,
+    growthCurve(state.traits.has('two_way')),
+  );
   const cost = abilityCost(current, potential + bonus, growthCurve(state.traits.has('two_way')));
 
   // 量表刻度：頭 20 尾 80。只有被事件提升過上限的能力，尾端才會延伸到 80 以上。
@@ -1622,11 +1630,12 @@ function AbilityRow({
       <span className="val" style={{ lineHeight: 1.1 }}>
         {current}
         <small style={{ opacity: 0.5 }}>/{ceiling}</small>
-        {cost > 1 && (
+        {(cost > 1 || gauge.debt) && (
           <span
             style={{ display: 'block', opacity: 0.5, fontSize: 10.5, letterSpacing: 1, marginTop: -2 }}
           >
-            {carry}/{cost}
+            {gauge.debt && '欠'}
+            {gauge.points}/{gauge.need}
           </span>
         )}
       </span>

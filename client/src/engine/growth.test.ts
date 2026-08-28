@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { abilities } from '../data/index.ts';
 import {
   abilityCost,
+  carryGauge,
   championshipDice,
   decline,
   growthCurve,
@@ -208,6 +209,28 @@ describe('train', () => {
 
   it('拒絕負點數——衰退要走 decline()', () => {
     expect(() => train(50, -1, 80, 0, curve)).toThrow(RangeError);
+  });
+});
+
+describe('carryGauge', () => {
+  it('存的時候分母是升上去那一級的價錢', () => {
+    const g = carryGauge(50, 80, 3, curve);
+    expect(g.debt).toBe(false);
+    expect(g.points).toBe(3);
+    expect(g.need).toBe(abilityCost(50, 80, curve));
+  });
+
+  it('欠的時候分母是退下去那一級的價錢，而且不是負的', () => {
+    const g = carryGauge(50, 80, -3, curve);
+    expect(g.debt).toBe(true);
+    expect(g.points).toBe(3);
+    expect(g.need).toBe(abilityCost(49, 80, curve));
+  });
+
+  it('欠到量表底部時分母仍以底部那一級計算', () => {
+    const floor = abilities.scale.hard_floor;
+    const g = carryGauge(floor, 80, -1, curve);
+    expect(g.need).toBe(abilityCost(floor, 80, curve));
   });
 });
 

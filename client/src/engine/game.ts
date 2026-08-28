@@ -109,6 +109,7 @@ import {
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
 import {
   abilityCost,
+  carryGauge,
   championshipDice,
   growthCurve,
   raiseCeiling,
@@ -4788,11 +4789,18 @@ export class Game {
   #deltaNote(key: AbilityKey, points: number, before: number): string {
     const gained = (this.#ability[key] ?? 0) - before;
     const carry = this.#carry[key] ?? 0;
-    const cost = abilityCost(this.#ability[key] ?? 0, this.#ceilingOf(key), growthCurve(this.isTwoWay));
+    const gauge = carryGauge(
+      this.#ability[key] ?? 0,
+      this.#ceilingOf(key),
+      carry,
+      growthCurve(this.isTwoWay),
+    );
     const head = `<span class="${points >= 0 ? 'up' : 'dn'}">${points > 0 ? '+' : ''}${points} 點</span>`;
 
     if (gained !== 0) return `${head}（${gained > 0 ? '+' : ''}${gained}）`;
-    if (carry !== 0) return `${head}（蓄力 ${carry}/${cost}）`;
+    // 欠點寫成「欠 1/2」而不是「蓄力 -1/2」：負號配上「蓄力」兩個字互相打架。
+    if (carry !== 0)
+      return `${head}（${gauge.debt ? '欠' : '蓄力'} ${gauge.points}/${gauge.need}）`;
     return `${head}（已經到底，沒有去處）`;
   }
 
@@ -4841,11 +4849,18 @@ export class Game {
     const note =
       result.gained > 0
         ? `${price}${current} → ${result.value}（上限 ${ceiling}）`
-        : `${price}${current}／上限 ${ceiling}・蓄力 ${carry} → ${result.carry}`;
+        : // 槽是負的就寫「欠」——這裡是「點下去會怎樣」的預告，寫成「蓄力 -1」
+          // 會讓玩家以為自己在存一個負數。
+          `${price}${current}／上限 ${ceiling}・${slotText(carry)} → ${slotText(result.carry)}`;
 
     return { id: `alloc:${key}`, label: name, note };
   }
 
+}
+
+/** 蓄力槽的短寫法：正的是存，負的是欠。 */
+function slotText(n: number): string {
+  return n < 0 ? `欠 ${-n}` : `蓄力 ${n}`;
 }
 
 /** 打擊率的棒球慣例寫法：去掉個位數的 0，例如 .333。 */

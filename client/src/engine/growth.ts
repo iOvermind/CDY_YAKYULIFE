@@ -69,6 +69,30 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
 }
 
 /**
+ * 蓄力槽怎麼寫給玩家看。
+ *
+ * 槽是雙向的：正的是**存**（存滿就升一級），負的是**欠**（欠滿就掉一級）。
+ * 兩邊的分母不是同一筆錢——存的目標是「買下一級」的價錢 abilityCost(current)，
+ * 欠的目標是「退掉現在這一級」退回來的 abilityCost(current-1)。用同一個分母
+ * 寫，就會出現「-1/2」這種一眼看不出在說什麼的東西：符號在講欠，分母卻在講
+ * 買。因此這裡把方向拆出來，畫面只要照 debt 決定要寫「欠」還是留白。
+ *
+ * 觸底的欠點在 untrain() 就被歸零，所以 current-1 不會掉到量表底線之下。
+ */
+export function carryGauge(
+  current: number,
+  ceiling: number,
+  carry: number,
+  ctx: CostContext,
+): { readonly points: number; readonly need: number; readonly debt: boolean } {
+  if (carry < 0) {
+    const below = Math.max(abilities.scale.hard_floor, current - 1);
+    return { points: -carry, need: abilityCost(below, ceiling, ctx), debt: true };
+  }
+  return { points: carry, need: abilityCost(current, ceiling, ctx), debt: false };
+}
+
+/**
  * 投入點數，回傳提升的級數與剩餘的蓄力。
  *
  * 未滿一級的點數留在蓄力槽而不蒸發——這讓細微的訓練成果得以累積，也是
