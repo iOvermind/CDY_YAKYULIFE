@@ -134,38 +134,39 @@ describe('seasonPoints', () => {
 
 describe('里程碑', () => {
   it('逐級累進——達到第二級的人同時拿到第一級的分', () => {
-    const one = evaluateMilestones(cfg.milestones.league, bat({ hits: 1000 }), null, 120);
-    const two = evaluateMilestones(cfg.milestones.league, bat({ hits: 1500 }), null, 120);
+    const one = evaluateMilestones(cfg.milestones.league, bat({ hits: 1000 }), null);
+    const two = evaluateMilestones(cfg.milestones.league, bat({ hits: 1500 }), null);
     expect(two.points).toBeGreaterThan(one.points);
   });
 
   it('沒達到第一級就沒有分', () => {
-    expect(evaluateMilestones(cfg.milestones.league, bat({ hits: 500 }), null, 120).points).toBe(0);
+    expect(evaluateMilestones(cfg.milestones.league, bat({ hits: 500 }), null).points).toBe(0);
   });
 
-  it('門檻依球季場次等比放大——大聯盟的 1000 安不算里程碑', () => {
-    const cpbl = evaluateMilestones(cfg.milestones.league, bat({ hits: 1000 }), null, 120);
-    const mlb = evaluateMilestones(cfg.milestones.league, bat({ hits: 1000 }), null, 162);
-    expect(cpbl.points).toBeGreaterThan(mlb.points);
+  /** 舊制會把 143 場聯盟的 2000 安門檻放大成 2383 支，玩家得多打 383 支才算數。 */
+  it('門檻照表面數字，不乘聯盟賽程係數', () => {
+    const r = evaluateMilestones(cfg.milestones.league, bat({ hits: 2000 }), null);
+    expect(r.reached).toContain('2000 安打');
+    const under = evaluateMilestones(cfg.milestones.league, bat({ hits: 1999 }), null);
+    expect(under.points).toBeLessThan(r.points);
   });
 
   it('只列最高的那一級，但分數是累加的', () => {
-    const r = evaluateMilestones(cfg.milestones.league, bat({ hits: 2000, hr: 0, rbi: 0, sb: 0 }), null, 120);
+    const r = evaluateMilestones(cfg.milestones.league, bat({ hits: 2000, hr: 0, rbi: 0, sb: 0 }), null);
     expect(r.reached.filter((s) => s.includes('安打'))).toHaveLength(1);
     expect(r.reached[0]).toContain('2000');
   });
 
   it('投手的里程碑不看打擊數據', () => {
-    const r = evaluateMilestones(cfg.milestones.league, null, pitch({ wins: 200 }), 120);
+    const r = evaluateMilestones(cfg.milestones.league, null, pitch({ wins: 200 }));
     expect(r.reached.some((s) => s.includes('勝投'))).toBe(true);
     expect(r.reached.some((s) => s.includes('安打'))).toBe(false);
   });
 
-  it('生涯里程碑不縮放——跨聯盟通算沒有單一的場次可依', () => {
-    const a = evaluateMilestones(cfg.milestones.career, bat({ hits: 2000 }), null, null);
-    const b = evaluateMilestones(cfg.milestones.career, bat({ hits: 2000 }), null, null);
-    expect(a.points).toBe(b.points);
-    expect(a.points).toBeGreaterThan(0);
+  it('生涯里程碑跨聯盟通算，門檻同樣照表面數字', () => {
+    const r = evaluateMilestones(cfg.milestones.career, bat({ hits: 2000 }), null);
+    expect(r.points).toBeGreaterThan(0);
+    expect(r.reached.some((s) => s.startsWith('2000 '))).toBe(true);
   });
 });
 

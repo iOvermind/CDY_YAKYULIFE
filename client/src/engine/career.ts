@@ -265,18 +265,18 @@ function statOf(
 /**
  * 里程碑結算。
  *
- * 逐級累進：達到第一級拿第一級的分，達到第二級再加第二級的分。門檻依球季場次
- * 等比放大——中職 120 場的 1000 安，到大聯盟 162 場就是 1350 安。
+ * 逐級累進：達到第一級拿第一級的分，達到第二級再加第二級的分。
  *
- * `leagueGames` 傳 null 表示不縮放（生涯里程碑跨聯盟通算，沒有單一的場次可依）。
+ * 門檻不依聯盟賽程縮放：2000 安就是 2000 安，日職球季長不代表那裡的 2000 安
+ * 比較不值錢。賽程長度已經反映在「同樣年數打得出多少累積量」上了，再乘一次
+ * 係數等於罰他選了長球季的聯盟——而且玩家看到的是「日職 2383 安」這種沒人
+ * 認得的數字，看不出自己離哪一座里程碑還有多遠。
  */
 export function evaluateMilestones(
   list: readonly Milestone[],
   batting: BattingLine | null,
   pitching: PitchingLine | null,
-  leagueGames: number | null,
 ): { readonly points: number; readonly reached: readonly string[] } {
-  const scale = leagueGames === null ? 1 : leagueGames / cfg.milestones.reference_games;
   let points = 0;
   const reached: string[] = [];
 
@@ -286,7 +286,7 @@ export function evaluateMilestones(
 
     let highest: number | null = null;
     for (let i = 0; i < m.steps.length; i++) {
-      const need = Math.round((m.steps[i] ?? 0) * scale);
+      const need = m.steps[i] ?? 0;
       if (value < need) break;
       points += m.points[i] ?? 0;
       highest = need;
@@ -415,13 +415,7 @@ export function summarizeCareer(
       own.reduce((sum, a) => sum + awardPoints(a.code), 0) +
       championships * cfg.award_points.championship.points;
 
-    const games = leagues.levels[list[0]?.level ?? '']?.games ?? cfg.milestones.reference_games;
-    const milestones = evaluateMilestones(
-      cfg.milestones.league,
-      lines.batting,
-      lines.pitching,
-      games,
-    );
+    const milestones = evaluateMilestones(cfg.milestones.league, lines.batting, lines.pitching);
 
     const score = sharePoints + awardTotal + milestones.points;
     const tier = applyTierFloors(tierOf(score), new Set(own.map((a) => a.code)));
@@ -470,12 +464,7 @@ export function summarizeCareer(
 
   // ---- 生涯里程碑：跨聯盟通算，只進總評價分
   const allTop = totalLines(records.filter((r) => r.top !== null));
-  const careerMilestones = evaluateMilestones(
-    cfg.milestones.career,
-    allTop.batting,
-    allTop.pitching,
-    null,
-  );
+  const careerMilestones = evaluateMilestones(cfg.milestones.career, allTop.batting, allTop.pitching);
 
   // ---- 總評價分：各聯盟的份額與榮譽加總，再加生涯里程碑與國際賽
   //

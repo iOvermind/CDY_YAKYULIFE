@@ -430,8 +430,8 @@ export interface HallOfFameData {
   readonly tier_floors: {
     readonly rules: readonly { readonly codes: readonly string[]; readonly min_tier: number }[];
   };
+  /** 門檻一律照表面數字，不依聯盟場次縮放——見 hall_of_fame.json 的 `_scaling_note`。 */
   readonly milestones: {
-    readonly reference_games: number;
     readonly league: readonly Milestone[];
     readonly career: readonly Milestone[];
   };
