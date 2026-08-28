@@ -13,7 +13,7 @@ import {
   type StartPosition,
 } from './data/index.ts';
 import { schoolTiersOf, stageOf } from './engine/amateur.ts';
-import type { LogEntry, Option, Prompt } from './engine/flow.ts';
+import type { Finale, LogEntry, Option, Prompt } from './engine/flow.ts';
 import {
   bbPerNine,
   fmtInnings,
@@ -400,19 +400,14 @@ function GameScreen({
           <div id="panel-abilities">
             <h4>能力</h4>
             <AbilityPanel state={state} allocatable={allocatable} onChoose={onChoose} />
-            <HonorBoard
-              awards={state.awards}
-              honors={state.honors}
-              summary={game.summary}
-              love={state.love}
-            />
           </div>
         )}
       </div>
 
       <div id="col-right">
-        {state && <StatsPanel state={state} summary={game.summary} />}
-        <EventLog entries={game.flow.log} />
+        {/* 生涯結束後整塊拿掉：狀態、生涯年表、榮譽都改由事件流末端的結算卡呈現。 */}
+        {state && game.summary === null && <StatsPanel state={state} />}
+        <EventLog entries={game.flow.log} state={state} summary={game.summary} />
         <div id="panel-act">
           {prompt !== null ? (
             <>
@@ -492,7 +487,15 @@ function GameScreen({
  * 3. **捲到 scrollHeight − clientHeight**，不是 scrollHeight。瀏覽器雖然會
  *    夾住，但明確寫出來才不會在計算貼底距離時差一個 clientHeight。
  */
-function EventLog({ entries }: { entries: readonly LogEntry[] }) {
+function EventLog({
+  entries,
+  state,
+  summary,
+}: {
+  entries: readonly LogEntry[];
+  state: PlayerState | null;
+  summary: CareerSummary | null;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const stuckToBottom = useRef(true);
@@ -557,7 +560,7 @@ function EventLog({ entries }: { entries: readonly LogEntry[] }) {
       }}
     >
       <div ref={innerRef}>
-        <LogView entries={entries} />
+        <LogView entries={entries} state={state} summary={summary} />
       </div>
     </div>
   );
@@ -586,17 +589,13 @@ function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } 
   );
 }
 
-/** 當年數據與生涯數據。 */
-function StatsPanel({
-  state,
-  summary,
-}: {
-  state: PlayerState;
-  summary: CareerSummary | null;
-}) {
+/** 最近一季的成績與狀態。只在生涯進行中出現。 */
+function StatsPanel({ state }: { state: PlayerState }) {
   return (
     <div id="panel-stats">
-      <h4>當年數據</h4>
+      {/* 面板不帶自己的標題：底下兩塊各自有 `<h4>`（最近一季／狀態），再加一個
+          面板級標題就是兩個同級標題連在一起、中間沒有內容。右欄因此是兩個平級
+          區塊。 */}
       {/* 這裡不再放方格。
 
           年份、年齡、綜合、可分配點左側記分板都有；年薪、合約、生涯收入已經併
@@ -607,20 +606,15 @@ function StatsPanel({
           動機是手機：右欄在窄螢幕上要一路捲到底才看得到成績表，方格佔掉的正是
           最上面那一屏。 */}
 
-      {/* 生涯進行中只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡
-          放的還是去年的成績，寫當年是騙人的。
-          引退之後換成生涯表：都結束了，右欄還停在最後一季沒有意義。 */}
-      {summary === null && (
-        <StatLines
-          label="最近一季"
-          batting={state.seasonBatting}
-          pitching={state.seasonPitching}
-          base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
-          defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
-        />
-      )}
-
-      {summary !== null && <CareerTable summary={summary} />}
+      {/* 只留最近打完的那一季。標題不寫「當年」——季初訓練時這裡放的還是去年的
+          成績，寫當年是騙人的。 */}
+      <StatLines
+        label="最近一季"
+        batting={state.seasonBatting}
+        pitching={state.seasonPitching}
+        base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
+        defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
+      />
       <TraitList traits={state.traits} names={state.traitNames} />
     </div>
   );
@@ -713,6 +707,9 @@ function TraitList({
   traits: ReadonlySet<string>;
   names: ReadonlyMap<string, string>;
 }) {
+  // 點開的那一個。一次只有一個：說明行固定在段落下方，多開就再也分不出哪行在
+  // 講哪個標籤（標籤會換行，順序對不上），單開才不必在說明裡重複一次名稱。
+  const [picked, setPicked] = useState<string | null>(null);
   const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
   // 名稱以取得當下解析的為準；沒有動態名稱的就用資料檔的固定名。這裡曾經
   // 把 name 為 null 的整個濾掉，於是三個動態命名的特性拿得到卻永遠看不到。
@@ -721,27 +718,44 @@ function TraitList({
     .map((id) => traitOf(id))
     .filter((t): t is NonNullable<typeof t> => t !== undefined)
     .map((t) => ({ ...t, label: names.get(t.id) ?? t.name ?? t.id }));
+  // 從當下的清單找，而不是記住點下去的那段文字：特性可以在生涯中途消失（受傷
+  // 洗掉、負向被覆蓋），留著舊說明會變成一行沒有標籤對應的孤兒。
+  const note = shown.find((t) => t.id === picked)?.effect_text ?? null;
 
   return (
     <>
-      <h4 style={{ marginTop: 12 }}>狀態</h4>
+      {/* 間距交給 CSS：在右欄它接在成績表下面要空一段，在結算卡裡它是卡片的
+          第一行，帶著 12px 會多出一截頭。 */}
+      <h4 className="tl-head">狀態</h4>
       {shown.length === 0 ? (
         <p className="stat-pending" style={{ marginTop: 8 }}>
           還沒有任何特性。
         </p>
       ) : (
-        <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
-          {shown.map((t) => (
-            <span
-              className="tag"
-              key={t.id}
-              title={t.effect_text}
-              style={{ marginRight: 4, ...(t.tone === 'bad' ? BAD_TAG : {}) }}
-            >
-              {t.label}
-            </span>
-          ))}
-        </p>
+        <>
+          <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
+            {shown.map((t) => (
+              // title 留著：桌面想一次掃過五六個特性時，懸停比逐個點快，內容與
+              // 下面那行同源。點擊是給觸控用的第二條路——原生 title 在手機上
+              // 永遠不會出現，而負向特性的說明是玩家判斷要不要留它的依據。
+              <span
+                className={`tag pick${picked === t.id ? ' on' : ''}`}
+                key={t.id}
+                title={t.effect_text}
+                onClick={() => setPicked((p) => (p === t.id ? null : t.id))}
+                style={{ marginRight: 4, ...(t.tone === 'bad' ? BAD_TAG : {}) }}
+              >
+                {t.label}
+              </span>
+            ))}
+          </p>
+          {/* 說明不做浮層：這塊在 #panel-stats 裡，那是個 overflow-y:auto 的捲動
+              容器，浮層要嘛被裁掉、要嘛得改用 fixed 自己算座標並在捲動時重算。
+              就地展開沒有這些問題，而 effect_text 最長也才 39 字。 */}
+          <p className={`tag-note${note === null ? ' hint' : ''}`}>
+            {note ?? '點特性看說明'}
+          </p>
+        </>
       )}
     </>
   );
@@ -1153,7 +1167,9 @@ function StatLines({
 
   return (
     <>
-      {label !== null && <h4 style={{ marginTop: 12 }}>{label}</h4>}
+      {/* 間距一律交給 CSS：這個標題現在是面板的第一行（面板自己的標題拿掉了），
+          帶著行內 margin 會在 padding 之上再多一截頭。 */}
+      {label !== null && <h4 className="tl-head">{label}</h4>}
       {pitching !== null && (
         <div className="fin-scroll">
           {/* 二刀流會同時出現兩張表，沒有小標就分不出哪張是哪張。 */}
@@ -1343,11 +1359,60 @@ function Board({
  */
 const HONOR_COLLATOR = new Intl.Collator('zh-Hant-TW-u-co-stroke');
 
+/**
+ * 事件流末端的結算卡：狀態、生涯年表、榮譽榜。
+ *
+ * 日誌只記下段落別，內容一律從 state / summary 重算（見 flow.ts 的 `Finale`）。
+ * 因此重讀存檔時這三塊跟著最新的資料走，不會留下一份過期的畫面副本。
+ */
+function FinaleCard({
+  section,
+  state,
+  summary,
+}: {
+  section: Finale['section'];
+  state: PlayerState | null;
+  summary: CareerSummary | null;
+}) {
+  // 讀檔中途或狀態尚未就緒時整塊不畫——結算卡沒有半成品的形態。
+  if (state === null || summary === null) return null;
+  if (section === 'traits')
+    return (
+      <div className="card">
+        <TraitList traits={state.traits} names={state.traitNames} />
+      </div>
+    );
+  if (section === 'career')
+    return (
+      <div className="card">
+        <CareerTable summary={summary} />
+      </div>
+    );
+  return (
+    <div className="card">
+      <HonorBoard
+        awards={state.awards}
+        honors={state.honors}
+        summary={summary}
+        love={state.love}
+      />
+    </div>
+  );
+}
+
 function sortHonors(honors: readonly string[]): string[] {
   return [...honors].sort((a, b) => HONOR_COLLATOR.compare(a, b));
 }
 
-function LogView({ entries }: { entries: readonly LogEntry[] }) {
+function LogView({
+  entries,
+  state,
+  summary,
+}: {
+  entries: readonly LogEntry[];
+  state: PlayerState | null;
+  summary: CareerSummary | null;
+}) {
   // divider 開啟新的年度區塊，後續卡片都掛在它底下，與原版的摺疊結構一致。
   const blocks: { head: string | null; cards: LogEntry[] }[] = [];
   for (const entry of entries) {
@@ -1371,6 +1436,8 @@ function LogView({ entries }: { entries: readonly LogEntry[] }) {
                   {entry.title !== undefined && <h4>{entry.title}</h4>}
                   <p dangerouslySetInnerHTML={{ __html: entry.body }} />
                 </div>
+              ) : entry.kind === 'finale' ? (
+                <FinaleCard key={j} section={entry.section} state={state} summary={summary} />
               ) : null,
             )}
           </div>

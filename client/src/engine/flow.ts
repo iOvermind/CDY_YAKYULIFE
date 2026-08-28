@@ -45,7 +45,20 @@ export interface Divider {
   readonly text: string;
 }
 
-export type LogEntry = ({ kind: 'card' } & Card) | Divider;
+/**
+ * 生涯結束的結算區塊：狀態、生涯年表、榮譽榜。
+ *
+ * **只帶段落別，不帶內容。** 這三塊都是介面層既有的元件，內容全部從 state 與
+ * summary 重算得出；引擎若把它們寫成 HTML 字串塞進 body，等於在日誌裡留下一份
+ * 會過期的畫面副本，還要為一張帶欄位提示、可橫向捲動的表格背上 esc() 的責任。
+ * 日誌只存事實，顯示物一律重算——這是 ADR 0002 的立場。
+ */
+export interface Finale {
+  readonly kind: 'finale';
+  readonly section: 'traits' | 'career' | 'honors';
+}
+
+export type LogEntry = ({ kind: 'card' } & Card) | Divider | Finale;
 
 export interface Option {
   /** 穩定的識別字串。這是寫進重播日誌的東西，**不得隨介面文案更動**。 */
@@ -119,6 +132,11 @@ export class Flow {
   /** 產生一則敘事卡片。 */
   card(tone: Tone, title: string | undefined, body: string): void {
     this.#log.push(title === undefined ? { kind: 'card', tone, body } : { kind: 'card', tone, title, body });
+  }
+
+  /** 排入一段生涯結算區塊，內容由介面層依段落別自行渲染。 */
+  finale(section: Finale['section']): void {
+    this.#log.push({ kind: 'finale', section });
   }
 
   /** 開啟一個新的年度區塊。 */

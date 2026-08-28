@@ -4098,6 +4098,13 @@ export class Game {
     this.#achievementCard(summary, ballots);
     this.#fanBoard(summary);
     this.#secondLife();
+
+    // 收尾的三塊：狀態、生涯年表、榮譽榜。引退之後右欄那塊面板整個消失——這三者
+    // 是這段生涯的結論，結論屬於敘事的結尾，不是常駐的儀表板；而且「最近一季」
+    // 已經沒有下一季可比，把結局壓在半個畫面高的面板裡捲並不合理。
+    this.flow.finale('traits');
+    this.flow.finale('career');
+    this.flow.finale('honors');
   }
 
   /** 生涯成績表：養成期、各頂級聯盟、各非頂級層級，最後是兩份通算。 */

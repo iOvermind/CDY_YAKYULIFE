@@ -134,8 +134,20 @@ a{color:var(--info)}
 .card.gold h4{color:var(--gold);text-shadow:var(--glow)}
 .card.bad h4{color:var(--bad)} .card.good h4{color:var(--good)} .card.info h4{color:var(--info)}
 .card p{font-size:14px} .card p+p{margin-top:4px}
+/* 結算卡在無內容時（沒有榮譽、沒有年表）自己收掉，不留一個空框。 */
+.card:empty{display:none}
 .tag{display:inline-block;font-family:var(--mono);font-size:12px;padding:0 6px;border-radius:min(var(--r),4px);
   background:var(--panel2);border:1px solid var(--edge);color:var(--accent);margin:0 2px}
+/* 特性標籤可點開說明。**選中態只能用 outline**：邊框樣式已經被 milestone（虛線）
+   與 life（點線）征用，底色與字色被 tone 征用（負向特性整組換紅），只有外圈是空
+   的——它與那兩套編碼正交，兩種標籤上都讀得出來，也不會讓負向特性在被點的那一
+   刻看起來變成正向的。 */
+.tag.pick{cursor:pointer}
+.tag.pick.on{outline:1px solid var(--accent);outline-offset:1px}
+/* 說明行。未選時放的是「點特性看說明」的提示，位置與高度和說明本身一樣——
+   這行永遠在，展開與收合就不會把底下的東西推來推去。 */
+.tag-note{font-size:11px;line-height:1.8;color:var(--dim);margin:4px 0 0;min-height:1.8em}
+.tag-note.hint{opacity:.6}
 .up{color:var(--good);font-weight:700}.dn{color:var(--bad);font-weight:700}.hl{color:var(--accent);font-weight:700}
 .statline{font-family:var(--mono);font-size:12.5px;color:var(--text);background:var(--panel2);border:1px dashed var(--edge);
   border-radius:min(var(--r),6px);padding:6px 10px;margin-top:6px;line-height:1.7}
@@ -183,14 +195,6 @@ table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.
   margin-bottom:1px;letter-spacing:.1em;font-weight:700}
 .row2 .btn{flex:1;text-align:center;margin-top:0}
 .row2 .btn small{text-align:center}
-/* trait side panel: desktop top-right list of unlocked hidden traits (hidden on mobile; settlement unchanged) */
-#trait-side{display:none}
-#trait-side.empty{display:none!important}
-#trait-side .tt{font-family:var(--head);font-size:12px;letter-spacing:.2em;color:var(--dim);font-weight:700;margin-bottom:8px}
-#trait-tags{display:flex;flex-direction:column;gap:6px}
-#trait-tags .trow{display:flex;align-items:center;gap:8px;min-width:0}
-#trait-tags .trow .tag{flex:none}
-#trait-tags .trow .td{flex:1;min-width:0;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 骰子與加點 */
 /* single row always: dice shrink evenly (44px cap) when the container is narrow */
 #dice{display:flex;align-items:flex-start;gap:8px;flex-wrap:nowrap;margin-bottom:10px}
@@ -370,19 +374,17 @@ body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content
 
 /* 右欄：數據（上）＋ 事件（下）＋ 操作（底） */
 #col-right{display:flex;flex-direction:column;min-width:0}
-/* 引退之後這一塊會塞進整張生涯表，可能比整欄還高——而 #col-right 是
-   overflow:hidden，不給它自己的捲軸就會被裁掉而不是捲動。
-   **上限是右欄的一半，而且是連同成就櫃與狀態一起算。** 只限生涯表沒有用：
-   成就櫃與狀態接在它下面，三塊加起來照樣會把事件流擠光。 */
+/* 只放最近一季與狀態；生涯結束後整塊消失，年表與榮譽改接在事件流末端。
+   #col-right 是 overflow:hidden，不給這塊自己的捲軸就會被裁掉而不是捲動；
+   上限壓在右欄的一半——特性一多它照樣長得起來，不設限會把事件流擠光。 */
 #panel-stats{padding:12px 14px;border-bottom:1px solid var(--edge);background:var(--panel);
   min-height:0;max-height:50%;overflow-y:auto;overscroll-behavior:contain}
-/* 生涯年表：引退之後才出現，欄位比狀態欄多得多，因此允許橫向捲動。
-   高度不在這裡限制——捲軸交給外層的 #panel-stats，那裡才管得到成就櫃與狀態。
-   在這裡再設一層 max-height 只會生出巢狀捲軸，捲起來會打架。 */
-#panel-career{padding:12px 0 4px;background:var(--panel)}
-#panel-career h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;
-  display:flex;align-items:center;gap:6px;margin:0 0 4px;color:var(--dim)}
-#panel-career h4::before{content:'■';font-size:9px;line-height:1;flex:none}
+/* 區塊標題彼此之間空一段才不會黏成一塊；第一行貼著面板的 padding 就好。 */
+#panel-stats .tl-head{margin-top:12px}
+#panel-stats>.tl-head:first-child{margin-top:0}
+/* 生涯年表：引退之後接在事件流末端，是一張結算卡。
+   外框、內距與標題都由 .card 負責，這裡只管兩張表之間的距離；欄位比一般卡片
+   寬得多，橫向捲動由 .fin-scroll 各自處理。 */
 #panel-career .fin-scroll+.fin-scroll{margin-top:14px}
 /* 兩張表的欄位差很多，捲到一半會分不出在看哪一側，因此各給一個小標。 */
 .fin-caption{font-family:var(--head);font-size:11px;letter-spacing:.16em;
@@ -395,11 +397,8 @@ body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content
 .tag.amateur{opacity:.7}
 /* 【人生】：婚姻與孩子不是獎項，但它是這段生涯的一部分。 */
 .tag.life{border-style:dotted;opacity:.8}
-/* 榮譽榜只在生涯結束後出現，接在能力表底下，跟著左欄一起捲。 */
-#panel-honors{margin-top:16px}
-#panel-honors h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;
-  display:flex;align-items:center;gap:6px;margin:0;color:var(--dim)}
-#panel-honors h4::before{content:'■';font-size:9px;line-height:1;flex:none}
+/* 榮譽榜只在生涯結束後出現，接在生涯年表後面，同樣是事件流末端的結算卡。
+   外框與標題由 .card 負責。 */
 #panel-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
 #panel-act{border-top:2px solid var(--edge);background:var(--panel);
   padding:10px 14px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 18px var(--shadow)}
