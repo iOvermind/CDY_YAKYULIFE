@@ -4533,15 +4533,25 @@ export class Game {
    *
    * 依生涯分級挑留言。這是唯一會**根據分級變臉**的區塊——玩家從留言的語氣就
    * 讀得出自己這輩子打得怎麼樣，那是結算的情緒收尾。
+   *
+   * **則數也跟著名氣走**：語氣變了但每個人都固定三則的話，看板讀起來像制式表
+   * 單；過客的引退串只有兩個人路過，名人堂的串會刷滿一整頁，那是名氣本身的形
+   * 狀。最低那一級用 `base_count`，每高一級多 `per_tier` 則，分級數改了也不必
+   * 回頭修對照表。
    */
   #fanBoard(summary: CareerSummary): void {
     const pool = flavor.fan_reactions[String(summary.bestTier)];
     if (pool === undefined || pool.length === 0) return;
 
+    const cfg = flavor.fan_board;
+    const lowest = hallOfFame.tier_thresholds.values.length;
     const rng = this.world.stream('career');
     const picks: string[] = [];
     const used = new Set<number>();
-    const want = Math.min(3, pool.length);
+    const want = Math.min(
+      pool.length,
+      Math.max(1, cfg.base_count + (lowest - summary.bestTier) * cfg.per_tier),
+    );
     while (picks.length < want) {
       const i = rng.int(0, pool.length - 1);
       if (used.has(i)) continue;

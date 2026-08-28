@@ -419,6 +419,8 @@ export interface FlavorData {
   readonly placeholders: Readonly<Record<string, string>>;
   /** 引退時的鄉民留言，鍵是分級（0 最高）。 */
   readonly fan_reactions: Readonly<Record<string, readonly string[]>>;
+  /** 引退串的長度：名氣（生涯分級）越高，留言則數越多。 */
+  readonly fan_board: { readonly base_count: number; readonly per_tier: number };
   readonly retire_scenes: Readonly<
     Record<string, string | Readonly<Record<string, string | Readonly<Record<string, string>>>>>
   >;
