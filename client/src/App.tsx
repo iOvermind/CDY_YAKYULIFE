@@ -454,7 +454,12 @@ function GameScreen({
         {state && (
           <div id="panel-abilities">
             <h4>能力</h4>
-            <AbilityPanel state={state} allocatable={allocatable} onChoose={onChoose} />
+            <AbilityPanel
+              state={state}
+              allocatable={allocatable}
+              repeatable={game.dice === null}
+              onChoose={onChoose}
+            />
           </div>
         )}
       </div>
@@ -1529,14 +1534,16 @@ function LogView({
 function AbilityPanel({
   state,
   allocatable,
+  repeatable,
   onChoose,
 }: {
   state: PlayerState;
   allocatable: Map<string, Option>;
+  repeatable: boolean;
   onChoose: (optionId: string) => void;
 }) {
   const display = abilities.display_groups;
-  const common = { state, allocatable, onChoose };
+  const common = { state, allocatable, repeatable, onChoose };
 
   return (
     <>
@@ -1564,12 +1571,14 @@ function AbilityBlock({
   keys,
   state,
   allocatable,
+  repeatable,
   onChoose,
 }: {
   title: string;
   keys: readonly string[];
   state: PlayerState;
   allocatable: Map<string, Option>;
+  repeatable: boolean;
   onChoose: (optionId: string) => void;
 }) {
   return (
@@ -1581,6 +1590,7 @@ function AbilityBlock({
           abilityKey={key}
           state={state}
           option={allocatable.get(key)}
+          repeatable={repeatable}
           onChoose={onChoose}
         />
       ))}
@@ -1592,13 +1602,17 @@ function AbilityRow({
   abilityKey,
   state,
   option,
+  repeatable,
   onChoose,
 }: {
   abilityKey: string;
   state: PlayerState;
   option: Option | undefined;
+  /** 長按可以連續加點。骰子分配是一顆一顆按的，不適用。 */
+  repeatable: boolean;
   onChoose: (optionId: string) => void;
 }) {
+  const repeat = useHold();
   const current = state.ability[abilityKey] ?? 0;
   const potential = state.origin.potential[abilityKey] ?? 0;
   const carry = state.carry[abilityKey] ?? 0;
@@ -1667,6 +1681,12 @@ function AbilityRow({
       tabIndex={0}
       title={option.note}
       onClick={() => onChoose(option.id)}
+      // 一次 100 點的大賽點數按一百下不是遊戲，是勞動。長按接管重複的部分：
+      // 首次的 +1 仍由 onClick 發出（放開手才算數），按住超過門檻才開始連發。
+      onPointerDown={() => repeatable && repeat.start(() => onChoose(option.id))}
+      onPointerUp={repeat.stop}
+      onPointerLeave={repeat.stop}
+      onPointerCancel={repeat.stop}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -1677,6 +1697,35 @@ function AbilityRow({
       {row}
     </div>
   );
+}
+
+/**
+ * 長按連發。
+ *
+ * 按住 400ms 後開始，每 90ms 一次——比游標移開就停，因為手指滑出按鈕範圍是
+ * 玩家想停下來的意思。計時器掛在 ref 上並在卸載時清掉：加點會讓整條能力列
+ * 重繪，若計時器留在舊的閉包裡就會變成停不下來的連發。
+ */
+function useHold(delay = 400, every = 90): { start: (fn: () => void) => void; stop: () => void } {
+  const timers = useRef<{ start?: number; tick?: number }>({});
+
+  const stop = () => {
+    window.clearTimeout(timers.current.start);
+    window.clearInterval(timers.current.tick);
+    timers.current = {};
+  };
+
+  useEffect(() => stop, []);
+
+  return {
+    start: (fn: () => void) => {
+      stop();
+      timers.current.start = window.setTimeout(() => {
+        timers.current.tick = window.setInterval(fn, every);
+      }, delay);
+    },
+    stop,
+  };
 }
 
 const HAND_LABEL: Record<string, string> = { R: '右', L: '左', S: '左右開弓' };
