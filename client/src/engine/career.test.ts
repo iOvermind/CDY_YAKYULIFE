@@ -40,6 +40,7 @@ const season = (over: Partial<SeasonRecord> = {}): SeasonRecord => ({
   position: 'SS',
   batting: bat(),
   pitching: null,
+  injured: null,
   defenseRuns: 3,
   shares: { batting: { win: 12, loss: 8 }, pitching: NONE, fielding: { win: 2, loss: 1.5 } },
   lossPenalty: { batting: 0.8, pitching: 0.8, fielding: 0.8 },

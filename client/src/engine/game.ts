@@ -107,7 +107,14 @@ import {
   type LeagueStandards,
 } from './league.ts';
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
-import { championshipDice, growthCurve, raiseCeiling, rollTrainingDice, train } from './growth.ts';
+import {
+  abilityCost,
+  championshipDice,
+  growthCurve,
+  raiseCeiling,
+  rollTrainingDice,
+  train,
+} from './growth.ts';
 import { injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
 import {
   isConscripted,
@@ -246,8 +253,16 @@ export interface CareerProgress {
 /** 沒有帳號時的進度：每一局都是第一段人生，每一項都算新解鎖。 */
 export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Set<string>() };
 
-/** 目前引擎版本。重播日誌帶著它，跨版本一律拒絕重播（ADR 0002）。 */
-export const ENGINE_VERSION = 1;
+/**
+ * 目前引擎版本。重播日誌帶著它，跨版本一律拒絕重播（ADR 0002）。
+ *
+ * **改動既有選項的意義就滘**（ADR 0032）。加欄位、加新選項不算——那些不改變舊
+ * 日誌的重現結果；`alloc:sta` 從扣 1 點變成扣 6 點才算，那種日誌重跑不會壞，只
+ * 會安靜地重出一個不同的人生。
+ *
+ * 2：大賽點數改成一次付滿該級成本（ADR 0032）。
+ */
+export const ENGINE_VERSION = 2;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
@@ -480,6 +495,13 @@ export class Game {
   #seasonDefenseRuns = 0;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
+  /**
+   * 這一季的傷勢種類，寫進當年的 SeasonRecord。
+   *
+   * 與 `#seasonFactor` 分開存：出賽係數是**打了多少**，這個是**為什麼**。
+   * 小傷有時候只扣一點點，係數看起來跟健康年沒兩樣，但那一年他確實是帶傷的。
+   */
+  #seasonInjury: 'minor' | 'major' | 'rehab' | null = null;
   /** 生涯大傷次數。帕瓦諾的解鎖條件與合約年限都看它。 */
   #majorInjuries = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
@@ -1740,6 +1762,7 @@ export class Game {
       this.#rehabYear = false;
       this.#seasonFactor = 0;
       this.#injuryRisk = 0;
+      this.#seasonInjury = 'rehab';
       this.flow.card(
         'bad',
         '復健年',
@@ -1782,6 +1805,7 @@ export class Game {
     });
     this.#injuryRisk = 0;
     this.#seasonFactor = result.seasonFactor;
+    this.#seasonInjury = result.kind === 'none' ? null : result.kind;
 
     if (result.kind === 'none') {
       this.flow.card('info', '健康回報', `本季平安出賽。<span class="sub">（受傷機率 ${chance}%）</span>`);
@@ -2905,6 +2929,7 @@ export class Game {
       position: this.#fieldPosition,
       batting,
       pitching,
+      injured: this.#seasonInjury,
       defenseRuns: defense,
       shares: {
         batting:
@@ -4528,20 +4553,29 @@ export class Game {
    * 剩多少，而畫面上並沒有地方講這件事。
    */
   #allocationPhase(source: 'dice' | 'pool'): void {
-    // 骰子每顆的點數不同，大賽點數一律 1 點——統一成「剩下的每一份是幾點」
-    // 的陣列，後面的計數與標題就不必再分兩套。
-    const remaining: readonly number[] =
-      source === 'dice' ? this.#remainingDice : Array.from({ length: this.#pool }, () => 1);
+    const dice = this.#remainingDice;
+    const left = source === 'dice' ? dice.length : this.#pool;
     // 分配完就交給確認關卡。**這裡不能清掉復原堆疊**——在確認畫面按復原，
     // 靠的正是這份紀錄。清空與收骰面都由確認那一步負責。
-    if (remaining.length === 0) return;
+    if (left === 0) return;
 
-    const value = remaining[0] ?? 1;
+    /**
+     * 選這一項要投進去幾點。
+     *
+     * 骰子是「一顆幾點就加幾點」——點數由骰面決定，跟這一級要幾點無關；投完
+     * 升幾級由 train() 一路花到底。
+     *
+     * 大賽點數則是相反：一次投滿這一級的成本，能力真的動一格。以前一次只給
+     * 1 點，遇到 2 點或 6 點一級的段位，按下去只會看到蓄力槽 +1、能力沒動，
+     * 等於逼玩家連按好幾次才會發生事情。池子不夠付一整級時才退成蓄力。
+     */
+    const spendOf = (key: AbilityKey): number =>
+      source === 'dice' ? (dice[0] ?? 1) : Math.min(this.#pool, this.#poolPriceOf(key));
+
     const done = this.#allocHistory.length;
-    const total = done + remaining.length;
 
     const options: Option[] = this.#allocatableAbilities.map((key) =>
-      this.#abilityOption(key, value),
+      this.#abilityOption(key, spendOf(key), source === 'pool'),
     );
     options.push({
       id: 'alloc:undo',
@@ -4553,21 +4587,36 @@ export class Game {
     options.push({
       id: 'alloc:confirm',
       label: '確認',
-      note: `還有 ${remaining.length} 點沒分配`,
+      note: source === 'dice' ? `還有 ${left} 顆骰沒分配` : `還有 ${left} 點沒分配`,
       role: 'main',
       disabled: true,
     });
 
     const title =
       source === 'dice'
-        ? `第 ${done + 1}／${total} 顆骰：${value} 點要加在哪？`
-        : `大賽點數 ${done + 1}／${total}：1 點要加在哪？`;
+        ? `第 ${done + 1}／${done + dice.length} 顆骰：${dice[0] ?? 1} 點要加在哪？`
+        : `大賽點數：還有 ${left} 點要加在哪？`;
 
     this.flow.ask({ title, options }, (choice) => {
       if (choice === 'alloc:undo') this.#undoAllocation();
-      else this.#pushAllocation(choice.slice('alloc:'.length) as AbilityKey, value, source);
+      else {
+        const key = choice.slice('alloc:'.length) as AbilityKey;
+        this.#pushAllocation(key, spendOf(key), source);
+      }
       this.flow.unshift(() => this.#allocationPhase(source));
     });
+  }
+
+  /**
+   * 大賽點數投一次這項能力的價碼：補滿這一級還差幾點。
+   *
+   * 蓄力槽裡已經有的先折抵——存了 1 點的能力再投 1 點就該升級，不該再收整級
+   * 的錢。至少 1 點，否則點數不會減少，畫面會卡在同一步。
+   */
+  #poolPriceOf(key: AbilityKey): number {
+    const current = this.#ability[key] ?? 0;
+    const cost = abilityCost(current, this.#ceilingOf(key), growthCurve(this.isTwoWay));
+    return Math.max(1, cost - (this.#carry[key] ?? 0));
   }
 
   /** 分配完最後一點之後的確認關卡。到這裡才允許往下走。 */
@@ -4596,7 +4645,7 @@ export class Game {
     );
   }
 
-  /** 這一輪還沒分配的點數。骰子是各自的點數，大賽點數一律 1 點。 */
+  /** 這一輪還沒投出去的骰面，各自的點數。 */
   get #remainingDice(): readonly number[] {
     const dice = this.#dice;
     if (dice === null) return [];
@@ -4616,7 +4665,7 @@ export class Game {
     if (source === 'dice' && this.#dice !== null) {
       this.#dice = { values: this.#dice.values, index: this.#dice.index + 1 };
     } else if (source === 'pool') {
-      this.#pool--;
+      this.#pool -= value;
     }
   }
 
@@ -4634,7 +4683,8 @@ export class Game {
     if (last.source === 'dice' && this.#dice !== null) {
       this.#dice = { values: this.#dice.values, index: Math.max(0, this.#dice.index - 1) };
     } else if (last.source === 'pool') {
-      this.#pool++;
+      // 一次投的不見得是 1 點——退回當初扣掉的那個數，不是加一。
+      this.#pool += last.value;
     }
   }
 
@@ -4739,8 +4789,13 @@ export class Game {
     }
   }
 
-  /** 產生一個能力的分配選項，附上目前值、天花板與這一級的成本。 */
-  #abilityOption(key: AbilityKey, value: number): Option {
+  /**
+   * 產生一個能力的分配選項，附上目前值、天花板與這一級的成本。
+   *
+   * `showPrice` 是給大賽點數用的：各項能力的段位不同，同一次分配按下去可能扣
+   * 2 點也可能扣 6 點，價碼得寫在選項上，不能等按下去才發現。
+   */
+  #abilityOption(key: AbilityKey, value: number, showPrice = false): Option {
     const current = this.#ability[key] ?? 0;
     const ceiling = this.#ceilingOf(key);
     const carry = this.#carry[key] ?? 0;
@@ -4754,10 +4809,11 @@ export class Game {
     );
 
     const name = abilities.abilities[key] ?? key;
+    const price = showPrice ? `－${value} 點・` : '';
     const note =
       result.gained > 0
-        ? `${current} → ${result.value}（上限 ${ceiling}）`
-        : `${current}／上限 ${ceiling}・蓄力 ${carry} → ${result.carry}`;
+        ? `${price}${current} → ${result.value}（上限 ${ceiling}）`
+        : `${price}${current}／上限 ${ceiling}・蓄力 ${carry} → ${result.carry}`;
 
     return { id: `alloc:${key}`, label: name, note };
   }

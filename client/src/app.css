@@ -142,6 +142,13 @@ a{color:var(--info)}
    與 life（點線）征用，底色與字色被 tone 征用（負向特性整組換紅），只有外圈是空
    的——它與那兩套編碼正交，兩種標籤上都讀得出來，也不會讓負向特性在被點的那一
    刻看起來變成正向的。 */
+/* 一排標籤。換行之後上下要與左右一樣寬，所以兩個方向都交給 gap 決定，標籤自己
+   的左右 margin 在這裡歸零，免得橫向被加兩次。8px 是原本 margin 疊出來的間距。 */
+.tag-row{display:flex;flex-wrap:wrap;gap:8px}
+.tag-row .tag{margin:0}
+/* 榮譽的分組小標。獎項、里程碑、業餘與國際賽、人生是四種不同的東西，混在同一
+   袋標籤裡看不出邊界。 */
+.tag-group+.tag-group{margin-top:10px}
 .tag.pick{cursor:pointer}
 .tag.pick.on{outline:1px solid var(--accent);outline-offset:1px}
 /* 說明行。未選時放的是「點特性看說明」的提示，位置與高度和說明本身一樣——
@@ -425,6 +432,11 @@ table.fin th{color:var(--dim);font-weight:400;font-size:10px;letter-spacing:.1em
   padding:2px 4px;border-bottom:1px solid var(--edge);text-align:right}
 table.fin td{padding:3px 4px;text-align:right;color:var(--text)}
 table.fin th:first-child,table.fin td:first-child{text-align:left}
+/* 受傷年份整列淡紅底。這裡不加欄位、不加圖示——一整欄只為了標少數幾年太貴，
+   而數字本身（出賽數掉下來）已經在講故事了；底色只負責讓人不要把那一年
+   當成正常年來讀。minor 更淡，因為「小傷但打完整季」和「整年不在」不是同一件事。 */
+table.fin tr.hurt td{background:color-mix(in srgb,var(--bad) 14%,transparent)}
+table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparent)}
 
 /* 桌面：左右並排。手機維持單欄堆疊。 */
 @media(min-width:921px){

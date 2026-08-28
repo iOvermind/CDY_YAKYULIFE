@@ -24,7 +24,7 @@ import {
   type PitchingLine,
 } from './engine/amateurStats.ts';
 import type { AwardRecord } from './engine/awards.ts';
-import type { CareerSummary } from './engine/career.ts';
+import type { CareerSummary, SeasonRecord } from './engine/career.ts';
 import {
   fmtAvg,
   Game,
@@ -669,33 +669,36 @@ function HonorBoard({
 
   if (shown.length === 0 && milestones.length === 0 && rest.length === 0) return null;
 
+  // 四種不同的東西，各給一行小標。標籤的形狀（虛線／點線／顏色）本來就在分類，
+  // 但那要先看得懂編碼才讀得出來；標題是直接寫出來的那一份。空的組不出現。
+  const groups = [
+    {
+      caption: '獎項',
+      tone: 'tag',
+      items: shown.map((a) => `${a.label}（${[...a.years].sort((x, y) => x - y).join('、')}）`),
+    },
+    { caption: '里程碑', tone: 'tag milestone', items: milestones },
+    { caption: '業餘與國際賽', tone: 'tag amateur', items: rest },
+    // 【人生】不是獎項，但它是這個人的生涯的一部分——一個拿過五座 MVP 卻離了
+    // 三次婚的人，與一個拿五座 MVP 且孩子坐滿看台的人，不是同一個故事。
+    { caption: '人生', tone: 'tag life', items: lifeTags(love) },
+  ].filter((g) => g.items.length > 0);
+
   return (
     <div id="panel-honors">
       <h4>榮譽</h4>
-      <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
-        {shown.map((a) => (
-          <span className="tag" key={a.label} style={{ marginRight: 4 }}>
-            {a.label}（{[...a.years].sort((x, y) => x - y).join('、')}）
-          </span>
-        ))}
-        {milestones.map((m) => (
-          <span className="tag milestone" key={m} style={{ marginRight: 4 }}>
-            {m}
-          </span>
-        ))}
-        {rest.map((h) => (
-          <span className="tag amateur" key={h} style={{ marginRight: 4 }}>
-            {h}
-          </span>
-        ))}
-        {/* 【人生】不是獎項，但它是這個人的生涯的一部分——一個拿過五座 MVP 卻離了
-            三次婚的人，與一個拿五座 MVP 且孩子坐滿看台的人，不是同一個故事。 */}
-        {lifeTags(love).map((t) => (
-          <span className="tag life" key={t} style={{ marginRight: 4 }}>
-            {t}
-          </span>
-        ))}
-      </p>
+      {groups.map((g) => (
+        <div className="tag-group" key={g.caption}>
+          <div className="fin-caption">{g.caption}</div>
+          <div className="tag-row">
+            {g.items.map((t) => (
+              <span className={g.tone} key={t}>
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -876,6 +879,8 @@ interface CareerRow {
   readonly position: string | null;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
+  /** 這一年帶著什麼傷。養成期不追蹤傷病，一律 null。 */
+  readonly injured: SeasonRecord['injured'];
   readonly defenseRuns: number;
   readonly base: Baseline;
 }
@@ -1006,6 +1011,9 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
       <th style={{ textAlign: 'left' }}>球隊</th>
     </>
   );
+  // 傷過的年份整列標色，而不是加一欄「傷」——空白佔一整欄只為了標少數幾年，
+  // 而且橫向已經很擠了。標色只回答「這一年他不是完整的」，細節在事件流裡。
+  const rowClass = (r: CareerRow) => (r.injured === null ? undefined : `hurt hurt-${r.injured}`);
   const rowLead = (r: CareerRow) => (
     <>
       <td>{r.year}</td>
@@ -1035,7 +1043,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
             </thead>
             <tbody>
               {batting.map((r) => (
-                <tr key={r.key}>
+                <tr key={r.key} className={rowClass(r)}>
                   {rowLead(r)}
                   <td title={r.position === null ? undefined : positionName(r.position)}>
                     {r.position ?? '—'}
@@ -1061,7 +1069,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
             </thead>
             <tbody>
               {pitching.map((r) => (
-                <tr key={r.key}>
+                <tr key={r.key} className={rowClass(r)}>
                   {rowLead(r)}
                   <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
                 </tr>
@@ -1091,6 +1099,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     position: a.position,
     batting: a.batting,
     pitching: a.pitching,
+    injured: null,
     defenseRuns: 0,
     base: amateurBaseline(),
   }));
@@ -1106,6 +1115,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     position: s.position,
     batting: s.batting,
     pitching: s.pitching,
+    injured: s.injured,
     defenseRuns: s.defenseRuns,
     base: proBaseline(s.level),
   }));

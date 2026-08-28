@@ -49,6 +49,15 @@ export interface SeasonRecord {
   readonly position: string | null;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
+  /**
+   * 這一季的傷勢：小傷 / 大傷 / 整季復健，沒事是 null。
+   *
+   * 存在檔裡而不是從日誌重算（ADR 0002：日誌是事實、顯示是重算），是因為
+   * 生涯表要的正是「哪幾年他不是完整的」——那是這張表的事實之一，不是排版。
+   * `rehab` 與 `major` 分開：復健年是**去年那一刀的帳**在今年到期，這一年
+   * 他根本沒有受新的傷。
+   */
+  readonly injured: 'minor' | 'major' | 'rehab' | null;
   /** 這一季的守備分（顯示用）。 */
   readonly defenseRuns: number;
   /** 三個分段的雙帳。 */
