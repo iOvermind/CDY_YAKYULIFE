@@ -172,27 +172,35 @@ export async function finishCareer(
   }
 }
 
-/** 買一級天賦。 */
-export async function buyTalent(user: UserRow, id: string): Promise<Me> {
+/**
+ * 把一個天賦設到指定的級數。**要的是結果，不是動作**——升一級、降兩級、退到底，
+ * 都是同一句話。差價由伺服器自己算，客戶端不必（也不可以）幫忙算錢。
+ *
+ * 這樣寫的理由是重送安全：網路重試同一個 `level = 2` 不會變成點兩級。動作型的
+ * API（`POST` 買一級）沒有這個性質。
+ */
+export async function setTalent(user: UserRow, id: string, level: number): Promise<Me> {
   if (!talentData.talents.some((t) => t.id === id)) throw new HttpError(404, '沒有這個天賦。');
-  const levels = await talentsOf(user.id);
-  const next = (levels[id] ?? 0) + 1;
-  if (next > maxLevelOf(id)) throw new HttpError(409, '這個天賦已經點滿了。');
+  if (!Number.isInteger(level) || level < 0) throw new HttpError(400, '級數要是零或正整數。');
+  if (level > maxLevelOf(id)) throw new HttpError(409, '這個天賦沒有這麼多級。');
 
-  const cost = costOf(id, next) - costOf(id, next - 1);
+  const levels = await talentsOf(user.id);
+  const current = levels[id] ?? 0;
+  if (level === current) return meOf(user); // 已經是這樣了，什麼都不用做。
+
+  // 差價＝兩個級數的累積成本相減。降級為負，等於退錢。
+  const cost = costOf(id, level) - costOf(id, current);
   const { ap } = await balanceOf(user.id, spentOn(levels));
   if (ap < cost) throw new HttpError(409, `成就點數不夠，還差 ${cost - ap} 點。`);
 
-  await pool.query(
-    `INSERT INTO talents (user_id, talent, level) VALUES ($1, $2, $3)
-     ON CONFLICT (user_id, talent) DO UPDATE SET level = EXCLUDED.level`,
-    [user.id, id, next],
-  );
-  return meOf(user);
-}
-
-/** 退掉一個天賦，全額返還。 */
-export async function refundTalent(user: UserRow, id: string): Promise<Me> {
-  await pool.query('DELETE FROM talents WHERE user_id = $1 AND talent = $2', [user.id, id]);
+  if (level === 0) {
+    await pool.query('DELETE FROM talents WHERE user_id = $1 AND talent = $2', [user.id, id]);
+  } else {
+    await pool.query(
+      `INSERT INTO talents (user_id, talent, level) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, talent) DO UPDATE SET level = EXCLUDED.level`,
+      [user.id, id, level],
+    );
+  }
   return meOf(user);
 }

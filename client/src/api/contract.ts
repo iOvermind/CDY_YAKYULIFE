@@ -101,10 +101,13 @@ export interface ProgressStore {
   startCareer(): Promise<CareerTicket>;
   /** 結算：上傳重播日誌，伺服器重跑驗證。 */
   finishCareer(careerId: string, body: FinishRequest): Promise<CareerResult>;
-  /** 買一級天賦。買不起就丟錯。 */
-  buyTalent(id: string): Promise<Me>;
-  /** 退掉一個天賦，全額返還 AP。 */
-  refundTalent(id: string): Promise<Me>;
+  /**
+   * 把天賦設到指定級數。`0` 等於退光，全額退還 AP。
+   *
+   * 送的是**想要的結果**而不是動作，所以重送同一個級數不會多扣一次；差價一律由
+   * 伺服器算，客戶端只負責問。
+   */
+  setTalent(id: string, level: number): Promise<Me>;
 }
 
 /** API 回傳的錯誤。訊息是給玩家看的，因此後端要用人話寫。 */

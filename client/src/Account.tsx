@@ -324,11 +324,16 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const act = (id: string, go: (id: string) => Promise<Me>) => {
+  /**
+   * 送出「這個天賦要變成幾級」。**畫面上的按鈕只是把目標級數算出來**——加價、退錢
+   * 都是伺服器的事，這裡不重算一次價格，兩邊的算法就不可能對不起來。
+   */
+  const act = (id: string, level: number) => {
     if (busy !== null) return;
     setBusy(id);
     setError(null);
-    void go(id)
+    void account.store
+      .setTalent(id, level)
       .then(account.update)
       .catch((e: unknown) =>
         setError(e instanceof ApiError ? e.message : '出了點問題，請再試一次。'),
@@ -384,7 +389,7 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                       type="button"
                       className={affordable ? 'on' : undefined}
                       disabled={!affordable || busy !== null}
-                      onClick={() => act(t.id, account.store.buyTalent)}
+                      onClick={() => act(t.id, level + 1)}
                     >
                       {level === 0 ? '解鎖' : `升到 Lv${level + 1}`}
                       <span className="price">{next.cost} AP</span>
@@ -394,7 +399,7 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                     <button
                       type="button"
                       disabled={busy !== null}
-                      onClick={() => act(t.id, account.store.refundTalent)}
+                      onClick={() => act(t.id, 0)}
                       title={`退掉全部 ${level} 級，返還 ${costOf(t.id, level)} AP`}
                     >
                       退還 {costOf(t.id, level)} AP

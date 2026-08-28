@@ -16,13 +16,12 @@ import { API } from '../../client/src/api/contract.ts';
 import { readCookie, readSession, sessionCookie, signSession } from './auth.ts';
 import { migrate, pool, type UserRow } from './db.ts';
 import {
-  buyTalent,
   finishCareer,
   HttpError,
   login,
   meOf,
-  refundTalent,
   register,
+  setTalent,
   startCareer,
 } from './routes.ts';
 
@@ -142,12 +141,9 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path.startsWith('/api/talents/')) {
     const user = await requireUser(req);
     const id = path.slice('/api/talents/'.length);
-    if (method === 'POST') {
-      send(res, 200, await buyTalent(user, id));
-      return;
-    }
-    if (method === 'DELETE') {
-      send(res, 200, await refundTalent(user, id));
+    if (method === 'PUT') {
+      const body = await readBody(req);
+      send(res, 200, await setTalent(user, id, Number(body.level)));
       return;
     }
   }

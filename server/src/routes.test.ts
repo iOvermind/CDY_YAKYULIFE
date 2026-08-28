@@ -14,12 +14,11 @@ import { Game, type ReplayLog } from '../../client/src/engine/game.ts';
 import { useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
 import {
-  buyTalent,
   finishCareer,
   HttpError,
   login,
   meOf,
-  refundTalent,
+  setTalent,
   register,
   startCareer,
 } from './routes.ts';
@@ -102,7 +101,7 @@ describe('登入', () => {
 describe('天賦', () => {
   it('AP 不夠買不下去', async () => {
     const user = await register('Overmind', 'hunter2');
-    await assert.rejects(() => buyTalent(user, 'gifted'), (e: HttpError) => e.status === 409);
+    await assert.rejects(() => setTalent(user, 'gifted', 1), (e: HttpError) => e.status === 409);
   });
 
   it('買下去會扣掉 AP，餘額是算出來的', async () => {
@@ -110,7 +109,7 @@ describe('天賦', () => {
     grant(user.id, 'test:rich', 30);
     assert.equal((await meOf(user)).ap, 30);
 
-    const after = await buyTalent(user, 'gifted'); // 第一級 5 點
+    const after = await setTalent(user, 'gifted', 1); // 第一級 5 點
     assert.equal(after.talents['gifted'], 1);
     assert.equal(after.ap, 25);
     // 賺過多少不會因為花掉而變少。
@@ -120,38 +119,69 @@ describe('天賦', () => {
   it('每一級各收各的價，不是重收一次全部', async () => {
     const user = await register('Overmind', 'hunter2');
     grant(user.id, 'test:rich', 30);
-    await buyTalent(user, 'gifted'); // Lv1：5
-    const after = await buyTalent(user, 'gifted'); // Lv2 再收 12，累積 17
+    await setTalent(user, 'gifted', 1); // Lv1：5
+    const after = await setTalent(user, 'gifted', 2); // Lv2 再收 12，累積 17
     assert.equal(after.talents['gifted'], 2);
     assert.equal(after.ap, 30 - 17);
+  });
+
+  it('一次跳兩級收的是累積價，跟一級一級點一樣', async () => {
+    const user = await register('Overmind', 'hunter2');
+    grant(user.id, 'test:rich', 30);
+    const after = await setTalent(user, 'gifted', 2);
+    assert.equal(after.talents['gifted'], 2);
+    assert.equal(after.ap, 30 - 17);
+  });
+
+  it('重送同一個級數不會再扣一次', async () => {
+    const user = await register('Overmind', 'hunter2');
+    grant(user.id, 'test:rich', 30);
+    await setTalent(user, 'gifted', 2);
+    const again = await setTalent(user, 'gifted', 2);
+    assert.equal(again.talents['gifted'], 2);
+    assert.equal(again.ap, 30 - 17);
+  });
+
+  it('降級退的是差價，不是全部', async () => {
+    const user = await register('Overmind', 'hunter2');
+    grant(user.id, 'test:rich', 30);
+    await setTalent(user, 'gifted', 2); // 花掉 17
+    const down = await setTalent(user, 'gifted', 1); // 退回 Lv2 的 12
+    assert.equal(down.talents['gifted'], 1);
+    assert.equal(down.ap, 25);
   });
 
   it('點滿之後買不下去', async () => {
     const user = await register('Overmind', 'hunter2');
     grant(user.id, 'test:rich', 999);
-    await buyTalent(user, 'gifted');
-    await buyTalent(user, 'gifted');
-    await buyTalent(user, 'gifted'); // 三級滿
-    await assert.rejects(() => buyTalent(user, 'gifted'), (e: HttpError) => e.status === 409);
+    await setTalent(user, 'gifted', 3); // 三級滿
+    await assert.rejects(() => setTalent(user, 'gifted', 4), (e: HttpError) => e.status === 409);
+  });
+
+  it('級數不是零或正整數就回 400', async () => {
+    const user = await register('Overmind', 'hunter2');
+    grant(user.id, 'test:rich', 999);
+    await assert.rejects(() => setTalent(user, 'gifted', -1), (e: HttpError) => e.status === 400);
+    await assert.rejects(() => setTalent(user, 'gifted', 1.5), (e: HttpError) => e.status === 400);
+    await assert.rejects(() => setTalent(user, 'gifted', NaN), (e: HttpError) => e.status === 400);
   });
 
   it('不存在的天賦回 404，不是默默寫進去', async () => {
     const user = await register('Overmind', 'hunter2');
     grant(user.id, 'test:rich', 999);
-    await assert.rejects(() => buyTalent(user, '不存在'), (e: HttpError) => e.status === 404);
+    await assert.rejects(() => setTalent(user, '不存在', 1), (e: HttpError) => e.status === 404);
   });
 
-  it('退還是全額，而且退完可以再買一次', async () => {
+  it('退到零是全額，而且退完可以再買一次', async () => {
     const user = await register('Overmind', 'hunter2');
     grant(user.id, 'test:rich', 30);
-    await buyTalent(user, 'gifted');
-    await buyTalent(user, 'gifted'); // 花掉 5 + 12 = 17
+    await setTalent(user, 'gifted', 2); // 花掉 5 + 12 = 17
 
-    const refunded = await refundTalent(user, 'gifted');
+    const refunded = await setTalent(user, 'gifted', 0);
     assert.equal(refunded.ap, 30);
     assert.equal(refunded.talents['gifted'], undefined);
 
-    assert.equal((await buyTalent(user, 'gifted')).ap, 25);
+    assert.equal((await setTalent(user, 'gifted', 1)).ap, 25);
   });
 });
 
@@ -159,14 +189,14 @@ describe('開局登記', () => {
   it('凍結當下的天賦組合', async () => {
     const user = await register('Overmind', 'hunter2');
     grant(user.id, 'test:rich', 30);
-    await buyTalent(user, 'gifted');
+    await setTalent(user, 'gifted', 1);
 
     const ticket = await startCareer(user);
     assert.deepEqual(ticket.talents, { gifted: 1 });
 
     // 登記之後退掉天賦，凍結的那一份不受影響——否則玩家可以開局帶著天賦、
     // 中途退掉換 AP，兩邊都拿。
-    await refundTalent(user, 'gifted');
+    await setTalent(user, 'gifted', 0);
     assert.deepEqual(db.careers[0]?.talents, { gifted: 1 });
   });
 });
@@ -248,9 +278,7 @@ describe('結算', () => {
   it('用登記時凍結的天賦重跑，不是日誌裡寫的那一組', async () => {
     const user = await register('Overmind', 'hunter2');
     grant(user.id, 'test:rich', 60);
-    await buyTalent(user, 'gifted');
-    await buyTalent(user, 'gifted');
-    await buyTalent(user, 'gifted'); // 凍結 Lv3
+    await setTalent(user, 'gifted', 3); // 凍結 Lv3
     const ticket = await startCareer(user);
 
     // 客戶端謊報成「我沒有天賦」，伺服器仍該用 Lv3 重跑。

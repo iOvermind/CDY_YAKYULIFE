@@ -64,6 +64,6 @@ export const httpProgress: ProgressStore = {
   logout: () => post<void>(API.logout),
   startCareer: () => post<CareerTicket>(API.careers),
   finishCareer: (careerId, body) => post<CareerResult>(API.career(careerId), body),
-  buyTalent: (id) => post<Me>(API.talent(id)),
-  refundTalent: (id) => call<Me>(API.talent(id), { method: 'DELETE' }),
+  setTalent: (id, level) =>
+    call<Me>(API.talent(id), { method: 'PUT', body: JSON.stringify({ level }) }),
 };
