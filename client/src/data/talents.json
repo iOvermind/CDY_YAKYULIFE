@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_note": "天賦商店。用成就點數（AP）購買的永久強化，見 CONTEXT.md 的「天賦」與 ADR 0007。",
+  "_note": "天賦。用成就點數（AP）購買的永久強化，見 CONTEXT.md 的「天賦」與 ADR 0007。",
   "_vs_trait_note": "**天賦與隱藏特性是兩件事。** 特性是在一段生涯裡掙來的、只屬於那個球員；天賦是跨局累積的、屬於玩家——他開的每一局都帶著買過的天賦。",
   "_effect_note": "效果宣告成「改哪一個設定、怎麼改、夾在哪」，由設定覆蓋層在載入規則資料時套上。**新增一個天賦只是新增一筆 JSON，不必改程式。** 代價是路徑寫錯不會在編譯期被抓到，因此有一條護欄測試把每一個天賦的每一條路徑都解一次。",
   "_path_note": "路徑的第一段是規則資料的檔名（abilities / season / amateur / leagues / awards / events / injury / love / traits / positions / hall_of_fame），其後是該檔內的鍵。",

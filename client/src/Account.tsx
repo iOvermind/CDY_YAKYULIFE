@@ -1,5 +1,5 @@
 /**
- * 帳號、成就與天賦商店的介面。
+ * 帳號、成就與天賦的介面。
  *
  * 從 App.tsx 拆出來是因為它有自己的一整組狀態機（未登入／登入中／已登入／
  * 連不上），塞回開局畫面會讓那個檔案再也讀不動。
@@ -86,7 +86,7 @@ export function AccountBar({ account }: { account: Account }) {
           className="ghost"
           // 未登入時反灰：成就是掛在帳號上的，沒有帳號就沒有東西可看。
           disabled={me === null}
-          title={offline ? OFFLINE_HINT : me === null ? '登入後才看得到成就與天賦商店' : undefined}
+          title={offline ? OFFLINE_HINT : me === null ? '登入後才看得到成就與天賦' : undefined}
           onClick={() => setPanel('achievements')}
         >
           成就{me !== null && <span className="ap">{me.ap} AP</span>}
@@ -224,7 +224,7 @@ function LoginPanel({ account, onClose }: { account: Account; onClose: () => voi
   );
 }
 
-/** 成就櫃與天賦商店。 */
+/** 成就櫃與天賦。 */
 function AchievementPanel({
   account,
   me,
@@ -234,7 +234,7 @@ function AchievementPanel({
   me: Me;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'achievements' | 'shop'>('achievements');
+  const [tab, setTab] = useState<'achievements' | 'talents'>('achievements');
 
   return (
     <Modal title={`${me.account} · ${me.ap} AP`} onClose={onClose}>
@@ -249,16 +249,16 @@ function AchievementPanel({
         </button>
         <button
           type="button"
-          className={tab === 'shop' ? 'on' : undefined}
-          onClick={() => setTab('shop')}
+          className={tab === 'talents' ? 'on' : undefined}
+          onClick={() => setTab('talents')}
         >
-          天賦商店
+          天賦
         </button>
       </div>
       {tab === 'achievements' ? (
         <AchievementList me={me} />
       ) : (
-        <TalentShop account={account} me={me} />
+        <TalentPanel account={account} me={me} />
       )}
     </Modal>
   );
@@ -315,12 +315,12 @@ function AchievementList({ me }: { me: Me }) {
 }
 
 /**
- * 天賦商店。
+ * 天賦。
  *
  * **整份畫面是從 `talents.json` 長出來的**——新增一個天賦只要加一筆 JSON，這裡
  * 一行都不用改。分組、名稱、每一級的敘述與價格全部來自資料。
  */
-function TalentShop({ account, me }: { account: Account; me: Me }) {
+function TalentPanel({ account, me }: { account: Account; me: Me }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 

@@ -99,7 +99,7 @@ describe('登入', () => {
   });
 });
 
-describe('天賦商店', () => {
+describe('天賦', () => {
   it('AP 不夠買不下去', async () => {
     const user = await register('Overmind', 'hunter2');
     await assert.rejects(() => buyTalent(user, 'gifted'), (e: HttpError) => e.status === 409);

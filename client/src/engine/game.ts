@@ -4470,7 +4470,7 @@ export class Game {
       'gold',
       `成就結算 · ${result.points} AP`,
       `${rows.join('<br>')}` +
-        `<br><span class="sub">成就點數可在下一段生涯開場的天賦商店消耗，買到的天賦永久啟用。` +
+        `<br><span class="sub">成就點數可在下一段生涯開場兌換天賦，買到的天賦永久啟用。` +
         `同一項成就只給一次點數。</span>`,
     );
   }
@@ -4736,7 +4736,7 @@ export class Game {
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */
   #ceilingOf(key: AbilityKey): number {
     const base = this.#player?.potential[key] ?? abilities.scale.max;
-    // 三個來源：抽到的天賦、事件卡提升的那一項、天賦商店買到的全域加成。
+    // 三個來源：抽到的天賦、事件卡提升的那一項、用 AP 買下的天賦帶來的全域加成。
     // 最後一項平常是 0，由設定覆蓋層寫入（見 ADR 0007）。
     return base + (this.#ceilingBonus[key] ?? 0) + abilities.talent_bonus.ceiling;
   }

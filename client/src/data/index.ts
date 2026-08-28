@@ -102,7 +102,7 @@ export interface PitcherRoleWeights {
 }
 
 export interface AbilitiesData {
-  /** 天賦商店買到的全域加成。平常是 0，由設定覆蓋層寫入。 */
+  /** 用 AP 買下的天賦帶來的全域加成。平常是 0，由設定覆蓋層寫入。 */
   readonly talent_bonus: { readonly ceiling: number };
   readonly scale: {
     readonly min: number;
@@ -374,7 +374,7 @@ export interface AchievementsData {
   readonly first_career_bonus: { readonly points: number; readonly name: string; readonly desc: string };
 }
 
-/** 天賦商店。用 AP 購買的永久強化，效果走設定覆蓋層宣告。見 ADR 0007。 */
+/** 天賦。用 AP 購買的永久強化，效果走設定覆蓋層宣告。見 ADR 0007。 */
 export interface TalentsData {
   readonly talents: readonly {
     readonly id: string;
