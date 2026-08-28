@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, isOffline, type Me, type ProgressStore } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
 import { cabinetTiles, type AchievementTile } from './engine/achievements.ts';
-import { costOf, maxLevelOf } from './engine/overlay.ts';
+import { maxLevelOf } from './engine/overlay.ts';
 
 /** 帳號的連線狀態。 */
 export type Progress =
@@ -364,6 +364,8 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
             const max = maxLevelOf(t.id);
             const next = t.levels[level];
             const affordable = next !== undefined && me.ap >= next.cost;
+            // 降一級退的就是「爬上這一級付的那一筆」——全額，沒有價差。
+            const prev = level > 0 ? (t.levels[level - 1]?.cost ?? 0) : 0;
             return (
               <div key={t.id} className={level > 0 ? 'talent owned' : 'talent'}>
                 <div className="talent-head">
@@ -381,30 +383,42 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                     </li>
                   ))}
                 </ol>
-                <div className="talent-buttons">
-                  {next === undefined ? (
-                    <span className="sub">已經點滿</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={affordable ? 'on' : undefined}
-                      disabled={!affordable || busy !== null}
-                      onClick={() => act(t.id, level + 1)}
-                    >
-                      {level === 0 ? '解鎖' : `升到 Lv${level + 1}`}
-                      <span className="price">{next.cost} AP</span>
-                    </button>
-                  )}
-                  {level > 0 && (
-                    <button
-                      type="button"
-                      disabled={busy !== null}
-                      onClick={() => act(t.id, 0)}
-                      title={`退掉全部 ${level} 級，返還 ${costOf(t.id, level)} AP`}
-                    >
-                      退還 {costOf(t.id, level)} AP
-                    </button>
-                  )}
+                {/*
+                  橫條本身就是控制項：左鍵升一級、右鍵降一級。**兩顆鍵互為反向操作**
+                  ——玩家在自己的存檔上按出來的每一步，都要能用另一顆鍵原地還原。
+                  等級只能一級一級走，價格由伺服器算；這裡只送目標級數。
+                */}
+                <div className="talent-bar-row">
+                  <button
+                    type="button"
+                    className="talent-bar"
+                    disabled={busy !== null || (!affordable && level === 0)}
+                    title="左鍵升一級、右鍵降一級"
+                    onClick={() => {
+                      if (affordable) act(t.id, level + 1);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      if (level > 0) act(t.id, level - 1);
+                    }}
+                  >
+                    <span className="cap">0</span>
+                    {t.levels.map((_l, i) => (
+                      <span key={i} className={i < level ? 'seg on' : 'seg'} />
+                    ))}
+                    <span className="cap">{max}</span>
+                  </button>
+                  <span className="talent-hint">
+                    {next === undefined ? (
+                      '已經點滿'
+                    ) : (
+                      <>
+                        升到 Lv{level + 1} 需
+                        <b className={affordable ? 'price on' : 'price'}>{next.cost} AP</b>
+                      </>
+                    )}
+                    {level > 0 && `・右鍵退回 Lv${level - 1}，返還 ${prev} AP`}
+                  </span>
                 </div>
               </div>
             );

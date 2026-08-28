@@ -330,13 +330,18 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 /* 已經買到的那幾級亮起來，還沒買的維持灰階——一眼看得出點到哪裡。 */
 .talent-levels li.have{color:var(--good)}
 .talent-levels li .sub{font-family:var(--mono);font-size:11.5px;white-space:nowrap}
-.talent-buttons{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.talent-buttons button{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);
-  color:var(--dim);font-family:var(--sans);font-size:12.5px;font-weight:700;padding:8px 14px;cursor:pointer}
-.talent-buttons button.on{color:var(--accent);border-color:var(--accent)}
-.talent-buttons button:disabled{opacity:.35;cursor:not-allowed}
-.talent-buttons .price{font-family:var(--mono);margin-left:9px;color:var(--gold)}
-.talent-buttons .sub{font-size:12px;color:var(--dim)}
+/* 橫條：整條是一顆按鈕（左鍵升、右鍵降），格子只是顯示。頭尾標出 0 與上限，
+   玩家一眼知道這條有多長、自己走到哪。價格放在條的下方一行。 */
+.talent-bar-row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.talent-bar{display:flex;gap:4px;align-items:center;background:none;border:0;padding:0;cursor:pointer}
+.talent-bar .cap{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.talent-bar .seg{width:34px;height:10px;border:1px solid var(--edge);border-radius:2px;
+  background:var(--panel)}
+.talent-bar .seg.on{background:var(--accent);border-color:var(--accent)}
+.talent-bar:disabled{opacity:.35;cursor:not-allowed}
+.talent-hint{font-size:12px;color:var(--dim)}
+.talent-hint .price{font-family:var(--mono);color:var(--gold);margin:0 3px;font-weight:700}
+.talent-hint .price.on{color:var(--accent)}
 
 .stitch{width:64px;height:64px;border-radius:50%;background:#ece7d6;position:relative;
   box-shadow:inset -6px -8px 0 rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.15)}
