@@ -44,11 +44,15 @@ interface EventsData {
     readonly boosted: number;
     readonly boost_traits: readonly string[];
     readonly fail_penalty: { readonly trait: string; readonly add_fail_percent: number };
+    /** 天賦「福將」的乘算層，平常是 1。 */
+    readonly talent_multiplier: number;
     readonly mode_modifier: {
       readonly safe: number;
       readonly normal: number;
       readonly bold: number;
       readonly bold_immune_trait: string;
+      /** 天賦「孤注一擲」的乘算層，只乘豪賭，平常是 1。 */
+      readonly bold_multiplier: number;
       readonly cap: number;
     };
   };
@@ -157,7 +161,12 @@ export function drawEvent(world: World, ctx: EventContext): GameEvent {
   return chosen;
 }
 
-/** 三種應對方式各自的成功率（百分比）。 */
+/**
+ * 三種應對方式各自的成功率（百分比）。
+ *
+ * 天賦一律走乘算層（見 ADR 0033），而且**三格都夾在 `cap`**：加算的天賦疊在「大心臟
+ * 選豪賭」這種本來就沒有懲罰的組合上會直接破表，乘算不會，但仍要有上限收尾。
+ */
 export function successChances(traits: ReadonlySet<string>): Record<EventMode, number> {
   const cfg = data.good_result_chance;
   const mod = cfg.mode_modifier;
@@ -166,10 +175,12 @@ export function successChances(traits: ReadonlySet<string>): Record<EventMode, n
   if (traits.has(cfg.fail_penalty.trait)) base -= cfg.fail_penalty.add_fail_percent;
 
   const boldPenalty = traits.has(mod.bold_immune_trait) ? 0 : mod.bold;
+  const talent = cfg.talent_multiplier;
+  const capped = (v: number): number => Math.min(mod.cap, v);
   return {
-    safe: Math.min(mod.cap, base + mod.safe),
-    normal: base + mod.normal,
-    bold: base + boldPenalty,
+    safe: capped((base + mod.safe) * talent),
+    normal: capped((base + mod.normal) * talent),
+    bold: capped((base + boldPenalty) * talent * mod.bold_multiplier),
   };
 }
 

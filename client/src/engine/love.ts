@@ -129,6 +129,9 @@ export function breakupChance(
  *
  * 三個來源疊加：**吞下去累積的裂痕**、旅外的安排、基礎值。帶她走是駝峰（適應期
  * 會過去），遠距離是平穩的一條高線（她的人生還在，只是時差對不上）。
+ *
+ * 天賦「心無旁騖」是**最後才乘**的一層（見 ADR 0033）：它按比例減災，所以裂痕
+ * 累得越多、它擋掉的越多，但永遠壓不到零。
  */
 export function turmoilChance(love: LoveState): number {
   if (!hasPartner(love)) return 0;
@@ -141,7 +144,7 @@ export function turmoilChance(love: LoveState): number {
   } else if (love.overseas === 'apart') {
     p += cfg.overseas.apart.turmoil_add;
   }
-  return Math.max(0, p);
+  return Math.max(0, p * t.talent_multiplier);
 }
 
 /**

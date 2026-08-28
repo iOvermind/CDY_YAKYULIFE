@@ -108,8 +108,8 @@
       "group": "事件卡",
       "desc": "全力一搏的那一刻，別人在算風險，你在算贏面。",
       "levels": [
-        { "cost": 6, "effect_text": "全力一搏的成功率 +10%", "effects": [{ "path": "events.good_result_chance.mode_modifier.bold", "op": "add", "value": 10 }] },
-        { "cost": 15, "effect_text": "全力一搏的成功率 +20%", "effects": [{ "path": "events.good_result_chance.mode_modifier.bold", "op": "add", "value": 20 }] }
+        { "cost": 6, "effect_text": "全力一搏的成功率 ×1.15", "effects": [{ "path": "events.good_result_chance.mode_modifier.bold_multiplier", "op": "mul", "value": 1.15 }] },
+        { "cost": 15, "effect_text": "全力一搏的成功率 ×1.3", "effects": [{ "path": "events.good_result_chance.mode_modifier.bold_multiplier", "op": "mul", "value": 1.3 }] }
       ]
     },
     {
@@ -118,8 +118,8 @@
       "group": "事件卡",
       "desc": "同樣的選擇，你的結果就是比較好看。沒有人解釋得了。",
       "levels": [
-        { "cost": 7, "effect_text": "事件卡的基礎成功率 +6%", "effects": [{ "path": "events.good_result_chance.base", "op": "add", "value": 6, "max": 95 }] },
-        { "cost": 17, "effect_text": "事件卡的基礎成功率 +12%", "effects": [{ "path": "events.good_result_chance.base", "op": "add", "value": 12, "max": 95 }] }
+        { "cost": 7, "effect_text": "事件卡的成功率 ×1.1", "effects": [{ "path": "events.good_result_chance.talent_multiplier", "op": "mul", "value": 1.1 }] },
+        { "cost": 17, "effect_text": "事件卡的成功率 ×1.2", "effects": [{ "path": "events.good_result_chance.talent_multiplier", "op": "mul", "value": 1.2 }] }
       ]
     },
 
@@ -129,8 +129,8 @@
       "group": "傷病",
       "desc": "撞牆、滑壘、連續出賽——身體居然都撐住了。",
       "levels": [
-        { "cost": 6, "effect_text": "受傷機率 −8%", "effects": [{ "path": "injury.chance.base", "op": "add", "value": -8, "min": 0 }] },
-        { "cost": 15, "effect_text": "受傷機率 −15%", "effects": [{ "path": "injury.chance.base", "op": "add", "value": -15, "min": 0 }] }
+        { "cost": 6, "effect_text": "受傷機率 ×0.8", "effects": [{ "path": "injury.chance.talent_multiplier", "op": "mul", "value": 0.8 }] },
+        { "cost": 15, "effect_text": "受傷機率 ×0.65", "effects": [{ "path": "injury.chance.talent_multiplier", "op": "mul", "value": 0.65 }] }
       ]
     },
     {
@@ -139,8 +139,8 @@
       "group": "傷病",
       "desc": "醫生說一年，你八個月就站回打擊區。",
       "levels": [
-        { "cost": 5, "effect_text": "大傷後隔年報廢的機率減半", "effects": [{ "path": "injury.severity.major.rehab_next_year.chance", "op": "add", "value": -10, "min": 0 }] },
-        { "cost": 13, "effect_text": "大傷後幾乎不會影響隔年", "effects": [{ "path": "injury.severity.major.rehab_next_year.chance", "op": "set", "value": 2, "min": 0 }] }
+        { "cost": 5, "effect_text": "大傷後隔年報廢的機率減半", "effects": [{ "path": "injury.severity.major.rehab_next_year.chance", "op": "mul", "value": 0.5 }] },
+        { "cost": 13, "effect_text": "大傷後隔年報廢的機率只剩 1/5", "effects": [{ "path": "injury.severity.major.rehab_next_year.chance", "op": "mul", "value": 0.2 }] }
       ]
     },
 
@@ -184,11 +184,22 @@
     {
       "id": "focused",
       "name": "心無旁騖",
-      "group": "職業",
+      "group": "感情",
       "desc": "場外的事就留在場外。你只想著下一個打席。",
       "levels": [
-        { "cost": 5, "effect_text": "感情風波的機率下降", "effects": [{ "path": "love.turmoil.base_chance", "op": "add", "value": -5, "min": 0 }] },
-        { "cost": 12, "effect_text": "感情風波幾乎不發生", "effects": [{ "path": "love.turmoil.base_chance", "op": "set", "value": 2, "min": 0 }] }
+        { "cost": 5, "effect_text": "感情風波的機率 ×0.7", "effects": [{ "path": "love.turmoil.talent_multiplier", "op": "mul", "value": 0.7 }] },
+        { "cost": 12, "effect_text": "感情風波的機率 ×0.4", "effects": [{ "path": "love.turmoil.talent_multiplier", "op": "mul", "value": 0.4 }] }
+      ]
+    },
+    {
+      "id": "childhood_sweetheart",
+      "name": "青梅竹馬",
+      "group": "感情",
+      "desc": "換了制服、換了城市、換了身分，那個人還在。",
+      "_note": "乘的是**撐過關卡的機率**而不是分手機率——這個天賦要保證的就是「這段感情走得過身分轉換」。見 ADR 0033。",
+      "levels": [
+        { "cost": 5, "effect_text": "升學與進職業的關卡更容易撐過去", "effects": [{ "path": "love.amateur.checkpoint.talent_survive_multiplier", "op": "mul", "value": 1.3 }] },
+        { "cost": 12, "effect_text": "升學與進職業的關卡幾乎一定撐得過去", "effects": [{ "path": "love.amateur.checkpoint.talent_survive_multiplier", "op": "mul", "value": 1.5 }] }
       ]
     }
   ]

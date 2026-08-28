@@ -24,20 +24,30 @@ describe('受傷機率', () => {
     expect(injuryChance({ age: after, traits: t })).toBe(injuryChance({ age: after, traits: none }));
   });
 
-  it('魔鬼筋肉人是上限、帕瓦諾是下限', () => {
-    expect(injuryChance({ age: 38, traits: new Set(['iron']) })).toBe(cfg.chance.traits.iron.cap);
-    expect(injuryChance({ age: 22, traits: new Set(['glass']) })).toBe(
-      cfg.chance.traits.glass.floor,
+  // 體質是**起點**不是上下限：它換掉基礎值，之後的年齡與體力照樣加在它身上。
+  it('體質特性換掉的是基礎值', () => {
+    expect(injuryChance({ age: 22, traits: new Set(['iron']) })).toBe(cfg.chance.traits.iron.base);
+    expect(injuryChance({ age: 22, traits: new Set(['glass']) })).toBe(cfg.chance.traits.glass.base);
+    expect(injuryChance({ age: 22, traits: none })).toBe(cfg.chance.base);
+  });
+
+  it('年齡照樣加在體質的起點上——魔鬼筋肉人也會老', () => {
+    const iron = new Set(['iron']);
+    expect(injuryChance({ age: 38, traits: iron })).toBeGreaterThan(
+      injuryChance({ age: 22, traits: iron }),
+    );
+    expect(injuryChance({ age: 38, traits: iron })).toBe(
+      cfg.chance.traits.iron.base + cfg.chance.age_steps.tiers[0]!.add,
     );
   });
 
-  it('兩個極端體質並存時取固定值——說誰壓過誰都不對', () => {
-    expect(injuryChance({ age: 30, traits: new Set(['iron', 'glass']) })).toBe(
-      cfg.chance.traits.both.value,
+  it('兩個極端體質並存時是自己的一組起點——說誰壓過誰都不對', () => {
+    expect(injuryChance({ age: 22, traits: new Set(['iron', 'glass']) })).toBe(
+      cfg.chance.traits.both.base,
     );
   });
 
-  it('事件卡自找的風險不受魔鬼筋肉人上限保護', () => {
+  it('事件卡自找的風險照樣疊上去', () => {
     const iron = new Set(['iron']);
     const plain = injuryChance({ age: 25, traits: iron });
     expect(injuryChance({ age: 25, traits: iron, extraRisk: 20 })).toBe(plain + 20);
@@ -88,11 +98,15 @@ describe('受傷機率', () => {
     expect(short).toBeLessThan(long);
   });
 
-  // 體力可以買到魔鬼筋肉人給的東西，不能買到比它更多的——否則特性就不是特性了。
-  it('體力折滿正好落在魔鬼筋肉人的上限上，不越過它', () => {
+  // 練到頂約等於換一副好體質——但只是**接近**，起點的差距買不完。
+  it('體力折滿的量級對得上換一副體質，而且追不過真的魔鬼筋肉人', () => {
     const maxed = injuryChance({ age: 25, traits: none, stamina: 99, position: 'DH' });
-    expect(maxed).toBe(cfg.chance.traits.iron.cap);
     expect(maxed).toBe(cfg.chance.base - cfg.chance.stamina.max_cut);
+    expect(maxed).toBe(cfg.chance.traits.iron.base);
+    // 但體質是起點：真的魔鬼筋肉人練到同樣的地方，還是再低一截。
+    expect(injuryChance({ age: 25, traits: new Set(['iron']), stamina: 99, position: 'DH' })).toBe(
+      maxed - cfg.chance.stamina.max_cut,
+    );
   });
 
   it('折扣有上限——再練下去不會歸零', () => {
@@ -111,9 +125,14 @@ describe('受傷機率', () => {
     }
   });
 
-  it('體力算在體質的上下限裡面，不像事件卡那樣穿透魔鬼筋肉人', () => {
+  // 體質是起點不是保險：魔鬼筋肉人照樣吃這一段折扣，也照樣得練才有。
+  it('魔鬼筋肉人照樣吃體力折扣，練不夠就沒有', () => {
     const iron = new Set(['iron']);
-    expect(injuryChance({ age: 38, traits: iron, stamina: 20 })).toBe(cfg.chance.traits.iron.cap);
+    const par = injuryChance({ age: 38, traits: iron });
+    const lazy = injuryChance({ age: 38, traits: iron, stamina: 20, position: 'DH' });
+    const drilled = injuryChance({ age: 38, traits: iron, stamina: 99, position: 'DH' });
+    expect(lazy).toBe(par + cfg.chance.stamina.max_add);
+    expect(drilled).toBe(par - cfg.chance.stamina.max_cut);
   });
 
   it('永遠在上下限之內', () => {

@@ -34,10 +34,16 @@ import {
   traits,
 } from '../data/index.ts';
 
-/** 一條覆蓋：改哪一個設定、怎麼改、夾在哪。 */
+/**
+ * 一條覆蓋：改哪一個設定、怎麼改、夾在哪。
+ *
+ * `mul` 存在的理由見 ADR 0033：機率類的設定只接受乘算。加算會疊出破表的數字
+ * （「今晚打老虎」再加一次百分比就衝破上限），乘算則天然是比例的，疊幾層都還在
+ * 同一個尺度上。
+ */
 export interface Effect {
   readonly path: string;
-  readonly op: 'add' | 'set';
+  readonly op: 'add' | 'set' | 'mul';
   readonly value: number;
   readonly min?: number;
   readonly max?: number;
@@ -123,7 +129,10 @@ export function applyTalents(levels: TalentLevels): () => void {
       const before = target.container[target.key] ?? 0;
       restore.push({ container: target.container, key: target.key, value: before });
 
-      let next = effect.op === 'set' ? effect.value : before + effect.value;
+      let next: number;
+      if (effect.op === 'set') next = effect.value;
+      else if (effect.op === 'mul') next = before * effect.value;
+      else next = before + effect.value;
       if (effect.min !== undefined) next = Math.max(effect.min, next);
       if (effect.max !== undefined) next = Math.min(effect.max, next);
       target.container[target.key] = next;

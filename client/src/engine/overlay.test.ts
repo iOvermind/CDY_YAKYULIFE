@@ -56,11 +56,12 @@ describe('天賦的路徑', () => {
 
 describe('套用與還原', () => {
   it('套上去會改，還原之後回到原值', () => {
-    const before = injury.chance.base;
+    // 天賦改的是乘算層，不是體質給的起點（base）——見 ADR 0033。
+    const before = injury.chance.talent_multiplier;
     const revert = applyTalents({ ironframe: 1 });
-    expect(injury.chance.base).toBeLessThan(before);
+    expect(injury.chance.talent_multiplier).toBeLessThan(before);
     revert();
-    expect(injury.chance.base).toBe(before);
+    expect(injury.chance.talent_multiplier).toBe(before);
   });
 
   it('沒買的天賦什麼都不做', () => {

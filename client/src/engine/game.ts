@@ -2466,11 +2466,16 @@ export class Game {
    * **還不能求婚的人不該因為沒結婚而被拆散**，因此學生時期不累計「婚期一延再延」
    * 的風險，改成身分轉換各擲一次。撐過去的對象會延續到職業生涯——那個在國中認識
    * 的人，可能就是日後在本壘板後方跪下來求婚的對象。
+   *
+   * 天賦「青梅竹馬」乘的是**撐過去的機率**而不是分手機率（見 ADR 0033）：這個天賦
+   * 要保證的就是「這段感情走得過身分轉換」。
    */
   #loveCheckpoint(label: string): void {
     const love = this.#love;
     const rng = this.world.stream('career');
-    const broke = rng.chance(loveCfg.amateur.checkpoint.break_chance);
+    const cp = loveCfg.amateur.checkpoint;
+    const survive = (100 - cp.break_chance) * cp.talent_survive_multiplier;
+    const broke = rng.chance(Math.max(0, 100 - survive));
     if (love.status !== 'dating' || !broke) return;
 
     const ex = love.partner ?? '';

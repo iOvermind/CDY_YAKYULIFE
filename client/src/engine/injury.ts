@@ -81,8 +81,10 @@ function staminaRisk(options: {
 /**
  * 這一季的受傷機率。
  *
- * 順序要緊：先套年齡與逃學威龍的加減，再套魔鬼筋肉人／帕瓦諾的上下限，**最後才加事件
- * 卡自找的額外風險**——那是自己選的，不該由體質買單，因此不受魔鬼筋肉人上限保護。
+ * 順序要緊：**體質特性決定基礎值**（魔鬼筋肉人 10／帕瓦諾 40／並存 25／其餘 15），再套
+ * 年齡、體力、逃學威龍的加減，然後才加事件卡自找的額外風險——那是自己選的。夾在
+ * clamp 之後，最後乘上天賦的 `talent_multiplier`：天賦是玩家帶進場的，在夾擠之外。
+ * 見 ADR 0033。
  */
 export function injuryChance(options: {
   readonly age: number;
@@ -97,7 +99,15 @@ export function injuryChance(options: {
   readonly leagueGames?: number | undefined;
 }): number {
   const c = cfg.chance;
-  let p = c.base;
+  const t = c.traits;
+
+  const iron = options.traits.has('iron');
+  const glass = options.traits.has('glass');
+  let p: number;
+  if (iron && glass) p = t.both.base;
+  else if (iron) p = t.iron.base;
+  else if (glass) p = t.glass.base;
+  else p = c.base;
 
   for (const tier of c.age_steps.tiers) {
     if (options.age >= tier.from_age) {
@@ -108,17 +118,11 @@ export function injuryChance(options: {
 
   p += staminaRisk(options);
 
-  const t = c.traits;
   if (options.traits.has('academy') && options.age < t.academy.before_age) p += t.academy.add;
 
-  const iron = options.traits.has('iron');
-  const glass = options.traits.has('glass');
-  if (iron && glass) p = t.both.value;
-  else if (iron) p = Math.min(p, t.iron.cap);
-  else if (glass) p = Math.max(p, t.glass.floor);
-
   p += options.extraRisk ?? 0;
-  return Math.max(c.clamp.min, Math.min(c.clamp.max, p));
+  p = Math.max(c.clamp.min, Math.min(c.clamp.max, p));
+  return p * c.talent_multiplier;
 }
 
 /**

@@ -215,6 +215,8 @@ export interface AbilitiesData {
 export interface InjuryData {
   readonly chance: {
     readonly base: number;
+    /** 天賦的乘算層，平常是 1。套在所有加減與 clamp 之後——見 ADR 0033。 */
+    readonly talent_multiplier: number;
     readonly age_steps: { readonly tiers: readonly { readonly from_age: number; readonly add: number }[] };
     readonly clamp: Range;
     /**
@@ -232,9 +234,9 @@ export interface InjuryData {
     };
     readonly traits: {
       readonly academy: { readonly before_age: number; readonly add: number };
-      readonly iron: { readonly cap: number };
-      readonly glass: { readonly floor: number };
-      readonly both: { readonly value: number };
+      readonly iron: { readonly base: number };
+      readonly glass: { readonly base: number };
+      readonly both: { readonly base: number };
     };
   };
   readonly severity: {
@@ -270,7 +272,11 @@ export interface LoveData {
       readonly per_rank: Readonly<Record<string, number>>;
       readonly clamp: Range;
     };
-    readonly checkpoint: { readonly break_chance: number };
+    readonly checkpoint: {
+      readonly break_chance: number;
+      /** 天賦「青梅竹馬」的乘算層，平常是 1。乘存活率，不是分手率。見 ADR 0033。 */
+      readonly talent_survive_multiplier: number;
+    };
   };
   readonly dating: {
     readonly breakup: { readonly from_years: number; readonly base: number; readonly per_year: number };
@@ -299,6 +305,8 @@ export interface LoveData {
   };
   readonly turmoil: {
     readonly base_chance: number;
+    /** 天賦「心無旁騖」的乘算層，平常是 1。最後才乘。見 ADR 0033。 */
+    readonly talent_multiplier: number;
     readonly swallow: { readonly crack_adds_chance: number; readonly reward_penalty_per_crack: number };
     readonly leave: { readonly ability_loss: number };
     readonly kinds: readonly { readonly id: string; readonly text: string }[];
