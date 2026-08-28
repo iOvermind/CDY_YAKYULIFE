@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, isOffline, type Me, type ProgressStore } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
+import { cabinetTiles, type AchievementTile } from './engine/achievements.ts';
 import { costOf, maxLevelOf } from './engine/overlay.ts';
 
 /** 帳號的連線狀態。 */
@@ -243,7 +244,8 @@ function AchievementPanel({
           className={tab === 'achievements' ? 'on' : undefined}
           onClick={() => setTab('achievements')}
         >
-          成就 {me.achievements.length}
+          {/* 數的是收斂後的格數——500／1000／1500 安是一格，不是三格。 */}
+          成就 {cabinetTiles(me.achievements).length}
         </button>
         <button
           type="button"
@@ -274,19 +276,20 @@ function AchievementList({ me }: { me: Me }) {
     );
   }
 
-  // 依分類分組，但**組內維持伺服器給的順序**（最新的在前）——玩家開這個面板
-  // 多半是想看剛才那一局拿到什麼。
-  const groups = new Map<string, Me['achievements'][number][]>();
-  for (const a of me.achievements) {
-    const list = groups.get(a.category);
-    if (list === undefined) groups.set(a.category, [a]);
-    else list.push(a);
+  // 階梯收斂成一格、順序固定（見 ADR 0031）——判定全部在 engine，這裡只畫。
+  const tiles = cabinetTiles(me.achievements);
+  const groups = new Map<string, AchievementTile[]>();
+  for (const t of tiles) {
+    const list = groups.get(t.category);
+    if (list === undefined) groups.set(t.category, [t]);
+    else list.push(t);
   }
 
   return (
     <>
       <p className="modal-note">
-        生涯累積 {me.apEarned} AP，目前可用 {me.ap} AP。同一項成就只給一次點數。
+        生涯累積 {me.apEarned} AP，目前可用 {me.ap} AP。同一項成就只給一次點數，
+        <b>同一座階梯只佔一格</b>——顯示的是爬到的最高一階。
       </p>
       {[...groups.entries()].map(([category, items]) => (
         <div key={category} className="achgroup">
@@ -296,12 +299,12 @@ function AchievementList({ me }: { me: Me }) {
               {items.reduce((sum, a) => sum + a.points, 0)} AP
             </span>
           </h3>
-          <ul>
+          {/* 小方塊而不是逐條列——櫃子是拿來一眼掃過的，不是拿來讀的。點數與
+              日期收進 tooltip，需要的人再問。 */}
+          <ul className="achtiles">
             {items.map((a) => (
-              <li key={a.id}>
-                <span className="achname">{a.name}</span>
-                <span className="sub">{DATE.format(new Date(a.at))}</span>
-                <span className="achpts">+{a.points}</span>
+              <li key={a.id} title={`+${String(a.points)} AP · ${DATE.format(new Date(a.at))}`}>
+                {a.name}
               </li>
             ))}
           </ul>

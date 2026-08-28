@@ -188,7 +188,7 @@ describe('分級', () => {
     expect(applyTierFloors(4, new Set(['pitcher_of_year']))).toBe(1);
   });
 
-  it('拿過單項王的人至少是每日', () => {
+  it('拿過單項王的人至少是每日先發', () => {
     expect(applyTierFloors(4, new Set(['hr_king']))).toBe(2);
   });
 

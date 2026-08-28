@@ -97,6 +97,7 @@ import {
   type Shares,
 } from './metrics.ts';
 import { esc, Flow, type Option } from './flow.ts';
+import { joinName } from './naming.ts';
 import { applyTalents, type TalentLevels } from './overlay.ts';
 import {
   advanceStandards,
@@ -938,7 +939,6 @@ export class Game {
     const honorRanks = new Set(amateur.amateur_international.honor_ranks.values);
     for (const code of qualifiedTournaments(this.#stage, season)) {
       const result = playYouthTournament(this.world, code, overall);
-      const prefix = amateur.amateur_international.honor_prefix;
 
       // 徵召一次就是一次，不管名次——「國家隊常客」看的是入選次數。
       this.#counts.internationalCaps++;
@@ -946,9 +946,11 @@ export class Game {
       if (honorRanks.has(result.rank)) this.#counts.internationalPodiums++;
 
       // 國際賽與國內大賽的榮譽各自獨立——贏下謝國城盃是一項成就，代表台灣
-      // 打 LLB 拿冠軍是另一項。
+      // 打 LLB 拿冠軍是另一項。名字與職業期的國家隊同一套組法（見 naming.ts）。
       if (honorRanks.has(result.rank)) {
-        this.#addHonor(`${prefix}${result.tournament}${result.rank}`);
+        this.#addHonor(
+          joinName(amateur.amateur_international.honor_prefix, result.tournament, result.rank),
+        );
       }
       this.#grantPoints(result.points);
       // 只有國際賽冠軍給訓練骰加成，且記的是拿下時所處的階段。
@@ -1189,7 +1191,7 @@ export class Game {
     this.#counts.domesticEntries += season.results.length;
     this.#counts.domesticTitles += season.championships.length;
     this.#counts.domesticPodiums += season.honors.length;
-    for (const h of season.honors) this.#addHonor(`${h.cup}${h.rank}`);
+    for (const h of season.honors) this.#addHonor(joinName(h.cup, h.rank));
     if (season.championships.length > 0) {
       this.flow.card(
         'gold',
@@ -2584,11 +2586,14 @@ export class Game {
     // 奪冠的隔年多擲訓練骰，與養成期的大賽同一套。
     if (result.rankIndex === 0) this.#lastChampionships.push('PRO');
 
-    const label = `${this.#year} ${tournament.name}${result.rank}`;
-    if (isHonorRank(result.rank)) this.#addHonor(label);
+    // **不帶年份**：2030 與 2034 的經典賽冠軍是同一項成就（見 ADR 0031 的鄰居
+    // ——成就 id 本來就要去年份）。年份留在生涯日誌裡，不留在榮譽的名字上。
+    if (isHonorRank(result.rank)) {
+      this.#addHonor(joinName(intl.honor_prefix, tournament.name, result.rank));
+    }
     let mvpLine = '';
     if (result.mvp) {
-      this.#addHonor(`${this.#year} ${tournament.name}${intl.mvp.suffix}`);
+      this.#addHonor(joinName(intl.honor_prefix, tournament.name, intl.mvp.suffix));
       mvpLine = `你被選為<b class="hl">賽會 ${intl.mvp.suffix}</b>！`;
     }
     this.#intlScore += tournamentScore(result.rank, result.mvp);
@@ -2984,7 +2989,7 @@ export class Game {
 
     this.#awards.push(...won);
     const orgName = leagues.top_league_names[info.org] ?? info.org;
-    for (const a of won) this.#addHonor(`${orgName}${a.name}`);
+    for (const a of won) this.#addHonor(joinName(orgName, a.name));
     this.flow.card('gold', '年度獎項', won.map((a) => esc(a.name)).join('｜'));
   }
 

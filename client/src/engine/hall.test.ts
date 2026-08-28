@@ -77,7 +77,7 @@ describe('runBallot', () => {
     expect(r?.votes).toBe(0);
   });
 
-  it('每日以下連候選都進不了——「從來沒被討論過」不該寫成「差一點就上」', () => {
+  it('每日先發以下連候選都進不了——「從來沒被討論過」不該寫成「差一點就上」', () => {
     for (const tier of [2, 3, 4]) {
       expect(runBallot(new World('low'), career({ tier }))).toBeNull();
     }

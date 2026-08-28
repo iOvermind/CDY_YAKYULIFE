@@ -354,15 +354,18 @@ export interface AchievementsData {
     readonly hall: { readonly name: string; readonly default: number };
     readonly cumulative: {
       readonly name: string;
-      readonly points_per_rung: number;
+      /** 單階點數的上限。第 n 階值 `min(ceil(n/2), increment_cap)`。 */
+      readonly increment_cap: number;
       readonly rungs: Readonly<
         Record<
           string,
           {
             readonly name: string;
             readonly side: 'batter' | 'pitcher';
-            readonly values: readonly number[];
-            readonly display_divisor?: number;
+            /** 一個顯示單位等於幾個原始數據（投球局數存出局數，unit 3）。 */
+            readonly unit?: number;
+            readonly step: number;
+            readonly max: number;
           }
         >
       >;
@@ -684,6 +687,8 @@ export interface AmateurData {
     readonly ranks: readonly string[];
     readonly points: readonly number[];
     readonly honor_ranks: { readonly values: readonly string[] };
+    /** 榮譽字串的前綴。與養成期同一個——中華隊就是中華隊。 */
+    readonly honor_prefix: string;
     readonly mvp: {
       readonly by_rank: Readonly<Record<string, number>>;
       readonly clutch_multiplier: number;

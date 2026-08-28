@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { abilities, amateur, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
+import { joinName } from './naming.ts';
 
 const setup: GameSetup = {
   seed: 'test-seed',
@@ -270,7 +271,7 @@ describe('養成六年（國中三年 + 高中三年）', () => {
         (e) => e.kind === 'card' && e.title === '冠軍',
       ).length;
       const honors = (game.state?.honors ?? []).filter((h) =>
-        cupNames.some((cup) => h.endsWith(`${cup}冠軍`)),
+        cupNames.some((cup) => h === joinName(cup, '冠軍')),
       ).length;
       if (championCards === 0) expect(honors).toBe(0);
       else expect(honors).toBeGreaterThan(0);

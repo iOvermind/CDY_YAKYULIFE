@@ -43,6 +43,7 @@ import {
   winPct,
   type Baseline,
 } from './engine/metrics.ts';
+import { joinName } from './engine/naming.ts';
 import { isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
 import { positionName } from './engine/season.ts';
@@ -663,7 +664,7 @@ function HonorBoard({
     const league = leagues.top_league_names[a.org] ?? a.org;
     const key = `${a.org}:${a.code}`;
     const hit = tally.get(key);
-    if (hit === undefined) tally.set(key, { label: `${league}${a.name}`, years: [a.year] });
+    if (hit === undefined) tally.set(key, { label: joinName(league, a.name), years: [a.year] });
     else hit.years.push(a.year);
   }
   const shown = [...tally.values()].sort((a, b) => b.years.length - a.years.length);

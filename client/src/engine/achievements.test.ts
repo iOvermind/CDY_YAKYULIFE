@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { achievements as cfg } from '../data/index.ts';
+import { achievements as cfg, amateur } from '../data/index.ts';
 import type { BattingLine } from './amateurStats.ts';
 import { evaluateAchievements, type AchievementContext } from './achievements.ts';
+import { joinName } from './naming.ts';
 import type { CareerSummary, LeagueCareer } from './career.ts';
 
 const NONE = { win: 0, loss: 0 };
@@ -62,40 +63,41 @@ const ctx = (over: Partial<AchievementContext> = {}): AchievementContext => ({
 });
 
 describe('累積成就', () => {
-  const hitsRungs = cfg.categories.cumulative.rungs['hits']!.values;
+  // 階梯是等距的：`step` 一階，爬到 `max` 為止（見 ADR 0031）。
+  const hits = cfg.categories.cumulative.rungs['hits']!;
 
   it('一段真的失敗的生涯就是拿零分', () => {
     // 第一階刻意拉高：養出一個廢物不該有回報。
-    const poor = summary({ topTotal: { batting: bat({ hits: hitsRungs[0]! - 1 }), pitching: null } });
+    const poor = summary({ topTotal: { batting: bat({ hits: hits.step - 1 }), pitching: null } });
     const got = evaluateAchievements(ctx({ summary: poor }));
     expect(got.list.filter((a) => a.id.startsWith('cum:'))).toHaveLength(0);
     expect(got.points).toBe(0);
   });
 
   it('跨過幾階就給幾點，但清單上只列最高的那一階', () => {
-    const good = summary({ topTotal: { batting: bat({ hits: hitsRungs[1]! }), pitching: null } });
+    const good = summary({ topTotal: { batting: bat({ hits: hits.step * 2 }), pitching: null } });
     const rows = evaluateAchievements(ctx({ summary: good })).list.filter((a) =>
       a.id.startsWith('cum:career:hits'),
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.points).toBe(2);
-    expect(rows[0]?.name).toContain(String(hitsRungs[1]));
+    expect(rows[0]?.name).toContain(String(hits.step * 2));
   });
 
   it('各聯盟各算一份，另外再算一份一軍通算', () => {
     const s = summary({
-      leagues: [league({ batting: bat({ hits: hitsRungs[0]! }) })],
-      topTotal: { batting: bat({ hits: hitsRungs[0]! }), pitching: null },
+      leagues: [league({ batting: bat({ hits: hits.step }) })],
+      topTotal: { batting: bat({ hits: hits.step }), pitching: null },
     });
     const ids = evaluateAchievements(ctx({ summary: s })).list.map((a) => a.id);
-    expect(ids).toContain(`cum:CPBL:hits:${hitsRungs[0]}`);
-    expect(ids).toContain(`cum:career:hits:${hitsRungs[0]}`);
+    expect(ids).toContain(`cum:CPBL:hits:${hits.step}`);
+    expect(ids).toContain(`cum:career:hits:${hits.step}`);
   });
 });
 
 describe('同一項成就只給一次 AP', () => {
-  const hitsRungs = cfg.categories.cumulative.rungs['hits']!.values;
-  const s = summary({ topTotal: { batting: bat({ hits: hitsRungs[0]! }), pitching: null } });
+  const hits = cfg.categories.cumulative.rungs['hits']!;
+  const s = summary({ topTotal: { batting: bat({ hits: hits.step }), pitching: null } });
 
   it('已經領過的仍然列在清單上，但不再計分', () => {
     const first = evaluateAchievements(ctx({ summary: s }));
@@ -111,14 +113,19 @@ describe('同一項成就只給一次 AP', () => {
   });
 });
 
-describe('成就 id 不含年份', () => {
-  it('不同年份拿下的同一項榮譽是同一項成就', () => {
-    const a = evaluateAchievements(ctx({ honors: ['2030 世界棒球經典賽冠軍'] }));
-    const b = evaluateAchievements(ctx({ honors: ['2034 世界棒球經典賽冠軍'] }));
-    // 帶年份的話每一局都會被當成新解鎖，AP 就無限刷了。
-    expect(a.list[0]?.id).toBe(b.list[0]?.id);
-    // 顯示的名稱仍然保留年份——那是這一生的紀錄。
-    expect(a.list[0]?.name).toContain('2030');
+describe('同一項賽事只留最高的名次', () => {
+  const wbsc = (rank: string) => joinName(amateur.international.honor_prefix, '世界棒球經典賽', rank);
+
+  it('冠亞軍都拿過只出現一格，點數是冠軍的', () => {
+    const got = evaluateAchievements(ctx({ honors: [wbsc('亞軍'), wbsc('冠軍')] }));
+    const rows = got.list.filter((a) => a.id.startsWith('intl:'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.name).toBe(wbsc('冠軍'));
+  });
+
+  it('榮譽字串不帶年份——帶了的話每一年都會被當成新解鎖，AP 無限刷', () => {
+    const got = evaluateAchievements(ctx({ honors: [wbsc('冠軍')] }));
+    expect(got.list[0]?.id).not.toMatch(/\d{4}/);
   });
 });
 
@@ -140,13 +147,16 @@ describe('獎項', () => {
 });
 
 describe('生涯分級', () => {
-  it('只給最高的那一級，不逐級累加', () => {
+  it('只給最高的那一級，點數是這一級以下每一級的總和', () => {
     const hof = summary({ bestTier: 0 });
     const rows = evaluateAchievements(ctx({ summary: hof })).list.filter((a) =>
       a.id.startsWith('tier:'),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.points).toBe(cfg.categories.tier.by_tier[0]);
+    // 名人堂 = 4+3+2+1+0，階梯累加（見 ADR 0031）。
+    expect(rows[0]?.points).toBe(
+      cfg.categories.tier.by_tier.reduce((sum, v) => sum + v, 0),
+    );
   });
 
   it('最低那一級不給分', () => {
