@@ -336,8 +336,11 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
   border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
 /* 買過的用強調色框起來——一整頁天賦裡，玩家最先要找到的是自己已經有的那幾個。 */
 .talent.owned{border-color:var(--accent);background:var(--panel2)}
-@media (hover:hover){ .talent:not(:disabled):hover{border-color:var(--accent)} }
+@media (hover:hover){ .talent:not(:disabled):not(.broke):hover{border-color:var(--accent)} }
 .talent:disabled{opacity:.5;cursor:not-allowed}
+/* AP 不夠：跟 disabled 長一樣。已經買過的那幾張不是 disabled——右鍵還要能退錢——
+   所以反灰是另一條規則，不能只靠 `:disabled`。 */
+.talent.broke{opacity:.5;cursor:not-allowed}
 .talent-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .talent-head b{font-size:14.5px;color:var(--text)}
 .talent-head .sub{font-family:var(--mono);font-size:11.5px;color:var(--dim)}

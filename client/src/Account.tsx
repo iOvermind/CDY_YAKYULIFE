@@ -361,7 +361,8 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
             const level = me.talents[t.id] ?? 0;
             const max = maxLevelOf(t.id);
             const next = t.levels[level];
-            const affordable = next !== undefined && me.ap >= next.cost;
+            const canBuy = next !== undefined && me.ap >= next.cost;
+            const short = next === undefined ? 0 : next.cost - me.ap;
             // 降一級退的就是「爬上這一級付的那一筆」——全額，沒有價差。
             const prev = level > 0 ? (t.levels[level - 1]?.cost ?? 0) : 0;
             // 每一級的效果收進 tooltip：常態攤開來的話，一整頁天賦會變成一面
@@ -378,11 +379,16 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
               <button
                 type="button"
                 key={t.id}
-                className={level > 0 ? 'talent owned' : 'talent'}
-                disabled={busy !== null || (next === undefined && level === 0)}
-                title={`${tip}\n\n左鍵升一級、右鍵降一級`}
+                className={`talent${level > 0 ? ' owned' : ''}${canBuy || next === undefined ? '' : ' broke'}`}
+                /*
+                  **買不起但退得掉的時候不能 disable**：`disabled` 的按鈕收不到
+                  `contextmenu`，玩家會被鎖在一個退不回來的等級上。那種卡片只反灰
+                  （`.broke`），右鍵照樣退錢；真的什麼都不能做的才 disable。
+                */
+                disabled={busy !== null || (level === 0 && !canBuy)}
+                title={`${tip}\n\n左鍵升一級、右鍵降一級${canBuy || next === undefined ? '' : `\nAP 不夠，還差 ${String(short)} 點`}`}
                 onClick={() => {
-                  if (affordable) act(t.id, level + 1);
+                  if (canBuy) act(t.id, level + 1);
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -410,7 +416,9 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                   ) : (
                     <>
                       升到 Lv{level + 1} 需
-                      <b className={affordable ? 'price on' : 'price'}>{next.cost} AP</b>
+                      <b className={canBuy ? 'price on' : 'price'}>{next.cost} AP</b>
+                      {/* 差多少要寫在卡片上：反灰只說得出「不行」，說不出「還差幾點」。 */}
+                      {!canBuy && `（還差 ${String(short)}）`}
                     </>
                   )}
                   {level > 0 && `・右鍵退回 Lv${level - 1}，返還 ${prev} AP`}
