@@ -292,7 +292,7 @@ function AchievementList({ me }: { me: Me }) {
             <span className="sub">{s.points} AP</span>
           </h3>
           {s.groups.map((g) => (
-            <div key={g.title ?? '-'}>
+            <div key={g.title ?? '-'} className="achsub">
               {/* 小標只有在大標底下真的分得出兩堆時才出現（聯盟＝獎項＋累積）。 */}
               {g.title !== null && <h4>{g.title}</h4>}
               {/* 小方塊而不是逐條列——櫃子是拿來一眼掃過的，不是拿來讀的。點數與

@@ -316,10 +316,11 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .achgroup h3{font-family:var(--head);font-size:12px;letter-spacing:.24em;color:var(--dim);
   margin:0 0 9px;display:flex;justify-content:space-between;align-items:baseline}
 .achgroup h3 .sub{font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:0}
-/* 間隔掛在磚牆下方而不是小標上方：小標的行高會多帶半個 leading，兩邊各給
-   一半的話，標題離下面自己的磚反而比離上一段的磚遠，讀起來會分錯組。 */
-.achgroup ul{list-style:none;margin:0 0 14px;padding:0}
-.achgroup ul:last-child{margin-bottom:0}
+.achgroup ul{list-style:none;margin:0;padding:0}
+/* 間隔掛在分組外層，不是掛在 ul 上：每個分組都自己包一層 div，ul 永遠是那層
+   的最後一個小孩，掛在 ul 上的 margin 會被 :last-child 全部吃掉。分組之間跟
+   大標底下同寬（9px），小標離自己的磚 6px——上面寬、下面窄才不會讀錯組。 */
+.achsub + .achsub{margin-top:9px}
 /* 小標比大標輕：聯盟才是玩家在找的那一層，獎項／累積只是它底下的隔板。 */
 .achgroup h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
   opacity:.7;font-weight:400;line-height:1;margin:0 0 6px}
