@@ -7,6 +7,7 @@ import {
   growthCurve,
   rollTrainingDice,
   train,
+  untrain,
 } from './growth.ts';
 import { World } from './rng.ts';
 
@@ -184,6 +185,91 @@ describe('train', () => {
 
   it('拒絕負點數——衰退要走 decline()', () => {
     expect(() => train(50, -1, 80, 0, curve)).toThrow(RangeError);
+  });
+});
+
+describe('untrain', () => {
+  /**
+   * 找一個「退下去那一級要價大於 1 點」的能力值——蓄力槽只在那一段才有戲。
+   * 退級退還的是 v-1 → v 那一級的價錢，所以要看的是 abilityCost(v - 1)。
+   */
+  const expensive = (() => {
+    for (let v = abilities.scale.min + 1; v <= abilities.scale.max; v++) {
+      if (abilityCost(v - 1, 80, curve) > 1) return v;
+    }
+    throw new Error('曲線上找不到成本大於 1 的能力值');
+  })();
+
+  it('低段扣幾點就掉幾級——一級 1 點時與舊行為一致', () => {
+    expect(abilityCost(30, 80, curve)).toBe(1);
+    const r = untrain(30, 5, 80, 0, curve);
+    expect(r.value).toBe(25);
+    expect(r.gained).toBe(-5);
+    expect(r.carry).toBe(0);
+  });
+
+  it('不夠退一級的點數留成欠點，不動能力值', () => {
+    const cost = abilityCost(expensive - 1, 80, curve);
+    const r = untrain(expensive, cost - 1, 80, 0, curve);
+    expect(r.gained).toBe(0);
+    expect(r.value).toBe(expensive);
+    expect(r.carry).toBe(-(cost - 1));
+  });
+
+  it('欠滿一級才退級，退還的是那一級自己的價錢', () => {
+    const cost = abilityCost(expensive - 1, 80, curve);
+    const r = untrain(expensive, cost, 80, 0, curve);
+    expect(r.gained).toBe(-1);
+    expect(r.value).toBe(expensive - 1);
+    expect(r.carry).toBe(0);
+  });
+
+  it('先扣蓄力槽裡的點，扣得動就不掉級', () => {
+    const r = untrain(expensive, 2, 80, 3, curve);
+    expect(r.gained).toBe(0);
+    expect(r.carry).toBe(1);
+  });
+
+  /**
+   * 這條是方案 A 的全部理由：加了再扣同樣的點數，要回到**完全相同**的狀態。
+   * 舊做法加點走成本曲線、扣值走 1:1，於是能力越高，同一張事件卡的下檔就越
+   * 比上檔重——這個往返測試在那個版本上必然失敗。
+   */
+  it('加點與扣點對稱：+n 之後 −n 回到原樣', () => {
+    for (let v = abilities.scale.min + 5; v <= abilities.scale.max - 5; v++) {
+      for (const points of [1, 2, 3, 4]) {
+        const up = train(v, points, 80, 0, curve);
+        const back = untrain(up.value, points, 80, up.carry, curve);
+        expect(`${v}+${points}: ${back.value}/${back.carry}`).toBe(`${v}+${points}: ${v}/0`);
+      }
+    }
+  });
+
+  it('扣到量表底部就停住，欠的點算浪費', () => {
+    const floor = abilities.scale.hard_floor;
+    const r = untrain(floor + 1, 100, 80, 0, curve);
+    expect(r.value).toBe(floor);
+    expect(r.carry).toBe(0);
+    expect(r.overflow).toBeGreaterThan(0);
+  });
+
+  /**
+   * 欠點要能反向結算：成本變便宜之後（衰退、天花板提升、二刀流），原本欠不
+   * 夠一級的點數可能已經欠得夠了。餵 0 點進去就該把帳結掉。
+   */
+  it('餵 0 點可以結算已經欠夠一級的槽', () => {
+    const cost = abilityCost(expensive - 1, 80, curve);
+    const settled = untrain(expensive, 0, 80, -cost, curve);
+    expect(settled.gained).toBe(-1);
+    expect(settled.carry).toBe(0);
+
+    const notYet = untrain(expensive, 0, 80, -(cost - 1), curve);
+    expect(notYet.gained).toBe(0);
+    expect(notYet.carry).toBe(-(cost - 1));
+  });
+
+  it('拒絕負點數——加點要走 train()', () => {
+    expect(() => untrain(50, -1, 80, 0, curve)).toThrow(RangeError);
   });
 });
 

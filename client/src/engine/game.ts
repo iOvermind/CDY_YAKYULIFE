@@ -114,6 +114,7 @@ import {
   raiseCeiling,
   rollTrainingDice,
   train,
+  untrain,
 } from './growth.ts';
 import { injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
 import {
@@ -261,8 +262,10 @@ export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Se
  * 會安靜地重出一個不同的人生。
  *
  * 2：大賽點數改成一次付滿該級成本（ADR 0032）。
+ * 3：事件扣點改走成本曲線（ADR 0033）。同一張事件卡，能力 64 的球員舊規則掉 3 級、
+ *    新規則只掉半級——重播不會壞，但生涯會長成另一個樣子。
  */
-export const ENGINE_VERSION = 2;
+export const ENGINE_VERSION = 3;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
@@ -1060,25 +1063,13 @@ export class Game {
 
     for (const delta of outcome.deltas) {
       const name = abilities.abilities[delta.key] ?? delta.key;
-      if (delta.points >= 0) {
-        const before = this.#ability[delta.key] ?? 0;
-        this.#applyPoints(delta.key, delta.points, { silent: true });
-        const after = this.#ability[delta.key] ?? 0;
-        lines.push(
-          after > before
-            ? `${esc(name)} <span class="up">+${after - before}</span>`
-            : `${esc(name)}：點數進了蓄力槽，未滿一級`,
-        );
-      } else {
-        const before = this.#ability[delta.key] ?? 0;
-        this.#ability[delta.key] = Math.max(
-          abilities.scale.hard_floor,
-          before + delta.points,
-        );
-        lines.push(
-          `${esc(name)} <span class="dn">${(this.#ability[delta.key] ?? 0) - before}</span>`,
-        );
-      }
+      const before = this.#ability[delta.key] ?? 0;
+      // 兩側都走成本曲線：加的點進蓄力槽，扣的點也從蓄力槽扣，欠到夠退一級
+      // 才退級。舊做法是扣值時 1 點 1 級，能力越高，同一張卡的下檔就越比上檔
+      // 重——那個不對稱不是設計出來的。
+      if (delta.points >= 0) this.#applyPoints(delta.key, delta.points, { silent: true });
+      else this.#applyPenalty(delta.key, -delta.points);
+      lines.push(`${esc(name)} ${this.#deltaNote(delta.key, delta.points, before)}`);
     }
 
     for (const raise of outcome.ceilings) {
@@ -4772,20 +4763,57 @@ export class Game {
     }
   }
 
+  /** 扣點，走與加點同一條成本曲線。點數為正數。 */
+  #applyPenalty(key: AbilityKey, points: number): void {
+    const result = untrain(
+      this.#ability[key] ?? 0,
+      points,
+      this.#ceilingOf(key),
+      this.#carry[key] ?? 0,
+      growthCurve(this.isTwoWay),
+    );
+    this.#ability[key] = result.value;
+    this.#carry[key] = result.carry;
+    // 這裡不必再 #settleCarry()：untrain() 的迴圈已經一路退到欠點不夠退下一
+    // 級為止，而成本只跟這一項自己的能力值有關，退這項不會改變別項的價錢。
+  }
+
+  /**
+   * 一次能力增減的戰報文字。
+   *
+   * 一律以**點數**為單位報告，級數是附帶結果。三種應對方式的差別（保守 1 點、
+   * 照常 2 點、豪賭 3 點）全在點數上，只講級數的話，能力 58 以上一級要 4–8
+   * 點，那個差別會塌成「+1 或什麼都沒有」，玩家看不到自己賭贏了什麼。
+   */
+  #deltaNote(key: AbilityKey, points: number, before: number): string {
+    const gained = (this.#ability[key] ?? 0) - before;
+    const carry = this.#carry[key] ?? 0;
+    const cost = abilityCost(this.#ability[key] ?? 0, this.#ceilingOf(key), growthCurve(this.isTwoWay));
+    const head = `<span class="${points >= 0 ? 'up' : 'dn'}">${points > 0 ? '+' : ''}${points} 點</span>`;
+
+    if (gained !== 0) return `${head}（${gained > 0 ? '+' : ''}${gained}）`;
+    if (carry !== 0) return `${head}（蓄力 ${carry}/${cost}）`;
+    return `${head}（已經到底，沒有去處）`;
+  }
+
   /**
    * 結算蓄力槽。
    *
-   * 蓄力槽只在**加點的當下**結算，但那一級的成本會被三件事往下拉：年齡衰退
-   * 讓能力值降下來、事件提升天花板、取得二刀流換到較便宜的成長曲線。這三件
-   * 事發生之後，原本存著的點數可能已經足夠升一級，卻沒有人去花它——畫面於是
-   * 顯示「2/2」卻不進位，看起來像壞掉。
+   * 蓄力槽只在**加點的當下**結算，但那一級的成本會被幾件事往下拉：年齡衰退
+   * 讓能力值降下來、事件扣點退了一級、事件提升天花板、取得二刀流換到較便宜
+   * 的成長曲線。這些事發生之後，原本存著的點數可能已經足夠升一級，卻沒有人
+   * 去花它——畫面於是顯示「2/2」卻不進位，看起來像壞掉。
+   *
+   * 欠點（負的蓄力）要往反方向結算：成本變便宜之後，原本欠不夠一級的點數可
+   * 能已經欠得夠了。
    *
    * 因此凡是會改變成本的地方，事後都要把槽清一次。
    */
   #settleCarry(): void {
     for (const key of Object.keys(this.#carry)) {
-      if ((this.#carry[key] ?? 0) <= 0) continue;
-      this.#applyPoints(key, 0, { silent: true });
+      const carry = this.#carry[key] ?? 0;
+      if (carry > 0) this.#applyPoints(key, 0, { silent: true });
+      else if (carry < 0) this.#applyPenalty(key, 0);
     }
   }
 

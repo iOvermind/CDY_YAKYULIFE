@@ -101,6 +101,56 @@ export function train(
 }
 
 /**
+ * 扣除點數，回傳降低的級數與剩餘的蓄力。train() 的鏡像。
+ *
+ * 扣的點先從蓄力槽扣，欠到夠退一級才退——而退掉的那一級**退還它自己的價
+ * 錢**：當初花 6 點買的，退掉就還 6 點。因此同一項能力 +n 點之後再 −n 點，
+ * 會回到完全相同的能力值與蓄力（測試釘住這條）。
+ *
+ * 這是為了修掉事件結算的兩側不對稱：舊做法把能力值直接減掉點數（1 點 = 1
+ * 級），於是能力 64 以上時，同一張卡成功 +3 點只進蓄力槽（一級要 6 點），
+ * 失敗 −3 點卻立刻掉 3 級。上檔付級價、下檔付點價，能力越高差得越遠——那
+ * 不是設計出來的，是加點與扣值各自長成兩條路徑的結果。
+ *
+ * 蓄力槽因此可以是負的，也就是欠點。欠點不會憑空拿走已經到手的級數，但會
+ * 讓下一級變貴（成本扣掉負的蓄力等於加價），要先還清才推得動。能力 50 以
+ * 下一級只要 1 點，欠點當場就結清，所以低段的行為與過去完全一致。
+ *
+ * 與 decline() 的分界：老化與傷病是時間對所有人一視同仁地收費，維持 1:1；
+ * 事件是玩家自己下的賭注，賭注的兩側必須用同一種貨幣結算。
+ */
+export function untrain(
+  current: number,
+  points: number,
+  ceiling: number,
+  carry: number,
+  ctx: CostContext,
+): TrainResult & { readonly value: number } {
+  if (points < 0) throw new RangeError('untrain(): 點數不可為負，加點請用 train()');
+
+  const floor = abilities.scale.hard_floor;
+  let value = current;
+  let budget = carry - points;
+  while (budget < 0 && value > floor) {
+    // 退的是 value-1 → value 這一級，價錢按當初買它的算。
+    const refund = abilityCost(value - 1, ceiling, ctx);
+    if (-budget < refund) break;
+    budget += refund;
+    value--;
+  }
+
+  // 觸底之後欠的點不再累積——已經扣到量表的底，再欠也沒有東西可以扣，
+  // 那些點是真的浪費掉了（與 train() 觸頂時的處理對稱）。
+  const grounded = value <= floor && budget < 0;
+  return {
+    value,
+    gained: value - current,
+    carry: grounded ? 0 : budget,
+    overflow: grounded ? -budget : 0,
+  };
+}
+
+/**
  * 這項能力目前的絕對上限。
  *
  * 球探量表的上限是 80，但被事件提升過上限的能力可以練得更高——每項最多
