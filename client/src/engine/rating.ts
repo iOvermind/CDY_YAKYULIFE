@@ -63,9 +63,13 @@ export type PitcherRole = 'SP' | 'RP';
  * 投手側評價：**依角色走兩套權重**，與野手依守位走不同的守備權重同構。
  * 見 ADR 0005。
  *
- * 球速與控球固定採計，不參與排序——那是每個投手都要的基本功，不是可以拿去
- * 交換的選項。四項變化球排序後遞減加權，**沒有「算不算一種球」的離散判定**，
- * 與打擊四項同一套辦法。
+ * 球速與四項變化球合為「武器庫」一起排序，取前 n 名套第 n 組權重，四組全算過
+ * 取最高分——球種數不該是離散的門檻判定（ADR 0005），一個只有一顆決勝球的
+ * 火球男該落在兩格那組，而不是被三顆爛球稀釋。控球固定採計，不參與排序：
+ * 那是每個投手都要的基本功，不是可以拿去交換的選項。
+ *
+ * 體力不進評價。野手側完全不看它，而它已經在出賽場數、投球局數與受傷機率上
+ * 結算過了——評價再算一次，同一個數字在投打兩條路上的價值就會天差地遠。
  *
  * 後援還要再減一道角色折扣：責任額由角色決定，能力再高也補不回來。不折扣的話
  * 低體力的火球男一掉進牛棚綜合能力反而上升。
@@ -82,13 +86,13 @@ export function pitcherRating(ability: Abilities, role: PitcherRole | null = nul
   const w = cfg.roles[role];
   if (w === undefined) return 0;
 
-  const pitches = topValues(ability, cfg.pitches, w.pitch_weights.length);
+  const arsenal = Math.max(
+    ...cfg.arsenal_weights.map((weights) =>
+      weightedSum(topValues(ability, ['vel', ...cfg.pitches], weights.length), weights),
+    ),
+  );
   return (
-    (ability['vel'] ?? 0) * w.velocity_weight +
-    (ability['ctl'] ?? 0) * w.control_weight +
-    (ability['sta'] ?? 0) * w.stamina_weight +
-    weightedSum(pitches, w.pitch_weights) -
-    w.discount
+    arsenal * w.arsenal_share + (ability['ctl'] ?? 0) * w.control_weight - w.discount
   );
 }
 

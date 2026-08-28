@@ -92,11 +92,9 @@ export interface Range {
 
 /** 一個投手角色的評價權重。 */
 export interface PitcherRoleWeights {
-  readonly velocity_weight: number;
+  /** 武器庫（球速＋四項變化球）在評價裡的總佔比。 */
+  readonly arsenal_share: number;
   readonly control_weight: number;
-  readonly stamina_weight: number;
-  /** 變化球排序後的遞減權重。 */
-  readonly pitch_weights: readonly number[];
   /** 角色折扣。責任額由角色決定，能力再高也補不回來。 */
   readonly discount: number;
 }
@@ -185,8 +183,10 @@ export interface AbilitiesData {
   };
   readonly overall: {
     readonly pitcher: {
-      /** 四項變化球。排序後遞減加權，沒有「算不算一種球」的離散判定。 */
+      /** 四項變化球。與球速合為武器庫一起排序，沒有「算不算一種球」的離散判定。 */
       readonly pitches: readonly AbilityKey[];
+      /** 武器庫的分組權重：取前 n 名套第 n 組，四組全算過取最高分。每組加總為 1。 */
+      readonly arsenal_weights: readonly (readonly number[])[];
       /** 依角色走兩套權重，與野手依守位走不同的守備權重同構。見 ADR 0005。 */
       readonly roles: Readonly<Record<string, PitcherRoleWeights>>;
     };

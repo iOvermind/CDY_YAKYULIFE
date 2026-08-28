@@ -49,36 +49,49 @@ describe('pitcherRating', () => {
     expect(pitcherRating(ace)).toBeGreaterThan(pitcherRating(spread));
   });
 
-  it('四項變化球全部採計——多練一顆永遠不會白費', () => {
-    const one = build(30, { vel: 70, ctl: 70, swp: 70 });
-    const two = build(30, { vel: 70, ctl: 70, swp: 70, drp: 70 });
-    const four = build(30, { vel: 70, ctl: 70, swp: 70, drp: 70, chg: 70, gim: 70 });
-    expect(pitcherRating(two)).toBeGreaterThan(pitcherRating(one));
-    expect(pitcherRating(four)).toBeGreaterThan(pitcherRating(two));
+  it('武器庫是平均水準，不是件數——同水準的第四顆球不加分', () => {
+    const two = build(30, { vel: 70, swp: 70 });
+    const four = build(30, { vel: 70, swp: 70, drp: 70, chg: 70 });
+    expect(pitcherRating(four)).toBe(pitcherRating(two));
   });
 
-  it('但遞減——第四顆球遠不如第一顆值錢', () => {
-    const base = build(30, { vel: 70, ctl: 70 });
-    const first = pitcherRating(build(30, { vel: 70, ctl: 70, swp: 70 })) - pitcherRating(base);
-    const fourth =
-      pitcherRating(build(30, { vel: 70, ctl: 70, swp: 70, drp: 70, chg: 70, gim: 70 })) -
-      pitcherRating(build(30, { vel: 70, ctl: 70, swp: 70, drp: 70, chg: 70 }));
-    expect(fourth).toBeGreaterThan(0);
-    expect(fourth).toBeLessThan(first / 2);
+  it('點數固定時，攤薄反而扣分——三顆 60 的人多練一顆變成四顆 55', () => {
+    const deep = build(30, { vel: 60, swp: 60, drp: 60 });
+    const wide = build(30, { vel: 55, swp: 55, drp: 55, chg: 55 });
+    expect(pitcherRating(deep)).toBeGreaterThan(pitcherRating(wide));
   });
 
-  it('球速與控球是基本功，不參與排序——零變化球的火球男不再是最優解', () => {
-    const flame = build(20, { vel: 95, ctl: 95, sta: 60 });
-    const rounded = build(55, { sta: 55 });
-    expect(pitcherRating(flame)).toBeLessThan(pitcherRating(rounded));
+  it('上限低的人靠多練球種補回來——五顆 62 追平兩顆 70', () => {
+    const capped = build(30, { vel: 62, swp: 62, drp: 62, chg: 62, gim: 62 });
+    const gifted = build(30, { vel: 70, swp: 70 });
+    expect(pitcherRating(capped)).toBeLessThan(pitcherRating(gifted));
+    expect(pitcherRating(capped)).toBeGreaterThan(pitcherRating(build(30, { vel: 70 })));
   });
 
-  it('依角色走兩套權重：牛棚那套更看球速、更不看體力', () => {
-    const flame = build(30, { vel: 85, ctl: 55, swp: 60, sta: 25 });
-    const horse = build(30, { vel: 55, ctl: 55, swp: 60, sta: 85 });
-    // 先發那套裡耐操的人贏；換成牛棚那套，火球男追上來。
-    const spGap = pitcherRating(horse, 'SP') - pitcherRating(flame, 'SP');
-    const rpGap = pitcherRating(horse, 'RP') - pitcherRating(flame, 'RP');
+  it('練出更好的一顆球一定加分', () => {
+    const before = build(30, { vel: 70, swp: 70 });
+    const after = build(30, { vel: 70, swp: 70, drp: 90 });
+    expect(pitcherRating(after)).toBeGreaterThan(pitcherRating(before));
+  });
+
+  it('控球是基本功，不參與排序', () => {
+    const wild = build(30, { vel: 90, swp: 90, ctl: 20 });
+    const command = build(30, { vel: 90, swp: 90, ctl: 90 });
+    expect(pitcherRating(command)).toBeGreaterThan(pitcherRating(wild));
+  });
+
+  it('體力完全不進評價——野手側不看它，投手側也不該重複計價', () => {
+    const rested = build(40, { sta: 80 });
+    expect(pitcherRating(rested)).toBe(pitcherRating(build(40, { sta: 20 })));
+  });
+
+  it('依角色走兩套權重：牛棚那套武器庫佔比更高、控球佔比更低', () => {
+    const stuff = build(30, { vel: 85, swp: 85, ctl: 40 });
+    const command = build(30, { vel: 55, swp: 55, ctl: 90 });
+    // 折扣是角色的成本，比的是折扣以外的權重分配。
+    const rp = abilities.overall.pitcher.roles['RP']?.discount ?? 0;
+    const spGap = pitcherRating(command, 'SP') - pitcherRating(stuff, 'SP');
+    const rpGap = pitcherRating(command, 'RP') + rp - (pitcherRating(stuff, 'RP') + rp);
     expect(spGap).toBeGreaterThan(rpGap);
   });
 
@@ -98,12 +111,6 @@ describe('pitcherRating', () => {
     );
   });
 
-  it('體力有貢獻但權重最低', () => {
-    const stamina = build(40, { sta: 80 });
-    const stuff = build(40, { swp: 80 });
-    expect(pitcherRating(stamina)).toBeGreaterThan(pitcherRating(build(40)));
-    expect(pitcherRating(stuff)).toBeGreaterThan(pitcherRating(stamina));
-  });
 });
 
 describe('fielderRating', () => {
