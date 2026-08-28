@@ -7,7 +7,8 @@
     "start": "node --experimental-strip-types src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/*.test.ts",
-    "dev": "node --experimental-strip-types src/dev.ts"
+    "dev": "node --experimental-strip-types src/dev.ts",
+    "dev:fresh": "node -e \"require('node:fs').rmSync('.devdata.json',{force:true})\" && npm run dev"
   },
   "dependencies": {
     "pg": "^8.13.1"

@@ -73,6 +73,25 @@
 > npm run dev
 > ```
 
+### 測試帳號、成就與天賦（不需要 Postgres）
+
+這些功能要有一個會回 JSON 的 `/api`，Vite 的 dev server 沒有。開兩個終端機：
+
+```bash
+cd server && npm run dev     # 8099，資料存在 server/.devdata.json
+cd client && npm run dev     # 1420，/api 會轉給 8099
+```
+
+預設帳號 `demo` / `demo1234`，帶著 29 AP——買得起、買到一半、點滿三種狀態才看得完。
+資料**重啟後還在**；要從乾淨的狀態重來就 `npm run dev:fresh`。
+
+底層是 `src/fakedb.ts`：**它不是 SQL 引擎**，是一張「看到這句就做這件事」的對照表。
+路由多打一條沒對應的 SQL 時它會直接丟錯，而不是靜靜回空陣列。
+
+> 伺服器沒開也不會壞，只是右上角的登入與成就整排反灰——離線是被支援的狀態。
+> 但**兩邊的連接埠必須對得起來**（`vite.config.js` 的代理 ↔ `server/src/dev.ts`），
+> 對不上的表現跟「沒開伺服器」一模一樣，不會有任何錯誤訊息。
+
 **連接埠固定為 1420**：`vite.config.js` 設了 `strictPort: true`，因為 Tauri 期望固定連接埠。被佔用時會直接失敗而非換一個，這是刻意的。
 
 **除錯**：瀏覽器開發者工具（F12）。

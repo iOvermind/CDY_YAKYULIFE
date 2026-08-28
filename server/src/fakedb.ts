@@ -37,7 +37,13 @@ export class FakeDb implements Queryable {
   careers: CareerRow[] = [];
   /** 每一句跑過的 SQL，讓測試可以斷言「真的有寫進去」。 */
   seen: string[] = [];
-  #nextUserId = 1;
+  /**
+   * 下一個使用者編號。
+   *
+   * 公開是為了讓存檔用的子類別（`devdb.ts`）能把它一起還原——不還原的話，重啟
+   * 之後第二個註冊的人會拿到 `1`，撞上磁碟裡已經存在的那個人。
+   */
+  nextUserId = 1;
 
   async query<R>(text: string, values: unknown[] = []): Promise<{ rows: R[] }> {
     this.seen.push(text);
@@ -71,7 +77,7 @@ export class FakeDb implements Queryable {
     }
     if (s.startsWith('INSERT INTO users')) {
       const row = {
-        id: String(this.#nextUserId++),
+        id: String(this.nextUserId++),
         account: String(v[0]),
         password_hash: String(v[1]),
       };

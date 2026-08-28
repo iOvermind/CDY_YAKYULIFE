@@ -52,12 +52,14 @@ docker compose up -d --build
 
 開局畫面右上角是登入與成就。未登入時成就鈕是反灰的——成就掛在帳號上，沒有帳號就沒有東西可看。
 
-只調介面而不想架 Postgres 時，伺服器可以跑在記憶體裡的假資料庫上：
+只調介面而不想架 Postgres 時，伺服器可以跑在一個 JSON 檔上（`server/.devdata.json`，重啟後資料還在）：
 
 ```bash
-cd client && npm run build
-cd server && STATIC_DIR=../client/dist npm run dev   # demo / demo1234
+cd server && npm run dev        # http://localhost:8099，預設帳號 demo / demo1234
+cd client && npm run dev        # 另一個終端機；/api 會自動轉給 8099
 ```
+
+要清掉測試資料重來就跑 `npm run dev:fresh`。
 
 不架伺服器也完全玩得起來——只是沒有帳號、成就不會累積、天賦不開放。
 
