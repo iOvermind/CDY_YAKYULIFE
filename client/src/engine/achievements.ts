@@ -123,6 +123,39 @@ function rankIndexOf(byRank: Readonly<Record<string, number>>, honor: string): n
 }
 
 /**
+ * 階梯結算。**上不封頂**：表格是有限的，生涯不是。走完最後一階之後，門檻照最後
+ * 一個級距一直往上長——3600 安顯示的是「3500 安」，不是卡在表格結尾的 3000。
+ *
+ * 但 **AP 與評價分只給到表內為止**。分數的天花板是設計出來的：一份生涯能換多少
+ * AP 有上限，否則打得夠久就能把天賦全買齊。表格外的每一階純粹是榮譽顯示，
+ * `points` 停在表內加總（跨過整張表的人一次拿滿，不會因為超額而漏掉前幾階）。
+ *
+ * 級距取表格最後兩階的差。表格只有一階時無從推級距，就停在那一階。
+ */
+export function ladderTop(
+  rungs: readonly (readonly number[])[],
+  value: number,
+): { readonly top: number | null; readonly points: number } {
+  let top: number | null = null;
+  let points = 0;
+  for (const rung of rungs) {
+    const need = rung[0] ?? Number.POSITIVE_INFINITY;
+    if (value < need) break;
+    top = need;
+    points += rung[1] ?? 0;
+  }
+  if (top === null) return { top: null, points: 0 };
+
+  const last = rungs[rungs.length - 1]?.[0];
+  const prev = rungs[rungs.length - 2]?.[0];
+  if (last === undefined || prev === undefined || top < last) return { top, points };
+
+  const step = last - prev;
+  if (step <= 0) return { top, points };
+  return { top: last + Math.floor((value - last) / step) * step, points };
+}
+
+/**
  * 累積成就：一項數據只佔清單裡的一格，顯示跨過的**最高階**，點數是每一階加總。
  *
  * 級距直接讀 `score[scope]`——AP 階梯與生涯里程碑是同一份表，`scope` 只決定看
@@ -149,13 +182,7 @@ function cumulative(
 
     // 同一份級距表也餵給 career.ts 的里程碑分數——階梯與里程碑是同一件事，
     // 不是兩套各自漂移的數字。
-    let top: number | null = null;
-    let points = 0;
-    for (const [need, pts] of spec.score[scope]) {
-      if (value < need) break;
-      top = need;
-      points += pts;
-    }
+    const { top, points } = ladderTop(spec.score[scope], value);
     if (top === null) continue;
 
     out.push({

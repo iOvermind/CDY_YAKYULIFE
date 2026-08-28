@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { achievements as cfg, amateur } from '../data/index.ts';
 import type { BattingLine } from './amateurStats.ts';
-import { cabinetSections, evaluateAchievements, type AchievementContext } from './achievements.ts';
+import {
+  cabinetSections,
+  evaluateAchievements,
+  ladderTop,
+  type AchievementContext,
+} from './achievements.ts';
 import { joinName } from './naming.ts';
 import type { CareerSummary, LeagueCareer } from './career.ts';
 
@@ -255,5 +260,40 @@ describe('成就櫃', () => {
       sections.find((s) => s.key === key)?.groups.map((g) => g.title);
     expect(titles('league:CPBL')).toEqual([cfg.categories.award.name, cfg.categories.cumulative.name]);
     expect(titles('league:MLB')).toEqual(titles('league:CPBL'));
+  });
+});
+
+describe('階梯上不封頂', () => {
+  const rungs = [
+    [1500, 5],
+    [2000, 10],
+    [2500, 16],
+    [3000, 24],
+  ];
+
+  it('沒跨過第一階就什麼都沒有', () => {
+    expect(ladderTop(rungs, 1499)).toEqual({ top: null, points: 0 });
+  });
+
+  it('表格之內走到哪一階顯示哪一階，分數逐級累加', () => {
+    expect(ladderTop(rungs, 2400)).toEqual({ top: 2000, points: 15 });
+  });
+
+  it('走完整張表的人一次拿滿底下每一階', () => {
+    expect(ladderTop(rungs, 3000).points).toBe(55);
+  });
+
+  // 這是使用者回報的那一局：3600 安卡在 3000。
+  it('超出表格後照最後一個級距繼續往上長', () => {
+    expect(ladderTop(rungs, 3600).top).toBe(3500);
+    expect(ladderTop(rungs, 4000).top).toBe(4000);
+  });
+
+  it('超出表格的階不再給分——AP 的天花板停在表內', () => {
+    expect(ladderTop(rungs, 9999).points).toBe(ladderTop(rungs, 3000).points);
+  });
+
+  it('只有一階的表無從推級距，就停在那一階', () => {
+    expect(ladderTop([[100, 1]], 9999)).toEqual({ top: 100, points: 1 });
   });
 });

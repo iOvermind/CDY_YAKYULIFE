@@ -451,6 +451,18 @@ describe('累積級距', () => {
             expect(list[i]![0]).toBeGreaterThan(list[i - 1]![0]);
           }
         });
+
+        // 階梯上不封頂，表格外的門檻是拿最後兩階的差往上長的。級距不勻的話，
+        // 那個「往上長的步幅」等於偷偷由最後兩階決定——3600 安該顯示 3500
+        // 還是 4000 就變成資料排版的意外，不是設計。
+        it(`${scope} 級距等寬——最後一階之後就是照這個寬度往上長`, () => {
+          const list = spec.score![scope];
+          if (list.length < 3) return;
+          const step = list[1]![0] - list[0]![0];
+          for (let i = 1; i < list.length; i++) {
+            expect(list[i]![0] - list[i - 1]![0], `${scope} 第 ${i} 段級距與第一段不同`).toBe(step);
+          }
+        });
       }
 
       it('生涯門檻一律高於同名次的聯盟門檻', () => {

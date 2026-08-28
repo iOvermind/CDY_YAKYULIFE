@@ -67,3 +67,15 @@ ALTER TABLE achievements ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT
 -- 舊 id 現在不可能再被寫入（`traitTile()` 一律帶名字），所以這行刪完就不會再有
 -- 東西回來；下一局結算時會以新 id 重新解鎖，AP 照算，不會重複給。
 DELETE FROM achievements WHERE achievement IN ('trait:legend', 'trait:mrteam', 'trait:rainbow');
+
+-- 獎項成就的 id 從 `award:<code>` 改成 `award:<org>:<code>`（獎項要掛回各聯盟底下，
+-- 「大聯盟 年度 MVP」與「中職 年度 MVP」是兩件事）。舊列的 id 只有一段，成就櫃
+-- 認不出它屬於哪個聯盟，只能掉進「獎項」那格孤兒欄位裡。
+--
+-- 一樣是刪完不會再回來：`awardName()` 現在一律寫 org。下一局拿到同一個獎會以新 id
+-- 重新解鎖。**注意 AP 是 SUM(points) 算出來的**，刪掉這幾列 `apEarned` 會跟著掉，
+-- 已經花掉 AP 的帳號餘額可能暫時變負——本地開發資料庫可以接受，正式環境要先確認
+-- 沒有這種 id 才跑。
+DELETE FROM achievements
+ WHERE achievement LIKE 'award:%'
+   AND split_part(achievement, ':', 2) NOT IN ('CPBL', 'NPB', 'KBO', 'MLB', 'LMB', 'ABL');

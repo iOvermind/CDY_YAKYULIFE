@@ -18,6 +18,7 @@
 
 import { achievements, hallOfFame as cfg, leagues } from '../data/index.ts';
 import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
+import { ladderTop } from './achievements.ts';
 import type { AwardRecord } from './awards.ts';
 import { sumShares, type Shares } from './metrics.ts';
 
@@ -249,12 +250,9 @@ export function evaluateMilestones(
     const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
     if (value === null) continue;
 
-    let highest: number | null = null;
-    for (const [need, pts] of spec.score[scope]) {
-      if (value < need) break;
-      points += pts;
-      highest = need;
-    }
+    // 與成就櫃共用 `ladderTop()`：門檻上不封頂，分數只給到表內。
+    const { top: highest, points: pts } = ladderTop(spec.score[scope], value);
+    points += pts;
     // 只列最高的那一級——「1000 安、1500 安、2000 安」三行都印出來很囉唆，
     // 玩家要看的是他走到哪裡。分數則是逐級累加的。
     if (highest !== null) reached.push(`${highest} ${spec.name}`);
