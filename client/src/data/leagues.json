@@ -69,35 +69,35 @@
       "par": 41,
       "min": 39,
       "games": 55,
-      "org": "MiLB"
+      "org": "MLB"
     },
     "A1": {
       "name": "1A",
       "par": 45,
       "min": 43,
       "games": 110,
-      "org": "MiLB"
+      "org": "MLB"
     },
     "A2": {
       "name": "2A",
       "par": 49,
       "min": 47,
       "games": 120,
-      "org": "MiLB"
+      "org": "MLB"
     },
     "A3": {
       "name": "3A",
       "par": 54,
       "min": 52,
       "games": 130,
-      "org": "MiLB"
+      "org": "MLB"
     },
     "MLB": {
       "name": "大聯盟",
       "par": 59,
       "min": 56,
       "games": 162,
-      "org": "MiLB",
+      "org": "MLB",
       "top": "MLB"
     }
   },
@@ -121,7 +121,7 @@
     "ABL": [
       "ABL"
     ],
-    "MiLB": [
+    "MLB": [
       "R",
       "A1",
       "A2",
@@ -129,20 +129,21 @@
       "MLB"
     ]
   },
-  "_top_league_names_note": "下面那張表的鍵是**體系代碼**（org），值是那個體系最高一層的名字——獎項、名人堂、里程碑的前綴，以及成就櫃的聯盟分區，全部拿 org 去查它。美職的體系代碼是 MiLB，這裡曾經誤寫成 MLB（那是最高層級的代碼），結果查不到、一路 fallback 到代碼本身，於是玩家看到「MiLB 明星賽」「MiLB 全壘打王」這種不存在的東西，成就櫃也分不出美職那一區。見 teams.json 的 _key_note——同一個坑踩過兩次。表本身不放註解鍵，因為它會被整個 Object.keys 拿去當聯盟清單。",
+  "_top_league_names_note": "下面那張表的鍵是**體系代碼**（org），值是那個體系最高一層的名字——獎項、名人堂、里程碑的前綴，以及成就櫃的聯盟分區，全部拿 org 去查它。表本身不放註解鍵，因為它會被整個 Object.keys 拿去當聯盟清單。",
+  "_org_code_note": "**體系代碼一律等於該體系頂級聯盟的代碼**（CPBL / NPB / KBO / LMB / ABL / MLB），層級代碼才帶軍別後綴（CPBL1、NPB2）。美職曾經例外——體系代碼寫成 `MiLB`、頂級層級叫 `MLB`——結果每一份以 org 為鍵的設定表（teams、hall_of_fame 的 halls 與 check_order、traits 的 rainbow、awards 的 aliases、flavor 的 retire_scenes、這裡的 top_league_names）作者都自然地寫成 `MLB`，六張表全部查不到而靜默 fallback：美國名人堂永遠進不去、七彩球衣永遠不會亮、賽揚獎顯示成預設名、大聯盟的引退場景一次都沒播過，而且沒有任何一處報錯。**不要再讓任何體系的 org 代碼與它的頂級聯盟代碼不同。** 護欄測試現在盯著每一張 org-keyed 表。",
   "top_league_names": {
     "CPBL": "中職",
     "NPB": "日職",
     "KBO": "韓職",
     "LMB": "墨聯",
     "ABL": "澳職",
-    "MiLB": "大聯盟"
+    "MLB": "大聯盟"
   },
   "_expansion_note": "KBO / LMB / ABL 是新架構的擴充聯盟，index_legacy.html 沒有它們。ROADMAP 階段五的「擴充聯盟資料」即指這批。index_legacy 的線性升降級無法表達它們之間的轉會關係，需要 ROADMAP 階段五的有向圖尋路系統才能真正啟用。",
   "org_names": {
     "CPBL": "中職",
     "NPB": "旅日",
-    "MiLB": "旅美"
+    "MLB": "旅美"
   },
   "minor_label": "小聯盟／二軍",
   "salary": {
@@ -322,7 +323,7 @@
         },
         "posting": {
           "_note": "日職球員可以申請入札前往美職。",
-          "to": "MiLB"
+          "to": "MLB"
         },
         "age_window": {
           "tiers": [
@@ -357,7 +358,7 @@
         },
         "posting": {
           "_note": "韓職球員同樣可以申請入札前往美職。",
-          "to": "MiLB"
+          "to": "MLB"
         },
         "age_window": {
           "tiers": [
@@ -381,7 +382,7 @@
           "default": 0
         }
       },
-      "MiLB": {
+      "MLB": {
         "_note": "美職。窗口最緊——他們要的是可以養的年輕人，不是即戰力。",
         "_monster_note": "28 歲之後只剩怪物條款：能力超過落地門檻夠多的人仍有微弱機會。",
         "_refuse_note": "MLB 的5 年年資條款：一軍服務滿五年的球員可以拒絕下放。拒絕不是免費的——球團可以直接釋出你。只有這個體系有這條規則，其他體系的下放是球團說了算。",

@@ -35,22 +35,22 @@ const ctx = (overall: number, age = 27) => ({
 
 describe('入札的目的地', () => {
   it('日職與韓職有，中職沒有', () => {
-    expect(postingTarget('NPB')).toBe('MiLB');
-    expect(postingTarget('KBO')).toBe('MiLB');
+    expect(postingTarget('NPB')).toBe('MLB');
+    expect(postingTarget('KBO')).toBe('MLB');
     expect(postingTarget('CPBL')).toBeNull();
   });
 });
 
 describe('入札的資格', () => {
   it('門檻就是落地在頂級聯盟，不另設數字', () => {
-    const bar = topBar('MiLB');
+    const bar = topBar('MLB');
     expect(canRequestPosting(ctx(bar))).toBe(true);
     expect(canRequestPosting(ctx(bar - 1))).toBe(false);
   });
 
   it('落地在小聯盟不算——那筆錢買的是即戰力', () => {
-    const bar = topBar('MiLB');
-    const level = landingLevel('MiLB', bar - 1, null);
+    const bar = topBar('MLB');
+    const level = landingLevel('MLB', bar - 1, null);
     expect(level).not.toBeNull();
     expect(leagues.levels[level!]!.top).toBeUndefined();
   });
@@ -86,12 +86,12 @@ describe('入札的競標', () => {
     const world = new World('posting');
     let seen = 0;
     for (let i = 0; i < 200; i++) {
-      const bids = postingBids(world, ctx(topBar('MiLB') + 6, 25));
+      const bids = postingBids(world, ctx(topBar('MLB') + 6, 25));
       if (bids.length === 0) continue;
       seen++;
       expect(bids.length).toBeLessThanOrEqual(cfg.bidders.max);
       for (const b of bids) {
-        expect(b.org).toBe('MiLB');
+        expect(b.org).toBe('MLB');
         expect(b.level).toBe('MLB');
       }
     }
@@ -102,7 +102,7 @@ describe('入札的競標', () => {
     const world = new World('posting-old');
     let empty = 0;
     for (let i = 0; i < 200; i++) {
-      if (postingBids(world, ctx(topBar('MiLB'), 36)).length === 0) empty++;
+      if (postingBids(world, ctx(topBar('MLB'), 36)).length === 0) empty++;
     }
     expect(empty).toBeGreaterThan(0);
   });
@@ -112,7 +112,7 @@ describe('入札的競標', () => {
   it('落空的原因不影響亂數的推進', () => {
     const a = new World('drift');
     const b = new World('drift');
-    expect(postingBids(a, ctx(topBar('MiLB') - 1, 25))).toHaveLength(0); // 能力不足
+    expect(postingBids(a, ctx(topBar('MLB') - 1, 25))).toHaveLength(0); // 能力不足
     expect(postingBids(b, { ...ctx(99, 25), org: 'CPBL' })).toHaveLength(0); // 沒有入札制度
     expect(a.stream('career').next()).toBe(b.stream('career').next());
   });
@@ -131,7 +131,7 @@ describe('海外自由球員', () => {
     const world = new World('ofa');
     for (let i = 0; i < 50; i++) {
       const offers = overseasFaOffers(world, {
-        ...ctx(topBar('MiLB') + 6, 27),
+        ...ctx(topBar('MLB') + 6, 27),
         serviceYears: years - 1,
       });
       expect(offers).toHaveLength(0);
@@ -143,12 +143,12 @@ describe('海外自由球員', () => {
     let seen = 0;
     for (let i = 0; i < 200; i++) {
       const offers = overseasFaOffers(world, {
-        ...ctx(topBar('MiLB') + 6, 26),
+        ...ctx(topBar('MLB') + 6, 26),
         serviceYears: years,
       });
       if (offers.length === 0) continue;
       seen++;
-      for (const o of offers) expect(o.org).toBe('MiLB');
+      for (const o of offers) expect(o.org).toBe('MLB');
     }
     expect(seen).toBeGreaterThan(0);
   });
@@ -221,7 +221,7 @@ describe('母國聯盟不收外籍加成', () => {
   });
 
   it('其他體系照收——他在那裡是外籍球員', () => {
-    for (const org of ['NPB', 'KBO', 'ABL', 'LMB', 'MiLB']) {
+    for (const org of ['NPB', 'KBO', 'ABL', 'LMB', 'MLB']) {
       const bottom = pathOf(org)[0]!;
       const min = leagues.levels[bottom]!.min;
       expect(landingLevel(org, min, null)).toBeNull();
@@ -233,15 +233,15 @@ describe('母國聯盟不收外籍加成', () => {
 describe('高中畢業的旅外報價', () => {
   const cfg = amateur.amateur_overseas;
   const npb = cfg.paths.find((p) => p.org === 'NPB')!;
-  const milb = cfg.paths.find((p) => p.org === 'MiLB')!;
+  const milb = cfg.paths.find((p) => p.org === 'MLB')!;
   const offers = (overall: number, seed = 'amateur') =>
     amateurOverseasOffers(new World(seed), overall);
 
   it('門檻看綜合能力的絕對值——十八歲的人沒有所屬聯盟可以相對', () => {
     expect(offers(npb.min_overall - 1)).toHaveLength(0);
     expect(offers(npb.min_overall).some((o) => o.org === 'NPB')).toBe(true);
-    expect(offers(milb.min_overall - 1).some((o) => o.org === 'MiLB')).toBe(false);
-    expect(offers(milb.min_overall).some((o) => o.org === 'MiLB')).toBe(true);
+    expect(offers(milb.min_overall - 1).some((o) => o.org === 'MLB')).toBe(false);
+    expect(offers(milb.min_overall).some((o) => o.org === 'MLB')).toBe(true);
   });
 
   it('落地層級寫死在資料裡，不走 landingLevel', () => {
@@ -254,10 +254,10 @@ describe('高中畢業的旅外報價', () => {
 
   it('能力夠好的旅美直接從 1A 起跳', () => {
     const up = milb.level_upgrade!;
-    for (const o of offers(up.min_overall - 1).filter((x) => x.org === 'MiLB')) {
+    for (const o of offers(up.min_overall - 1).filter((x) => x.org === 'MLB')) {
       expect(o.level).toBe(milb.level);
     }
-    for (const o of offers(up.min_overall).filter((x) => x.org === 'MiLB')) {
+    for (const o of offers(up.min_overall).filter((x) => x.org === 'MLB')) {
       expect(o.level).toBe(up.level);
     }
   });
@@ -299,7 +299,7 @@ describe('在籍夠久就視同本土', () => {
   });
 
   it('沒有這條規則的體系待再久也是外籍', () => {
-    for (const org of ['KBO', 'MiLB', 'LMB', 'ABL']) {
+    for (const org of ['KBO', 'MLB', 'LMB', 'ABL']) {
       expect(leagues.transfer.orgs[org]?.domestic_after_years).toBeUndefined();
       const bottom = pathOf(org)[0]!;
       const min = leagues.levels[bottom]!.min;
@@ -419,10 +419,10 @@ describe('canRefuseDemotion', () => {
   // MLB 的五年年資條款只有那一個體系有。這是規則差異，不是平衡調整——
   // 日職與中職沒有對應制度，年資在那裡只換來 FA。
   it('美職滿五年一軍年資才有拒絕權', () => {
-    expect(canRefuseDemotion('MiLB', 5)).toBe(true);
-    expect(canRefuseDemotion('MiLB', 9)).toBe(true);
-    expect(canRefuseDemotion('MiLB', 4)).toBe(false);
-    expect(canRefuseDemotion('MiLB', 0)).toBe(false);
+    expect(canRefuseDemotion('MLB', 5)).toBe(true);
+    expect(canRefuseDemotion('MLB', 9)).toBe(true);
+    expect(canRefuseDemotion('MLB', 4)).toBe(false);
+    expect(canRefuseDemotion('MLB', 0)).toBe(false);
   });
 
   it('其他體系不管幾年都不能拒絕', () => {
@@ -438,12 +438,12 @@ describe('落葉歸根只算「離開之後再回來」（#17）', () => {
     // 待過 1A、收到 3A 邀約時人已經不在美職了，那確實是回鄉。
     const offers = fallbackOffers(new World('milb-internal'), {
       overall: 55,
-      currentOrg: 'MiLB',
+      currentOrg: 'MLB',
       currentTeam: '某隊',
-      playedOrgs: new Set(['MiLB']),
+      playedOrgs: new Set(['MLB']),
       standards: null,
     });
-    expect(offers.some((o) => o.org === 'MiLB')).toBe(false);
+    expect(offers.some((o) => o.org === 'MLB')).toBe(false);
     expect(offers.length).toBeGreaterThan(0);
   });
 
@@ -452,10 +452,10 @@ describe('落葉歸根只算「離開之後再回來」（#17）', () => {
       overall: 55,
       currentOrg: 'CPBL1',
       currentTeam: '某隊',
-      playedOrgs: new Set(['MiLB']),
+      playedOrgs: new Set(['MLB']),
       standards: null,
     });
-    const milb = offers.filter((o) => o.org === 'MiLB');
+    const milb = offers.filter((o) => o.org === 'MLB');
     expect(milb.length).toBeGreaterThan(0);
     expect(milb.every((o) => o.homecoming)).toBe(true);
   });

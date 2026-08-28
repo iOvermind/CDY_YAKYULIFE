@@ -83,8 +83,18 @@ describe('runBallot', () => {
     }
   });
 
+  /**
+   * 這條原本拿 `MiLB` 當「沒有名人堂的體系」的例子——而那正是**美職的體系
+   * 代碼**，`hall_of_fame.json` 明明寫著美國棒球名人堂，只是鍵寫成 `MLB`。
+   * 於是這個測試把一個 bug 寫成了規格：美國名人堂永遠進不去，而測試是綠的。
+   * 現在體系代碼統一了，就拿一個真的不存在的體系來測這條路徑。
+   */
   it('沒有名人堂設定的體系不跑票選', () => {
-    expect(runBallot(new World('x'), career({ org: 'MiLB' }))).toBeNull();
+    expect(runBallot(new World('x'), career({ org: 'NOSUCH' }))).toBeNull();
+  });
+
+  it('美職有名人堂——體系代碼是 MLB，不是層級代碼以外的任何東西', () => {
+    expect(runBallot(new World('x'), career({ org: 'MLB', tier: 0 }))).not.toBeNull();
   });
 
   it('帽徽帶在結果上', () => {

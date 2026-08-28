@@ -167,7 +167,7 @@
         { "cost": 18, "effect_text": "各國的球探關注度都明顯提升", "effects": [
           { "path": "leagues.transfer.orgs.NPB.scout_chance", "op": "add", "value": 20, "max": 95 },
           { "path": "leagues.transfer.orgs.KBO.scout_chance", "op": "add", "value": 20, "max": 95 },
-          { "path": "leagues.transfer.orgs.MiLB.scout_chance", "op": "add", "value": 15, "max": 95 }
+          { "path": "leagues.transfer.orgs.MLB.scout_chance", "op": "add", "value": 15, "max": 95 }
         ] }
       ]
     },

@@ -119,8 +119,8 @@ export interface LeagueCareer {
    * 這個體系的頂級層級代碼，例如 CPBL1、LMB、MLB。
    *
    * **不要用 `org + '1'` 拼**：那只對中職、日職、韓職成立。墨聯的層級就叫
-   * `LMB`、澳職叫 `ABL`、美職的頂級是 `MLB` 而體系代碼是 `MiLB`——拼出來的
-   * `LMB1` 不存在，讀它的地方會直接拋錯。
+   * `LMB`、澳職叫 `ABL`、美職叫 `MLB`——拼出來的 `LMB1` 不存在，讀它的地方會
+   * 直接拋錯。
    */
   readonly topLevel: string;
   readonly seasons: number;

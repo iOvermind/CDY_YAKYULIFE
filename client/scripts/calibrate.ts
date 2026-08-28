@@ -126,7 +126,7 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
     // 高中畢業的路口：基準線走選秀，旅外模式則直接簽出去。**不能靠「取第一個
     // 選項」矇對**——選項順序改一次，整批樣本就換成另一種生涯。
     const crossroads = overseas
-      ? (options.find((o) => o.id === 'path:MiLB') ?? options.find((o) => o.id === 'path:NPB'))
+      ? (options.find((o) => o.id === 'path:MLB') ?? options.find((o) => o.id === 'path:NPB'))
       : options.find((o) => o.id === 'path:draft');
     const route = overseas
       ? (options.find((o) => o.id === 'transfer:0') ??

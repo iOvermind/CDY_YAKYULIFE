@@ -413,7 +413,7 @@
         "signing_bonus": { "base": 800, "per_point_over": 60 }
       },
       {
-        "org": "MiLB",
+        "org": "MLB",
         "min_overall": 50,
         "label": "洽談旅美合約",
         "note": "逐級挑戰大聯盟",

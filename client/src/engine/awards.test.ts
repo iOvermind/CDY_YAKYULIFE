@@ -18,8 +18,8 @@ const SPREAD = 8.4;
 const CPBL1_GAMES = 120;
 const MLB_GAMES = 162;
 const GAMES = CPBL1_GAMES;
-/** 美職的體系代碼是 MiLB，MLB 只是最高的那一層——見 teams.json 的 _key_note。 */
-const MLB = { level: 'MLB', org: 'MiLB', leagueGames: MLB_GAMES, spread: SPREAD };
+/** 美職的體系代碼是 MLB，MLB 只是最高的那一層——見 teams.json 的 _key_note。 */
+const MLB = { level: 'MLB', org: 'MLB', leagueGames: MLB_GAMES, spread: SPREAD };
 const CPBL = { level: 'CPBL1', org: 'CPBL', leagueGames: CPBL1_GAMES, spread: SPREAD };
 const BASE = proBaseline('CPBL1');
 

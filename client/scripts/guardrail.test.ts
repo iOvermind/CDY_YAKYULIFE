@@ -18,6 +18,7 @@ import {
   amateur as amateurCfg,
   awards as awardsCfg,
   dataKeys,
+  flavor,
   hallOfFame,
   injury as injuryCfg,
   leagues as leaguesData,
@@ -238,9 +239,9 @@ describe('平衡護欄', () => {
 /**
  * 球隊清單以**體系代碼**為鍵，不是層級代碼。
  *
- * 曾經發生過：美職的清單誤寫成 `MLB`（層級代碼）而不是 `MiLB`（體系代碼），
- * 結果是美職一份轉會報價都發不出來——抽不到球隊就不會 push，**靜默失敗**，
- * 而且真的轉過去會讓 initLeague 直接炸掉。
+ * 曾經發生過：美職的清單鍵與 `leagues.paths` 的體系代碼對不起來，結果是美職
+ * 一份轉會報價都發不出來——抽不到球隊就不會 push，**靜默失敗**，而且真的
+ * 轉過去會讓 initLeague 直接炸掉。
  */
 describe('球隊清單涵蓋所有體系', () => {
   it('每個體系都有球隊', () => {
@@ -265,32 +266,90 @@ describe('球隊清單涵蓋所有體系', () => {
 });
 
 /**
- * 聯盟名稱表也是掛在體系代碼上的。
+ * **所有以體系代碼為鍵的設定表，鍵都必須是 `leagues.paths` 裡的體系。**
  *
- * 同一個坑的第二次：`top_league_names` 的美職誤寫成 `MLB`（層級代碼），查不到就
- * 一路 fallback 到代碼本身，玩家看到的是「MiLB 明星賽」「MiLB 全壘打王」這種
- * 不存在的獎，成就櫃也分不出美職那一區。**靜默失敗**——沒有例外，只有醜字串。
+ * 這個坑踩過不只一次。美職的體系代碼一度是 `MiLB`，而頂級層級叫 `MLB`——於是
+ * 每一張 org-keyed 表的作者都很自然地寫成 `MLB`，六張表同時查不到，而且**全部
+ * 靜默 fallback**，沒有一行錯誤：
+ *
+ * - `top_league_names` → 玩家看到「MiLB 明星賽」「MiLB 全壘打王」這種不存在的獎，
+ *   成就櫃也分不出美職那一區。
+ * - `hall_of_fame.halls` → `runBallot` 回 null，**美國棒球名人堂永遠進不去**。
+ * - `hall_of_fame.representative_league.check_order` → `indexOf` 回 -1，旅美生涯
+ *   被排到最後才檢查，而它本該第一個。
+ * - `traits.rainbow.thresholds` → `limit === undefined` 直接 continue，**旅美永遠
+ *   拿不到七彩球衣**。
+ * - `awards.aliases` → 賽揚獎與漢克阿倫獎顯示成預設名。
+ * - `flavor.retire_scenes` → 整組大聯盟引退場景（Curtain Call）一次都沒播過。
+ *
+ * 體系代碼現已統一為「該體系頂級聯盟的代碼」，但那只是把當下的資料修對。這條
+ * 護欄擋的是下一次——新增聯盟時漏掉某一張表，或又有人拿層級代碼當鍵。
  */
-describe('聯盟名稱掛在體系代碼上', () => {
-  it('每個體系都有名字', () => {
-    for (const org of dataKeys(leaguesData.paths)) {
-      expect(leaguesData.top_league_names[org], `${org} 沒有聯盟名`).toBeDefined();
-    }
-  });
+describe('org-keyed 設定表的鍵都是體系代碼', () => {
+  const orgs = new Set(dataKeys(leaguesData.paths));
+  const rainbow = traitOf('rainbow');
 
-  it('沒有多餘的名字掛在層級代碼上', () => {
-    const orgs = new Set(dataKeys(leaguesData.paths));
-    for (const key of dataKeys(leaguesData.top_league_names)) {
-      expect(orgs.has(key), `${key} 不是體系代碼`).toBe(true);
-    }
-    for (const key of dataKeys(leaguesData.org_names)) {
-      expect(orgs.has(key), `${key} 不是體系代碼`).toBe(true);
-    }
-  });
+  /**
+   * 表名 → 鍵集合。`required` 為真的表，每個體系都必須到齊；為假的表允許只涵蓋
+   * 一部分體系（例如獎項別名本來就只有幾個聯盟有），但寫進去的鍵不能是錯的。
+   */
+  const tables: readonly {
+    name: string;
+    keys: readonly string[];
+    required: boolean;
+    /** 刻意不是體系代碼的鍵——每一個都要在這裡寫明理由，否則就是打錯字。 */
+    extra?: readonly string[];
+  }[] = [
+    { name: 'leagues.top_league_names', keys: dataKeys(leaguesData.top_league_names), required: true },
+    { name: 'teams.leagues', keys: dataKeys(teamsData.leagues), required: true },
+    { name: 'leagues.org_names', keys: dataKeys(leaguesData.org_names), required: false },
+    { name: 'hallOfFame.halls', keys: dataKeys(hallOfFame.halls), required: false },
+    {
+      name: 'hallOfFame.representative_league.check_order',
+      keys: hallOfFame.representative_league.check_order,
+      required: true,
+    },
+    {
+      name: 'hallOfFame.first_ballot.multiplier',
+      keys: dataKeys(hallOfFame.first_ballot.multiplier),
+      required: false,
+    },
+    { name: 'awards.aliases', keys: dataKeys(awardsCfg.aliases), required: false },
+    {
+      name: 'flavor.retire_scenes',
+      keys: dataKeys(flavor.retire_scenes),
+      required: false,
+      // `minor` 不是體系，是「沒打過頂級聯盟」那一格：見 game.ts 的 #retireScene。
+      extra: ['minor'],
+    },
+    { name: 'traits.rainbow.thresholds', keys: dataKeys(rainbow?.thresholds ?? {}), required: false },
+  ];
 
-  it('名字不是代碼本身', () => {
-    for (const org of dataKeys(leaguesData.paths)) {
-      expect(leaguesData.top_league_names[org]).not.toBe(org);
+  for (const table of tables) {
+    it(`${table.name} 沒有不存在的體系代碼`, () => {
+      const allowed = new Set([...orgs, ...(table.extra ?? [])]);
+      for (const key of table.keys) {
+        expect(allowed.has(key), `${table.name} 的 ${key} 不是體系代碼`).toBe(true);
+      }
+    });
+  }
+
+  for (const table of tables.filter((t) => t.required)) {
+    it(`${table.name} 涵蓋每一個體系`, () => {
+      const keys = new Set(table.keys);
+      for (const org of orgs) {
+        expect(keys.has(org), `${table.name} 少了 ${org}`).toBe(true);
+      }
+    });
+  }
+
+  /**
+   * 上面那些表全是「查不到就 fallback」，因此漏掉不會報錯。這條把最貴的一張
+   * 單獨釘死：**每個頂級聯盟都要有名人堂**，否則那個聯盟的生涯終點是空的。
+   */
+  it('每個體系都有名人堂', () => {
+    for (const org of orgs) {
+      expect(hallOfFame.halls[org], `${org} 沒有名人堂`).toBeDefined();
     }
   });
 });
