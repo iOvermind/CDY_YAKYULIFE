@@ -1027,8 +1027,13 @@ export interface SeasonData {
       /** 能力先平移到這個 par 再算恐懼值，因此 Dom 只吃 d，不吃絕對 par。 */
       readonly reference_par: number;
       readonly threshold: number;
+      /** 曲線的另一端：Dom 到這裡時，一季 per_season_pa 個打席會被敬遠 walks 次。 */
+      readonly peak: {
+        readonly dom: number;
+        readonly per_season_pa: number;
+        readonly walks: number;
+      };
       readonly exponent: number;
-      readonly rate_divisor: number;
       readonly noise: Range;
     };
     readonly hit_rate: RateSpec;

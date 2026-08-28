@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { leagues, season as cfg } from '../data/index.ts';
 import {
+  dominanceAt,
   gamesPlayed,
   intentionalWalks,
+  intentionalWalksFrom,
   levelOf,
   pitcherRole,
   plateAppearances,
@@ -235,6 +237,29 @@ describe('intentionalWalks', () => {
     const slow = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 20 }), 600, MLB_PAR);
     const fast = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 80 }), 600, MLB_PAR);
     expect(fast).toBeLessThan(slow);
+  });
+
+  it('三圍全滿的慢腳重砲一季敬遠約 120 次——現實裡的單季最高', () => {
+    const bonds = with_(50, { pow: 80, con: 80, eye: 80, spd: 20 });
+    // 雜訊是 ±15%，錨點 120 落在區間中央。
+    const ibb = intentionalWalks(new World('a'), bonds, 600, MLB_PAR);
+    expect(ibb).toBeGreaterThan(120 * 0.85 - 1);
+    expect(ibb).toBeLessThan(120 * 1.15 + 1);
+  });
+
+  it('過門檻是從 0 長上去，不是一過線就滿額', () => {
+    // 舊版直接把 Dom 取冪，門檻上一格就跳到三十幾支。剛構到線的打者該是個位數。
+    const edge = intentionalWalksFrom(dominanceAt(66, MLB_PAR), 600, () => 0.5);
+    expect(edge).toBeLessThan(5);
+    expect(intentionalWalksFrom(dominanceAt(69, MLB_PAR), 600, () => 0.5)).toBeLessThan(15);
+  });
+
+  it('打席少的球季敬遠等比變少', () => {
+    const dom = dominanceAt(75, MLB_PAR);
+    expect(intentionalWalksFrom(dom, 300, () => 0.5) * 2).toBeCloseTo(
+      intentionalWalksFrom(dom, 600, () => 0.5),
+      -0.5,
+    );
   });
 
   it('門檻隨聯盟 par 縮放——低階聯盟的相對怪物也會被敬遠', () => {
