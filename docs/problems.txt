@@ -65,3 +65,4 @@
 31. 退休的選項順序也有問題，都在我選擇續約後才問我要不要退休
 [x] 已結案 · ADR 0021 修正 · commit `f0b1a34`。#3／#4 的暫定守位引擎裡一直有，只活在畫面上沒存進生涯紀錄（ADR 0021 原文就寫「不寫進生涯紀錄」）。改成當季結算時存進 SeasonRecord 與 AmateurSeasonRecord。
 32. 養成和小聯盟仍未顯示守位
+[x] 已結案 · ADR 0021 修正 · commit `9e91c2c`。養成期借了中職一軍的 par 44 當守位門檻，八個守位沒一個過得了，實測 83% 落在 DH、其餘 1B。改成先查該學制自己的 par（JHS 28、HS 38）；`Game.#benchmarkLevel` 在未進職業前回當下學制。`#playsField` 一併改讀 `#activeSide`，不再隨每年能力增減翻面。
