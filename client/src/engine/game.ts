@@ -319,6 +319,13 @@ export interface PlayerState {
     readonly kids: number;
     readonly divorces: number;
     readonly caught: number;
+    /**
+     * 這一生結過婚的對象，依結婚先後排列且去重。
+     *
+     * 與 partner 分工：那個是**現在**在身邊的人，這份是走過紅毯的全部。離婚再娶
+     * 的人兩個名字都在裡面——成就要數的是不同的對象（見 achievements.ts）。
+     */
+    readonly spouses: readonly string[];
   };
   /** 生涯累積收入，單位萬元。含簽約金與逐季年薪。 */
   readonly earnings: number;
@@ -514,6 +521,8 @@ export class Game {
   #love: LoveState = newLoveState();
   /** 結婚的年份。結算的【人生】區塊要寫它。 */
   #weddingYear: number | null = null;
+  /** 走過紅毯的對象，依序去重。離婚再娶不會抹掉前一個名字。 */
+  #spouses: string[] = [];
   /** 第一次被徵召的年份。列管期從這裡算。 */
   #intlLockedSince: number | null = null;
   /** 打進國際賽冠亞軍的次數。東亞功夫的解鎖條件看它。 */
@@ -753,6 +762,7 @@ export class Game {
         kids: this.#love.kids,
         divorces: this.#love.divorces,
         caught: this.#love.caught,
+        spouses: this.#spouses,
       },
       earnings: this.#earnings,
       pool: this.#pool,
@@ -2094,6 +2104,7 @@ export class Game {
         love.kids = 0;
         love.datingYears = 0;
         this.#weddingYear = this.#year;
+        this.#recordSpouse(love.partner);
         const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 2);
         this.flow.card(
           'gold',
@@ -2110,6 +2121,18 @@ export class Game {
         next();
       },
     );
+  }
+
+  /**
+   * 把一位對象記進婚姻史。
+   *
+   * 去重是刻意的：離婚後與同一個人復合再婚，成就上不算新的一項——那是同一段
+   * 關係的第二次嘗試，不是另一個人。
+   */
+  #recordSpouse(name: string | null): void {
+    if (name === null || name === '') return;
+    if (this.#spouses.includes(name)) return;
+    this.#spouses.push(name);
   }
 
   /** 已婚的一年：風波 → 生子 → 外遇或日常。 */
@@ -4440,6 +4463,7 @@ export class Game {
       halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
       // 未登入時是 NO_PROGRESS：每一局都是「第一段人生」、每一項都算新解鎖。
       firstCareer: this.#progress.firstCareer,
+      spouses: this.#spouses,
       unlocked: this.#progress.unlocked,
     });
     this.#achievements = result;

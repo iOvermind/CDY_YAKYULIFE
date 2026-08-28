@@ -58,6 +58,7 @@ const ctx = (over: Partial<AchievementContext> = {}): AchievementContext => ({
   honors: [],
   halls: [],
   firstCareer: false,
+  spouses: [],
   unlocked: new Set<string>(),
   ...over,
 });
@@ -165,6 +166,28 @@ describe('生涯分級', () => {
       (a) => a.id.startsWith('tier:'),
     );
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe('姻緣', () => {
+  it('每一位對象各算一項', () => {
+    const got = evaluateAchievements(ctx({ spouses: ['王小美', '陳大文'] }));
+    const rows = got.list.filter((a) => a.id.startsWith('marriage:'));
+    expect(rows).toHaveLength(2);
+    expect(got.points).toBe(cfg.categories.marriage.default * 2);
+  });
+
+  it('id 掛名字不掛年份——跨局娶到同一個人不再給點', () => {
+    const first = evaluateAchievements(ctx({ spouses: ['王小美'] }));
+    expect(first.list[0]?.id).not.toMatch(/\d{4}/);
+
+    const again = evaluateAchievements(
+      ctx({ spouses: ['王小美', '陳大文'], unlocked: new Set(first.list.map((a) => a.id)) }),
+    );
+    // 兩段婚姻都看得到，但只有新的那一位給 AP。
+    expect(again.list.filter((a) => a.id.startsWith('marriage:'))).toHaveLength(2);
+    expect(again.newly.map((a) => a.name)).toEqual(['陳大文']);
+    expect(again.points).toBe(cfg.categories.marriage.default);
   });
 });
 

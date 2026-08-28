@@ -354,6 +354,8 @@ export interface AchievementsData {
     };
     readonly tier: { readonly name: string; readonly by_tier: readonly number[] };
     readonly hall: { readonly name: string; readonly default: number };
+    /** 姻緣。與不同對象結婚各算一項，一律同價。 */
+    readonly marriage: { readonly name: string; readonly default: number };
     readonly cumulative: {
       readonly name: string;
       /** 單階點數的上限。第 n 階值 `min(ceil(n/2), increment_cap)`。 */

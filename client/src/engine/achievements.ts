@@ -51,6 +51,13 @@ export interface AchievementContext {
   /** 這是不是玩家的第一段生涯。 */
   readonly firstCareer: boolean;
   /**
+   * 這一生走過紅毯的對象。
+   *
+   * 跨局去重由 unlocked 負責——id 掛的是名字，所以在不同的生涯娶到同一個人只算
+   * 一項，娶到不同的人才會長出新的一格。
+   */
+  readonly spouses: readonly string[];
+  /**
    * 已經領過 AP 的成就 id。
    *
    * **同一項成就只給一次 AP。** 在中職打滿 500 安兩次不會拿兩次點數——AP 買到的
@@ -256,6 +263,16 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
     });
   }
 
+  // ---- 姻緣。一位對象一格，id 掛名字所以跨局自動去重。
+  for (const spouse of ctx.spouses) {
+    list.push({
+      id: `marriage:${spouse}`,
+      category: c.marriage.name,
+      name: spouse,
+      points: c.marriage.default,
+    });
+  }
+
   // ---- 第一段人生
   if (ctx.firstCareer) {
     list.push({
@@ -321,6 +338,7 @@ const CATEGORY_ORDER: readonly string[] = [
   cfg.categories.cumulative.name,
   cfg.categories.tier.name,
   cfg.categories.hall.name,
+  cfg.categories.marriage.name,
   cfg.first_career_bonus.name,
 ];
 

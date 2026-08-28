@@ -125,6 +125,7 @@ export async function finishCareer(
       honors: state?.honors ?? [],
       halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
       firstCareer: owned.length === 0,
+      spouses: state?.love.spouses ?? [],
       unlocked: new Set(owned.map((a) => a.id)),
     });
 
