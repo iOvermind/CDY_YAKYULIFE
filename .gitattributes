@@ -1,0 +1,20 @@
+# 統一換行符：repo 內一律 LF，工作目錄也一律 LF。
+# 專案在 WSL 與 Windows 兩邊開，沒有這個檔案時整包 93 個檔案會被
+# 誤判為「已修改」（實際上只有 CRLF/LF 的差別）。
+* text=auto eol=lf
+
+# Windows 批次檔必須是 CRLF，否則 cmd.exe 會解析失敗。
+*.bat text eol=crlf
+
+# 二進位檔不做任何換行符轉換。
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
