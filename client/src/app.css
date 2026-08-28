@@ -317,34 +317,35 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
   margin:0 0 9px;display:flex;justify-content:space-between;align-items:baseline}
 .achgroup h3 .sub{font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:0}
 .achgroup ul{list-style:none;margin:0;padding:0}
+/* 小標比大標輕：聯盟才是玩家在找的那一層，獎項／累積只是它底下的隔板。 */
+.achgroup h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
+  opacity:.7;font-weight:400;margin:9px 0 6px}
+.achgroup h4:first-child{margin-top:0}
 /* 成就櫃是小方塊：一眼掃完一整面，點數與日期在 tooltip 裡。 */
 .achtiles{display:flex;flex-wrap:wrap;gap:6px}
 .achtiles li{border:1px solid var(--edge);border-radius:var(--r);background:var(--panel2);
   padding:6px 10px;font-size:12.5px;line-height:1.3;cursor:default}
 
-.talent{border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+/* 整張卡片就是按鈕：左鍵升一級、右鍵降一級。做成 <button> 是為了鍵盤與
+   焦點框都自己來，因此外觀要先歸零回一張卡片的樣子。 */
+.talent{display:block;width:100%;text-align:left;font:inherit;color:inherit;
+  background:none;cursor:pointer;
+  border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
 /* 買過的用強調色框起來——一整頁天賦裡，玩家最先要找到的是自己已經有的那幾個。 */
 .talent.owned{border-color:var(--accent);background:var(--panel2)}
+@media (hover:hover){ .talent:not(:disabled):hover{border-color:var(--accent)} }
+.talent:disabled{opacity:.5;cursor:not-allowed}
 .talent-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .talent-head b{font-size:14.5px;color:var(--text)}
 .talent-head .sub{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
 .talent-desc{font-size:12px;color:var(--dim);margin:5px 0 9px;line-height:1.6}
-.talent-levels{list-style:none;margin:0;padding:0}
-.talent-levels li{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;
-  color:var(--dim);padding:3px 0}
-/* 已經買到的那幾級亮起來，還沒買的維持灰階——一眼看得出點到哪裡。 */
-.talent-levels li.have{color:var(--good)}
-.talent-levels li .sub{font-family:var(--mono);font-size:11.5px;white-space:nowrap}
-/* 橫條：整條是一顆按鈕（左鍵升、右鍵降），格子只是顯示。頭尾標出 0 與上限，
-   玩家一眼知道這條有多長、自己走到哪。價格放在條的下方一行。 */
-.talent-bar-row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.talent-bar{display:flex;gap:4px;align-items:center;background:none;border:0;padding:0;cursor:pointer}
-.talent-bar .cap{font-family:var(--mono);font-size:11px;color:var(--dim)}
-.talent-bar .seg{width:34px;height:10px;border:1px solid var(--edge);border-radius:2px;
-  background:var(--panel)}
-.talent-bar .seg.on{background:var(--accent);border-color:var(--accent)}
-.talent-bar:disabled{opacity:.35;cursor:not-allowed}
-.talent-hint{font-size:12px;color:var(--dim)}
+/* 進度是**一條連續的橫條**：問的是「還有多遠」，切成格子得先數格子才讀得出來。
+   每一級的效果收在 tooltip 裡，不常態攤在卡片上。 */
+.talent-bar{height:8px;border-radius:999px;background:var(--panel);
+  border:1px solid var(--edge);overflow:hidden;margin:0 0 7px}
+.talent-bar .fill{display:block;height:100%;background:var(--accent);
+  box-shadow:var(--glow);transition:width .2s}
+.talent-hint{display:block;font-size:12px;color:var(--dim)}
 .talent-hint .price{font-family:var(--mono);color:var(--gold);margin:0 3px;font-weight:700}
 .talent-hint .price.on{color:var(--accent)}
 

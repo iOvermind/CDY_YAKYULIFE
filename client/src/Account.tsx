@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, isOffline, type Me, type ProgressStore } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
-import { cabinetTiles, type AchievementTile } from './engine/achievements.ts';
+import { cabinetSections, cabinetTiles } from './engine/achievements.ts';
 import { maxLevelOf } from './engine/overlay.ts';
 
 /** 帳號的連線狀態。 */
@@ -276,14 +276,8 @@ function AchievementList({ me }: { me: Me }) {
     );
   }
 
-  // 階梯收斂成一格、順序固定（見 ADR 0031）——判定全部在 engine，這裡只畫。
-  const tiles = cabinetTiles(me.achievements);
-  const groups = new Map<string, AchievementTile[]>();
-  for (const t of tiles) {
-    const list = groups.get(t.category);
-    if (list === undefined) groups.set(t.category, [t]);
-    else list.push(t);
-  }
+  // 階梯收斂成一格、分組與順序固定（見 ADR 0031）——判定全部在 engine，這裡只畫。
+  const sections = cabinetSections(me.achievements);
 
   return (
     <>
@@ -291,23 +285,27 @@ function AchievementList({ me }: { me: Me }) {
         生涯累積 {me.apEarned} AP，目前可用 {me.ap} AP。同一項成就只給一次點數，
         <b>同一座階梯只佔一格</b>——顯示的是爬到的最高一階。
       </p>
-      {[...groups.entries()].map(([category, items]) => (
-        <div key={category} className="achgroup">
+      {sections.map((s) => (
+        <div key={s.key} className="achgroup">
           <h3>
-            {category}
-            <span className="sub">
-              {items.reduce((sum, a) => sum + a.points, 0)} AP
-            </span>
+            {s.title}
+            <span className="sub">{s.points} AP</span>
           </h3>
-          {/* 小方塊而不是逐條列——櫃子是拿來一眼掃過的，不是拿來讀的。點數與
-              日期收進 tooltip，需要的人再問。 */}
-          <ul className="achtiles">
-            {items.map((a) => (
-              <li key={a.id} title={`+${String(a.points)} AP · ${DATE.format(new Date(a.at))}`}>
-                {a.name}
-              </li>
-            ))}
-          </ul>
+          {s.groups.map((g) => (
+            <div key={g.title ?? '-'}>
+              {/* 小標只有在大標底下真的分得出兩堆時才出現（聯盟＝獎項＋累積）。 */}
+              {g.title !== null && <h4>{g.title}</h4>}
+              {/* 小方塊而不是逐條列——櫃子是拿來一眼掃過的，不是拿來讀的。點數與
+                  日期收進 tooltip，需要的人再問。 */}
+              <ul className="achtiles">
+                {g.items.map((a) => (
+                  <li key={a.id} title={`+${String(a.points)} AP · ${DATE.format(new Date(a.at))}`}>
+                    {a.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       ))}
     </>
@@ -366,8 +364,31 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
             const affordable = next !== undefined && me.ap >= next.cost;
             // 降一級退的就是「爬上這一級付的那一筆」——全額，沒有價差。
             const prev = level > 0 ? (t.levels[level - 1]?.cost ?? 0) : 0;
+            // 每一級的效果收進 tooltip：常態攤開來的話，一整頁天賦會變成一面
+            // 讀不完的規格表，而玩家在這一頁要做的決定只有「買不買」。
+            const tip = t.levels
+              .map((l, i) => `Lv${i + 1} ${l.effect_text}（${l.cost} AP）`)
+              .join('\n');
             return (
-              <div key={t.id} className={level > 0 ? 'talent owned' : 'talent'}>
+              /*
+                **整張卡片就是控制項**：左鍵升一級、右鍵降一級。兩顆鍵互為反向
+                操作——玩家在自己的存檔上按出來的每一步，都要能用另一顆鍵原地
+                還原。等級只能一級一級走，價格由伺服器算；這裡只送目標級數。
+              */
+              <button
+                type="button"
+                key={t.id}
+                className={level > 0 ? 'talent owned' : 'talent'}
+                disabled={busy !== null || (next === undefined && level === 0)}
+                title={`${tip}\n\n左鍵升一級、右鍵降一級`}
+                onClick={() => {
+                  if (affordable) act(t.id, level + 1);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (level > 0) act(t.id, level - 1);
+                }}
+              >
                 <div className="talent-head">
                   <b>{t.name}</b>
                   <span className="sub">
@@ -375,52 +396,26 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                   </span>
                 </div>
                 <p className="talent-desc">{t.desc}</p>
-                <ol className="talent-levels">
-                  {t.levels.map((l, i) => (
-                    <li key={i} className={i < level ? 'have' : undefined}>
-                      {l.effect_text}
-                      <span className="sub">{l.cost} AP</span>
-                    </li>
-                  ))}
-                </ol>
-                {/*
-                  橫條本身就是控制項：左鍵升一級、右鍵降一級。**兩顆鍵互為反向操作**
-                  ——玩家在自己的存檔上按出來的每一步，都要能用另一顆鍵原地還原。
-                  等級只能一級一級走，價格由伺服器算；這裡只送目標級數。
-                */}
-                <div className="talent-bar-row">
-                  <button
-                    type="button"
-                    className="talent-bar"
-                    disabled={busy !== null || (!affordable && level === 0)}
-                    title="左鍵升一級、右鍵降一級"
-                    onClick={() => {
-                      if (affordable) act(t.id, level + 1);
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      if (level > 0) act(t.id, level - 1);
-                    }}
-                  >
-                    <span className="cap">0</span>
-                    {t.levels.map((_l, i) => (
-                      <span key={i} className={i < level ? 'seg on' : 'seg'} />
-                    ))}
-                    <span className="cap">{max}</span>
-                  </button>
-                  <span className="talent-hint">
-                    {next === undefined ? (
-                      '已經點滿'
-                    ) : (
-                      <>
-                        升到 Lv{level + 1} 需
-                        <b className={affordable ? 'price on' : 'price'}>{next.cost} AP</b>
-                      </>
-                    )}
-                    {level > 0 && `・右鍵退回 Lv${level - 1}，返還 ${prev} AP`}
-                  </span>
+                {/* 一條從左到右的進度，不是一格一格的刻度——玩家要看的是「還有
+                    多遠」，切成格子反而要先數格子才讀得出來。 */}
+                <div className="talent-bar">
+                  <span
+                    className="fill"
+                    style={{ width: `${String(max === 0 ? 0 : (level / max) * 100)}%` }}
+                  />
                 </div>
-              </div>
+                <span className="talent-hint">
+                  {next === undefined ? (
+                    '已經點滿'
+                  ) : (
+                    <>
+                      升到 Lv{level + 1} 需
+                      <b className={affordable ? 'price on' : 'price'}>{next.cost} AP</b>
+                    </>
+                  )}
+                  {level > 0 && `・右鍵退回 Lv${level - 1}，返還 ${prev} AP`}
+                </span>
+              </button>
             );
           })}
         </div>

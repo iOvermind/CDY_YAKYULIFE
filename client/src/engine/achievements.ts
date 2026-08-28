@@ -395,3 +395,120 @@ export function cabinetTiles(unlocked: readonly UnlockedLike[]): readonly Achiev
       return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2]);
     });
 }
+
+/* ------------------------------------------------------- 成就櫃的兩層分組 */
+
+/** 大標底下的一個小標。`title` 是 `null` 代表這個大標不再往下分。 */
+export interface CabinetGroup {
+  readonly title: string | null;
+  readonly items: readonly AchievementTile[];
+}
+
+/**
+ * 成就櫃的一個大標。
+ *
+ * **職業聯盟自己站一個大標。** 六個聯盟的獎項、累積、名人堂全部倒進同一個
+ * 「獎項」「累積」裡的話，玩家看到的是一長串分不出出處的名字——中職的 MVP 和
+ * 大聯盟的 MVP 疊在一起，而那正是兩件完全不同重量的事。名人堂併進聯盟底下的
+ * 「獎項」，因為單一聯盟的名人堂永遠只有一格，自己撐不起一個小標。
+ */
+export interface CabinetSection {
+  readonly key: string;
+  readonly title: string;
+  readonly points: number;
+  readonly groups: readonly CabinetGroup[];
+}
+
+const LEAGUE_NAMES: Readonly<Record<string, string>> = leagues.top_league_names;
+const ORG_BY_LEAGUE_NAME = new Map(Object.entries(LEAGUE_NAMES).map(([org, name]) => [name, org]));
+
+/** 生涯合計不屬於任何聯盟——它是把所有聯盟加起來的那一欄。 */
+const CAREER_TOTAL_TITLE = '生涯通算';
+
+/** 這一格屬於哪個職業聯盟；不屬於任何聯盟的回 `null`。 */
+function orgOf(id: string): string | null {
+  const parts = id.split(':');
+  if (parts[0] === 'cum') return parts[1] === 'career' ? null : (parts[1] ?? null);
+  if (parts[0] === 'award') return parts[1] ?? null;
+  // 名人堂的鍵帶的是聯盟**名字**（見 evaluateAchievements），反查回體系代碼。
+  if (parts[0] === 'hall') return ORG_BY_LEAGUE_NAME.get(parts[1] ?? '') ?? null;
+  return null;
+}
+
+/** 名字在源頭就帶了聯盟前綴；進了聯盟大標之後那個前綴就是重複的。 */
+function stripLeague(name: string, league: string): string {
+  return name.startsWith(`${league} `) ? name.slice(league.length + 1) : name;
+}
+
+function push<T>(map: Map<string, T[]>, key: string, value: T): void {
+  const list = map.get(key);
+  if (list === undefined) map.set(key, [value]);
+  else list.push(value);
+}
+
+function sumPoints(items: readonly AchievementTile[]): number {
+  return items.reduce((sum, a) => sum + a.points, 0);
+}
+
+/**
+ * 把成就櫃排成「大標＝聯盟／小標＝獎項與累積」的兩層。
+ *
+ * 順序仍然是固定的（見 `cabinetTiles`）：業餘與國際賽在前，接著六個職業聯盟，
+ * 然後才是生涯通算與分級。空的分類不出現。
+ */
+export function cabinetSections(unlocked: readonly UnlockedLike[]): readonly CabinetSection[] {
+  const tiles = cabinetTiles(unlocked);
+  const HALL = cfg.categories.hall.name;
+  const AWARD = cfg.categories.award.name;
+  const CUMULATIVE = cfg.categories.cumulative.name;
+
+  const byLeague = new Map<string, AchievementTile[]>();
+  const plain = new Map<string, AchievementTile[]>();
+  for (const tile of tiles) {
+    const org = orgOf(tile.id);
+    // 查不到聯盟就照原本的分類放——寧可多一個大標，也不要讓一格消失。
+    if (org !== null && LEAGUE_NAMES[org] !== undefined) push(byLeague, org, tile);
+    else push(plain, tile.category, tile);
+  }
+
+  const out: CabinetSection[] = [];
+  for (const category of CATEGORY_ORDER) {
+    // 聯盟整批插在「獎項」原本的位置上。
+    if (category === AWARD) {
+      for (const org of LEAGUE_ORDER) {
+        const items = byLeague.get(org);
+        if (items === undefined) continue;
+        const name = LEAGUE_NAMES[org] ?? org;
+        const groups = new Map<string, AchievementTile[]>();
+        for (const tile of items) {
+          push(groups, tile.category === HALL ? AWARD : tile.category, {
+            ...tile,
+            name: stripLeague(tile.name, name),
+          });
+        }
+        out.push({
+          key: `league:${org}`,
+          title: name,
+          points: sumPoints(items),
+          groups: [...groups.entries()].map(([title, list]) => ({ title, items: list })),
+        });
+      }
+    }
+
+    const items = plain.get(category);
+    if (items === undefined) continue;
+    const career = category === CUMULATIVE;
+    out.push({
+      key: category,
+      title: career ? CAREER_TOTAL_TITLE : category,
+      points: sumPoints(items),
+      groups: [
+        {
+          title: null,
+          items: career ? items.map((t) => ({ ...t, name: stripLeague(t.name, '生涯') })) : items,
+        },
+      ],
+    });
+  }
+  return out;
+}
