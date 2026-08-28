@@ -58,6 +58,11 @@ a{color:var(--info)}
 .bd-cell b{display:block;font-family:var(--disp);font-size:17px;font-weight:700;color:var(--accent);
   text-shadow:var(--glow);line-height:1.2}
 .bd-cell span{font-size:10px;color:var(--dim);letter-spacing:.15em}
+/* the two-way value row (`63/58`) never wraps: the cell grid is four fixed
+   columns and a wrapped value pushes the whole strip a line taller. JS shrinks
+   the font to fit (FitValue); nowrap is what makes scrollWidth report the
+   overflow it measures, and hidden keeps a pathological value inside the box. */
+.bd-cell b.fit-value{white-space:nowrap;overflow:hidden}
 /* salary cell: bare number in the value row, unit carried by the label,
    full amount in an out-of-flow tip. nowrap on both rows because the label's
    CJK gives the line-breaker opportunities the bare digits do not. */
