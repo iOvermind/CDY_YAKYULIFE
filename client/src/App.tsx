@@ -710,7 +710,9 @@ function HonorBoard({
   const milestones = [
     // 聯盟名與數字之間要留空白——「中職1000 安打」的中職與 1000 會黏成一團。
     ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName} ${m}`)),
-    ...summary.careerMilestones,
+    // 跨聯盟通算的那幾條也要冠上出處。同一排裡「大聯盟 2000 安打」旁邊擺一個
+    // 沒有前綴的「3000 安打」，看起來像是漏字，而不是另一種計算方式。
+    ...summary.careerMilestones.map((m) => `生涯 ${m}`),
   ];
 
   const tally = new Map<string, { label: string; years: number[] }>();
