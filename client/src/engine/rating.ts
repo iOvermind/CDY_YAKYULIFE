@@ -224,18 +224,34 @@ export function benchmarkLevelOf(level: string): string | null {
   return null;
 }
 
-/** 母國體系的頂級聯盟。養成期還沒有所屬層級，守位就拿這把尺量。 */
+/** 母國體系的頂級聯盟。認不出球員所在體系時的退路。 */
 export function homeBenchmarkLevel(): string {
   const path = leagues.paths[leagues.transfer.home_org.value];
   return path?.[path.length - 1] ?? 'CPBL1';
 }
 
 /**
- * 守這個守位的門檻基準線：該體系**頂級聯盟**的 par 加上守位位移。**不含年齡
- * 折扣**。
+ * 這個養成階段的對手平均水準，也就是它那把尺的 par。不是養成階段就回 null。
  *
- * 層級先過 `benchmarkLevelOf`，因此二軍與小聯盟拿到的是同一組數字——暫定守位
- * 與登錄守位用同一套門檻，差別只在登不登錄（ADR 0021）。
+ * 養成期的守位門檻**跟同齡人比**，不借職業的尺（ADR 0021 修正）：拿中職一軍
+ * 的 par 44 去量一個國一生，八個守位沒有一個守得動，養成期的守位欄只剩 1B 與
+ * DH 兩種值——那不是「他守不動游擊」，那是尺拿錯了。國中的游擊手就是要跟國中
+ * 的游擊手比。
+ */
+function amateurPar(stage: string): number | null {
+  const cup: unknown = amateur.cups[stage as keyof typeof amateur.cups];
+  if (typeof cup !== 'object' || cup === null) return null;
+  const par: unknown = (cup as { par?: unknown }).par;
+  return typeof par === 'number' ? par : null;
+}
+
+/**
+ * 守這個守位的門檻基準線：該層級的 par 加上守位位移。**不含年齡折扣**。
+ *
+ * par 從哪裡來分兩條路：養成階段（JHS／HS）用 `amateur.cups[stage].par`，職業
+ * 層級先過 `benchmarkLevelOf` 拿該體系**頂級聯盟**的 par。因此二軍與小聯盟拿到
+ * 的是跟一軍同一組數字——暫定守位與登錄守位用同一套門檻，差別只在登不登錄
+ * （ADR 0021）；而養成期自成一把尺，因為那六年他的對手是同齡人。
  *
  * 認不出來的層級回傳 null，而不是無條件放行：後者曾讓 KBO 一軍、墨西哥聯盟、
  * 澳職三個頂級聯盟因為漏填而放行，守備零分的人照樣登錄為游擊手（見 ADR
@@ -247,6 +263,8 @@ export function homeBenchmarkLevel(): string {
 export function baseThreshold(position: string, level: string): number | null {
   const offset = positions.defense_offsets[position];
   if (offset === undefined) return null;
+  const stagePar = amateurPar(level);
+  if (stagePar !== null) return stagePar + offset;
   const benchmark = benchmarkLevelOf(level);
   if (benchmark === null) return null;
   const info = leagues.levels[benchmark];

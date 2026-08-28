@@ -1563,13 +1563,15 @@ export class Game {
   /**
    * 算守位時該拿哪一把尺。
    *
-   * 一律是所屬體系的**頂級聯盟**：問的是「他守不守得動游擊」，那是對上這項
-   * 運動的標準，不是對上他這季剛好待在哪一層（ADR 0021）。還沒進職業就用母國
-   * 體系的頂級聯盟。
+   * 進職業後一律是所屬體系的**頂級聯盟**：問的是「他守不守得動游擊」，那是對
+   * 上這項運動的標準，不是對上他這季剛好待在哪一層（ADR 0021）。
+   *
+   * 養成期則是當下的學制階段（JHS／HS）。同一句話換個對手：國中生的游擊要對
+   * 上的是國中的游擊，拿中職一軍的尺量他，全隊只剩一壘手（ADR 0021 修正）。
    */
   get #benchmarkLevel(): string {
     const pro = this.#pro;
-    if (pro === null) return homeBenchmarkLevel();
+    if (pro === null) return this.#stage;
     return benchmarkLevelOf(pro.level) ?? homeBenchmarkLevel();
   }
 
@@ -1602,10 +1604,21 @@ export class Game {
     }).position;
   }
 
-  /** 這一季要不要打野手側。投手側單獨鎖定的球員不守備。 */
+  /**
+   * 這一季要不要打野手側。投手側單獨鎖定的球員不守備。
+   *
+   * 問的是 `#activeSide` 而不是 `#lockedSide`：**畢業前定位鎖定還沒發生**，
+   * 而起始守位早就把側別決定好了（ADR 0009，另一側的能力連加點選項都不出現）。
+   * 原本這裡在養成期一路落到 `r.fielder > r.pitcher`，於是選一壘手開局的人在
+   * 野手側評價追過初始擲出的投手側評價之前，會被判成純投手而掛上 DH——拿一個
+   * 他根本不能訓練的評價去問他是不是投手，這個比較本身就不成立。
+   *
+   * UTIL 仍然比評價高低：他的側別本來就沒定，那正是「守位不定」的意思。
+   */
   get #playsField(): boolean {
     if (this.isTwoWay) return true;
-    if (this.#lockedSide !== null) return this.#lockedSide === 'fielder';
+    const side = this.#activeSide;
+    if (side !== null) return side === 'fielder';
     const r = this.rating;
     return r !== null && r.fielder > r.pitcher;
   }
