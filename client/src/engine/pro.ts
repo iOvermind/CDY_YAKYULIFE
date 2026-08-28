@@ -104,13 +104,34 @@ export function evaluateMovement(
     const target = leagues.levels[above];
     if (target !== undefined) {
       // 門檻用當年的值：人才斷層的年份比較好擠上去，這正是浮動該有的效果。
+      const barOf = (level: string): number =>
+        Math.round(standardOf(standards, level).min) + barAt(level) + mv.promote.margin;
       const targetMin = Math.round(standardOf(standards, above).min) + barAt(above);
       const d = options.overall - (targetMin + mv.promote.margin);
       if (d >= 0 && rng.chance(chanceOf(mv.promote.chance, d))) {
+        // **升到清得過的最高一階，不是只升一階。** 小聯盟有四層，逐年升階代表
+        // 一個十八歲就有大聯盟能力的人得先在 1A、2A、3A 各耗一年——球團不會這樣
+        // 用他，那是把即戰力放在板凳上折舊。要不要動由上一層級的餘裕決定（跟原
+        // 本一樣，升遷率不變），動到哪由能力本身決定。
+        //
+        // 反過來，一階都跳不過的人不受影響：他清得過的最高一階就是上一階。
+        let dest = above;
+        for (let i = path.length - 1; i > index + 1; i--) {
+          const level = path[i];
+          if (level !== undefined && options.overall >= barOf(level)) {
+            dest = level;
+            break;
+          }
+        }
+        const destInfo = leagues.levels[dest];
+        const skipped = path.indexOf(dest) - index - 1;
         return {
           movement: 'promote',
-          level: above,
-          reason: `能力達到${target.name}的標準（綜合 ${options.overall}／門檻 ${targetMin}${noteAt(above)}）`,
+          level: dest,
+          reason:
+            `能力達到${destInfo?.name ?? dest}的標準（綜合 ${options.overall}／門檻 ${
+              dest === above ? targetMin : barOf(dest) - mv.promote.margin
+            }${noteAt(dest)}）` + (skipped > 0 ? `，越級跳過 ${skipped} 階` : ''),
         };
       }
     }

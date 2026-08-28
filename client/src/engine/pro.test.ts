@@ -94,6 +94,25 @@ describe('evaluateMovement', () => {
     expect(easy).toBeGreaterThan(base);
   });
 
+  it('小聯盟的即戰力一次跳到清得過的最高一階', () => {
+    // 新人聯盟的球員已經有大聯盟的能力，就不必在 1A、2A、3A 各耗一年。
+    const MLB = leagues.levels['MLB']!;
+    const ups = [...Array(300).keys()]
+      .map((i) => move(`s${i}`, 'R', MLB.min + 6))
+      .filter((r) => r.movement === 'promote');
+    expect(ups.length).toBeGreaterThan(0);
+    for (const r of ups) expect(r.level).toBe('MLB');
+  });
+
+  it('只清得過下一階的人還是一階一階爬', () => {
+    const A1 = leagues.levels['A1']!;
+    const ups = [...Array(300).keys()]
+      .map((i) => move(`s${i}`, 'R', A1.min + 1))
+      .filter((r) => r.movement === 'promote');
+    expect(ups.length).toBeGreaterThan(0);
+    for (const r of ups) expect(r.level).toBe('A1');
+  });
+
   it('差距越大越容易被下放', () => {
     const near = rateOf((s) => move(s, 'CPBL1', CPBL1.min - 2).movement === 'demote');
     const far = rateOf((s) => move(s, 'CPBL1', CPBL1.min - 10).movement === 'demote');
