@@ -380,6 +380,13 @@ export interface PlayerState {
    * 介面請用這個，不要用 `lockedSide` 判斷顯示。
    */
   readonly visibleSide: 'pitcher' | 'fielder' | null;
+  /**
+   * 掛靴的地方：引退時所屬的球隊與層級。沒進過職業，或還沒引退時為 null。
+   *
+   * 引退會把 `pro` 收掉——他確實不再屬於任何球團——但介面上的「所屬單位」不能
+   * 因此退回 `school`，那會讓一個打了二十年的老將在生涯落幕的那一刻變回高中生。
+   */
+  readonly retiredFrom: { readonly team: string; readonly levelName: string } | null;
 }
 
 /**
@@ -576,6 +583,8 @@ export class Game {
      */
     position: string | null;
   } | null = null;
+  /** 掛靴的地方。見 PlayerState.retiredFrom。 */
+  #retiredFrom: { team: string; levelName: string } | null = null;
   /**
    * 各層級當年的水準。尚未進職業時為 null。
    *
@@ -779,6 +788,7 @@ export class Game {
       pro: this.#proState,
       lockedSide: this.#lockedSide,
       visibleSide: this.#activeSide,
+      retiredFrom: this.#retiredFrom,
     };
   }
 
@@ -4121,6 +4131,9 @@ export class Game {
       '引退',
       `${esc(reason)}。在<b class="hl">${esc(pro?.team ?? '')}</b>結束了 ${pro?.year ?? 0} 年的職業生涯。`,
     );
+    if (pro !== null) {
+      this.#retiredFrom = { team: pro.team, levelName: levelOf(pro.level).name };
+    }
     this.#pro = null;
     this.#settle();
   }

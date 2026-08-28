@@ -114,6 +114,23 @@ function ladderPoints(increments: readonly number[], index: number): number {
 }
 
 /**
+ * 同一座階梯上，之前的生涯已經爬到哪一階；沒爬過回傳 null。
+ *
+ * 階梯的 id 只記「走到的那一階」（`cum:MLB:rbi:1000`），所以上一段生涯領走的
+ * 是一個**不同的 id**——不扣掉它，這一段走到 1500 時會把 500 與 1000 的分數
+ * 再領一次（#51／#52 的 +828 就是這麼來的）。階梯只補沒拿過的階。
+ */
+function bestUnlockedRung(unlocked: ReadonlySet<string>, key: string): number | null {
+  let best: number | null = null;
+  for (const id of unlocked) {
+    const l = ladderOf(id);
+    if (l.key !== key) continue;
+    if (best === null || l.rung > best) best = l.rung;
+  }
+  return best;
+}
+
+/**
  * 名次階梯：從榮譽字串的結尾認出名次，回傳它在階梯上的位置。
  *
  * 找不到回傳 -1——十六強不是成就，不該被硬塞進最後一階。
@@ -165,6 +182,7 @@ function cumulative(
   label: string,
   batting: BattingLine | null,
   pitching: PitchingLine | null,
+  unlocked: ReadonlySet<string>,
 ): Achievement[] {
   const c = cfg.categories.cumulative;
   const out: Achievement[] = [];
@@ -179,11 +197,15 @@ function cumulative(
     const { top, points } = ladderTop(spec.step, spec.points, c.first_rung[scope], value);
     if (top === null) continue;
 
+    // 扣掉上一段生涯已經領過的階，只補這一段新爬上來的部分。
+    const prev = bestUnlockedRung(unlocked, `${prefix}:${stat}`);
+    const taken = prev === null ? 0 : ladderTop(spec.step, spec.points, c.first_rung[scope], prev).points;
+
     out.push({
       id: `${prefix}:${stat}:${top}`,
       category: c.name,
       name: joinName(label, spec.name, top),
-      points,
+      points: Math.max(0, points - taken),
     });
   }
   return out;
@@ -276,14 +298,33 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
 
   // ---- 累積：各聯盟各一份，另外再算一份一軍通算。不計養成與二軍。
   for (const league of ctx.summary.leagues) {
-    list.push(...cumulative('league', `cum:${league.org}`, league.orgName, league.batting, league.pitching));
+    list.push(
+      ...cumulative(
+        'league',
+        `cum:${league.org}`,
+        league.orgName,
+        league.batting,
+        league.pitching,
+        ctx.unlocked,
+      ),
+    );
   }
   list.push(
-    ...cumulative('career', 'cum:career', '生涯', ctx.summary.topTotal.batting, ctx.summary.topTotal.pitching),
+    ...cumulative(
+      'career',
+      'cum:career',
+      '生涯',
+      ctx.summary.topTotal.batting,
+      ctx.summary.topTotal.pitching,
+      ctx.unlocked,
+    ),
   );
 
-  // ---- 生涯分級。清單上只有最高的那一級，點數是那一級與底下每一級的增量加總。
-  const tierPoints = ladderPoints(c.tier.by_tier, ctx.summary.bestTier);
+  // ---- 生涯分級。清單上只有最高的那一級，點數是那一級與底下每一級的增量加總，
+  // 同樣只補上一段生涯還沒爬到的那幾級。
+  const prevTier = bestUnlockedRung(ctx.unlocked, 'tier');
+  const takenTier = prevTier === null ? 0 : ladderPoints(c.tier.by_tier, -prevTier);
+  const tierPoints = Math.max(0, ladderPoints(c.tier.by_tier, ctx.summary.bestTier) - takenTier);
   if (tierPoints > 0) {
     const label = ctx.summary.representative?.tierLabel ?? '';
     list.push({

@@ -1073,10 +1073,12 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
   // 傷過的年份整列標色，而不是加一欄「傷」——空白佔一整欄只為了標少數幾年，
   // 而且橫向已經很擠了。標色只回答「這一年他不是完整的」，細節在事件流裡。
   const rowClass = (r: CareerRow) => (r.injured === null ? undefined : `hurt hurt-${r.injured}`);
-  const rowLead = (r: CareerRow) => (
+  // 季中轉隊的那一年會有兩列。年與齡只寫在第一列——同一年重覆印一次年份，
+  // 讀起來像兩個球季，而球隊那一欄已經說清楚這是同一年的後半段了。
+  const rowLead = (r: CareerRow, cont: boolean) => (
     <>
-      <td>{r.year}</td>
-      <td>{r.age}</td>
+      <td>{cont ? '' : r.year}</td>
+      <td>{cont ? '' : r.age}</td>
       <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
         {r.team}
         {r.note !== null && <span className="sub">・{r.note}</span>}
@@ -1101,9 +1103,9 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
               </tr>
             </thead>
             <tbody>
-              {batting.map((r) => (
+              {batting.map((r, i) => (
                 <tr key={r.key} className={rowClass(r)}>
-                  {rowLead(r)}
+                  {rowLead(r, batting[i - 1]?.year === r.year)}
                   <td title={r.position === null ? undefined : positionName(r.position)}>
                     {r.position ?? '—'}
                   </td>
@@ -1127,9 +1129,9 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
               </tr>
             </thead>
             <tbody>
-              {pitching.map((r) => (
+              {pitching.map((r, i) => (
                 <tr key={r.key} className={rowClass(r)}>
-                  {rowLead(r)}
+                  {rowLead(r, pitching[i - 1]?.year === r.year)}
                   <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
                 </tr>
               ))}
@@ -1308,10 +1310,14 @@ function Board({
   // 所屬單位一律讀目前的狀態：升學會換學校、選秀會換成球隊。讀 origin 那一份
   // 會永遠停在開局的國中，讀 state.school 則會在進職業之後停在高中。
   const tierLabel = schoolTiersOf(state.stage)?.tiers[String(state.schoolTier)]?.label ?? '';
+  // 引退之後球團關係已經結束，但這一格要停在他掛靴的地方——退回學校會讓一段
+  // 二十年的職業生涯在落幕那一刻變回高中生（見 PlayerState.retiredFrom）。
   const affiliation =
-    state.pro === null
-      ? { name: state.school, note: tierLabel }
-      : { name: state.pro.team, note: state.pro.levelName };
+    state.pro !== null
+      ? { name: state.pro.team, note: state.pro.levelName }
+      : state.retiredFrom !== null
+        ? { name: state.retiredFrom.team, note: `${state.retiredFrom.levelName}·引退` }
+        : { name: state.school, note: tierLabel };
 
   // 取得二刀流之後，起始守位就不再說明他是什麼球員了——他是投手也是打者，
   // 因此寫成兩個守位。不再冠上「二刀流」三個字：右欄的狀態欄已經會列出這個

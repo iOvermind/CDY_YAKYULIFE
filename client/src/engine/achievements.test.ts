@@ -104,6 +104,15 @@ describe('累積成就', () => {
     expect(row?.id).toBe(`cum:career:hits:${second}`);
   });
 
+  it('上一段生涯爬過的階不再給分，只補新爬上來的那幾階', () => {
+    const good = summary({ topTotal: { batting: bat({ hits: second }), pitching: null } });
+    const row = evaluateAchievements(
+      ctx({ summary: good, unlocked: new Set([`cum:career:hits:${first}`]) }),
+    ).list.find((a) => a.id.startsWith('cum:career:hits'));
+    // 只拿第二階，不是從第一階重新加總。
+    expect(row?.points).toBe(spec.points * (firstRung + 1));
+  });
+
   it('各聯盟各算一份，另外再算一份一軍通算', () => {
     const leagueFirst = spec.step * cum.first_rung.league;
     const s = summary({
