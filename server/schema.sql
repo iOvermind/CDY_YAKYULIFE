@@ -59,3 +59,11 @@ CREATE INDEX IF NOT EXISTS careers_user_idx ON careers (user_id, started_at DESC
 -- 必須另外寫一行——這整份檔案每次啟動都會跑，所以每一行都得是冪等的。
 ALTER TABLE achievements ADD COLUMN IF NOT EXISTS name     TEXT NOT NULL DEFAULT '';
 ALTER TABLE achievements ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+
+-- `legend` / `mrteam` / `rainbow` 的名字要冠上聯盟或球隊（「中職 歷史級球星」），
+-- 因此 id 改成 `trait:<id>:<名字>`。**`name` 是解鎖當下凍結寫進來的**，改程式碼
+-- 動不到已經躺在這裡的舊列，成就櫃會一直顯示 `legend` 這種英文 id。
+--
+-- 舊 id 現在不可能再被寫入（`traitTile()` 一律帶名字），所以這行刪完就不會再有
+-- 東西回來；下一局結算時會以新 id 重新解鎖，AP 照算，不會重複給。
+DELETE FROM achievements WHERE achievement IN ('trait:legend', 'trait:mrteam', 'trait:rainbow');
