@@ -528,7 +528,12 @@ export function cabinetSections(unlocked: readonly UnlockedLike[]): readonly Cab
           key: `league:${org}`,
           title: name,
           points: sumPoints(items),
-          groups: [...groups.entries()].map(([title, list]) => ({ title, items: list })),
+          // 小標的順序不能跟著這個聯盟剛好解到什麼而跑——名人堂併進「獎項」之後，
+          // 沒拿過獎的聯盟會先插進「累積」，六個聯盟就會排成兩種樣子。一律照分類
+          // 表的順序（獎項在累積前）擺，缺哪一堆就少哪一堆。
+          groups: [...groups.entries()]
+            .sort((a, b) => orderOf(CATEGORY_ORDER, a[0]) - orderOf(CATEGORY_ORDER, b[0]))
+            .map(([title, list]) => ({ title, items: list })),
         });
       }
     }
