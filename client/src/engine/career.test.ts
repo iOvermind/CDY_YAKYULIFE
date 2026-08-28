@@ -140,7 +140,14 @@ describe('里程碑', () => {
   });
 
   it('沒達到第一級就沒有分', () => {
-    expect(evaluateMilestones('league', bat({ hits: 500 }), null).points).toBe(0);
+    expect(evaluateMilestones('league', bat({ hits: 499 }), null).points).toBe(0);
+  });
+
+  // 級距兩邊同一個 step，只有起算階不同：500 安在聯盟算一級，在生涯還不算。
+  it('生涯的門高一階，但級距和聯盟一樣', () => {
+    expect(evaluateMilestones('career', bat({ hits: 500 }), null).points).toBe(0);
+    expect(evaluateMilestones('league', bat({ hits: 500 }), null).points).toBeGreaterThan(0);
+    expect(evaluateMilestones('career', bat({ hits: 1000 }), null).reached).toContain('1000 安打');
   });
 
   /** 舊制會把 143 場聯盟的 2000 安門檻放大成 2383 支，玩家得多打 383 支才算數。 */

@@ -358,6 +358,8 @@ export interface AchievementsData {
     readonly marriage: { readonly name: string; readonly default: number };
     readonly cumulative: {
       readonly name: string;
+      /** 各範圍從第幾階起算。生涯的第一階就是聯盟的第二階，級距不變。 */
+      readonly first_rung: { readonly league: number; readonly career: number };
       readonly rungs: Readonly<
         Record<
           string,
@@ -368,14 +370,12 @@ export interface AchievementsData {
             /** 一個顯示單位等於幾個原始數據（投球局數存出局數，unit 3）。 */
             readonly unit?: number;
             /**
-             * 級距，`[門檻, 分數]`，由低到高、逐級累加。成就櫃與生涯里程碑讀同一份。
-             *
-             * 沒有 `max`：走到哪一階就顯示哪一階。沒有這一欄就是這項不列入累積。
+             * 級距。第 n 階的門檻是 n×step，上不封頂——階梯是生成的，沒有表尾，
+             * 也就沒有「表尾即天花板」這種沒人宣告過的上限。
              */
-            readonly score?: {
-              readonly league: readonly (readonly [number, number])[];
-              readonly career: readonly (readonly [number, number])[];
-            };
+            readonly step: number;
+            /** 第一階的分數。第 n 階給 n×points，AP 與生涯評價分共用。 */
+            readonly points: number;
           }
         >
       >;

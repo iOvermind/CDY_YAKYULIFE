@@ -123,47 +123,41 @@ function rankIndexOf(byRank: Readonly<Record<string, number>>, honor: string): n
 }
 
 /**
- * 階梯結算。**上不封頂**：表格是有限的，生涯不是。走完最後一階之後，門檻照最後
- * 一個級距一直往上長——3600 安顯示的是「3500 安」，不是卡在表格結尾的 3000。
+ * 階梯結算。階梯是**生成**的，不是查表：第 n 階的門檻就是 n×step，往上沒有盡頭。
+ * 4200 安顯示「4000 安」，380 盜顯示「350 盜」——手寫的表格總有結尾，而結尾遲早
+ * 會變成沒人宣告過的天花板（3600 安卡在 3000 就是這麼來的）。
  *
- * 但 **AP 與評價分只給到表內為止**。分數的天花板是設計出來的：一份生涯能換多少
- * AP 有上限，否則打得夠久就能把天賦全買齊。表格外的每一階純粹是榮譽顯示，
- * `points` 停在表內加總（跨過整張表的人一次拿滿，不會因為超額而漏掉前幾階）。
+ * 分數同樣不封頂：跨過的第 n 階給 n×points，逐階累加，AP 與生涯評價分都照給。
+ * 累加的結果隨階數平方成長，這是刻意的——能打到那個份上的人早就不缺 AP，攔他
+ * 只會讓紀錄停在半路。
  *
- * 級距取表格最後兩階的差。表格只有一階時無從推級距，就停在那一階。
+ * `firstRung` 決定從第幾階開始給：聯盟 1、生涯 2。生涯的門高一階，級距不變。
  */
 export function ladderTop(
-  rungs: readonly (readonly number[])[],
+  step: number,
+  points: number,
+  firstRung: number,
   value: number,
 ): { readonly top: number | null; readonly points: number } {
-  let top: number | null = null;
-  let points = 0;
-  for (const rung of rungs) {
-    const need = rung[0] ?? Number.POSITIVE_INFINITY;
-    if (value < need) break;
-    top = need;
-    points += rung[1] ?? 0;
-  }
-  if (top === null) return { top: null, points: 0 };
+  if (step <= 0) throw new Error(`級距必須為正，收到 ${step}`);
 
-  const last = rungs[rungs.length - 1]?.[0];
-  const prev = rungs[rungs.length - 2]?.[0];
-  if (last === undefined || prev === undefined || top < last) return { top, points };
+  const rung = Math.floor(value / step);
+  if (rung < firstRung) return { top: null, points: 0 };
 
-  const step = last - prev;
-  if (step <= 0) return { top, points };
-  return { top: last + Math.floor((value - last) / step) * step, points };
+  // firstRung..rung 每階 n×points 的總和。逐階跑迴圈也對，但生涯可以走到幾十階，
+  // 用公式省得有人日後把上限塞回迴圈裡。
+  const sum = (n: number): number => (n * (n + 1)) / 2;
+  return { top: rung * step, points: points * (sum(rung) - sum(firstRung - 1)) };
 }
 
 /**
  * 累積成就：一項數據只佔清單裡的一格，顯示跨過的**最高階**，點數是每一階加總。
  *
- * 級距直接讀 `score[scope]`——AP 階梯與生涯里程碑是同一份表，`scope` 只決定看
- * 聯盟欄還是生涯欄。兩邊分開寫過一次，結果就是聯盟盜壘 50 進得了成就櫃、生涯
- * 350 卻不見蹤影。
+ * 級距讀 `step`，AP 階梯與生涯里程碑是同一個數字，`scope` 只決定從第幾階起算。
+ * 兩邊分開寫過一次，結果就是聯盟盜壘 50 進得了成就櫃、生涯 350 卻不見蹤影。
  *
- * **第一階刻意拉高**——打 300 安就引退的人跨不過任何一階。那不是漏掉了他，是
- * 這個系統要說的話：養出一個廢物不該有回報。
+ * 跨不過第一階就什麼都沒有——打 300 安就引退的人不會出現在成就櫃上。那不是漏掉
+ * 了他，是這個系統要說的話：養出一個廢物不該有回報。
  */
 function cumulative(
   scope: 'league' | 'career',
@@ -176,13 +170,13 @@ function cumulative(
   const out: Achievement[] = [];
 
   for (const [stat, spec] of Object.entries(c.rungs)) {
-    if (stat.startsWith('_') || spec.score === undefined) continue;
+    if (stat.startsWith('_')) continue;
     const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
     if (value === null) continue;
 
-    // 同一份級距表也餵給 career.ts 的里程碑分數——階梯與里程碑是同一件事，
+    // 同一份級距也餵給 career.ts 的里程碑分數——階梯與里程碑是同一件事，
     // 不是兩套各自漂移的數字。
-    const { top, points } = ladderTop(spec.score[scope], value);
+    const { top, points } = ladderTop(spec.step, spec.points, c.first_rung[scope], value);
     if (top === null) continue;
 
     out.push({

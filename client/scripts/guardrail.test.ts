@@ -416,7 +416,7 @@ describe('球系', () => {
 });
 
 /**
- * 累積成就與生涯里程碑吃同一份 `score` 表，所以資料本身要撐住兩邊的約定。
+ * 累積成就與生涯里程碑吃同一份 `step`，所以資料本身要撐住兩邊的約定。
  *
  * 這裡擋的是三種真的發生過的漂移：級距分岔（聯盟盜壘 50、生涯 350，中間那段
  * 玩家什麼都拿不到）、封頂（打到 3500 安卻只顯示 3000）、以及漏項（中繼成功
@@ -428,46 +428,29 @@ describe('累積級距', () => {
 
   it('該有的累積數據一項都不能少', () => {
     const keys = new Set(rungs.map(([k]) => k));
-    for (const stat of ['hits', 'hr', 'rbi', 'sb', 'wins', 'so', 'outs', 'saves', 'holds']) {
+    for (const stat of ['hits', 'hr', 'rbi', 'runs', 'sb', 'wins', 'so', 'outs', 'saves', 'holds']) {
       expect(keys.has(stat), `少了 ${stat}`).toBe(true);
     }
   });
 
+  // 階梯是生成的：第 n 階 = n×step。表格沒有結尾，也就沒有「表尾即天花板」。
+  it('起算階只有兩個：聯盟第一階、生涯第二階', () => {
+    expect(c.first_rung.league).toBe(1);
+    expect(c.first_rung.career).toBe(2);
+  });
+
   for (const [stat, spec] of rungs) {
     describe(stat, () => {
-      it('有級距表——沒有的話這項不會出現在成就櫃上', () => {
-        expect(spec.score).toBeDefined();
+      it('級距與分數都是正數', () => {
+        expect(spec.step).toBeGreaterThan(0);
+        expect(spec.points).toBeGreaterThan(0);
       });
 
-      it('沒有 max 之類的封頂欄位', () => {
-        expect('max' in spec || 'step' in spec).toBe(false);
-      });
-
-      for (const scope of ['league', 'career'] as const) {
-        it(`${scope} 由低到高遞增`, () => {
-          const list = spec.score![scope];
-          expect(list.length).toBeGreaterThan(0);
-          for (let i = 1; i < list.length; i++) {
-            expect(list[i]![0]).toBeGreaterThan(list[i - 1]![0]);
-          }
-        });
-
-        // 階梯上不封頂，表格外的門檻是拿最後兩階的差往上長的。級距不勻的話，
-        // 那個「往上長的步幅」等於偷偷由最後兩階決定——3600 安該顯示 3500
-        // 還是 4000 就變成資料排版的意外，不是設計。
-        it(`${scope} 級距等寬——最後一階之後就是照這個寬度往上長`, () => {
-          const list = spec.score![scope];
-          if (list.length < 3) return;
-          const step = list[1]![0] - list[0]![0];
-          for (let i = 1; i < list.length; i++) {
-            expect(list[i]![0] - list[i - 1]![0], `${scope} 第 ${i} 段級距與第一段不同`).toBe(step);
-          }
-        });
-      }
-
-      it('生涯門檻一律高於同名次的聯盟門檻', () => {
-        const { league, career } = spec.score!;
-        expect(career[0]![0]).toBeGreaterThan(league[0]![0]);
+      // 手寫的級距表總有最後一階，而最後一階遲早會變成沒人宣告過的上限。
+      it('沒有 max / 級距表 之類的封頂欄位', () => {
+        for (const banned of ['max', 'score', 'increment_cap', 'cap']) {
+          expect(banned in spec, `${stat} 又長回封頂欄位 ${banned}`).toBe(false);
+        }
       });
     });
   }

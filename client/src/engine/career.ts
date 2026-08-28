@@ -245,13 +245,19 @@ export function evaluateMilestones(
   let points = 0;
   const reached: string[] = [];
 
-  for (const [stat, spec] of Object.entries(achievements.categories.cumulative.rungs)) {
-    if (stat.startsWith('_') || spec.score === undefined) continue;
+  const cfgRungs = achievements.categories.cumulative;
+  for (const [stat, spec] of Object.entries(cfgRungs.rungs)) {
+    if (stat.startsWith('_')) continue;
     const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
     if (value === null) continue;
 
-    // 與成就櫃共用 `ladderTop()`：門檻上不封頂，分數只給到表內。
-    const { top: highest, points: pts } = ladderTop(spec.score[scope], value);
+    // 與成就櫃共用 `ladderTop()`：同一個級距、同一套分數，門檻與分數都不封頂。
+    const { top: highest, points: pts } = ladderTop(
+      spec.step,
+      spec.points,
+      cfgRungs.first_rung[scope],
+      value,
+    );
     points += pts;
     // 只列最高的那一級——「1000 安、1500 安、2000 安」三行都印出來很囉唆，
     // 玩家要看的是他走到哪裡。分數則是逐級累加的。

@@ -70,41 +70,55 @@ const ctx = (over: Partial<AchievementContext> = {}): AchievementContext => ({
 });
 
 describe('累積成就', () => {
-  // 階梯就是里程碑的級距，同一份表（見 ADR 0031）。
-  const rungs = cfg.categories.cumulative.rungs['hits']!.score!;
-  const [first, second] = [rungs.career[0]!, rungs.career[1]!];
+  // 階梯就是里程碑的級距，同一份生成規則（見 ADR 0031）。
+  const cum = cfg.categories.cumulative;
+  const spec = cum.rungs['hits']!;
+  // 生涯從第二階起算，級距與聯盟同一個 step。
+  const firstRung = cum.first_rung.career;
+  const first = spec.step * firstRung;
+  const second = spec.step * (firstRung + 1);
 
   it('一段真的失敗的生涯就是拿零分', () => {
-    // 第一階刻意拉高：養出一個廢物不該有回報。
-    const poor = summary({ topTotal: { batting: bat({ hits: first[0] - 1 }), pitching: null } });
+    // 生涯的第一階刻意拉高：養出一個廢物不該有回報。
+    const poor = summary({ topTotal: { batting: bat({ hits: first - 1 }), pitching: null } });
     const got = evaluateAchievements(ctx({ summary: poor }));
-    expect(got.list.filter((a) => a.id.startsWith('cum:'))).toHaveLength(0);
-    expect(got.points).toBe(0);
+    expect(got.list.filter((a) => a.id.startsWith('cum:career:hits'))).toHaveLength(0);
   });
 
   it('跨過幾階就給幾點，但清單上只列最高的那一階', () => {
-    const good = summary({ topTotal: { batting: bat({ hits: second[0] }), pitching: null } });
+    const good = summary({ topTotal: { batting: bat({ hits: second }), pitching: null } });
     const rows = evaluateAchievements(ctx({ summary: good })).list.filter((a) =>
       a.id.startsWith('cum:career:hits'),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.points).toBe(first[1] + second[1]);
-    expect(rows[0]?.name).toContain(String(second[0]));
+    expect(rows[0]?.points).toBe(spec.points * (firstRung + (firstRung + 1)));
+    expect(rows[0]?.name).toContain(String(second));
+  });
+
+  it('不足一階的餘數不算，顯示的是走到的那一階', () => {
+    // 4200 安顯示 4000 安：手寫表格的結尾不該變成天花板。
+    const over = summary({ topTotal: { batting: bat({ hits: second + 1 }), pitching: null } });
+    const row = evaluateAchievements(ctx({ summary: over })).list.find((a) =>
+      a.id.startsWith('cum:career:hits'),
+    );
+    expect(row?.id).toBe(`cum:career:hits:${second}`);
   });
 
   it('各聯盟各算一份，另外再算一份一軍通算', () => {
+    const leagueFirst = spec.step * cum.first_rung.league;
     const s = summary({
-      leagues: [league({ batting: bat({ hits: rungs.league[0]![0] }) })],
-      topTotal: { batting: bat({ hits: first[0] }), pitching: null },
+      leagues: [league({ batting: bat({ hits: leagueFirst }) })],
+      topTotal: { batting: bat({ hits: first }), pitching: null },
     });
     const ids = evaluateAchievements(ctx({ summary: s })).list.map((a) => a.id);
-    expect(ids).toContain(`cum:CPBL:hits:${rungs.league[0]![0]}`);
-    expect(ids).toContain(`cum:career:hits:${first[0]}`);
+    expect(ids).toContain(`cum:CPBL:hits:${leagueFirst}`);
+    expect(ids).toContain(`cum:career:hits:${first}`);
   });
 });
 
 describe('同一項成就只給一次 AP', () => {
-  const hits = cfg.categories.cumulative.rungs['hits']!.score!.career[0]![0];
+  const spec = cfg.categories.cumulative.rungs['hits']!;
+  const hits = spec.step * cfg.categories.cumulative.first_rung.career;
   const s = summary({ topTotal: { batting: bat({ hits }), pitching: null } });
 
   it('已經領過的仍然列在清單上，但不再計分', () => {
@@ -264,36 +278,39 @@ describe('成就櫃', () => {
 });
 
 describe('階梯上不封頂', () => {
-  const rungs = [
-    [1500, 5],
-    [2000, 10],
-    [2500, 16],
-    [3000, 24],
-  ];
+  // 安打：級距 500、每階 4 分。聯盟從第 1 階起算、生涯從第 2 階。
+  const step = 500;
+  const pts = 4;
 
   it('沒跨過第一階就什麼都沒有', () => {
-    expect(ladderTop(rungs, 1499)).toEqual({ top: null, points: 0 });
+    expect(ladderTop(step, pts, 1, 499)).toEqual({ top: null, points: 0 });
   });
 
-  it('表格之內走到哪一階顯示哪一階，分數逐級累加', () => {
-    expect(ladderTop(rungs, 2400)).toEqual({ top: 2000, points: 15 });
+  it('生涯的門高一階，級距不變', () => {
+    // 500 安在聯盟是一階成就，在生涯還不算數。
+    expect(ladderTop(step, pts, 2, 500)).toEqual({ top: null, points: 0 });
+    expect(ladderTop(step, pts, 1, 500)).toEqual({ top: 500, points: 4 });
   });
 
-  it('走完整張表的人一次拿滿底下每一階', () => {
-    expect(ladderTop(rungs, 3000).points).toBe(55);
+  it('不足一階的餘數不算，走到哪一階就顯示哪一階', () => {
+    expect(ladderTop(step, pts, 1, 4200).top).toBe(4000);
+    expect(ladderTop(50, 3, 1, 380).top).toBe(350);
   });
 
-  // 這是使用者回報的那一局：3600 安卡在 3000。
-  it('超出表格後照最後一個級距繼續往上長', () => {
-    expect(ladderTop(rungs, 3600).top).toBe(3500);
-    expect(ladderTop(rungs, 4000).top).toBe(4000);
+  // 這是使用者回報的那一局：3600 安卡在 3000。手寫表格的結尾就是那道天花板。
+  it('表格沒有結尾，階梯永遠往上生成', () => {
+    expect(ladderTop(step, pts, 1, 3600).top).toBe(3500);
+    expect(ladderTop(step, pts, 1, 99999).top).toBe(99500);
   });
 
-  it('超出表格的階不再給分——AP 的天花板停在表內', () => {
-    expect(ladderTop(rungs, 9999).points).toBe(ladderTop(rungs, 3000).points);
+  it('分數逐階累加，第 n 階給 n 倍——高處的分數也不封頂', () => {
+    // 1..8 階 = 36 級，×4 分。
+    expect(ladderTop(step, pts, 1, 4000).points).toBe(144);
+    // 生涯扣掉第 1 階那 4 分。
+    expect(ladderTop(step, pts, 2, 4000).points).toBe(140);
   });
 
-  it('只有一階的表無從推級距，就停在那一階', () => {
-    expect(ladderTop([[100, 1]], 9999)).toEqual({ top: 100, points: 1 });
+  it('級距必須為正，否則階梯無從生成', () => {
+    expect(() => ladderTop(0, pts, 1, 100)).toThrow();
   });
 });
