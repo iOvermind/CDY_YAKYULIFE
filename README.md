@@ -36,9 +36,9 @@
 
 將本專案 clone 回本機，或直接下載儲存庫中的 `index_legacy.html` 檔案即可。不需要安裝任何東西。
 
-### 線上版（帳號、成就與天賦商店）
+### 線上版（帳號、成就與天賦）
 
-帳號、成就點數與天賦商店需要伺服器——**成就點數是跨局累積並換成永久強化的貨幣，它一旦可以偽造，整個系統就沒有意義**，因此伺服器會用同一份引擎重跑重播日誌來驗證每一段生涯。設計見 [ADR 0007](docs/adr/0007-online-accounts-and-server-verification.md)。
+帳號、成就點數與天賦需要伺服器——**成就點數是跨局累積並換成永久強化的貨幣，它一旦可以偽造，整個系統就沒有意義**，因此伺服器會用同一份引擎重跑重播日誌來驗證每一段生涯。設計見 [ADR 0007](docs/adr/0007-online-accounts-and-server-verification.md)。
 
 ```bash
 cd server
@@ -59,7 +59,7 @@ cd client && npm run build
 cd server && STATIC_DIR=../client/dist npm run dev   # demo / demo1234
 ```
 
-不架伺服器也完全玩得起來——只是沒有帳號、成就不會累積、天賦商店不開放。
+不架伺服器也完全玩得起來——只是沒有帳號、成就不會累積、天賦不開放。
 
 ### 網頁版（GitHub Pages）
 
