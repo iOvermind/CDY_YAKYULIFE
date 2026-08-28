@@ -73,25 +73,16 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
 /**
  * 蓄力槽怎麼寫給玩家看。
  *
- * 槽是雙向的：正的是**存**（存滿就升一級），負的是**欠**（欠滿就掉一級）。
- * 兩邊的分母不是同一筆錢——存的目標是「買下一級」的價錢 abilityCost(current)，
- * 欠的目標是「退掉現在這一級」退回來的 abilityCost(current-1)。用同一個分母
- * 寫，就會出現「-1/2」這種一眼看不出在說什麼的東西：符號在講欠，分母卻在講
- * 買。因此這裡把方向拆出來，畫面只要照 debt 決定要寫「欠」還是留白。
- *
- * 觸底的欠點在 untrain() 就被歸零，所以 current-1 不會掉到量表底線之下。
+ * 槽只會是正的——扣點走借位（見 untrain()），不會留下負數。分母固定是「買下
+ * 一級」的價錢 abilityCost(current)。
  */
 export function carryGauge(
   current: number,
   ceiling: number,
   carry: number,
   ctx: CostContext,
-): { readonly points: number; readonly need: number; readonly debt: boolean } {
-  if (carry < 0) {
-    const below = Math.max(abilities.scale.hard_floor, current - 1);
-    return { points: -carry, need: abilityCost(below, ceiling, ctx), debt: true };
-  }
-  return { points: carry, need: abilityCost(current, ceiling, ctx), debt: false };
+): { readonly points: number; readonly need: number } {
+  return { points: Math.max(0, carry), need: abilityCost(current, ceiling, ctx) };
 }
 
 /**
@@ -133,18 +124,21 @@ export function train(
 /**
  * 扣除點數，回傳降低的級數與剩餘的蓄力。train() 的鏡像。
  *
- * 扣的點先從蓄力槽扣，欠到夠退一級才退——而退掉的那一級**退還它自己的價
- * 錢**：當初花 6 點買的，退掉就還 6 點。因此同一項能力 +n 點之後再 −n 點，
- * 會回到完全相同的能力值與蓄力（測試釘住這條）。
+ * **不夠退一級就借位**：能力 66、蓄力 0/6 被扣 3 點，會變成 65 3/6——退掉
+ * 65 → 66 這一級，拿回它的價錢 6 點，扣掉 3 點，找零 3 點留在槽裡。能力值
+ * 與蓄力槽合起來是一條連續的點數座標，扣點就是在這條座標上往下走。
+ *
+ * 因此蓄力槽永遠是正的，沒有「欠點」這種東西。舊版讓槽變成負數（欠滿一級
+ * 才掉），畫面上就會出現「欠 3/6」——一個能力值沒動、卻說你欠著債的狀態，
+ * 玩家看不懂扣掉的 3 點跑去哪裡了。借位把它寫成「已經掉了一級，但你手上還
+ * 剩 3 點」，同一件事，看得見。
+ *
+ * 退掉的那一級**退還它自己的價錢**：當初花 6 點買的，退掉就還 6 點。因此同
+ * 一項能力 +n 點之後再 −n 點，會回到完全相同的能力值與蓄力（測試釘住這條）。
  *
  * 這是為了修掉事件結算的兩側不對稱：舊做法把能力值直接減掉點數（1 點 = 1
  * 級），於是能力 64 以上時，同一張卡成功 +3 點只進蓄力槽（一級要 6 點），
- * 失敗 −3 點卻立刻掉 3 級。上檔付級價、下檔付點價，能力越高差得越遠——那
- * 不是設計出來的，是加點與扣值各自長成兩條路徑的結果。
- *
- * 蓄力槽因此可以是負的，也就是欠點。欠點不會憑空拿走已經到手的級數，但會
- * 讓下一級變貴（成本扣掉負的蓄力等於加價），要先還清才推得動。能力 50 以
- * 下一級只要 1 點，欠點當場就結清，所以低段的行為與過去完全一致。
+ * 失敗 −3 點卻立刻掉 3 級。上檔付級價、下檔付點價，能力越高差得越遠。
  *
  * 與 decline() 的分界：老化與傷病是時間對所有人一視同仁地收費，維持 1:1；
  * 事件是玩家自己下的賭注，賭注的兩側必須用同一種貨幣結算。
@@ -163,9 +157,7 @@ export function untrain(
   let budget = carry - points;
   while (budget < 0 && value > floor) {
     // 退的是 value-1 → value 這一級，價錢按當初買它的算。
-    const refund = abilityCost(value - 1, ceiling, ctx);
-    if (-budget < refund) break;
-    budget += refund;
+    budget += abilityCost(value - 1, ceiling, ctx);
     value--;
   }
 

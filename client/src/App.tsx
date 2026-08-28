@@ -1654,11 +1654,10 @@ function AbilityRow({
       <span className="val" style={{ lineHeight: 1.1 }}>
         {current}
         <small style={{ opacity: 0.5 }}>/{ceiling}</small>
-        {(cost > 1 || gauge.debt) && (
+        {cost > 1 && (
           <span
             style={{ display: 'block', opacity: 0.5, fontSize: 10.5, letterSpacing: 1, marginTop: -2 }}
           >
-            {gauge.debt && '欠'}
             {gauge.points}/{gauge.need}
           </span>
         )}

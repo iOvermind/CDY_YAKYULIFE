@@ -4836,8 +4836,8 @@ export class Game {
     );
     this.#ability[key] = result.value;
     this.#carry[key] = result.carry;
-    // 這裡不必再 #settleCarry()：untrain() 的迴圈已經一路退到欠點不夠退下一
-    // 級為止，而成本只跟這一項自己的能力值有關，退這項不會改變別項的價錢。
+    // 這裡不必再 #settleCarry()：untrain() 的迴圈已經一路借位到槽轉正為止，
+    // 而成本只跟這一項自己的能力值有關，退這項不會改變別項的價錢。
   }
 
   /**
@@ -4859,9 +4859,7 @@ export class Game {
     const head = `<span class="${points >= 0 ? 'up' : 'dn'}">${points > 0 ? '+' : ''}${points} 點</span>`;
 
     if (gained !== 0) return `${head}（${gained > 0 ? '+' : ''}${gained}）`;
-    // 欠點寫成「欠 1/2」而不是「蓄力 -1/2」：負號配上「蓄力」兩個字互相打架。
-    if (carry !== 0)
-      return `${head}（${gauge.debt ? '欠' : '蓄力'} ${gauge.points}/${gauge.need}）`;
+    if (carry !== 0) return `${head}（蓄力 ${gauge.points}/${gauge.need}）`;
     return `${head}（已經到底，沒有去處）`;
   }
 
@@ -4873,16 +4871,11 @@ export class Game {
    * 的成長曲線。這些事發生之後，原本存著的點數可能已經足夠升一級，卻沒有人
    * 去花它——畫面於是顯示「2/2」卻不進位，看起來像壞掉。
    *
-   * 欠點（負的蓄力）要往反方向結算：成本變便宜之後，原本欠不夠一級的點數可
-   * 能已經欠得夠了。
-   *
    * 因此凡是會改變成本的地方，事後都要把槽清一次。
    */
   #settleCarry(): void {
     for (const key of Object.keys(this.#carry)) {
-      const carry = this.#carry[key] ?? 0;
-      if (carry > 0) this.#applyPoints(key, 0, { silent: true });
-      else if (carry < 0) this.#applyPenalty(key, 0);
+      if ((this.#carry[key] ?? 0) > 0) this.#applyPoints(key, 0, { silent: true });
     }
   }
 

@@ -213,24 +213,14 @@ describe('train', () => {
 });
 
 describe('carryGauge', () => {
-  it('存的時候分母是升上去那一級的價錢', () => {
+  it('分母是升上去那一級的價錢', () => {
     const g = carryGauge(50, 80, 3, curve);
-    expect(g.debt).toBe(false);
     expect(g.points).toBe(3);
     expect(g.need).toBe(abilityCost(50, 80, curve));
   });
 
-  it('欠的時候分母是退下去那一級的價錢，而且不是負的', () => {
-    const g = carryGauge(50, 80, -3, curve);
-    expect(g.debt).toBe(true);
-    expect(g.points).toBe(3);
-    expect(g.need).toBe(abilityCost(49, 80, curve));
-  });
-
-  it('欠到量表底部時分母仍以底部那一級計算', () => {
-    const floor = abilities.scale.hard_floor;
-    const g = carryGauge(floor, 80, -1, curve);
-    expect(g.need).toBe(abilityCost(floor, 80, curve));
+  it('槽不會是負的——扣點走借位，見 untrain()', () => {
+    expect(carryGauge(50, 80, -3, curve).points).toBe(0);
   });
 });
 
@@ -254,15 +244,16 @@ describe('untrain', () => {
     expect(r.carry).toBe(0);
   });
 
-  it('不夠退一級的點數留成欠點，不動能力值', () => {
+  it('不夠退一級就借位——能力掉一級，找零留在槽裡', () => {
     const cost = abilityCost(expensive - 1, 80, curve);
     const r = untrain(expensive, cost - 1, 80, 0, curve);
-    expect(r.gained).toBe(0);
-    expect(r.value).toBe(expensive);
-    expect(r.carry).toBe(-(cost - 1));
+    // 66 0/6 被扣 3 點就是 65 3/6：退掉那一級拿回 6 點，扣掉 3 點，剩 3 點。
+    expect(r.gained).toBe(-1);
+    expect(r.value).toBe(expensive - 1);
+    expect(r.carry).toBe(1);
   });
 
-  it('欠滿一級才退級，退還的是那一級自己的價錢', () => {
+  it('剛好一級就是掉一級、槽歸零', () => {
     const cost = abilityCost(expensive - 1, 80, curve);
     const r = untrain(expensive, cost, 80, 0, curve);
     expect(r.gained).toBe(-1);
@@ -299,19 +290,12 @@ describe('untrain', () => {
     expect(r.overflow).toBeGreaterThan(0);
   });
 
-  /**
-   * 欠點要能反向結算：成本變便宜之後（衰退、天花板提升、二刀流），原本欠不
-   * 夠一級的點數可能已經欠得夠了。餵 0 點進去就該把帳結掉。
-   */
-  it('餵 0 點可以結算已經欠夠一級的槽', () => {
-    const cost = abilityCost(expensive - 1, 80, curve);
-    const settled = untrain(expensive, 0, 80, -cost, curve);
-    expect(settled.gained).toBe(-1);
-    expect(settled.carry).toBe(0);
-
-    const notYet = untrain(expensive, 0, 80, -(cost - 1), curve);
-    expect(notYet.gained).toBe(0);
-    expect(notYet.carry).toBe(-(cost - 1));
+  it('扣到剩下的點數永遠是正的', () => {
+    for (let v = abilities.scale.min + 1; v <= abilities.scale.max; v++) {
+      for (const points of [1, 2, 3, 5, 8]) {
+        expect(untrain(v, points, 80, 0, curve).carry).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 
   it('拒絕負點數——加點要走 train()', () => {
