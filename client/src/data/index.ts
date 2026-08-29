@@ -1019,7 +1019,12 @@ export interface SeasonData {
       readonly min: number;
       readonly max: number;
     };
-    readonly trust_factor: { readonly base: number; readonly per_point: number } & Range;
+    readonly trust_factor: {
+      readonly base: number;
+      readonly per_point: number;
+      /** 落到這個能力差以下就完全不出賽。等於 min 觸底的那一點。 */
+      readonly cut_d: number;
+    } & Range;
     readonly position_factor: Readonly<Record<string, number>>;
     readonly position_factor_clamp: Range;
     readonly games_noise: Range;

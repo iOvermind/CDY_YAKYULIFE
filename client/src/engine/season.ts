@@ -129,6 +129,10 @@ export function gamesPlayed(
   const perfF = trustFactor(overall, par);
   const noise = pt.games_noise.min + rng.next() * (pt.games_noise.max - pt.games_noise.min);
 
+  // 判定放在抽完噪音之後：抽取次數不能隨結果變動，否則同一顆種子會因為某年
+  // 少抽一次而讓後面整串偏移（ADR 0002）。
+  if (offRoster(overall, par)) return 0;
+
   return Math.round(Math.min(info.games, info.games * load * perfF * noise));
 }
 
@@ -228,6 +232,19 @@ export function staThresholdForLeague(
 export function trustFactor(overall: number, par: number): number {
   const t = cfg.playing_time.trust_factor;
   return clamp(t.base + (overall - par) * t.per_point, t.min, t.max);
+}
+
+/**
+ * 這一側是否連名單都排不進去。
+ *
+ * `trustFactor` 的 min 是**名單裡的最後一格**，不是「再爛也有得打」的保證：
+ * 掉到觸底點以下就是 0 場。斷崖是刻意的——名單是離散的，現實中沒有從一年
+ * 40 場平滑滑到一年 3 場這條路，你要嘛佔著位子、要嘛被清掉。
+ *
+ * 二刀流兩側各判各的：投球那側被清掉不影響他繼續當野手上場。
+ */
+export function offRoster(overall: number, par: number): boolean {
+  return overall - par < cfg.playing_time.trust_factor.cut_d;
 }
 
 /**
@@ -502,6 +519,17 @@ export function proPitchingLine(
   games = Math.round(games * seasonFactor);
   starts = Math.round(starts * seasonFactor);
   ip *= seasonFactor;
+
+  // 投手側的信任度判定。同樣放在抽完之後，理由見 `gamesPlayed`。
+  //
+  // 注意 `overall` 是球員的綜合能力，不是他的投手評價：二刀流兩側目前共用它，
+  // 所以一個強打弱投的人不會被這道判定清出投手名單。見 season.json 的
+  // `trust_factor._side_note`。
+  if (offRoster(overall, par)) {
+    games = 0;
+    starts = 0;
+    ip = 0;
+  }
 
   // 出局數才是原子單位——存小數會生出 29.5 這種棒球裡不存在的局數。
   const outs = Math.max(0, Math.round(ip * 3));

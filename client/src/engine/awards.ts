@@ -244,6 +244,10 @@ function statValue(ctx: AwardContext, stat: string): number | null {
 function qualifies(ctx: AwardContext, award: LeaderAward): boolean {
   if (award.side === 'pitcher') {
     if (ctx.pitching === null) return false;
+    // 沒投過就沒有資格，即使 `era` 欄位有值：那是「他若上場會投成怎樣」的率，
+    // 不是他投出來的成績。少了這道，被清出投手名單的人會用一個沒兌現的防禦率
+    // 去角逐防禦率王。
+    if (ctx.pitching.outs === 0) return false;
     if (award.requires_role !== undefined && ctx.role !== award.requires_role) return false;
     if (award.min_ip_equals_games === true && innings(ctx.pitching) < ctx.leagueGames) return false;
     return true;

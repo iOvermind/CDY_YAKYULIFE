@@ -14,6 +14,7 @@ import {
   staminaFactor,
   fullSeasonSta,
   trustFactor,
+  offRoster,
 } from './season.ts';
 import { pitcherRating, type Abilities } from './rating.ts';
 import { World } from './rng.ts';
@@ -432,6 +433,35 @@ describe('proPitchingLine', () => {
   });
 });
 
+describe('offRoster', () => {
+  it('觸底點正是 trustFactor 的 min 落點——不是另外手調的數字', () => {
+    const t = cfg.playing_time.trust_factor;
+    const atCut = t.base + t.cut_d * t.per_point;
+    expect(atCut).toBeCloseTo(t.min, 10);
+  });
+
+  it('斷崖兩側：剛好在線上仍在名單，掉下去就是 0 場', () => {
+    const cut = cfg.playing_time.trust_factor.cut_d;
+    expect(offRoster(CPBL1.par + cut, CPBL1.par)).toBe(false);
+    expect(offRoster(CPBL1.par + cut - 1, CPBL1.par)).toBe(true);
+  });
+
+  it('被清出名單的野手整季 0 場，不是「幾場」', () => {
+    for (let i = 0; i < 50; i++) {
+      const g = gamesPlayed(new World(`s${i}`), flat(20), 'SS', 'CPBL1', 20);
+      expect(g).toBe(0);
+    }
+  });
+
+  it('判定不改變抽取次數——否則同種子的後續年份會整串偏移', () => {
+    const kept = new World('a');
+    gamesPlayed(kept, flat(50), 'SS', 'CPBL1', CPBL1.par);
+    const cut = new World('a');
+    gamesPlayed(cut, flat(20), 'SS', 'CPBL1', 20);
+    expect(cut.drawCounts().season).toBe(kept.drawCounts().season);
+  });
+});
+
 describe('playSeason', () => {
   const ctx = (over = {}) => ({
     level: 'CPBL1',
@@ -459,6 +489,26 @@ describe('playSeason', () => {
     const line = playSeason(new World('a'), ctx({ twoWay: true }));
     expect(line.pitching).not.toBeNull();
     expect(line.batting).not.toBeNull();
+  });
+
+  it('【已知缺口】二刀流兩側共用 overall：強打會撐起他的投手出賽量', () => {
+    // 投球四項全爛、打擊全滿。理想上他該被清出投手名單，但兩側共用 overall，
+    // 所以他照樣上丘。這條測試釘住的是現況而非期望——見 trust_factor._side_note。
+    const ability = with_(20, { con: 80, pow: 80, spd: 80, eye: 80 });
+    const line = playSeason(new World('a'), ctx({ twoWay: true, ability, overall: 70 }));
+    expect(line.pitching?.outs).toBeGreaterThan(0);
+  });
+
+  it('0 局的投手不會生出勝投或救援——率型欄位不該自己長出成績', () => {
+    const p = playSeason(new World('a'), ctx({ better: 'pitcher', ability: flat(20), overall: 20 }))
+      .pitching!;
+    expect(p.outs).toBe(0);
+    expect(p.wins).toBe(0);
+    expect(p.losses).toBe(0);
+    expect(p.saves).toBe(0);
+    expect(p.holds).toBe(0);
+    expect(p.so).toBe(0);
+    expect(p.er).toBe(0);
   });
 
   it('只消耗 season 流，不動其他流', () => {

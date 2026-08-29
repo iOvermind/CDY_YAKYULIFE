@@ -1209,8 +1209,11 @@ export class Game {
     const statLines: string[] = [];
     if (line.pitching !== null) {
       const p = line.pitching;
+      // 沒投就不報防禦率——0 局配一個防禦率是在報一件沒發生的事。
       statLines.push(
-        `投球 ${p.games} 場 ${fmtInnings(p.outs)} 局・${p.so} K・防禦率 <b class="hl">${p.era.toFixed(2)}</b>`,
+        p.outs === 0
+          ? '本季未獲登板'
+          : `投球 ${p.games} 場 ${fmtInnings(p.outs)} 局・${p.so} K・防禦率 <b class="hl">${p.era.toFixed(2)}</b>`,
       );
     }
     if (line.batting !== null) {
