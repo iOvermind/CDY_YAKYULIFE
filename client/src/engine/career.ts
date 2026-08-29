@@ -18,7 +18,7 @@
 
 import { achievements, hallOfFame as cfg, leagues } from '../data/index.ts';
 import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
-import { ladderTop } from './achievements.ts';
+import { ladderTop, rungName } from './achievements.ts';
 import type { AwardRecord } from './awards.ts';
 import { sumShares, type Shares } from './metrics.ts';
 
@@ -261,7 +261,8 @@ export function evaluateMilestones(
     points += pts;
     // 只列最高的那一級——「1000 安、1500 安、2000 安」三行都印出來很囉唆，
     // 玩家要看的是他走到哪裡。分數則是逐級累加的。
-    if (highest !== null) reached.push(`${highest} ${spec.name}`);
+    // 名字也跟成就櫃共用一份（`rungName`）——同一階在兩張卡上得長成同一個樣子。
+    if (highest !== null) reached.push(rungName(highest, spec.name));
   }
   return { points, reached };
 }

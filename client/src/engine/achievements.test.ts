@@ -8,7 +8,7 @@ import {
   type AchievementContext,
 } from './achievements.ts';
 import { joinName } from './naming.ts';
-import type { CareerSummary, LeagueCareer } from './career.ts';
+import { evaluateMilestones, type CareerSummary, type LeagueCareer } from './career.ts';
 
 const NONE = { win: 0, loss: 0 };
 
@@ -122,6 +122,17 @@ describe('累積成就', () => {
     const ids = evaluateAchievements(ctx({ summary: s })).list.map((a) => a.id);
     expect(ids).toContain(`cum:CPBL:hits:${leagueFirst}`);
     expect(ids).toContain(`cum:career:hits:${first}`);
+  });
+
+  // 同一階在成就櫃和生涯里程碑卡上得長成同一個樣子，否則玩家會以為那是兩件事。
+  it('成就櫃和里程碑卡的階名是同一份', () => {
+    const s = summary({ topTotal: { batting: bat({ hits: first }), pitching: null } });
+    const tile = evaluateAchievements(ctx({ summary: s })).list.find((a) =>
+      a.id.startsWith('cum:career:hits'),
+    );
+    const [milestone] = evaluateMilestones('career', bat({ hits: first }), null).reached;
+    expect(milestone).toBeDefined();
+    expect(tile?.name.endsWith(milestone!)).toBe(true);
   });
 });
 

@@ -168,6 +168,18 @@ export function ladderTop(
 }
 
 /**
+ * 一階階梯的名字。
+ *
+ * **數字在前。**「500 安打」是一句話，「安打 500」讀起來像另一個欄位的數值。
+ * 成就櫃與生涯里程碑爬的是同一座階梯（見 `ladderTop`），這裡是它們唯一的
+ * 寫法——分開寫過一次，結果就是同一個 500 安在成就卡上叫「安打 500」、在
+ * 里程碑卡上叫「500 安打」，玩家得自己猜那是不是同一件事。
+ */
+export function rungName(top: number, name: string): string {
+  return joinName(top, name);
+}
+
+/**
  * 累積成就：一項數據只佔清單裡的一格，顯示跨過的**最高階**，點數是每一階加總。
  *
  * 級距讀 `step`，AP 階梯與生涯里程碑是同一個數字，`scope` 只決定從第幾階起算。
@@ -204,7 +216,7 @@ function cumulative(
     out.push({
       id: `${prefix}:${stat}:${top}`,
       category: c.name,
-      name: joinName(label, spec.name, top),
+      name: joinName(label, rungName(top, spec.name)),
       points: Math.max(0, points - taken),
     });
   }
