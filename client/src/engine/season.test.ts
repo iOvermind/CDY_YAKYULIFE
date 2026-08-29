@@ -503,6 +503,29 @@ describe('playSeason', () => {
     expect(line.batting?.pa).toBeGreaterThan(0);
   });
 
+  it('二刀流的手臂換不到打席：強投弱打拿不到打擊出賽', () => {
+    // 打擊四項全爛、投球全滿。他的 overall 70 是手臂掙來的，不該換成打席——
+    // 投手能力再高也可以不上場打擊，這兩件事拆得開。
+    const ability = with_(20, { vel: 80, ctl: 80, swp: 80, drp: 80 });
+    const line = playSeason(
+      new World('a'),
+      ctx({ twoWay: true, ability, overall: 70, battingOverall: 20 }),
+    );
+    expect(line.batting?.pa).toBe(0);
+    // 但他照樣是個好投手——扣的只有打擊側。
+    expect(line.pitching?.outs).toBeGreaterThan(0);
+  });
+
+  it('游擊手的手套照樣灌進打席——守備算在野手評價裡，這條路徑不受影響', () => {
+    // 打擊平庸但守備撐起來的野手：battingOverall 等於他的野手評價，不被扣。
+    const ability = with_(40, { fld: 80, arm: 80, spd: 70 });
+    const line = playSeason(
+      new World('a'),
+      ctx({ better: 'fielder', position: 'SS', ability, overall: 65, battingOverall: 65 }),
+    );
+    expect(line.batting?.pa).toBeGreaterThan(0);
+  });
+
   it('省略 pitchingOverall 時沿用 overall——單一守位球員一位元都不該動', () => {
     const ability = with_(60, { vel: 70, ctl: 70 });
     const base = playSeason(new World('a'), ctx({ better: 'pitcher', ability, overall: 60 }));

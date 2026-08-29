@@ -58,12 +58,18 @@ export interface SeasonContext {
    * `overall` 是 `max(投手評價, 野手評價)`：單一守備位置的球員，那個 max 本來
    * 就是他自己那一側，所以兩者相同。只有二刀流會分岔——強打弱投的人，他的
    * 棒子會把投手出賽量一起撐起來，於是模型讓一個沒有球威的人繼續拿先發輪值。
-   *
-   * 注意這不對稱，而且是刻意的：打擊側照樣吃完整的 `overall`。游擊手靠手套
-   * 掙到先發，出賽就會有打席——守備灌進打席數是棒球本來的樣子，不是洩漏。
-   * 反過來卻不成立：打擊再好也不會讓總教練多給他一場先發。
    */
   readonly pitchingOverall?: number | null;
+  /**
+   * 打擊側專用的綜合能力。省略時沿用 `overall`。
+   *
+   * 投球與打擊可以拆開：能力夠的投手照樣可以不上場打擊，所以一條手臂不該
+   * 替他換來打席。這一側只認野手評價。
+   *
+   * 守位與打席則拆不開，但那不需要靠吃完整的 `overall` 來達成——守備已經
+   * 算在野手評價裡了。游擊手靠手套掙到先發、出賽就有打席，這條路徑原封不動。
+   */
+  readonly battingOverall?: number | null;
   readonly better: 'pitcher' | 'fielder';
   readonly twoWay: boolean;
   /** 當年的聯盟水準。null 表示用 leagues.json 的基準值。 */
@@ -617,7 +623,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
           ctx.ability,
           ctx.position,
           ctx.level,
-          ctx.overall,
+          ctx.battingOverall ?? ctx.overall,
           standards,
           ctx.seasonFactor ?? 1,
         )
