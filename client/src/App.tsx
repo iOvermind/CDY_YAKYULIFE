@@ -1658,7 +1658,11 @@ function AbilityRow({
   const tail = abilities.scale.max + bonus;
   const pct = (v: number) => Math.max(0, Math.min(100, ((v - head) / (tail - head)) * 100));
 
-  const allocating = option !== undefined;
+  // 已達上限的能力是「看得到、按不動」：仍然列在那裡（玩家要能看見自己的
+  // 天花板），但不掛任何點擊或長按。之前只看 option 存不存在，於是滿級的列
+  // 照樣可以按下去，engine 那邊 choose() 對 disabled 選項是丟例外的——畫面
+  // 沒有任何反應，點數也不會少，看起來就是「卡在同一步」。
+  const allocating = option !== undefined && option.disabled !== true;
   const ceiling = potential + bonus;
 
   const [barRef, barWidth] = useElementWidth<HTMLSpanElement>();
@@ -1692,7 +1696,12 @@ function AbilityRow({
 
   if (!allocating) {
     return (
-      <div className="abrow" title={`${head}–${tail}${bonus > 0 ? `（上限已提升 +${bonus}）` : ''}`}>
+      <div
+        className={`abrow${option !== undefined ? ' capped' : ''}`}
+        // 分配中卻不能點的列，把 engine 給的理由（已達上限）直接掛上去，
+        // 不要退回那條泛用的量表說明。
+        title={option?.note ?? `${head}–${tail}${bonus > 0 ? `（上限已提升 +${bonus}）` : ''}`}
+      >
         {row}
       </div>
     );
