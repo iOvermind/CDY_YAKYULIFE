@@ -1637,7 +1637,11 @@ function AbilityRow({
   repeatable: boolean;
   onChoose: (optionId: string) => void;
 }) {
-  const repeat = useHold();
+  // 連發要綁在「這一列現在還能不能點」上。放掉手指時這一列可能已經因為加點
+  // 而變成不可點（沒有 option 了），pointerup 就落在一個沒有 handler 的
+  // element 上，計時器會活過整個階段，下一輪骰子一發出來全灌進這條能力
+  // （problems #55）。
+  const repeat = useHold(option !== undefined && option.disabled !== true);
   const current = state.ability[abilityKey] ?? 0;
   const potential = state.origin.potential[abilityKey] ?? 0;
   const carry = state.carry[abilityKey] ?? 0;
@@ -1682,7 +1686,11 @@ function AbilityRow({
       </span>
       <span className="val" style={{ lineHeight: 1.1 }}>
         {current}
-        <small style={{ opacity: 0.5 }}>/{ceiling}</small>
+        {/* 分母是量表上限，不是潛力——潛力是價錢的轉折點，條上那道 marker 已經
+            標了；寫成分母會讓人以為點到潛力就沒得練了。 */}
+        <small style={{ opacity: 0.5 }} title={`潛力 ${ceiling}`}>
+          /{tail}
+        </small>
         {cost > 1 && (
           <span
             style={{ display: 'block', opacity: 0.5, fontSize: 10.5, letterSpacing: 1, marginTop: -2 }}
@@ -1738,8 +1746,15 @@ function AbilityRow({
  * 按住 400ms 後開始，每 90ms 一次——比游標移開就停，因為手指滑出按鈕範圍是
  * 玩家想停下來的意思。計時器掛在 ref 上並在卸載時清掉：加點會讓整條能力列
  * 重繪，若計時器留在舊的閉包裡就會變成停不下來的連發。
+ *
+ * `active` 轉 false 也停：見 problems #55——放手時那一列可能已經沒有
+ * handler 了，光靠 pointerup 收不乾淨。
  */
-function useHold(delay = 400, every = 90): { start: (fn: () => void) => void; stop: () => void } {
+function useHold(
+  active = true,
+  delay = 400,
+  every = 90,
+): { start: (fn: () => void) => void; stop: () => void } {
   const timers = useRef<{ start?: number; tick?: number }>({});
 
   const stop = () => {
@@ -1749,6 +1764,11 @@ function useHold(delay = 400, every = 90): { start: (fn: () => void) => void; st
   };
 
   useEffect(() => stop, []);
+  // 元件還在、但已經不該連發了（選項消失或反灰）也要收掉：卸載不是唯一的
+  // 結束方式，這一列多半是原地重繪的。
+  useEffect(() => {
+    if (!active) stop();
+  }, [active]);
 
   return {
     start: (fn: () => void) => {

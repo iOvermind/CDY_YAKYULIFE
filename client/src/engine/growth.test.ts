@@ -6,6 +6,7 @@ import {
   championshipDice,
   decline,
   growthCurve,
+  hardCap,
   rollTrainingDice,
   train,
   untrain,
@@ -484,5 +485,29 @@ describe('蓄力槽的結算', () => {
     const settled = train(value, 0, ceiling, cost - 1, ctx);
     expect(settled.value).toBe(value);
     expect(settled.carry).toBe(cost - 1);
+  });
+});
+
+describe('hardCap', () => {
+  it('沒有事件加成時，硬上限就是量表上限', () => {
+    expect(hardCap(0)).toBe(abilities.scale.max);
+  });
+
+  it('潛力之上仍練得動，只是變貴——牆是硬上限而不是潛力', () => {
+    const ctx = growthCurve(false);
+    const ceiling = 70;
+    const cheap = abilityCost(ceiling - 1, ceiling, ctx);
+    const dear = abilityCost(ceiling, ceiling, ctx);
+    expect(dear).toBeGreaterThan(cheap);
+
+    // 給足點數，能力應該一路長到硬上限，而不是停在潛力。
+    let value = ceiling;
+    let carry = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = train(value, 10, ceiling, carry, ctx);
+      value = r.value;
+      carry = r.carry;
+    }
+    expect(value).toBe(hardCap(0));
   });
 });

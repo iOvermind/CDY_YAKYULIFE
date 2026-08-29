@@ -112,6 +112,7 @@ import {
   carryGauge,
   championshipDice,
   growthCurve,
+  hardCap,
   raiseCeiling,
   rollTrainingDice,
   train,
@@ -4842,9 +4843,12 @@ export class Game {
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */
   #ceilingOf(key: AbilityKey): number {
     const base = this.#player?.potential[key] ?? abilities.scale.max;
-    // 三個來源：抽到的天賦、事件卡提升的那一項、用 AP 買下的天賦帶來的全域加成。
-    // 最後一項平常是 0，由設定覆蓋層寫入（見 ADR 0007）。
-    return base + (this.#ceilingBonus[key] ?? 0) + abilities.talent_bonus.ceiling;
+    // 三個來源，但不是同一種東西：抽到的潛力與「天賦異稟」那類全域加成都只是
+    // 在量表**之內**移動，加起來最多 80；只有事件卡提升的那一項有資格把量表
+    // 本身頂過 80（hardCap 同樣只認它）。最後一項平常是 0，由設定覆蓋層寫入
+    // （見 ADR 0007）。
+    const inScale = Math.min(abilities.scale.max, base + abilities.talent_bonus.ceiling);
+    return inScale + (this.#ceilingBonus[key] ?? 0);
   }
 
   /** 把點數投進一項能力，並產生對應的敘事。 */
@@ -4953,22 +4957,30 @@ export class Game {
 
     const name = abilities.abilities[key] ?? key;
     const price = showPrice ? `－${value} 點・` : '';
-    // 已經頂到天花板的能力反灰。事件可以把能力推過天花板（77 +5 → 82），
-    // 那之後同樣不能再點——判準是「還有沒有空間」，不是「等不等於上限」。
-    if (current >= ceiling) {
+    // 反灰的判準是**硬上限**，不是潛力。潛力天花板是價錢的轉折點（之上每級
+    // 乘 above_ceiling_multiplier，破繭天賦可以把倍率壓低），不是牆——牆只有
+    // 一道，就是量表的 80，事件提升過上限的能力才會往上挪。
+    //
+    // 舊版在 current >= ceiling 就擋掉，於是 abilityCost() 那條「天花板之上
+    // 仍可成長」的曲線只有事件點數走得到，玩家看到的卻是「上限 80、點到 7X
+    // 就不給點」（problems #55）。
+    const cap = hardCap(this.#ceilingBonus[key] ?? 0);
+    if (current >= cap) {
       return {
         id: `alloc:${key}`,
         label: name,
-        note: `${current}／上限 ${ceiling}・已達上限`,
+        note: `${current}／上限 ${cap}・已達上限`,
         disabled: true,
       };
     }
+    // 潛力之上要提醒一句，否則玩家只會看到蓄力槽突然變慢，不知道是自己越線了。
+    const over = current >= ceiling ? `・潛力 ${ceiling} 之上` : '';
     const note =
       result.gained > 0
-        ? `${price}${current} → ${result.value}（上限 ${ceiling}）`
+        ? `${price}${current} → ${result.value}（潛力 ${ceiling}／上限 ${cap}）`
         : // 槽是負的就寫「欠」——這裡是「點下去會怎樣」的預告，寫成「蓄力 -1」
           // 會讓玩家以為自己在存一個負數。
-          `${price}${current}／上限 ${ceiling}・${slotText(carry)} → ${slotText(result.carry)}`;
+          `${price}${current}／潛力 ${ceiling}${over}・${slotText(carry)} → ${slotText(result.carry)}`;
 
     return { id: `alloc:${key}`, label: name, note };
   }
