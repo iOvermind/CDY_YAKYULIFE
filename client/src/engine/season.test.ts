@@ -498,7 +498,8 @@ describe('playSeason', () => {
       new World('a'),
       ctx({ twoWay: true, ability, overall: 70, pitchingOverall: 20 }),
     );
-    expect(line.pitching?.outs).toBe(0);
+    // 一場都沒登板的那一側整條不留——一整排 0 不是成績。
+    expect(line.pitching).toBeNull();
     // 但他照樣是個強打者——扣的只有投手側。
     expect(line.batting?.pa).toBeGreaterThan(0);
   });
@@ -511,7 +512,8 @@ describe('playSeason', () => {
       new World('a'),
       ctx({ twoWay: true, ability, overall: 70, battingOverall: 20 }),
     );
-    expect(line.batting?.pa).toBe(0);
+    // 一打席都沒有的那一側整條不留——不會有個掛著 .000 的打者。
+    expect(line.batting).toBeNull();
     // 但他照樣是個好投手——扣的只有打擊側。
     expect(line.pitching?.outs).toBeGreaterThan(0);
   });
@@ -537,8 +539,10 @@ describe('playSeason', () => {
   });
 
   it('0 局的投手不會生出勝投或救援——率型欄位不該自己長出成績', () => {
-    const p = playSeason(new World('a'), ctx({ better: 'pitcher', ability: flat(20), overall: 20 }))
-      .pitching!;
+    // 直接測底層那條線：playSeason 會把它整條收掉，但收掉不是零化的替代品，
+    // 兩層各自成立才行——別讓「反正外面會擋」變成裡面可以長出勝投的理由。
+    const p = proPitchingLine(new World('a'), flat(20), 'CPBL1', 20, null, 0.5);
+    expect(p.games).toBe(0);
     expect(p.outs).toBe(0);
     expect(p.wins).toBe(0);
     expect(p.losses).toBe(0);
@@ -546,6 +550,11 @@ describe('playSeason', () => {
     expect(p.holds).toBe(0);
     expect(p.so).toBe(0);
     expect(p.er).toBe(0);
+    // 而 playSeason 這一層再把整條收掉。
+    expect(
+      playSeason(new World('a'), ctx({ better: 'pitcher', ability: flat(20), overall: 20 }))
+        .pitching,
+    ).toBeNull();
   });
 
   it('只消耗 season 流，不動其他流', () => {

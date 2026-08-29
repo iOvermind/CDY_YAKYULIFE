@@ -606,29 +606,44 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
   const standards = ctx.standards ?? null;
   return {
     level: ctx.level,
-    pitching: asPitcher
-      ? proPitchingLine(
-          world,
-          ctx.ability,
-          ctx.level,
-          ctx.pitchingOverall ?? ctx.overall,
-          standards,
-          ctx.teamWinRate ?? null,
-          ctx.seasonFactor ?? 1,
-        )
-      : null,
-    batting: asBatter
-      ? proBattingLine(
-          world,
-          ctx.ability,
-          ctx.position,
-          ctx.level,
-          ctx.battingOverall ?? ctx.overall,
-          standards,
-          ctx.seasonFactor ?? 1,
-        )
-      : null,
+    pitching: played(
+      asPitcher
+        ? proPitchingLine(
+            world,
+            ctx.ability,
+            ctx.level,
+            ctx.pitchingOverall ?? ctx.overall,
+            standards,
+            ctx.teamWinRate ?? null,
+            ctx.seasonFactor ?? 1,
+          )
+        : null,
+    ),
+    batting: played(
+      asBatter
+        ? proBattingLine(
+            world,
+            ctx.ability,
+            ctx.position,
+            ctx.level,
+            ctx.battingOverall ?? ctx.overall,
+            standards,
+            ctx.seasonFactor ?? 1,
+          )
+        : null,
+    ),
   };
+}
+
+/**
+ * 一場都沒上的那一側不留成績列，直接當作沒有。
+ *
+ * 一整排 0 不是成績，是「他今年沒在這一側出現過」——留著它，
+ * 顯示端就得每個印表處各自記得跳過，獎項端也得各自記得排除；
+ * 零出賽卻掛在打擊排行榜上的洞就是這樣開的。少一個狀態勝過多一層防呆。
+ */
+function played<T extends { readonly games: number }>(line: T | null): T | null {
+  return line === null || line.games === 0 ? null : line;
 }
 
 /** 這個守位的體能勞損係數。未登錄的守位視為無勞損。 */
