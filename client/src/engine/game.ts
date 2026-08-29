@@ -144,6 +144,8 @@ import {
   hasPartner,
   isChildhoodSweetheart,
   newLoveState,
+  partnerBonusKey,
+  partnerOf,
   pickPartner,
   rehabChance,
   rewardMultiplier,
@@ -1973,6 +1975,9 @@ export class Game {
   #singleYear(next: () => void): void {
     const pro = this.#pro !== null;
     const partner = pickPartner(this.world, pro ? 'pro' : 'school', null);
+    // 側寫要在「要不要告白」之前就攤開——選擇之前拿不到的資訊不構成選擇。
+    const desc = partnerOf(partner)?.desc ?? '';
+    const profile = desc === '' ? '' : `<br><span class="sub">${esc(desc)}</span>`;
 
     if (!pro) {
       const rank = this.#bestRankThisYear;
@@ -1984,7 +1989,7 @@ export class Game {
             {
               id: 'love:confess',
               label: '找個機會告白',
-              note: `成功率 ${chance}%｜${rank === null ? '今年沒有大賽成績' : `今年打到${rank}`}`,
+              note: `成功率 ${chance}%｜${rank === null ? '今年沒有大賽成績' : `今年打到${rank}`}｜${desc}`,
               role: 'main',
             },
             { id: 'love:wait', label: '再說吧，先專心打球' },
@@ -2016,6 +2021,7 @@ export class Game {
       'info',
       '場外話題',
       `你和啦啦隊的 <b class="hl">${esc(partner)}</b> 被拍到球場外同框，緋聞登上娛樂版頭條。` +
+        profile +
         (this.#love.divorces > 0 ? '<br><span class="sub">（評論區：「離過婚還這麼搶手」）</span>' : ''),
     );
     this.flow.ask(
@@ -2060,7 +2066,7 @@ export class Game {
     love.datingYears = 0;
     love.datedTimes++;
 
-    const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 1);
+    const gain = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), 1);
     this.flow.card(
       'gold',
       fromSchool ? '在一起了' : '戀情公開',
@@ -2133,7 +2139,7 @@ export class Game {
         love.datingYears = 0;
         this.#weddingYear = this.#year;
         this.#recordSpouse(love.partner);
-        const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 2);
+        const gain = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), 2);
         this.flow.card(
           'gold',
           '婚禮',
@@ -2286,7 +2292,7 @@ export class Game {
       (choice) => {
         if (choice !== 'love:affair') {
           const gain = this.#grantSeasonBonus(
-            loveCfg.affair.reward.ability,
+            partnerBonusKey(this.world, love.partner),
             loveCfg.affair.reward.refused,
           );
           this.flow.card('good', '正確答案', `心定了，身體就穩了——${gain}`);
@@ -2296,7 +2302,7 @@ export class Game {
         love.affairs++;
         if (this.world.stream('career').chance(loveCfg.affair.escape_chance)) {
           const gain = this.#grantSeasonBonus(
-            loveCfg.affair.reward.ability,
+            partnerBonusKey(this.world, love.partner),
             loveCfg.affair.reward.escaped,
           );
           this.flow.card(
@@ -2421,7 +2427,7 @@ export class Game {
   /** 平淡但溫暖的一年。感情線多數的年份都是這種。 */
   #datingFlavour(): void {
     const love = this.#love;
-    const gain = this.#grantSeasonBonus(loveCfg.affair.reward.ability, 1);
+    const gain = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), 1);
     const partner = esc(love.partner ?? '');
     if (love.status === 'married' && love.kids > 0) {
       this.flow.card(
@@ -4640,6 +4646,10 @@ export class Game {
     const options: Option[] = this.#allocatableAbilities.map((key) =>
       this.#abilityOption(key, spendOf(key), source === 'pool'),
     );
+    // 每一項都頂到天花板時，剩下的點數沒有地方去。這時確認鍵必須放行，否則畫面上
+    // 只剩灰按鈕，生涯卡在這一步走不下去。**只看能力選項**——復原鍵可不可按跟
+    // 「還有沒有地方加點」無關，把它算進去會讓死局漏判。
+    const stuck = options.every((o) => o.disabled === true);
     options.push({
       id: 'alloc:undo',
       label: '復原',
@@ -4650,9 +4660,13 @@ export class Game {
     options.push({
       id: 'alloc:confirm',
       label: '確認',
-      note: source === 'dice' ? `還有 ${left} 顆骰沒分配` : `還有 ${left} 點沒分配`,
+      note: stuck
+        ? `所有能力都到頂了，剩下的${source === 'dice' ? `${left} 顆骰` : `${left} 點`}作廢`
+        : source === 'dice'
+          ? `還有 ${left} 顆骰沒分配`
+          : `還有 ${left} 點沒分配`,
       role: 'main',
-      disabled: true,
+      disabled: !stuck,
     });
 
     const title =
@@ -4661,6 +4675,13 @@ export class Game {
         : `大賽點數：還有 ${left} 點要加在哪？`;
 
     this.flow.ask({ title, options }, (choice) => {
+      if (choice === 'alloc:confirm') {
+        // 作廢剩下的點數：骰面推到底、池子歸零，不留到下一年（見上面的「沒有先留著」）。
+        if (source === 'dice' && this.#dice !== null) {
+          this.#dice = { values: this.#dice.values, index: this.#dice.values.length };
+        } else if (source === 'pool') this.#pool = 0;
+        return;
+      }
       if (choice === 'alloc:undo') this.#undoAllocation();
       else {
         const key = choice.slice('alloc:'.length) as AbilityKey;
@@ -4910,6 +4931,16 @@ export class Game {
 
     const name = abilities.abilities[key] ?? key;
     const price = showPrice ? `－${value} 點・` : '';
+    // 已經頂到天花板的能力反灰。事件可以把能力推過天花板（77 +5 → 82），
+    // 那之後同樣不能再點——判準是「還有沒有空間」，不是「等不等於上限」。
+    if (current >= ceiling) {
+      return {
+        id: `alloc:${key}`,
+        label: name,
+        note: `${current}／上限 ${ceiling}・已達上限`,
+        disabled: true,
+      };
+    }
     const note =
       result.gained > 0
         ? `${price}${current} → ${result.value}（上限 ${ceiling}）`

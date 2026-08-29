@@ -73,11 +73,13 @@ function runCareer(seed: string, startPosition: GameSetup['startPosition']): Car
       options.find((o) => o.id === 'fa:crawl') ??
       options.find((o) => o.id === 'demote:accept') ??
       options.find((o) => o.id === 'fallback:0') ??
-      rotated.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
-      options.find((o) => o.id === 'alloc:confirm') ??
+      rotated
+        .map((k) => options.find((o) => o.id === `alloc:${k}` && o.disabled !== true))
+        .find((o) => o !== undefined) ??
+      options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
       options.find((o) => o.id === 'draft:accept') ??
       options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-      options[0];
+      undefined;
     if (pick === undefined) break;
     if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;
     game.choose(pick.id);

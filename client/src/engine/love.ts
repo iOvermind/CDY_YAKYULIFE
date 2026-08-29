@@ -11,6 +11,7 @@
  */
 
 import { love as cfg } from '../data/index.ts';
+import type { AbilityKey } from '../data/index.ts';
 import type { World } from './rng.ts';
 
 /** 感情狀態。 */
@@ -214,6 +215,32 @@ export function pickPartner(
   const source = list.length > 0 ? list : usable;
   if (source.length === 0) return '';
   return source[world.stream('career').int(0, source.length - 1)] ?? '';
+}
+
+/**
+ * 對象的側寫。**每個名字都有一筆**——沒有空白的對象，所以重抽只會換風格，不會換強弱。
+ *
+ * 側寫那一句話不明寫數值，但看得出她怎麼花錢、想不想要孩子、定不定得下來。**那是玩家
+ * 在告白之前唯一拿得到的線索**，所以它必須在選擇之前就顯示出來，不是在一起之後才補。
+ */
+export function partnerOf(
+  name: string | null,
+): { readonly desc: string; readonly abilities: readonly AbilityKey[] } | null {
+  if (name === null) return null;
+  return cfg.partners[name] ?? null;
+}
+
+/**
+ * 感情事件把當季點數加在哪一項能力上。
+ *
+ * 走對象自己的那兩項——這是側寫裡 `[增加能力]` 的兌現處。名單外的名字（測試造的、
+ * 舊存檔留下的）退回設定裡的預設值，不要因為查無此人就整條感情線斷掉。
+ */
+export function partnerBonusKey(world: World, name: string | null): AbilityKey {
+  const profile = partnerOf(name);
+  const keys = profile?.abilities ?? [];
+  if (keys.length === 0) return cfg.affair.reward.ability as AbilityKey;
+  return keys[world.stream('career').int(0, keys.length - 1)] ?? (cfg.affair.reward.ability as AbilityKey);
 }
 
 /** 分手或離婚之後的狀態。離過婚的人回不到「單身」。 */

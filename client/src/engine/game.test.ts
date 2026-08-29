@@ -91,6 +91,33 @@ function defaultPick(game: Game, prefer: readonly string[] = []): string | undef
   return (usable.find((o) => o.id === 'alloc:confirm') ?? usable[0])?.id;
 }
 
+/** 目前提問裡第一個可按的選項——選項可能反灰（能力已到天花板），不能盲抓 [0]。 */
+function firstEnabled(game: Game): string {
+  const hit = game.flow.prompt?.options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
+  if (hit === undefined) throw new Error('沒有可按的選項');
+  return hit.id;
+}
+
+/** 目前配點提問裡可加的能力（跳過反灰的、復原與確認）。 */
+function allocKeys(game: Game): readonly string[] {
+  return (game.flow.prompt?.options ?? [])
+    .filter(
+      (o) =>
+        o.id.startsWith('alloc:') &&
+        o.id !== 'alloc:undo' &&
+        o.id !== 'alloc:confirm' &&
+        o.disabled !== true,
+    )
+    .map((o) => o.id);
+}
+
+/** 加一點在第一個還加得動的能力上。 */
+function allocOne(game: Game, index = 0): string {
+  const id = allocKeys(game)[index];
+  if (id === undefined) throw new Error('沒有能力可以加點');
+  return id;
+}
+
 /**
  * 流程是否已離開養成期。
  *
@@ -143,9 +170,9 @@ describe('重播', () => {
   it('不同的選擇走出不同的能力分佈', () => {
     // 兩項都在野手側：起始守位是 SS，投手側的能力已經不能加點了。
     const a = started();
-    a.choose('alloc:pow');
+    a.choose(allocOne(a, 0));
     const b = started();
-    b.choose('alloc:con');
+    b.choose(allocOne(b, 1));
     expect(a.state?.ability).not.toEqual(b.state?.ability);
   });
 
@@ -209,7 +236,7 @@ describe('步驟順序', () => {
       if (title.includes('顆骰')) seen.push('訓練');
       else if (title.startsWith('事件')) seen.push('事件');
       else if (title.includes('大賽點數')) seen.push('大賽點數');
-      const first = game.flow.prompt.options[0];
+      const first = game.flow.prompt.options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (first === undefined) break;
       game.choose(first.id);
     }
@@ -433,9 +460,11 @@ describe('職業階段的狀態', () => {
     while (game.flow.prompt !== null && guard++ < 4000) {
       const options = game.flow.prompt.options;
       const pick =
-        EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find((o) => o !== undefined) ??
+        EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}` && o.disabled !== true)).find(
+          (o) => o !== undefined,
+        ) ??
         options.find((o) => o.id === 'draft:accept') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       game.choose(pick.id);
       if (game.state?.pro !== null && game.state?.pro !== undefined) return game;
@@ -515,7 +544,7 @@ describe('定位鎖定', () => {
     for (let i = 0; i < 60 && game.flow.prompt !== null; i++) {
       const options = game.flow.prompt.options;
       if (options.some((o) => o.id.startsWith('draft:'))) break;
-      game.choose(options[0]?.id ?? '');
+      game.choose(firstEnabled(game));
       // 高中畢業之前一律不鎖
       if (game.state?.stage === 'HS' && (game.state?.stageYear ?? 0) > 3) break;
       expect(game.state?.lockedSide).toBeNull();
@@ -543,7 +572,7 @@ describe('定位鎖定', () => {
           }
           return;
         }
-        game.choose(options[0]?.id ?? '');
+        game.choose(firstEnabled(game));
       }
     }
   });
@@ -571,7 +600,7 @@ describe('配點的復原與確認', () => {
     let guard = 0;
     while (game.flow.prompt !== null && guard++ < 50) {
       if (game.flow.prompt.options.some((o) => o.id === 'alloc:confirm')) return game;
-      game.choose(game.flow.prompt.options[0]?.id ?? '');
+      game.choose(firstEnabled(game));
     }
     throw new Error('沒有進到配點階段');
   };
@@ -591,7 +620,7 @@ describe('配點的復原與確認', () => {
 
   it('分配一點之後復原可按，但確認仍反灰', () => {
     const game = toAllocation();
-    game.choose('alloc:sta');
+    game.choose(allocOne(game));
     expect(optionOf(game, 'alloc:undo')?.disabled).toBe(false);
     expect(optionOf(game, 'alloc:confirm')?.disabled).toBe(true);
   });
@@ -604,7 +633,7 @@ describe('配點的復原與確認', () => {
     const game = toAllocation();
     const before = { ...(game.state?.ability ?? {}) };
     const carryBefore = { ...(game.state?.carry ?? {}) };
-    game.choose('alloc:sta');
+    game.choose(allocOne(game));
     game.choose('alloc:undo');
     expect(game.state?.ability).toEqual(before);
     expect(game.state?.carry).toEqual(carryBefore);
@@ -612,7 +641,7 @@ describe('配點的復原與確認', () => {
 
   it('復原之後又回到「什麼都還沒分配」的狀態', () => {
     const game = toAllocation();
-    game.choose('alloc:sta');
+    game.choose(allocOne(game));
     game.choose('alloc:undo');
     expect(optionOf(game, 'alloc:undo')?.disabled).toBe(true);
   });
@@ -622,7 +651,7 @@ describe('配點的復原與確認', () => {
     const before = { ...(game.state?.ability ?? {}) };
     let steps = 0;
     while (optionOf(game, 'alloc:confirm')?.disabled === true) {
-      game.choose('alloc:sta');
+      game.choose(allocOne(game));
       steps++;
     }
     for (let i = 0; i < steps; i++) game.choose('alloc:undo');
@@ -631,18 +660,18 @@ describe('配點的復原與確認', () => {
 
   it('全部分配完之後確認才可按', () => {
     const game = toAllocation();
-    while (optionOf(game, 'alloc:confirm')?.disabled === true) game.choose('alloc:sta');
+    while (optionOf(game, 'alloc:confirm')?.disabled === true) game.choose(allocOne(game));
     expect(optionOf(game, 'alloc:confirm')?.disabled).not.toBe(true);
   });
 
   it('復原本身也寫進重播日誌，重播仍然完全一致', () => {
     const game = toAllocation();
-    game.choose('alloc:sta');
+    game.choose(allocOne(game));
     game.choose('alloc:undo');
-    game.choose('alloc:pow');
+    game.choose(allocOne(game));
     while (game.flow.prompt !== null) {
       const options = game.flow.prompt.options;
-      const pick = options.find((o) => o.disabled !== true);
+      const pick = options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       game.choose(pick.id);
     }
@@ -657,7 +686,7 @@ describe('配點的復原與確認', () => {
   it('復原不消耗亂數——配點本來就不抽籤', () => {
     const game = toAllocation();
     const before = game.world.drawCounts();
-    game.choose('alloc:sta');
+    game.choose(allocOne(game));
     game.choose('alloc:undo');
     expect(game.world.drawCounts()).toEqual(before);
   });
@@ -810,11 +839,11 @@ describe('聯盟水準逐年浮動', () => {
       while (game.flow.prompt !== null && guard++ < 5000) {
         const options = game.flow.prompt.options;
         const pick =
-          EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}`)).find(
+          EFFECTIVE.map((k) => options.find((o) => o.id === `alloc:${k}` && o.disabled !== true)).find(
             (o) => o !== undefined,
           ) ??
           options.find((o) => o.id === 'draft:accept') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         game.choose(pick.id);
         const pro = game.state?.pro;
@@ -849,9 +878,9 @@ describe('年度獎項', () => {
       const options = game.flow.prompt.options;
       const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
       const pick =
-        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true)).find((o) => o !== undefined) ??
         options.find((o) => o.id === 'draft:accept') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
       game.choose(pick.id);
@@ -927,9 +956,9 @@ describe('引退與結算', () => {
       const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
       const pick =
         retireChoice ??
-        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true)).find((o) => o !== undefined) ??
         options.find((o) => o.id === 'draft:accept') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
       game.choose(pick.id);
@@ -1071,9 +1100,9 @@ describe('薪資', () => {
       const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
       const pick =
         options.find((o) => o.id === 'retire:stay') ??
-        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true)).find((o) => o !== undefined) ??
         options.find((o) => o.id === 'draft:accept') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
       game.choose(pick.id);
@@ -1094,7 +1123,7 @@ describe('薪資', () => {
         const pick =
           options.find((o) => o.id === 'draft:accept') ??
           options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         game.choose(pick.id);
         if (game.state?.pro != null) {
@@ -1106,7 +1135,7 @@ describe('薪資', () => {
     throw new Error('二十局都沒有人進職業');
   });
 
-  it('生涯收入只增不減', () => {
+  it('收入只在寫明代價的事件上減少——不會平白蒸發', () => {
     const game = started({ seed: 'pay-mono' });
     let guard = 0;
     let last = 0;
@@ -1116,11 +1145,22 @@ describe('薪資', () => {
         options.find((o) => o.id === 'retire:stay') ??
         options.find((o) => o.id === 'draft:accept') ??
         options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
+      const before = game.flow.log.length;
       game.choose(pick.id);
       const now = game.state?.earnings ?? 0;
-      expect(now).toBeGreaterThanOrEqual(last);
+      if (now < last) {
+        // 離婚的財產分配與舉家旅外的安家費是設計上的支出，會從生涯累積裡扣掉；
+        // 除此之外收入不該減少。這條原本寫成「只增不減」，是因為當初的自動代理
+        // 從沒走到離婚那條線。
+        const titles = game.flow.log
+          .slice(before)
+          .filter((e) => e.kind === 'card')
+          .map((e) => (e as { title?: string }).title ?? '');
+        expect(titles.some((t) => t === '離婚' || t === '舉家旅外')).toBe(true);
+        expect(now).toBeGreaterThanOrEqual(0);
+      }
       last = now;
     }
   });
@@ -1156,7 +1196,7 @@ describe('薪資', () => {
         const pick =
           options.find((o) => o.id === 'draft:accept') ??
           options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         game.choose(pick.id);
         const pro = game.state?.pro;
@@ -1186,9 +1226,9 @@ describe('合約', () => {
       const pick =
         term ??
         options.find((o) => o.id === 'retire:stay') ??
-        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true)).find((o) => o !== undefined) ??
         options.find((o) => o.id === 'draft:accept') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
       game.choose(pick.id);
@@ -1208,7 +1248,7 @@ describe('合約', () => {
         const pick =
           options.find((o) => o.id === 'draft:accept') ??
           options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         game.choose(pick.id);
         if (game.state?.pro != null) return;
@@ -1278,9 +1318,9 @@ describe('合約', () => {
           options.find((o) => o.id === 'term:long') ??
           options.find((o) => o.id === 'term:short') ??
           options.find((o) => o.id === 'retire:stay') ??
-          rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+          rot.map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true)).find((o) => o !== undefined) ??
           options.find((o) => o.id === 'draft:accept') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
         game.choose(pick.id);
@@ -1419,9 +1459,9 @@ describe('跨聯盟轉會', () => {
         options.find((o) => o.id === 'term:short') ??
         options.find((o) => o.id === 'demote:accept') ??
         options.find((o) => o.id === 'retire:stay') ??
-        rot.map((key) => options.find((o) => o.id === `alloc:${key}`)).find((o) => o !== undefined) ??
+        rot.map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true)).find((o) => o !== undefined) ??
         options.find((o) => o.id === 'draft:accept') ??
-        options[0];
+        options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
       if (pick === undefined) break;
       if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
       game.choose(pick.id);
@@ -1477,10 +1517,10 @@ describe('跨聯盟轉會', () => {
           options.find((o) => o.id === 'demote:accept') ??
           options.find((o) => o.id === 'retire:stay') ??
           rot
-            .map((key) => options.find((o) => o.id === `alloc:${key}`))
+            .map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true))
             .find((o) => o !== undefined) ??
           options.find((o) => o.id === 'draft:accept') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
         game.choose(pick.id);
@@ -1653,7 +1693,7 @@ describe('下放與換體系', () => {
           options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
           options.find((o) => o.id === 'draft:accept') ??
           options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;
         game.choose(pick.id);
@@ -1741,7 +1781,7 @@ describe('戰力外之後的去路', () => {
           options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
           options.find((o) => o.id === 'draft:accept') ??
           options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-          options[0];
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
         if (pick === undefined) break;
         if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;
         game.choose(pick.id);

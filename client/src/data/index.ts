@@ -335,6 +335,10 @@ export interface LoveData {
     /** 安全名單。與 school/pro 共用名字池，只在外遇抽選時排除。 */
     readonly safe: readonly string[];
   };
+  /** 名字 → 側寫。每個名字都要有一筆，見 `partnerOf()`。 */
+  readonly partners: Readonly<
+    Record<string, { readonly desc: string; readonly abilities: readonly AbilityKey[] }>
+  >;
 }
 
 /** 成就與成就點數（AP）。跨局的 Meta-progression，見 CONTEXT.md。 */
