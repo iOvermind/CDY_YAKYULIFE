@@ -865,6 +865,7 @@ export class Game {
       position: ratingPosition(this.#player.startPosition, {
         ability: this.#ability,
         level: this.#benchmarkLevel,
+        throws: this.#player.throws,
       }),
       traits: this.#traits,
     });
@@ -1172,6 +1173,7 @@ export class Game {
       position: ratingPosition(player.startPosition, {
         ability: this.#ability,
         level: this.#benchmarkLevel,
+        throws: player.throws,
       }),
       traits: this.#traits,
       schoolTier: this.#schoolTier,
@@ -1564,6 +1566,7 @@ export class Game {
       level: pro.level,
       age: this.#age,
       startPosition: player.startPosition,
+      throws: player.throws,
     });
     pro.position = result.position;
 
@@ -1616,6 +1619,7 @@ export class Game {
       level: this.#benchmarkLevel,
       age: this.#age,
       startPosition: this.#player.startPosition,
+      throws: this.#player.throws,
     }).position;
   }
 
@@ -1830,7 +1834,11 @@ export class Game {
       pro === null || player === null
         ? undefined
         : (pro.position ??
-          ratingPosition(player.startPosition, { ability: this.#ability, level: pro.level }));
+          ratingPosition(player.startPosition, {
+            ability: this.#ability,
+            level: pro.level,
+            throws: player.throws,
+          }));
     const durability = {
       stamina: this.#ability['sta'],
       position,

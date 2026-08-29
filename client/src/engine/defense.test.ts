@@ -228,6 +228,33 @@ describe('assignPosition', () => {
     expect(r.move).toBe('promote');
   });
 
+  it('左投一壘手守備練起來也不會被移防到二三游', () => {
+    const ability = glove(80, 80, 80);
+    const right = assignPosition({ ...base, ability, current: '1B', startPosition: '1B' });
+    const left = assignPosition({
+      ...base,
+      ability,
+      current: '1B',
+      startPosition: '1B',
+      throws: 'L',
+    });
+    // 右投同樣的守備會被拉去游擊——證明這個測試咬得到東西。
+    expect(right.position).toBe('SS');
+    expect(left.position).toBe('1B');
+    expect(left.move).toBe('stay');
+  });
+
+  it('左投掃不到二三游時往外野走，不是掉到指定打擊', () => {
+    const r = assignPosition({
+      ...base,
+      ability: glove(80, 80, 80),
+      current: null,
+      startPosition: 'CF',
+      throws: 'L',
+    });
+    expect(r.position).toBe('CF');
+  });
+
   it('年輕的門檻折扣真的讓人守得住原本守不住的位置', () => {
     const ability = glove(48, 48, 48);
     const young = assignPosition({ ...base, age: 22, ability, current: null, startPosition: 'SS' });

@@ -10,7 +10,15 @@
  * 本模組是純函式，不抽任何亂數。
  */
 
-import { abilities, amateur, leagues, positions, season, type AbilityKey } from '../data/index.ts';
+import {
+  abilities,
+  amateur,
+  leagues,
+  positions,
+  season,
+  type AbilityKey,
+  type Hand,
+} from '../data/index.ts';
 
 /**
  * 二刀流特性名。
@@ -291,13 +299,36 @@ export function localBaseThreshold(position: string, level: string): number | nu
   return info.par + offset;
 }
 
-export function fieldingPosition(ability: Abilities, level: string): string {
+/**
+ * 左投守不守得了這個位置。
+ *
+ * 二壘、三壘、游擊的傳球都得先轉身，左投要多轉 180 度——這在職業層級是「不
+ * 可能」，不是「扣分」，所以它是資格判定的一部分，跟門檻站在一起，而不是守
+ * 備分的一個修正項。
+ *
+ * **因此它不能只活在開局畫面上**：開局擋掉的組合，生涯中途照樣走得進去——一個
+ * 左投一壘手把守備練起來，移防掃描的第一個候選就是游擊。規則的家在引擎裡，
+ * 開局畫面只是同一條規則的提前顯示，兩邊讀同一個函式。
+ *
+ * 捕手不在此列——左投捕手雖然罕見但確實存在，那是留給玩家的一條稀有的路。
+ */
+export function blockedByHand(throws: Hand | null | undefined, position: string): boolean {
+  if (throws !== 'L') return false;
+  return abilities.handedness.left_throw_blocked_positions.positions.includes(position as never);
+}
+
+export function fieldingPosition(
+  ability: Abilities,
+  level: string,
+  throws?: Hand | null,
+): string {
   // 內野與外野的光譜合起來掃，取「守得動的最高階守位」——門檻越高的守位越
   // 難守，也越有價值。掃不到任何一個就落到 DH。
   const candidates = [...positions.scan_order.IF, ...positions.scan_order.OF, 'C'];
   let best: { position: string; required: number } | null = null;
 
   for (const position of candidates) {
+    if (blockedByHand(throws, position)) continue;
     const required = baseThreshold(position, level);
     if (required === null) continue;
     if (defenseScore(ability, position) < required) continue;
@@ -324,7 +355,7 @@ const AUTO_POSITION = 'AUTO';
  */
 export function ratingPosition(
   startPosition: string,
-  auto?: { readonly ability: Abilities; readonly level: string },
+  auto?: { readonly ability: Abilities; readonly level: string; readonly throws?: Hand | null },
 ): string {
   const map = abilities.overall.fielder.default_position;
   // 退路是指定打擊而非游擊：認不出來的起始守位不該被當成守得住游擊。
@@ -332,7 +363,7 @@ export function ratingPosition(
   if (mapped !== AUTO_POSITION) return mapped;
   return auto === undefined
     ? positions.scan_order.fallback
-    : fieldingPosition(auto.ability, auto.level);
+    : fieldingPosition(auto.ability, auto.level, auto.throws);
 }
 
 export interface Rating {

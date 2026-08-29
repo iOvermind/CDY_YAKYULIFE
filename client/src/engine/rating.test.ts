@@ -193,6 +193,15 @@ describe('ratingPosition', () => {
     expect(ratingPosition('UTIL', auto)).not.toBe('DH');
   });
 
+  it('工具人是左投時推不出二三游（#54）', () => {
+    const glove = build(80);
+    expect(ratingPosition('UTIL', { ability: glove, level: 'CPBL1' })).toBe('SS');
+    const left = ratingPosition('UTIL', { ability: glove, level: 'CPBL1', throws: 'L' });
+    expect(['2B', '3B', 'SS']).not.toContain(left);
+    // 但也不該因此掉到指定打擊——他守得動的位置還多的是。
+    expect(left).not.toBe('DH');
+  });
+
   it('推定守位跟著所在體系的尺走，不是一律用中職量（#13）', () => {
     // 守備門檻是「該層級 par + 位移」，層級越高門檻越高。同一副手套在中職
     // 上得了的守位，到大聯盟不一定上得了——評價因此必須帶當下的層級進來。

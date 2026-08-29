@@ -16,9 +16,15 @@
  * 後果，擲骰決定守哪裡會讓玩家練了守備卻看不到效果。
  */
 
-import { leagues, positions } from '../data/index.ts';
+import { leagues, positions, type Hand } from '../data/index.ts';
 import { standardOf, type LeagueStandards } from './league.ts';
-import { baseThreshold, defenseScore, localBaseThreshold, type Abilities } from './rating.ts';
+import {
+  baseThreshold,
+  blockedByHand,
+  defenseScore,
+  localBaseThreshold,
+  type Abilities,
+} from './rating.ts';
 
 /** 指定打擊。掃不到任何守位時的去處，不產生守備分。 */
 export const DH = 'DH';
@@ -162,6 +168,8 @@ export function assignPosition(options: {
   readonly age: number;
   /** 起始守位。首次登錄時用它決定從哪條光譜開始掃。 */
   readonly startPosition: string;
+  /** 投球慣用手。左投的二三游整段從掃描裡消失（見 blockedByHand）。 */
+  readonly throws?: Hand | null;
 }): PositionResult {
   const { ability, current, level, age } = options;
 
@@ -179,7 +187,11 @@ export function assignPosition(options: {
     }
   }
 
-  const list = scanListFor(current ?? options.startPosition);
+  // 守不了的位置直接不進掃描，而不是掃到了再擋——擋在後面的話「守備追上來了」
+  // 那條訊息會先組出來，玩家會收到一張把他改守游擊的卡片。
+  const list = scanListFor(current ?? options.startPosition).filter(
+    (p) => !blockedByHand(options.throws, p),
+  );
   let picked: string | null = null;
   for (const position of list) {
     if (canPlay(ability, position, level, age)) {

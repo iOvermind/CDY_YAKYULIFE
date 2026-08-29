@@ -44,7 +44,7 @@ import {
   type Baseline,
 } from './engine/metrics.ts';
 import { joinName } from './engine/naming.ts';
-import { isSideVisible, type Rating } from './engine/rating.ts';
+import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
 import { positionName } from './engine/season.ts';
 import { newSeed } from './engine/rng.ts';
@@ -240,10 +240,12 @@ function StartScreen({
   /**
    * 左投封死的守位（二、三、游）。兩個方向都要反灰：選了左投就不能選這三個位置，
    * 已經選了這三個位置也不能改成左投——否則玩家會從一個合法組合走到一個非法組合。
+   *
+   * 規則本身在引擎（`blockedByHand`），這裡只是同一條規則的提前顯示。開局畫面
+   * 自己讀一次設定檔的話，引擎那邊的移防掃描就會變成另一份實作。
    */
-  const leftBlocked = new Set<string>(abilities.handedness.left_throw_blocked_positions.positions);
-  const posBlocked = (p: StartPosition) => throws === 'L' && leftBlocked.has(p);
-  const leftThrowBlocked = leftBlocked.has(startPosition);
+  const posBlocked = (p: StartPosition) => blockedByHand(throws, p);
+  const leftThrowBlocked = blockedByHand('L', startPosition);
 
   /**
    * 開局。
