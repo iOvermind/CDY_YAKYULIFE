@@ -52,6 +52,18 @@ export interface SeasonContext {
   readonly position: string;
   /** 綜合能力，用於信任度與升降級判定。 */
   readonly overall: number;
+  /**
+   * 投球側專用的綜合能力。省略時沿用 `overall`。
+   *
+   * `overall` 是 `max(投手評價, 野手評價)`：單一守備位置的球員，那個 max 本來
+   * 就是他自己那一側，所以兩者相同。只有二刀流會分岔——強打弱投的人，他的
+   * 棒子會把投手出賽量一起撐起來，於是模型讓一個沒有球威的人繼續拿先發輪值。
+   *
+   * 注意這不對稱，而且是刻意的：打擊側照樣吃完整的 `overall`。游擊手靠手套
+   * 掙到先發，出賽就會有打席——守備灌進打席數是棒球本來的樣子，不是洩漏。
+   * 反過來卻不成立：打擊再好也不會讓總教練多給他一場先發。
+   */
+  readonly pitchingOverall?: number | null;
   readonly better: 'pitcher' | 'fielder';
   readonly twoWay: boolean;
   /** 當年的聯盟水準。null 表示用 leagues.json 的基準值。 */
@@ -522,9 +534,8 @@ export function proPitchingLine(
 
   // 投手側的信任度判定。同樣放在抽完之後，理由見 `gamesPlayed`。
   //
-  // 注意 `overall` 是球員的綜合能力，不是他的投手評價：二刀流兩側目前共用它，
-  // 所以一個強打弱投的人不會被這道判定清出投手名單。見 season.json 的
-  // `trust_factor._side_note`。
+  // 這裡的 `overall` 已經是投球側的（見 SeasonContext.pitchingOverall），
+  // 所以強打弱投的二刀流會被這道判定清出投手名單，而他的打擊側不受影響。
   if (offRoster(overall, par)) {
     games = 0;
     starts = 0;
@@ -594,7 +605,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
           world,
           ctx.ability,
           ctx.level,
-          ctx.overall,
+          ctx.pitchingOverall ?? ctx.overall,
           standards,
           ctx.teamWinRate ?? null,
           ctx.seasonFactor ?? 1,

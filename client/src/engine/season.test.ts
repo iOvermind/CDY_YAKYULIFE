@@ -491,12 +491,26 @@ describe('playSeason', () => {
     expect(line.batting).not.toBeNull();
   });
 
-  it('【已知缺口】二刀流兩側共用 overall：強打會撐起他的投手出賽量', () => {
-    // 投球四項全爛、打擊全滿。理想上他該被清出投手名單，但兩側共用 overall，
-    // 所以他照樣上丘。這條測試釘住的是現況而非期望——見 trust_factor._side_note。
+  it('二刀流的棒子撐不起他的投手丘：強打弱投拿不到先發輪值', () => {
+    // 投球四項全爛、打擊全滿。他的 overall 70 是棒子掙來的，不該換成先發。
     const ability = with_(20, { con: 80, pow: 80, spd: 80, eye: 80 });
-    const line = playSeason(new World('a'), ctx({ twoWay: true, ability, overall: 70 }));
-    expect(line.pitching?.outs).toBeGreaterThan(0);
+    const line = playSeason(
+      new World('a'),
+      ctx({ twoWay: true, ability, overall: 70, pitchingOverall: 20 }),
+    );
+    expect(line.pitching?.outs).toBe(0);
+    // 但他照樣是個強打者——扣的只有投手側。
+    expect(line.batting?.pa).toBeGreaterThan(0);
+  });
+
+  it('省略 pitchingOverall 時沿用 overall——單一守位球員一位元都不該動', () => {
+    const ability = with_(60, { vel: 70, ctl: 70 });
+    const base = playSeason(new World('a'), ctx({ better: 'pitcher', ability, overall: 60 }));
+    const same = playSeason(
+      new World('a'),
+      ctx({ better: 'pitcher', ability, overall: 60, pitchingOverall: 60 }),
+    );
+    expect(same).toEqual(base);
   });
 
   it('0 局的投手不會生出勝投或救援——率型欄位不該自己長出成績', () => {

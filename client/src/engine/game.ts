@@ -1691,6 +1691,11 @@ export class Game {
       ability: this.#seasonAbility,
       position,
       overall: r.overall,
+      // 投手丘只認手臂。扣掉的是「綜合能力高出他投手評價的那一截」，對只
+      // 守一側的人恆為 0（他的 overall 本來就是自己那側），所以既有球員的
+      // 數據一位元都不動；只有二刀流會被扣，而那正是要修的洩漏。
+      // 用扣的而不是直接換成 r.pitcher，是為了保住 overall 裡的特性加成。
+      pitchingOverall: r.overall - Math.max(0, r.fielder - r.pitcher),
       // 定位鎖定之後就照鎖定的那一側打，不再每季比較評價高低——職業球員的
       // 角色是固定的，不會因為某年打擊練得比較好就改當野手。
       better: this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder'),
