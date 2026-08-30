@@ -432,7 +432,7 @@ export interface FlavorData {
 }
 
 export interface HallOfFameData {
-  readonly difficulty: { readonly reference_par: number; readonly exponent: number };
+  readonly difficulty: { readonly baseline_par: number; readonly exponent: number };
   readonly tier_thresholds: {
     /** 五帶的名稱，由高到低。 */
     readonly labels: readonly string[];

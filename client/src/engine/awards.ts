@@ -175,6 +175,8 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
 
   if (award.kind === 'shares') {
     if (d === undefined) return null;
+    // **聯盟真尺**：門檻線吃該層級的 par，同一座獎全聯盟同一條線。個人的上限
+    // 折扣（慣用手那類）不平移這裡——那會變成「某些人的 MVP 比較便宜」。
     const line = proLineAt(d, proPaAt(d, games), levelOf(level).par);
     const shares = battingShares(line, proBaseline(level), null);
     // 球隊勝率傳 null：門檻線問的是「這種等級的球員能打出多少份額」，不是

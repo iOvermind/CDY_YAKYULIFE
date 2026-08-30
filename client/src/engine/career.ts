@@ -201,16 +201,22 @@ export interface CareerSummary {
 /**
  * 聯盟難度係數。
  *
- * `(當年 par / 基準 par) ^ 指數`。弱聯盟的份額會虛胖——聯盟平均是自我參照的，
+ * `(當年 par / baseline_par) ^ 指數`。弱聯盟的份額會虛胖——聯盟平均是自我參照的，
  * 因此能力相同的球員在弱聯盟宰制力更強、份額更高。這個係數把虛胖壓回去。
  *
  * 用**當年**的 par，因此聯盟水準的逐年浮動會被吃掉：玩家不會因為生在弱年而
  * 白賺評價分，但成績單上仍看得到那年打得特別兇。
+ *
+ * **分母不跟著浮動**，那不是疏漏：分子浮動、分母釘死，才是浮動被吃掉的機制。
+ * 見 `hall_of_fame.json` 的 `_baseline_note`。
+ *
+ * 這條是**聯盟真尺**——它只吃聯盟 par，不吃球員能力。慣用手之類的個人上限
+ * 折扣對它自動生效（能力低→份額低→分數低），不可以在這裡再折一次。
  */
 export function difficultyOf(par: number): number {
   const d = cfg.difficulty;
-  if (d.reference_par <= 0 || par <= 0) return 1;
-  return Math.pow(par / d.reference_par, d.exponent);
+  if (d.baseline_par <= 0 || par <= 0) return 1;
+  return Math.pow(par / d.baseline_par, d.exponent);
 }
 
 /** 一段效力貢獻的分數：三個分段各自扣完敗戰份額，再乘難度係數。 */

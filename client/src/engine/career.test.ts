@@ -61,7 +61,7 @@ const award = (code: string, org = 'CPBL'): AwardRecord => ({
 
 describe('difficultyOf', () => {
   it('基準 par 的係數是 1', () => {
-    expect(difficultyOf(cfg.difficulty.reference_par)).toBeCloseTo(1, 10);
+    expect(difficultyOf(cfg.difficulty.baseline_par)).toBeCloseTo(1, 10);
   });
 
   it('聯盟越強係數越大——弱聯盟的份額會虛胖，係數把它壓回去', () => {

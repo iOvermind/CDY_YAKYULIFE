@@ -1037,7 +1037,7 @@ function difficultyGroup(label: string, SAMPLES: number, absolute: boolean): voi
   let bestExp = 0;
   let bestSpread = Number.POSITIVE_INFINITY;
   for (let e = 0; e <= 4.001; e += 0.05) {
-    const adj = rows.map((r) => r.perGame * Math.pow(r.par / hallOfFame.difficulty.reference_par, e));
+    const adj = rows.map((r) => r.perGame * Math.pow(r.par / hallOfFame.difficulty.baseline_par, e));
     const spread = Math.max(...adj) / Math.max(0.001, Math.min(...adj));
     if (spread < bestSpread) {
       bestSpread = spread;
