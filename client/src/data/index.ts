@@ -150,13 +150,10 @@ export interface AbilitiesData {
     readonly selectable: { readonly throws: readonly Hand[]; readonly bats: readonly Hand[] };
     /** 左投封死的守位（二、三、游）——傳一壘要多轉半圈，這不是扣分而是不可能。 */
     readonly left_throw_blocked_positions: { readonly positions: readonly StartPosition[] };
-    /** 左投左打的結構性優勢對價：受益的那一側，天賦上限相應降低。 */
-    readonly ceiling_modifier: {
-      readonly throws: Readonly<
-        Partial<Record<Hand, { readonly group: string; readonly delta: number }>>
-      >;
-      readonly bats: Readonly<
-        Partial<Record<Hand, { readonly group: string; readonly delta: number }>>
+    /** 左投左打的結構性優勢對價：個人尺與潛力上限一起打折。檔次取代不累加。 */
+    readonly discount: {
+      readonly tiers: Readonly<
+        Record<'left' | 'switch', { readonly standard: number; readonly potential: number }>
       >;
     };
   };

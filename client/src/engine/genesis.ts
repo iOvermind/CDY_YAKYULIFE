@@ -119,37 +119,6 @@ function rollPotential(world: World, start: StartPosition): Record<AbilityKey, n
 }
 
 /**
- * 套用慣用手對天賦上限的修正。
- *
- * 左投與左打在棒球裡有結構性優勢，這個修正是那份優勢的對價。修正只作用在
- * 受益的那一側——左投扣投球能力的天花板，左打扣打擊能力的天花板。
- *
- * 注意：對價的另一半（simulation_math.md §5 的同邊優勢與反邊剋星）尚未接上
- * 賽季模擬，因此目前選左手只有扣分、沒有好處。見 abilities.json 的
- * ceiling_modifier._pending_warning。
- */
-function applyHandednessCeiling(
-  potential: Record<AbilityKey, number>,
-  hands: { readonly throws: Hand; readonly bats: Hand },
-): void {
-  const cfg = abilities.handedness.ceiling_modifier;
-  const groups = abilities.ability_groups;
-
-  for (const [mod, hand] of [
-    [cfg.throws[hands.throws], hands.throws],
-    [cfg.bats[hands.bats], hands.bats],
-  ] as const) {
-    if (mod === undefined || hand === undefined) continue;
-    const keys = mod.group === 'pitcher' ? groups.pitcher : groups.fielder;
-    for (const key of keys) {
-      const current = potential[key];
-      if (current === undefined) continue;
-      potential[key] = Math.max(abilities.scale.hard_floor, current + mod.delta);
-    }
-  }
-}
-
-/**
  * 分發學校。
  *
  * 學校名單與隱藏分級來自 amateur.json，各階段一份。生涯從國中開始，因此開局
@@ -182,8 +151,10 @@ export function createPlayer(
   hands: { readonly throws: Hand; readonly bats: Hand },
 ): NewPlayer {
   const ability = rollAbility(world, startPosition);
+  // 潛力照抽到的原值存。慣用手的折扣不在這裡改寫它——那會把「他抽到多少」
+  // 和「他被扣了多少」揉成同一個數字，之後中途拿到左右開投就無從補算。
+  // 折扣是衍生的，見 handedness.ts 的 discountedPotential。
   const potential = rollPotential(world, startPosition);
-  applyHandednessCeiling(potential, hands);
   const { throws, bats } = hands;
   const { school, tier } = assignSchool(world, 'JHS');
 

@@ -3,6 +3,7 @@ import { abilities, amateur, leagues, love, season as seasonData } from '../data
 import { stageOf } from './amateur.ts';
 import { ALL_ABILITIES } from '../data/index.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
+import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
 
 const setup: GameSetup = {
@@ -189,13 +190,25 @@ describe('重播', () => {
       const state = started({ seed }).state;
       expect(state).not.toBeNull();
       for (const key of ALL_ABILITIES) {
-        const base = state!.origin.potential[key] ?? abilities.scale.max;
+        const rolled = state!.origin.potential[key] ?? abilities.scale.max;
+        const base = discountedPotential(rolled, handednessTier({ ...state!.origin, traits: state!.traits }));
         const expected =
           Math.min(abilities.scale.max, base + abilities.talent_bonus.ceiling) +
           (state!.ceilingBonus[key] ?? 0);
         expect(state!.ceiling[key]).toBe(expected);
       }
     }
+  });
+
+  it('左手的代價落在天花板上——同一個 seed，左投的上限比右投低', () => {
+    const right = started({ seed: 'hand-x', throws: 'R', bats: 'R' }).state!;
+    const left = started({ seed: 'hand-x', throws: 'L', bats: 'R' }).state!;
+
+    // 抽到的潛力是同一份——左手不改寫它，只是折扣它。
+    expect(left.origin.potential).toEqual(right.origin.potential);
+    const lower = ALL_ABILITIES.filter((k) => left.ceiling[k]! < right.ceiling[k]!);
+    expect(lower.length).toBeGreaterThan(0);
+    for (const k of ALL_ABILITIES) expect(left.ceiling[k]!).toBeLessThanOrEqual(right.ceiling[k]!);
   });
 
   it('跨版本一律拒絕重播，不嘗試相容', () => {

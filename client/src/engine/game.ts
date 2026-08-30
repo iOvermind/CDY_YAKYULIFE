@@ -107,6 +107,7 @@ import {
   type LeagueStandards,
 } from './league.ts';
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
+import { discountedPotential, handednessTier, type HandednessTier } from './handedness.ts';
 import {
   abilityCost,
   carryGauge,
@@ -4851,9 +4852,24 @@ export class Game {
     return ALL_ABILITIES.filter((key) => isSideVisible(key, this.#activeSide));
   }
 
+  /**
+   * 這個球員目前落在哪一慣用手檔次。
+   *
+   * 每次讀都重算，因為左右開投是後天拿到的：拿到的當下尺與上限一起改變，
+   * 不需要任何補算或快照。
+   */
+  get #handednessTier(): HandednessTier {
+    const p = this.#player;
+    if (p === null) return 'none';
+    return handednessTier({ throws: p.throws, bats: p.bats, traits: this.#traits });
+  }
+
   /** 這項能力目前的潛力天花板，含事件提升的部分。 */
   #ceilingOf(key: AbilityKey): number {
-    const base = this.#player?.potential[key] ?? abilities.scale.max;
+    // 抽到的潛力先吃慣用手折扣——左手的順風在尺那邊，代價在這裡。折扣只咬
+    // 這個原值，後面兩項加成都是原價疊上去的（見 handedness.ts）。
+    const rolled = this.#player?.potential[key] ?? abilities.scale.max;
+    const base = discountedPotential(rolled, this.#handednessTier);
     // 三個來源，但不是同一種東西：抽到的潛力與「天賦異稟」那類全域加成都只是
     // 在量表**之內**移動，加起來最多 80；只有事件卡提升的那一項有資格把量表
     // 本身頂過 80（hardCap 同樣只認它）。最後一項平常是 0，由設定覆蓋層寫入

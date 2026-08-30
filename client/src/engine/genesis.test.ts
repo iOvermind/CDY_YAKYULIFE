@@ -190,37 +190,13 @@ describe('慣用手', () => {
     expect(a.drawCounts()).toEqual(b.drawCounts());
   });
 
-  it('左投的投球天賦上限較低——那是左投結構性優勢的對價', () => {
+  it('慣用手不改寫抽到的潛力——折扣是衍生的，不是寫死在出生資料裡', () => {
     const right = withHands('R', 'R');
-    const left = withHands('L', 'R');
-    const sum = (p: typeof right, keys: readonly string[]) =>
-      keys.reduce((n, k) => n + (p.potential[k] ?? 0), 0);
-    const pitching = abilities.ability_groups.pitcher;
-    expect(sum(left, pitching)).toBeLessThan(sum(right, pitching));
-  });
-
-  it('左投不影響野手側的天賦上限', () => {
-    const right = withHands('R', 'R');
-    const left = withHands('L', 'R');
-    const fielding = abilities.ability_groups.fielder;
-    for (const k of fielding) expect(left.potential[k]).toBe(right.potential[k]);
-  });
-
-  it('左打與左右開弓扣的是野手側，且左右開弓扣得更多', () => {
-    const sum = (bats: 'R' | 'L' | 'S') =>
-      abilities.ability_groups.fielder.reduce(
-        (n, k) => n + (withHands('R', bats).potential[k] ?? 0),
-        0,
-      );
-    expect(sum('L')).toBeLessThan(sum('R'));
-    expect(sum('S')).toBeLessThan(sum('L'));
-  });
-
-  it('天賦上限不會被扣到零以下', () => {
-    for (let i = 0; i < 100; i++) {
-      const p = withHands('L', 'S', `s${i}`);
-      for (const v of Object.values(p.potential)) expect(v).toBeGreaterThan(0);
-    }
+    for (const bats of ['R', 'L', 'S'] as const)
+      for (const throws of ['R', 'L'] as const) {
+        const p = withHands(throws, bats);
+        for (const k of ALL_ABILITIES) expect(p.potential[k]).toBe(right.potential[k]);
+      }
   });
 });
 
