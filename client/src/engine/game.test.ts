@@ -1901,3 +1901,36 @@ describe('感情風波的敘事', () => {
     }
   });
 });
+
+describe('左右開投', () => {
+  const rate = (over: Partial<GameSetup>, n = 60) => {
+    let hit = 0;
+    for (let i = 0; i < n; i++) {
+      const game = playAmateur(started({ ...over, seed: `sp-${i}` }));
+      if (game.state?.traits.has('switch_pitcher') === true) hit++;
+    }
+    return hit / n;
+  };
+
+  it('左投明顯比右投容易練成——左撇子從小就兩隻手都在用', () => {
+    const left = rate({ startPosition: 'P', throws: 'L', bats: 'L' });
+    const right = rate({ startPosition: 'P', throws: 'R', bats: 'R' });
+    expect(left).toBeGreaterThan(right);
+    expect(right).toBeGreaterThan(0);
+  });
+
+  it('野手不會練成——這是投手的東西', () => {
+    expect(rate({ startPosition: 'SS', throws: 'L', bats: 'L' })).toBe(0);
+  });
+
+  it('練成之後檔次跳到左右開投，天花板跟著降', () => {
+    let found: Game | null = null;
+    for (let i = 0; i < 60 && found === null; i++) {
+      const game = playAmateur(started({ startPosition: 'P', throws: 'L', bats: 'L', seed: `sp-${i}` }));
+      if (game.state?.traits.has('switch_pitcher') === true) found = game;
+    }
+    expect(found).not.toBeNull();
+    const state = found!.state!;
+    expect(handednessTier({ ...state.origin, traits: state.traits })).toBe('switch');
+  });
+});

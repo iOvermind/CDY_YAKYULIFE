@@ -374,10 +374,10 @@
     {
       "id": "switch_pitcher",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "左右開投",
-      "effect_text": "左右開弓的投手，永遠取得同邊優勢",
-      "trigger_note": "刻意不進開局擲骰。真實棒球史上的左右開投投手只有個位數，放進常規機率會讓投手看起來一堆怪物；當成生涯中觸發的隱藏稱號才是亮點。觸發條件待定。"
+      "effect_text": "個人尺 -15%、潛力上限 -25%、受傷率 -10%",
+      "trigger_note": "刻意不進開局擲骰。真實棒球史上的左右開投投手只有個位數，放進常規機率會讓投手看起來一堆怪物；當成養成期觸發的隱藏稱號才是亮點。養成期每年擲一次，限投手，左投 10%、右投 3%（abilities.json 的 handedness.switch_pitcher_chance）。"
     },
     {
       "id": "rainbow",

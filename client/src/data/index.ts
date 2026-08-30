@@ -150,6 +150,8 @@ export interface AbilitiesData {
     readonly selectable: { readonly throws: readonly Hand[]; readonly bats: readonly Hand[] };
     /** 左投封死的守位（二、三、游）——傳一壘要多轉半圈，這不是扣分而是不可能。 */
     readonly left_throw_blocked_positions: { readonly positions: readonly StartPosition[] };
+    /** 養成期取得「左右開投」的年機率（百分比），依投球慣用手分。限投手。 */
+    readonly switch_pitcher_chance: { readonly by_throws: Readonly<Partial<Record<Hand, number>>> };
     /** 左投左打的結構性優勢對價：個人尺與潛力上限一起打折。檔次取代不累加。 */
     readonly discount: {
       readonly tiers: Readonly<
@@ -216,6 +218,8 @@ export interface InjuryData {
     readonly base: number;
     /** 天賦的乘算層，平常是 1。套在所有加減與 clamp 之後——見 ADR 0033。 */
     readonly talent_multiplier: number;
+    /** 左右開投的受傷率乘數。與 talent_multiplier 相乘，不共用同一格。 */
+    readonly switch_pitcher_multiplier: number;
     readonly age_steps: { readonly tiers: readonly { readonly from_age: number; readonly add: number }[] };
     readonly clamp: Range;
     /**

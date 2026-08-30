@@ -239,3 +239,19 @@ describe('養成期的傷病', () => {
     expect(hurt).toBeGreaterThan(0);
   });
 });
+
+describe('左右開投', () => {
+  const at = (traits: string[]) => injuryChance({ age: 27, traits: new Set(traits) });
+
+  it('兩邊輪流投，受傷率打折', () => {
+    expect(at(['switch_pitcher'])).toBeLessThan(at([]));
+  });
+
+  it('折扣乘在夾擠之外，與體質特性相乘而不是取代', () => {
+    expect(at(['glass', 'switch_pitcher'])).toBeCloseTo(
+      at(['glass']) * cfg.chance.switch_pitcher_multiplier,
+      10,
+    );
+    expect(at(['glass', 'switch_pitcher'])).toBeGreaterThan(at(['iron']));
+  });
+});

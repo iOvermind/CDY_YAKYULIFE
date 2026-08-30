@@ -11,6 +11,7 @@
  * 全部走 `health` 子序列。那條子序列從 ADR 0002 就保留著，一直沒有使用者。
  */
 
+import { SWITCH_PITCHER_TRAIT } from './handedness.ts';
 import { injury as cfg } from '../data/index.ts';
 import type { World } from './rng.ts';
 import { fullSeasonSta, staThresholdForLeague } from './season.ts';
@@ -85,6 +86,9 @@ function staminaRisk(options: {
  * 年齡、體力、逃學威龍的加減，然後才加事件卡自找的額外風險——那是自己選的。夾在
  * clamp 之後，最後乘上天賦的 `talent_multiplier`：天賦是玩家帶進場的，在夾擠之外。
  * 見 ADR 0033。
+ *
+ * 左右開投的乘數走同一段，但是**另一格**：`talent_multiplier` 是天賦覆蓋層的寫
+ * 入點，共用那一格會讓兩邊互相覆寫。兩個乘數相乘。
  */
 export function injuryChance(options: {
   readonly age: number;
@@ -122,7 +126,9 @@ export function injuryChance(options: {
 
   p += options.extraRisk ?? 0;
   p = Math.max(c.clamp.min, Math.min(c.clamp.max, p));
-  return p * c.talent_multiplier;
+  // 兩邊輪流投，單邊手臂的累積量減少——這是左右開投唯一不在尺上的好處。
+  const switchPitcher = options.traits.has(SWITCH_PITCHER_TRAIT) ? c.switch_pitcher_multiplier : 1;
+  return p * c.talent_multiplier * switchPitcher;
 }
 
 /**

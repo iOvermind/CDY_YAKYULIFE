@@ -107,7 +107,12 @@ import {
   type LeagueStandards,
 } from './league.ts';
 import { assignSchool, createPlayer, START_SEASON, type NewPlayer } from './genesis.ts';
-import { discountedPotential, handednessTier, type HandednessTier } from './handedness.ts';
+import {
+  discountedPotential,
+  handednessTier,
+  SWITCH_PITCHER_TRAIT,
+  type HandednessTier,
+} from './handedness.ts';
 import {
   abilityCost,
   carryGauge,
@@ -980,10 +985,34 @@ export class Game {
     );
     this.flow.push(
       () => this.#springTraining(),
+      () => this.#switchPitcherRoll(),
       () => this.#loveEvent(() => this.#drawEventCards()),
       () => this.#cups(),
       () => this.#youthTournament(),
       () => this.#endYear(),
+    );
+  }
+
+  /**
+   * 養成期每年一次的「左右開投」判定。
+   *
+   * **擲骰無條件執行，判定才有條件。** 是不是投手會因為中途定位確立而改變，
+   * 把擲骰包在條件裡會讓同一個種子的 events 子序列從那一年起整串偏移。
+   *
+   * 左投的機率明顯高於右投：左撇子從小被迫用右手做事，兩邊都能用的底子本來
+   * 就在；右投是從零練起一隻沒用過的手。
+   */
+  #switchPitcherRoll(): void {
+    const cfg = abilities.handedness.switch_pitcher_chance;
+    const throws = this.#player?.throws;
+    const hit = this.world.stream('events').chance(cfg.by_throws[throws ?? 'R'] ?? 0);
+    if (!hit || this.#activeSide !== 'pitcher') return;
+    if (this.#traits.has(SWITCH_PITCHER_TRAIT)) return;
+
+    this.#unlockTrait(
+      SWITCH_PITCHER_TRAIT,
+      '練習後留下來的那顆球，你隨手用另一隻手扔了回去——教練停住了腳步。' +
+        '從那天起你多練了一隻手——<b class="hl">兩邊輪流投，單邊手臂的累積量也跟著少了</b>。',
     );
   }
 
