@@ -15,6 +15,9 @@ body{
   --btnbg:linear-gradient(#1b3a5c,#132b45);--btnedge:#2f5f8f;--btntx:#e8f2ff;
   --bgfx:radial-gradient(ellipse 120% 60% at 50% -10%,rgba(30,90,160,.45) 0%,transparent 60%);
   --shadow:rgba(0,0,0,.45);
+  /* 「上限突破」的語意色。預設借 --good；主題 d 的 --good 跟 --accent 是同一個
+     綠，突破的能力條會跟一般的糊在一起，那裡改用 --info。 */
+  --over:var(--good);
   /* 相容別名：舊的行內樣板仍在引用。新程式碼禁止使用，見 INTERFACE.md §2.3 */
   --chalk:var(--text);--amber:var(--accent);--blue:var(--info);--clay:var(--accent);
 }
@@ -27,7 +30,7 @@ body[data-theme='c']{--bg:#f4efe1;--panel:#faf6ea;--panel2:#ece5d2;--edge:#1e1c1
   --head:'Noto Serif TC',serif;--disp:'Noto Serif TC',serif;
   --glow:none;--btnbg:#1e1c18;--btnedge:#1e1c18;--btntx:#f4efe1;--bgfx:none;--shadow:rgba(30,28,24,.12)}
 body[data-theme='d']{--bg:#f6f7f6;--panel:#ffffff;--panel2:#f2f4f2;--edge:#e2e6e3;--text:#1a201c;--dim:#7a857e;
-  --accent:#0f7b4d;--good:#0f7b4d;--bad:#c0392b;--info:#4a76a8;--gold:#b8862d;--r:12px;
+  --accent:#0f7b4d;--good:#0f7b4d;--bad:#c0392b;--info:#4a76a8;--gold:#b8862d;--r:12px;--over:var(--info);
   --glow:none;--btnbg:#0f7b4d;--btnedge:#0f7b4d;--btntx:#ffffff;--bgfx:none;--shadow:rgba(26,32,28,.1)}
 /* touch-action:manipulation keeps pan + pinch but kills double-tap zoom (tap-heavy game) */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
@@ -248,6 +251,11 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .abrow .val{font-family:var(--mono);width:62px;text-align:right;font-size:14px;flex:none}
 .abrow .val b{color:var(--good)}
 .abrow.capped{opacity:.45}
+/* 上限被事件頂過量表尾端（>80）。刻度不伸縮，改用底色說：這條的盡頭在畫面外。
+   marker 抵在 100% 不再退讓，所以要比平常明顯，不然會被誤讀成「剛好點滿」。
+   不用紅色——紅在別處一律是傷病與負面。 */
+.abrow.over .bar{background:color-mix(in srgb,var(--over) 18%,var(--bg))}
+.abrow.over .bar em{background:var(--over);opacity:1;width:3px}
 .bar{position:relative}
 .bar em{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--accent);opacity:.5;border-radius:1px}
 /* ---------- 開場 ---------- */

@@ -336,6 +336,14 @@ export interface PlayerState {
   readonly pool: number;
   /** 各項能力被提升的上限點數。 */
   readonly ceilingBonus: Readonly<Record<AbilityKey, number>>;
+  /**
+   * 各項能力目前的潛力天花板，已含天賦加成與事件提升。
+   *
+   * **畫面要顯示天花板就讀這裡，不要自己拼。** 抽到的潛力、天賦加成、事件提升
+   * 三者的合成規則（誰只在量表內移動、誰能頂過 80）只有引擎知道，前端重算一次
+   * 就會跟收錢的那條公式分岔——problems.txt #56 就是這樣來的。
+   */
+  readonly ceiling: Readonly<Record<AbilityKey, number>>;
   /** 本季累積的受傷機率增幅。 */
   readonly injuryRisk: number;
   /** 當年成績。尚未打完大賽時為 null。 */
@@ -779,6 +787,9 @@ export class Game {
       earnings: this.#earnings,
       pool: this.#pool,
       ceilingBonus: this.#ceilingBonus,
+      ceiling: Object.fromEntries(
+        ALL_ABILITIES.map((key) => [key, this.#ceilingOf(key)]),
+      ) as Record<AbilityKey, number>,
       injuryRisk: this.#injuryRisk,
       position: this.#fieldPosition,
       positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),

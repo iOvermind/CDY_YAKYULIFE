@@ -1643,23 +1643,26 @@ function AbilityRow({
   // （problems #55）。
   const repeat = useHold(option !== undefined && option.disabled !== true);
   const current = state.ability[abilityKey] ?? 0;
-  const potential = state.origin.potential[abilityKey] ?? 0;
   const carry = state.carry[abilityKey] ?? 0;
   const bonus = state.ceilingBonus[abilityKey] ?? 0;
+  // 天花板一律問引擎要。這裡曾經拿 origin.potential 自己加 ceilingBonus，漏掉了
+  // 「天賦異稟」那類天賦加成（最高 +10），於是收錢按 80 收、畫面卻寫 70
+  // （problems.txt #56）。合成規則歸引擎，前端只負責畫。
+  const ceiling = state.ceiling[abilityKey] ?? 0;
+  // 天花板被事件頂過量表上限的那幾項（最多 +5，見 abilities.json 的
+  // max_ceiling_bonus）。刻度不為它們伸縮，改用底色與 marker 標示。
+  const overScale = ceiling > abilities.scale.max;
   // 與舊版一致的表達方式：蓄力／這一級所需點數，例如 0/2。成本 1 點時不顯示。
   // 欠點另外標一個「欠」字：分母跟著換成退一級退回來的錢，只寫負號會讀成
   // 「存了 -1 點」。
-  const gauge = carryGauge(
-    current,
-    potential + bonus,
-    carry,
-    growthCurve(state.traits.has('two_way')),
-  );
-  const cost = abilityCost(current, potential + bonus, growthCurve(state.traits.has('two_way')));
+  const gauge = carryGauge(current, ceiling, carry, growthCurve(state.traits.has('two_way')));
+  const cost = abilityCost(current, ceiling, growthCurve(state.traits.has('two_way')));
 
-  // 量表刻度：頭 20 尾 80。只有被事件提升過上限的能力，尾端才會延伸到 80 以上。
+  // 量表刻度固定 20–80，**任何情況都不伸縮**。尾端會跟著上限提升而變長的話，
+  // 同一條能力在事件前後長度不同、十幾條之間也互相對不齊，玩家沒辦法一眼橫著
+  // 掃完一整欄。破 80 的部分寧可畫成滿條，由分母的數字去講完剩下的事。
   const head = abilities.scale.min;
-  const tail = abilities.scale.max + bonus;
+  const tail = abilities.scale.max;
   const pct = (v: number) => Math.max(0, Math.min(100, ((v - head) / (tail - head)) * 100));
 
   // 已達上限的能力是「看得到、按不動」：仍然列在那裡（玩家要能看見自己的
@@ -1667,7 +1670,6 @@ function AbilityRow({
   // 照樣可以按下去，engine 那邊 choose() 對 disabled 選項是丟例外的——畫面
   // 沒有任何反應，點數也不會少，看起來就是「卡在同一步」。
   const allocating = option !== undefined && option.disabled !== true;
-  const ceiling = potential + bonus;
 
   const [barRef, barWidth] = useElementWidth<HTMLSpanElement>();
   const markerStyle =
@@ -1686,10 +1688,12 @@ function AbilityRow({
       </span>
       <span className="val" style={{ lineHeight: 1.1 }}>
         {current}
-        {/* 分母是量表上限，不是潛力——潛力是價錢的轉折點，條上那道 marker 已經
-            標了；寫成分母會讓人以為點到潛力就沒得練了。 */}
-        <small style={{ opacity: 0.5 }} title={`潛力 ${ceiling}`}>
-          /{tail}
+        {/* 分母是這一項真正的天花板。原本固定寫 80，於是所有能力看起來都一樣有
+            前途，玩家得靠 marker 的位置目測自己的潛力——而那道線只有兩像素。
+            分子超過分母（例如 74/70）就是已經踩進加價區，那個寫法本身就是提示，
+            不再另外上色。 */}
+        <small style={{ opacity: 0.5 }} title={`潛力天花板 ${ceiling}`}>
+          /{ceiling}
         </small>
         {cost > 1 && (
           <span
@@ -1705,7 +1709,7 @@ function AbilityRow({
   if (!allocating) {
     return (
       <div
-        className={`abrow${option !== undefined ? ' capped' : ''}`}
+        className={`abrow${option !== undefined ? ' capped' : ''}${overScale ? ' over' : ''}`}
         // 分配中卻不能點的列，把 engine 給的理由（已達上限）直接掛上去，
         // 不要退回那條泛用的量表說明。
         title={option?.note ?? `${head}–${tail}${bonus > 0 ? `（上限已提升 +${bonus}）` : ''}`}
@@ -1717,7 +1721,7 @@ function AbilityRow({
 
   return (
     <div
-      className="abrow pickable"
+      className={`abrow pickable${overScale ? ' over' : ''}`}
       role="button"
       tabIndex={0}
       title={option.note}

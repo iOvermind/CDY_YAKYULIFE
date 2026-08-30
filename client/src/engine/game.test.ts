@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilities, amateur, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
+import { ALL_ABILITIES } from '../data/index.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 import { joinName } from './naming.ts';
 
@@ -178,6 +179,23 @@ describe('重播', () => {
 
   it('重播日誌帶著引擎版本', () => {
     expect(started().toReplayLog().engineVersion).toBe(ENGINE_VERSION);
+  });
+
+  it('快照直接給出天花板，且已含天賦加成——前端不必自己拼', () => {
+    // problems.txt #56：畫面本來拿 origin.potential 自己加 ceilingBonus，漏掉
+    // 「天賦異稟」那類把上限往上推的天賦，於是收錢按 80 收、分母寫 70。天花板
+    // 只有一個合成點，這條測試守的就是那個點。
+    for (const seed of ['test-seed', 'ceiling-a', 'ceiling-b', 'ceiling-c']) {
+      const state = started({ seed }).state;
+      expect(state).not.toBeNull();
+      for (const key of ALL_ABILITIES) {
+        const base = state!.origin.potential[key] ?? abilities.scale.max;
+        const expected =
+          Math.min(abilities.scale.max, base + abilities.talent_bonus.ceiling) +
+          (state!.ceilingBonus[key] ?? 0);
+        expect(state!.ceiling[key]).toBe(expected);
+      }
+    }
   });
 
   it('跨版本一律拒絕重播，不嘗試相容', () => {
