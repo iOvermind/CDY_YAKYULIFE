@@ -102,7 +102,7 @@ import { applyTalents, type TalentLevels } from './overlay.ts';
 import {
   advanceStandards,
   initStandards,
-  standardOf,
+  leagueStandardOf,
   standardsNote,
   type LeagueStandards,
 } from './league.ts';
@@ -824,8 +824,8 @@ export class Game {
       position: pro.position,
       positionName: pro.position === null ? null : positionLabel(pro.position),
       defenseRuns: this.#defenseRuns[pro.level] ?? 0,
-      par: standardOf(this.#standards, pro.level).par,
-      min: standardOf(this.#standards, pro.level).min,
+      par: leagueStandardOf(this.#standards, pro.level).par,
+      min: leagueStandardOf(this.#standards, pro.level).min,
       salary: this.#seasonSalary,
       contractYears: pro.contract.years,
       serviceYears: pro.serviceYears,
@@ -844,7 +844,7 @@ export class Game {
   get #seasonSalary(): number {
     const pro = this.#pro;
     if (pro === null) return 0;
-    const d = (this.rating?.overall ?? 0) - standardOf(this.#standards, pro.level).par;
+    const d = (this.rating?.overall ?? 0) - leagueStandardOf(this.#standards, pro.level).par;
     return salaryFor(pro.level, d);
   }
 
@@ -1574,6 +1574,7 @@ export class Game {
     }
 
     const result = assignPosition({
+      tier: this.#handednessTier,
       ability: this.#ability,
       current: pro.position,
       level: pro.level,
@@ -1627,6 +1628,7 @@ export class Game {
     // 有野手成績。
     if (!this.#playsField) return this.#pro === null ? DH : null;
     return assignPosition({
+      tier: this.#handednessTier,
       ability: this.#ability,
       current: null,
       level: this.#benchmarkLevel,
@@ -1751,7 +1753,7 @@ export class Game {
       this.#seasonDefenseRuns = def;
     }
 
-    this.#lastD = r.overall - standardOf(this.#standards, pro.level).par;
+    this.#lastD = r.overall - leagueStandardOf(this.#standards, pro.level).par;
     this.#playedOrgs.add(levelOf(pro.level).org);
 
     // 領薪水。**在成績結算之後才領**——年薪看的是這一季的 d 值，而 d 值要等
@@ -2633,6 +2635,7 @@ export class Game {
         overall: this.rating?.overall ?? 0,
         standards: this.#standards,
         seasonFactor: this.#seasonFactor,
+        tier: this.#handednessTier,
       });
     if (tournament === null || !eligible) {
       next();
@@ -2755,7 +2758,7 @@ export class Game {
     const leagueGames = levelOf(level).games;
     const side = this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder');
     const par = tournamentPar();
-    const overall = (r.overall ?? 0) - par + standardOf(this.#standards, level).par;
+    const overall = (r.overall ?? 0) - par + leagueStandardOf(this.#standards, level).par;
 
     if (side === 'pitcher' || this.isTwoWay) {
       const role = (this.#seasonPitching as ProPitchingLine | null)?.role ?? 'SP';
@@ -2822,7 +2825,7 @@ export class Game {
       return;
     }
 
-    const par = standardOf(this.#standards, pro.level).par;
+    const par = leagueStandardOf(this.#standards, pro.level).par;
     if (isStar(this.rating?.overall ?? 0, par)) {
       this.#tradeVeto();
       return;
@@ -2979,7 +2982,7 @@ export class Game {
     const pro = this.#pro;
     if (pro === null) return;
     const info = levelOf(pro.level);
-    const now = standardOf(this.#standards, pro.level);
+    const now = leagueStandardOf(this.#standards, pro.level);
     const baseline = proBaseline(pro.level);
     // 球隊戰績決定兩本帳怎麼切——0 勝的球隊沒有勝利份額可分。二軍沒有聯盟
     // 戰力表，那裡的球隊勝率視為未知，不做調整。
@@ -2990,7 +2993,7 @@ export class Game {
     let fieldingK = 0;
     if (pro.position !== null && pro.position !== DH && batting !== null) {
       const average = positionAverage(pro.position, pro.level, this.#standards);
-      const threshold = requiredScore(pro.position, pro.level, this.#age);
+      const threshold = requiredScore(pro.position, pro.level, this.#age, this.#handednessTier);
       if (average !== null) {
         fielding = fieldingShares({
           defenseScore: defenseScore(this.#ability, pro.position),
@@ -3054,7 +3057,7 @@ export class Game {
     if (info.top === undefined) return;
 
     const r = this.rating;
-    const par = standardOf(this.#standards, pro.level).par;
+    const par = leagueStandardOf(this.#standards, pro.level).par;
 
     // 守備勝率：獎項判定看它而不是守備分的顯示數字——顯示尺度可以隨時調整，
     // 判定不該跟著跑掉。
@@ -3128,7 +3131,7 @@ export class Game {
     // 聯盟推進一年。玩家的貢獻只加在自己的球隊上——棒球是九個人的運動，
     // 再強的球員也翻不了一支爛隊，因此上限壓得很窄。
     if (this.#league !== null) {
-      const par = standardOf(this.#standards, pro.level).par;
+      const par = leagueStandardOf(this.#standards, pro.level).par;
       this.#league = advanceLeague(this.world, this.#league, {
         playerTeam: pro.team,
         playerEffect: playerEffect(this.rating?.overall ?? 0, par),
@@ -3168,6 +3171,7 @@ export class Game {
       standards: this.#standards,
       // 一軍的位置有外籍名額擋著，直到在籍年資讓你視同本土為止（ADR 0019）。
       importPremium: importPremium(org, this.#orgYears.get(org) ?? 0),
+      tier: this.#handednessTier,
     });
 
     // 聯盟水準推進一年。人才有興衰，同一個聯盟在不同年代不是同一個聯盟。
@@ -3418,7 +3422,7 @@ export class Game {
       }),
       ...fallbackOffers(this.world, {
         ...this.#transferContext,
-        minPar: standardOf(this.#standards, pro.level).par,
+        minPar: leagueStandardOf(this.#standards, pro.level).par,
         // 借用尋路的名單，但這條路是球團在挑人——外籍加成照收。見 ADR 0012。
         approach: 'recruit',
       }),
@@ -3566,6 +3570,7 @@ export class Game {
   get #transferContext() {
     const pro = this.#pro;
     return {
+      tier: this.#handednessTier,
       overall: this.rating?.overall ?? 0,
       age: this.#age,
       lastWinPct: this.#lastWinPct,
@@ -3739,6 +3744,7 @@ export class Game {
   get #overseasContext() {
     const pro = this.#pro;
     return {
+      tier: this.#handednessTier,
       org: pro === null ? '' : levelOf(pro.level).org,
       overall: this.rating?.overall ?? 0,
       age: this.#age,

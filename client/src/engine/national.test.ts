@@ -42,18 +42,18 @@ describe('賽事的年份', () => {
 
 describe('徵召資格', () => {
   const standards = initStandards();
-  const bar = callUpBar(standards);
+  const bar = callUpBar(standards, 'none');
 
   it('門檻以中職為基準——旅外不會改變國籍', () => {
     // 日職球員用的是同一條線，不是日職的 par。
-    expect(isEligible({ overall: bar, standards, seasonFactor: 1 })).toBe(true);
-    expect(isEligible({ overall: bar - 1, standards, seasonFactor: 1 })).toBe(false);
+    expect(isEligible({ overall: bar, standards, seasonFactor: 1 , tier: 'none' })).toBe(true);
+    expect(isEligible({ overall: bar - 1, standards, seasonFactor: 1 , tier: 'none' })).toBe(false);
   });
 
   it('傷缺大半季的人不會被徵召', () => {
     const factor = cfg.eligibility.min_season_factor;
-    expect(isEligible({ overall: bar + 20, standards, seasonFactor: factor })).toBe(true);
-    expect(isEligible({ overall: bar + 20, standards, seasonFactor: factor - 0.01 })).toBe(false);
+    expect(isEligible({ overall: bar + 20, standards, seasonFactor: factor , tier: 'none' })).toBe(true);
+    expect(isEligible({ overall: bar + 20, standards, seasonFactor: factor - 0.01 , tier: 'none' })).toBe(false);
   });
 });
 

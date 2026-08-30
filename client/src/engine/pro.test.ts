@@ -31,11 +31,12 @@ describe('pathOf', () => {
 
 describe('evaluateMovement', () => {
   const move = (seed: string, level: string, overall: number, yearsAtBottom = 0) =>
-    evaluateMovement(new World(seed), { level, overall, yearsAtBottom });
+    evaluateMovement(new World(seed), { level, overall, yearsAtBottom, tier: 'none' });
 
   /** 帶外籍名額擠壓的版本（ADR 0019）。 */
   const moveAsImport = (seed: string, level: string, overall: number, premium = 4) =>
     evaluateMovement(new World(seed), {
+      tier: 'none',
       level,
       overall,
       yearsAtBottom: 0,
@@ -69,6 +70,7 @@ describe('evaluateMovement', () => {
     const floated = new Map([['CPBL1', { par: CPBL1.par + 10, min: CPBL1.min + 10 }]]);
     for (let i = 0; i < 200; i++) {
       const r = evaluateMovement(new World(`s${i}`), {
+      tier: 'none',
         level: 'CPBL1',
         overall: CPBL1.min,
         yearsAtBottom: 0,
@@ -85,6 +87,7 @@ describe('evaluateMovement', () => {
     const easy = rateOf(
       (s) =>
         evaluateMovement(new World(s), {
+      tier: 'none',
           level: 'CPBL2',
           overall: CPBL1.min - 3,
           yearsAtBottom: 0,
@@ -138,11 +141,13 @@ describe('evaluateMovement', () => {
     // 「外籍連二軍都待不住」，那不是名額擠壓，那是把人趕出球界。
     for (let i = 0; i < 200; i++) {
       const local = evaluateMovement(new World(`s${i}`), {
+      tier: 'none',
         level: 'CPBL2',
         overall: CPBL2.min - 6,
         yearsAtBottom: 3,
       });
       const asImport = evaluateMovement(new World(`s${i}`), {
+      tier: 'none',
         level: 'CPBL2',
         overall: CPBL2.min - 6,
         yearsAtBottom: 3,
@@ -208,7 +213,7 @@ describe('evaluateMovement', () => {
 
   it('只消耗 career 流', () => {
     const world = new World('a');
-    evaluateMovement(world, { level: 'CPBL2', overall: 40, yearsAtBottom: 0 });
+    evaluateMovement(world, { level: 'CPBL2', overall: 40, yearsAtBottom: 0, tier: 'none' });
     const counts = world.drawCounts();
     expect(counts.growth).toBe(0);
     expect(counts.season).toBe(0);
@@ -295,6 +300,7 @@ describe('拒絕下放的代價（ADR 0020）', () => {
     const n = 400;
     for (let i = 0; i < n; i++) {
       const move = evaluateMovement(new World(`pressure${i}`), {
+      tier: 'none',
         level: 'CPBL1',
         overall: CPBL1.min - 6,
         yearsAtBottom: 0,
@@ -396,5 +402,19 @@ describe('衰退的下限', () => {
 
   it('量表下限與 hard_floor 一致', () => {
     expect(abilities.scale.hard_floor).toBe(abilities.scale.min);
+  });
+});
+
+describe('慣用手的順風', () => {
+  it('戰力外的下限跟著個人尺走——同樣的能力，左手撐得比較久', () => {
+    const at = (tier: 'none' | 'switch') =>
+      evaluateMovement(new World('release'), {
+        level: pathOf('CPBL')[0]!,
+        overall: leagues.levels[pathOf('CPBL')[0]!]!.min - 8,
+        yearsAtBottom: 99,
+        tier,
+      });
+    expect(at('none').movement).toBe('release');
+    expect(at('switch').movement).not.toBe('release');
   });
 });

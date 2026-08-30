@@ -10,7 +10,7 @@
 
 import { amateur, season as cfg } from '../data/index.ts';
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { leagueStandardOf, type LeagueStandards } from './league.ts';
 import { dominanceAt, intentionalWalksFrom, levelOf } from './season.ts';
 
 /** 聯盟平均：一名平均球員的打擊率、上壘率、長打率與防禦率。 */
@@ -416,7 +416,7 @@ export function replacementWinPct(
   level: string,
   standards: LeagueStandards | null = null,
 ): number {
-  const now = standardOf(standards, level);
+  const now = leagueStandardOf(standards, level);
   const d = now.min - now.par;
   const base = proBaselineAt(level, 0);
   const replacement = proBaselineAt(level, d);

@@ -24,7 +24,7 @@
  */
 
 import { awards as cfg, teams } from '../data/index.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { leagueStandardOf, type LeagueStandards } from './league.ts';
 
 /**
  * 標準常態的分位函數，也就是 CDF 的反函數。
@@ -71,7 +71,7 @@ export function zQuantile(p: number): number {
  * 變高），偏低就調大。
  */
 export function abilitySpread(level: string, standards: LeagueStandards | null = null): number {
-  const now = standardOf(standards, level);
+  const now = leagueStandardOf(standards, level);
   const q = cfg.rival_pool.replacement_quantile;
   return Math.max(0, now.par - now.min) / Math.abs(zQuantile(q));
 }

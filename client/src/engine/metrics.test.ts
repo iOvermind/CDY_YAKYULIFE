@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
-import { advanceStandards, initStandards, standardOf } from './league.ts';
+import { advanceStandards, initStandards, leagueStandardOf } from './league.ts';
 import {
   amateurBaseline,
   battingResponsibility,
@@ -317,7 +317,7 @@ describe('替代水準與 k', () => {
     let narrowest = { gap: 999, k: 0 };
     for (let i = 0; i < 60; i++) {
       standards = advanceStandards(world, standards);
-      const now = standardOf(standards, 'CPBL1');
+      const now = leagueStandardOf(standards, 'CPBL1');
       const gap = now.par - now.min;
       const k = lossPenalty('batting', 'CPBL1', standards);
       if (gap > widest.gap) widest = { gap, k };

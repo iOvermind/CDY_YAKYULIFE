@@ -31,6 +31,7 @@ const ctx = (overall: number, age = 27) => ({
   age,
   playedOrgs: new Set<string>(['NPB']),
   standards: null,
+  tier: 'none' as const,
 });
 
 describe('入札的目的地', () => {
@@ -157,6 +158,7 @@ describe('海外自由球員', () => {
 describe('挖角的加薪門檻', () => {
   const scout = (currentOrg: string, salary: number, overall = topBar('KBO') + 10) =>
     scoutingOffers(new World('raise'), {
+      tier: 'none' as const,
       overall,
       age: 26,
       lastWinPct: 0.7,
@@ -177,6 +179,7 @@ describe('挖角的加薪門檻', () => {
     for (let i = 0; i < 40; i++) {
       const world = new World(`poor-${i}`);
       seen += scoutingOffers(world, {
+      tier: 'none' as const,
         overall: topBar('KBO') + 10,
         age: 26,
         lastWinPct: 0.7,
@@ -195,6 +198,7 @@ describe('挖角的加薪門檻', () => {
     let seen = 0;
     for (let i = 0; i < 60; i++) {
       seen += scoutingOffers(new World(`up-${i}`), {
+      tier: 'none' as const,
         overall: topBar('NPB') + 6,
         age: 24,
         lastWinPct: 0.7,
@@ -358,6 +362,7 @@ describe('下放時的退路', () => {
   /** 從日職一軍被送回二軍的處境。 */
   function demotionOffers(overall: number) {
     return fallbackOffers(new World(`demote-${overall}`), {
+      tier: 'none' as const,
       overall,
       currentOrg: 'NPB',
       currentTeam: '某隊',
@@ -403,6 +408,7 @@ describe('下放時的退路', () => {
    */
   it('母國永遠佔得到一格，不會被 par 排序擠掉', () => {
     const offers = fallbackOffers(new World('home-guarantee'), {
+      tier: 'none' as const,
       overall: 60,
       currentOrg: 'ABL',
       currentTeam: '某隊',
@@ -437,6 +443,7 @@ describe('落葉歸根只算「離開之後再回來」（#17）', () => {
     // #17 的誤會出在文案（「聯盟」寫成了「體系」該說的事），不在判定：
     // 待過 1A、收到 3A 邀約時人已經不在美職了，那確實是回鄉。
     const offers = fallbackOffers(new World('milb-internal'), {
+      tier: 'none' as const,
       overall: 55,
       currentOrg: 'MLB',
       currentTeam: '某隊',
@@ -449,6 +456,7 @@ describe('落葉歸根只算「離開之後再回來」（#17）', () => {
 
   it('離開之後再收到同一個體系的邀約才算回鄉', () => {
     const offers = fallbackOffers(new World('milb-internal'), {
+      tier: 'none' as const,
       overall: 55,
       currentOrg: 'CPBL1',
       currentTeam: '某隊',
@@ -458,5 +466,22 @@ describe('落葉歸根只算「離開之後再回來」（#17）', () => {
     const milb = offers.filter((o) => o.org === 'MLB');
     expect(milb.length).toBeGreaterThan(0);
     expect(milb.every((o) => o.homecoming)).toBe(true);
+  });
+});
+
+describe('慣用手的順風', () => {
+  it('同樣的能力，左手落得下更高的層級——那是上限折扣的對價', () => {
+    // 剛好差一分落不到頂級聯盟的人，換成左投就落得下去。
+    const bar = topBar('NPB');
+    const overall = bar - 1;
+    const top = pathOf('NPB')[pathOf('NPB').length - 1]!;
+    expect(landingLevel('NPB', overall, null, 0, 'recruit', 'none')).not.toBe(top);
+    expect(landingLevel('NPB', overall, null, 0, 'recruit', 'switch')).toBe(top);
+  });
+
+  it('順風不是無限的——差太多還是簽不下去', () => {
+    const bottom = pathOf('CPBL')[0]!;
+    const min = leagues.levels[bottom]!.min;
+    expect(landingLevel('CPBL', min - 30, null, 0, 'recruit', 'switch')).toBeNull();
   });
 });

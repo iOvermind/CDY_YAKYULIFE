@@ -3,7 +3,8 @@ import { leagues, season as cfg } from '../data/index.ts';
 import {
   advanceStandards,
   initStandards,
-  standardOf,
+  leagueStandardOf,
+  personalStandardOf,
   standardsNote,
   type LeagueStandards,
 } from './league.ts';
@@ -23,8 +24,8 @@ describe('initStandards', () => {
   it('開局就是 leagues.json 的基準值——第一年是玩家認識世界的參照點', () => {
     const s = initStandards();
     for (const [level, info] of Object.entries(leagues.levels)) {
-      expect(standardOf(s, level).par).toBe(info.par);
-      expect(standardOf(s, level).min).toBe(info.min);
+      expect(leagueStandardOf(s, level).par).toBe(info.par);
+      expect(leagueStandardOf(s, level).min).toBe(info.min);
     }
   });
 
@@ -44,7 +45,7 @@ describe('advanceStandards', () => {
 
   it('par 真的會動——不是每年都停在基準值', () => {
     const years = run('drift', 20);
-    const pars = years.map((s) => standardOf(s, 'CPBL1').par);
+    const pars = years.map((s) => leagueStandardOf(s, 'CPBL1').par);
     expect(new Set(pars).size).toBeGreaterThan(1);
   });
 
@@ -53,7 +54,7 @@ describe('advanceStandards', () => {
     const c = cfg.league_standards.level_drift.clamp;
     for (let seed = 0; seed < 30; seed++) {
       for (const s of run(`s${seed}`, 15)) {
-        const shift = standardOf(s, 'CPBL1').par - base;
+        const shift = leagueStandardOf(s, 'CPBL1').par - base;
         expect(shift).toBeGreaterThanOrEqual(c.min - 1e-9);
         expect(shift).toBeLessThanOrEqual(c.max + 1e-9);
       }
@@ -66,7 +67,7 @@ describe('advanceStandards', () => {
     const c = cfg.league_standards.gap_drift.clamp;
     for (let seed = 0; seed < 30; seed++) {
       for (const s of run(`g${seed}`, 15)) {
-        const now = standardOf(s, 'CPBL1');
+        const now = leagueStandardOf(s, 'CPBL1');
         const ratio = (now.par - now.min) / baseGap;
         expect(ratio).toBeGreaterThanOrEqual(c.min - 1e-9);
         expect(ratio).toBeLessThanOrEqual(c.max + 1e-9);
@@ -78,7 +79,7 @@ describe('advanceStandards', () => {
     for (let seed = 0; seed < 20; seed++) {
       for (const s of run(`m${seed}`, 15)) {
         for (const level of Object.keys(leagues.levels)) {
-          const now = standardOf(s, level);
+          const now = leagueStandardOf(s, level);
           expect(now.min).toBeLessThan(now.par);
         }
       }
@@ -87,16 +88,16 @@ describe('advanceStandards', () => {
 
   it('同一個體系的所有層級同進同退——一軍與二軍的位移相同', () => {
     for (const s of run('org', 12)) {
-      const one = standardOf(s, 'CPBL1').par - leagues.levels['CPBL1']!.par;
-      const two = standardOf(s, 'CPBL2').par - leagues.levels['CPBL2']!.par;
+      const one = leagueStandardOf(s, 'CPBL1').par - leagues.levels['CPBL1']!.par;
+      const two = leagueStandardOf(s, 'CPBL2').par - leagues.levels['CPBL2']!.par;
       expect(two).toBeCloseTo(one, 10);
     }
   });
 
   it('不同體系各走各的——中職與日職不會同步', () => {
     const years = run('cross', 12);
-    const cpbl = years.map((s) => standardOf(s, 'CPBL1').par - leagues.levels['CPBL1']!.par);
-    const npb = years.map((s) => standardOf(s, 'NPB1').par - leagues.levels['NPB1']!.par);
+    const cpbl = years.map((s) => leagueStandardOf(s, 'CPBL1').par - leagues.levels['CPBL1']!.par);
+    const npb = years.map((s) => leagueStandardOf(s, 'NPB1').par - leagues.levels['NPB1']!.par);
     expect(cpbl).not.toEqual(npb);
   });
 
@@ -105,7 +106,7 @@ describe('advanceStandards', () => {
     let n = 0;
     for (let seed = 0; seed < 40; seed++) {
       for (const s of run(`r${seed}`, 20)) {
-        sum += standardOf(s, 'CPBL1').par - leagues.levels['CPBL1']!.par;
+        sum += leagueStandardOf(s, 'CPBL1').par - leagues.levels['CPBL1']!.par;
         n++;
       }
     }
@@ -113,16 +114,16 @@ describe('advanceStandards', () => {
   });
 });
 
-describe('standardOf', () => {
+describe('leagueStandardOf', () => {
   it('standards 為 null 時退回基準值', () => {
-    expect(standardOf(null, 'CPBL1')).toEqual({
+    expect(leagueStandardOf(null, 'CPBL1')).toEqual({
       par: leagues.levels['CPBL1']!.par,
       min: leagues.levels['CPBL1']!.min,
     });
   });
 
   it('未知層級直接炸開，不默默給預設值', () => {
-    expect(() => standardOf(null, 'NOPE')).toThrow();
+    expect(() => leagueStandardOf(null, 'NOPE')).toThrow();
   });
 });
 
@@ -142,5 +143,39 @@ describe('standardsNote', () => {
     }
     expect(notes).toBeGreaterThan(0);
     expect(notes / total).toBeLessThan(0.7);
+  });
+});
+
+describe('個人尺', () => {
+  const standards = initStandards();
+  const level = 'CPBL1';
+
+  it('沒有對價的人，兩把尺是同一把', () => {
+    expect(personalStandardOf(standards, level, 'none')).toEqual(
+      leagueStandardOf(standards, level),
+    );
+  });
+
+  it('par 與 min 同步下移——差距是聯盟的性質，不是球員的', () => {
+    const real = leagueStandardOf(standards, level);
+    for (const tier of ['left', 'switch'] as const) {
+      const mine = personalStandardOf(standards, level, tier);
+      expect(mine.par).toBeLessThan(real.par);
+      expect(mine.min).toBeLessThan(real.min);
+      expect(mine.par - mine.min).toBeCloseTo(real.par - real.min, 10);
+    }
+  });
+
+  it('越深的檔次，尺降得越多', () => {
+    expect(personalStandardOf(standards, level, 'switch').par).toBeLessThan(
+      personalStandardOf(standards, level, 'left').par,
+    );
+  });
+
+  it('個人尺跟著聯盟一起浮動——折扣是平移，不是取代', () => {
+    const flat = personalStandardOf(null, level, 'left').par;
+    const now = personalStandardOf(standards, level, 'left').par;
+    const drift = leagueStandardOf(standards, level).par - leagueStandardOf(null, level).par;
+    expect(now - flat).toBeCloseTo(drift * (1 - 0.1), 10);
   });
 });

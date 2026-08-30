@@ -11,7 +11,7 @@ import {
   requiredScore,
   DH,
 } from './defense.ts';
-import { advanceStandards, initStandards, standardOf } from './league.ts';
+import { advanceStandards, initStandards, leagueStandardOf } from './league.ts';
 import { baseThreshold, defenseScore, type Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -95,7 +95,7 @@ describe('positionAverage', () => {
     const base = positionAverage('SS', 'CPBL1')!;
     for (let i = 0; i < 15; i++) standards = advanceStandards(world, standards);
     const drifted = positionAverage('SS', 'CPBL1', standards)!;
-    const parShift = standardOf(standards, 'CPBL1').par - standardOf(null, 'CPBL1').par;
+    const parShift = leagueStandardOf(standards, 'CPBL1').par - leagueStandardOf(null, 'CPBL1').par;
     expect(drifted - base).toBeCloseTo(parShift, 10);
   });
 

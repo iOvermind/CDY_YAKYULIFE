@@ -15,7 +15,8 @@
  */
 
 import { amateur, dataKeys, leagues, season, teams as teamsData } from '../data/index.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { leagueStandardOf, personalStandardOf, type LeagueStandards } from './league.ts';
+import type { HandednessTier } from './handedness.ts';
 import { pathOf } from './pro.ts';
 import type { World } from './rng.ts';
 import { salaryFor } from './salary.ts';
@@ -125,12 +126,14 @@ export function landingLevel(
   standards: LeagueStandards | null = null,
   servedYears = 0,
   approach: Approach = 'recruit',
+  tier: HandednessTier = 'none',
 ): string | null {
   const premium = importPremium(org, servedYears, approach);
   let best: string | null = null;
   // pathOf 由低到高，因此最後一個達標的就是最高的那一層。
+  // 簽不簽得下是關卡，吃個人尺——見 CONTEXT.md「個人尺 / 聯盟真尺」。
   for (const level of pathOf(org)) {
-    if (overall >= standardOf(standards, level).min + premium) best = level;
+    if (overall >= personalStandardOf(standards, level, tier).min + premium) best = level;
   }
   return best;
 }
@@ -190,12 +193,13 @@ function topLandingBar(
   standards: LeagueStandards | null,
   servedYears = 0,
   approach: Approach = 'recruit',
+  tier: HandednessTier = 'none',
 ): number {
   const path = pathOf(org);
   const top = path[path.length - 1] ?? '';
   // 與 landingLevel 走同一個加成——先前這裡寫死 import_premium，回母國時門檻
   // 因此被高估四分，簽約金與怪物條款都連帶算錯。
-  return standardOf(standards, top).min + importPremium(org, servedYears, approach);
+  return personalStandardOf(standards, top, tier).min + importPremium(org, servedYears, approach);
 }
 
 /** 抽一支球隊。走訪順序照 teams.json 的宣告順序，否則同一個種子會抽出不同結果。 */
@@ -209,7 +213,7 @@ function pickTeam(world: World, org: string, exclude: string | null): string | n
 /** 這個體系頂級聯盟的當年水準。比較兩個體系誰強看它。 */
 function orgPar(org: string, standards: LeagueStandards | null): number {
   const path = pathOf(org);
-  return standardOf(standards, path[path.length - 1] ?? '').par;
+  return leagueStandardOf(standards, path[path.length - 1] ?? '').par;
 }
 
 /**
@@ -229,7 +233,7 @@ function worthMoving(
 ): boolean {
   if (ctx.salary <= 0) return true;
   if (orgPar(org, ctx.standards) > orgPar(ctx.currentOrg, ctx.standards)) return true;
-  const projected = salaryFor(level, ctx.overall - standardOf(ctx.standards, level).par);
+  const projected = salaryFor(level, ctx.overall - personalStandardOf(ctx.standards, level, ctx.tier).par);
   return projected >= ctx.salary * cfg.scouting.min_raise;
 }
 
@@ -309,6 +313,8 @@ export interface ScoutContext {
   /** 待過的體系。回到其中之一算落葉歸根。 */
   readonly playedOrgs: ReadonlySet<string>;
   readonly standards: LeagueStandards | null;
+  /** 慣用手檔次。簽約是關卡，門檻與待遇都吃他自己的那把尺。 */
+  readonly tier: HandednessTier;
   /** 目前的年薪。挖角要加薪才提得出口，見 scouting.min_raise。 */
   readonly salary: number;
   /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
@@ -334,8 +340,8 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
     // 資格：能力、上季表現、年齡窗口。三者缺一不可。
     const minOverall = spec.scout_min_overall ?? Number.POSITIVE_INFINITY;
     const served = servedIn(ctx.servedYears, org);
-    const level = landingLevel(org, ctx.overall, ctx.standards, served);
-    const overBar = ctx.overall - topLandingBar(org, ctx.standards, served);
+    const level = landingLevel(org, ctx.overall, ctx.standards, served, 'recruit', ctx.tier);
+    const overBar = ctx.overall - topLandingBar(org, ctx.standards, served, 'recruit', ctx.tier);
     const gate = ageGate(org, ctx.age, overBar);
 
     // 機率一律先抽，不管有沒有資格——抽取次數必須與資格無關，否則同一個種子
@@ -377,7 +383,7 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
   // 依落地層級的水準由高到低——玩家評估報價時看的就是「哪個舞台比較高」，
   // 資料的宣告順序對他沒有意義。同一個體系的兩份報價維持抽出來的順序。
   return out.sort(
-    (a, b) => standardOf(ctx.standards, b.level).par - standardOf(ctx.standards, a.level).par,
+    (a, b) => leagueStandardOf(ctx.standards, b.level).par - leagueStandardOf(ctx.standards, a.level).par,
   );
 }
 
@@ -387,6 +393,8 @@ export interface FallbackContext {
   readonly currentTeam: string;
   readonly playedOrgs: ReadonlySet<string>;
   readonly standards: LeagueStandards | null;
+  /** 慣用手檔次。簽約是關卡，門檻與待遇都吃他自己的那把尺。 */
+  readonly tier: HandednessTier;
   /**
    * 落地層級的水準下限。低於它的報價不列出。
    *
@@ -435,10 +443,10 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
     if (orgConfig(org) === undefined) continue;
     if (org === ctx.currentOrg) continue;
     const served = servedIn(ctx.servedYears, org);
-    const level = landingLevel(org, ctx.overall, ctx.standards, served, approach);
+    const level = landingLevel(org, ctx.overall, ctx.standards, served, approach, ctx.tier);
     if (level === null) continue;
     if (ctx.topLevelOnly === true && leagues.levels[level]?.top === undefined) continue;
-    if (ctx.minPar !== undefined && standardOf(ctx.standards, level).par < ctx.minPar) continue;
+    if (ctx.minPar !== undefined && leagueStandardOf(ctx.standards, level).par < ctx.minPar) continue;
 
     const table = tableFor(world, org, tables);
     const team = pickTeam(world, org, null);
@@ -453,7 +461,7 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
       team,
       bonus: signingBonus(
         org,
-        ctx.overall - topLandingBar(org, ctx.standards, served, approach),
+        ctx.overall - topLandingBar(org, ctx.standards, served, approach, ctx.tier),
         odds,
       ),
       homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
@@ -464,7 +472,7 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
   }
 
   const sorted = out.sort(
-    (a, b) => standardOf(ctx.standards, b.level).par - standardOf(ctx.standards, a.level).par,
+    (a, b) => leagueStandardOf(ctx.standards, b.level).par - leagueStandardOf(ctx.standards, a.level).par,
   );
   return keepHomeOrg(sorted, cfg.fallback.max_offers);
 }
@@ -517,10 +525,11 @@ export function canRequestPosting(options: {
   readonly org: string;
   readonly overall: number;
   readonly standards: LeagueStandards | null;
+  readonly tier: HandednessTier;
 }): boolean {
   const target = postingTarget(options.org);
   if (target === null) return false;
-  const level = landingLevel(target, options.overall, options.standards);
+  const level = landingLevel(target, options.overall, options.standards, 0, 'recruit', options.tier);
   if (level === null) return false;
   return leagues.levels[level]?.top !== undefined;
 }
@@ -550,6 +559,8 @@ export interface OverseasContext {
   readonly age: number;
   readonly playedOrgs: ReadonlySet<string>;
   readonly standards: LeagueStandards | null;
+  /** 慣用手檔次。簽約是關卡，門檻與待遇都吃他自己的那把尺。 */
+  readonly tier: HandednessTier;
   /** 各體系的累計年資。日職在籍八年之後不再算外籍。 */
   readonly servedYears?: ServedYears;
 }
@@ -573,10 +584,10 @@ function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOf
   if (target === null) return [];
 
   const served = servedIn(ctx.servedYears, target);
-  const level = landingLevel(target, ctx.overall, ctx.standards, served);
+  const level = landingLevel(target, ctx.overall, ctx.standards, served, 'recruit', ctx.tier);
   if (level === null || leagues.levels[level]?.top === undefined) return [];
 
-  const overBar = ctx.overall - topLandingBar(target, ctx.standards, served);
+  const overBar = ctx.overall - topLandingBar(target, ctx.standards, served, 'recruit', ctx.tier);
   if (roll >= ageGate(target, ctx.age, overBar) * 100) return [];
 
   const table = tableFor(world, target, new Map());

@@ -11,7 +11,7 @@
 
 import { leagues, positions, season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { leagueStandardOf, type LeagueStandards } from './league.ts';
 import { bullpenScore, pitcherRating, type Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
@@ -89,7 +89,7 @@ export interface SeasonContext {
  * 取聯盟層級設定。找不到就是資料壞了，直接炸開比默默用預設值好。
  *
  * 注意：這裡的 par／min 是**基準值**。實際判定要用當年的值，見 `league.ts` 的
- * `standardOf()`——聯盟水準逐年浮動，直接讀這裡等於假裝聯盟永遠一樣強。
+ * `leagueStandardOf()`——聯盟水準逐年浮動，直接讀這裡等於假裝聯盟永遠一樣強。
  * 場次數（games）不浮動，讀這裡是對的。
  */
 export function levelOf(level: string) {
@@ -135,7 +135,7 @@ export function gamesPlayed(
 ): number {
   const rng = world.stream('season');
   const info = levelOf(level);
-  const par = standardOf(standards, level).par;
+  const par = leagueStandardOf(standards, level).par;
   const pt = cfg.playing_time;
 
   const staF = staminaFactor(ability[pt.stamina_factor.ability] ?? 0, info.games);
@@ -381,7 +381,7 @@ export function proBattingLine(
 ): ProBattingLine {
   const rng = world.stream('season');
   const b = cfg.batting;
-  const par = standardOf(standards, level).par;
+  const par = leagueStandardOf(standards, level).par;
   const noise = () => b.noise.min + rng.next() * (b.noise.max - b.noise.min);
 
   const games = Math.round(
@@ -465,7 +465,7 @@ export function pitcherRole(
     readonly starterRating: number;
   },
 ): PitcherRole {
-  const par = standardOf(options.standards ?? null, level).par;
+  const par = leagueStandardOf(options.standards ?? null, level).par;
   const r = cfg.pitching.role.starter;
   const rng = world.stream('season');
 
@@ -497,7 +497,7 @@ export function proPitchingLine(
   const rng = world.stream('season');
   const p = cfg.pitching;
   const info = levelOf(level);
-  const par = standardOf(standards, level).par;
+  const par = leagueStandardOf(standards, level).par;
   const d = overall - par;
   const role = pitcherRole(world, ability, level, {
     standards,

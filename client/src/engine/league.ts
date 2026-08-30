@@ -24,6 +24,7 @@
  */
 
 import { leagues, season as cfg } from '../data/index.ts';
+import { standardDiscount, type HandednessTier } from './handedness.ts';
 import type { World } from './rng.ts';
 
 /** 某個層級在某一年的實際水準。 */
@@ -131,17 +132,42 @@ function driftOf(standards: LeagueStandards, org: string): OrgDrift {
 }
 
 /**
- * 取某層級當年的水準。
+ * 取某層級當年的**聯盟真尺**。
+ *
+ * 這把尺回答「他比別人強不強」——獎項門檻、生涯評價的難度係數。比較必須全
+ * 聯盟同一條線，因此這裡不吃任何球員身上的折扣。
  *
  * `standards` 為 null 時退回基準值——養成期還沒有聯盟水準表，而評價用的守位
  * 推定仍需要一組數字。
  */
-export function standardOf(standards: LeagueStandards | null, level: string): LevelStandard {
+export function leagueStandardOf(standards: LeagueStandards | null, level: string): LevelStandard {
   const now = standards?.get(level);
   if (now !== undefined) return now;
   const info = leagues.levels[level];
   if (info === undefined) throw new Error(`未知的聯盟層級：${level}`);
   return { par: info.par, min: info.min };
+}
+
+/**
+ * 取某層級當年**這名球員的那一把尺**。
+ *
+ * 這把尺回答「他被不被接受」——升降級、戰力外、球團簽約、守位門檻、國家隊
+ * 徵召。這些是關卡，而關卡的高度因人而異：慣用手的折扣把整條尺平移到球員自
+ * 己的那一把。
+ *
+ * **par 與 min 同步下移，兩者的差距不動。** 差距是「這個層級容得下多少落差」
+ * ——那是聯盟的性質，不是球員的性質。只折 par 會讓左投的容錯區間跟著縮水，
+ * 語意變成「他更容易被降級」，剛好反了。
+ */
+export function personalStandardOf(
+  standards: LeagueStandards | null,
+  level: string,
+  tier: HandednessTier,
+): LevelStandard {
+  const now = leagueStandardOf(standards, level);
+  const shift = now.par * standardDiscount(tier);
+  if (shift === 0) return now;
+  return { par: now.par - shift, min: now.min - shift };
 }
 
 /**
@@ -153,7 +179,7 @@ export function standardOf(standards: LeagueStandards | null, level: string): Le
 export function standardsNote(standards: LeagueStandards, level: string): string | null {
   const info = leagues.levels[level];
   if (info === undefined) return null;
-  const now = standardOf(standards, level);
+  const now = leagueStandardOf(standards, level);
   const shift = now.par - info.par;
   const gap = now.par - now.min;
   const baseGap = info.par - info.min;

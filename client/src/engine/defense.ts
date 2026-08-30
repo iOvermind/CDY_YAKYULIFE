@@ -17,7 +17,8 @@
  */
 
 import { leagues, positions, type Hand } from '../data/index.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { personalStandardOf, type LeagueStandards } from './league.ts';
+import { standardDiscount, type HandednessTier } from './handedness.ts';
 import {
   baseThreshold,
   blockedByHand,
@@ -57,10 +58,17 @@ export interface PositionResult {
  *
  * 回傳 null 表示這個層級不設限（非頂級聯盟，或這個守位不在光譜上）。
  */
-export function requiredScore(position: string, level: string, age: number): number | null {
+export function requiredScore(
+  position: string,
+  level: string,
+  age: number,
+  tier: HandednessTier = 'none',
+): number | null {
   const base = baseThreshold(position, level);
   if (base === null) return null;
-  return base + youthAdjust(age);
+  // 守位是關卡，整條尺按慣用手折扣平移——見 CONTEXT.md「個人尺 / 聯盟真尺」。
+  // 年齡的折讓是加在折後的門檻上：那是「他還年輕」，跟他慣用哪隻手無關。
+  return base * (1 - standardDiscount(tier)) + youthAdjust(age);
 }
 
 /** 年齡對門檻的折扣，取第一個符合的區間。 */
@@ -93,10 +101,12 @@ export function positionAverage(
   position: string,
   level: string,
   standards: LeagueStandards | null = null,
+  tier: HandednessTier = 'none',
 ): number | null {
   const base = localBaseThreshold(position, level);
   if (base === null) return null;
-  const drift = standardOf(standards, level).par - (leagues.levels[level]?.par ?? 0);
+  // 守位是關卡，吃個人尺：左投左打被要求的守備水準跟著他自己的那把尺下移。
+  const drift = personalStandardOf(standards, level, tier).par - (leagues.levels[level]?.par ?? 0);
   return base + positions.defense_average.margin + drift;
 }
 
@@ -111,9 +121,10 @@ export function canPlay(
   position: string,
   level: string,
   age: number,
+  tier: HandednessTier = 'none',
 ): boolean {
   if (position === DH) return true;
-  const required = requiredScore(position, level, age);
+  const required = requiredScore(position, level, age, tier);
   return required === null || defenseScore(ability, position) >= required;
 }
 
@@ -170,19 +181,22 @@ export function assignPosition(options: {
   readonly startPosition: string;
   /** 投球慣用手。左投的二三游整段從掃描裡消失（見 blockedByHand）。 */
   readonly throws?: Hand | null;
+  /** 慣用手檔次。守位是關卡，門檻吃他自己的那把尺。 */
+  readonly tier?: HandednessTier;
 }): PositionResult {
   const { ability, current, level, age } = options;
+  const tier = options.tier ?? 'none';
 
   // 捕手是一條獨立的路：先問守不守得動本壘板，守得動就不必掃別的。
   const catcherCandidate = current === 'C' || (current === null && options.startPosition === 'C');
-  if (catcherCandidate && canPlay(ability, 'C', level, age)) {
+  if (catcherCandidate && canPlay(ability, 'C', level, age, tier)) {
     return current === 'C'
       ? { position: 'C', move: 'stay', reason: '' }
       : { position: 'C', move: 'register', reason: '登錄為捕手' };
   }
   // 已經離開本壘板的人，守備練回來就能重披護具——但門檻不打折。
   if (current !== null && current !== 'C' && options.startPosition === 'C') {
-    if (canPlay(ability, 'C', level, age)) {
+    if (canPlay(ability, 'C', level, age, tier)) {
       return { position: 'C', move: 'promote', reason: '接捕又行了，重新登錄為捕手' };
     }
   }
@@ -194,7 +208,7 @@ export function assignPosition(options: {
   );
   let picked: string | null = null;
   for (const position of list) {
-    if (canPlay(ability, position, level, age)) {
+    if (canPlay(ability, position, level, age, tier)) {
       picked = position;
       break;
     }

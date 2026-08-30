@@ -14,7 +14,8 @@
  */
 
 import { amateur } from '../data/index.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { personalStandardOf, type LeagueStandards } from './league.ts';
+import type { HandednessTier } from './handedness.ts';
 import type { World } from './rng.ts';
 
 const cfg = amateur.international;
@@ -52,17 +53,19 @@ export function isEligible(options: {
   readonly overall: number;
   readonly standards: LeagueStandards | null;
   readonly seasonFactor: number;
+  /** 徵召是關卡，吃個人尺——見 CONTEXT.md「個人尺 / 聯盟真尺」。 */
+  readonly tier: HandednessTier;
 }): boolean {
   const e = cfg.eligibility;
   if (options.seasonFactor < e.min_season_factor) return false;
-  const par = standardOf(options.standards, e.reference_level).par;
+  const par = personalStandardOf(options.standards, e.reference_level, options.tier).par;
   return options.overall >= par + e.min_d;
 }
 
-/** 徵召的門檻值，給提示文字用。 */
-export function callUpBar(standards: LeagueStandards | null): number {
+/** 徵召的門檻值，給提示文字用。門檻因人而異，因此要帶檔次。 */
+export function callUpBar(standards: LeagueStandards | null, tier: HandednessTier): number {
   const e = cfg.eligibility;
-  return standardOf(standards, e.reference_level).par + e.min_d;
+  return personalStandardOf(standards, e.reference_level, tier).par + e.min_d;
 }
 
 /**

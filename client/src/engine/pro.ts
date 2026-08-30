@@ -10,7 +10,8 @@
  */
 
 import { abilities, leagues, season as cfg } from '../data/index.ts';
-import { standardOf, type LeagueStandards } from './league.ts';
+import { personalStandardOf, type LeagueStandards } from './league.ts';
+import type { HandednessTier } from './handedness.ts';
 import type { Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
@@ -84,6 +85,8 @@ export function evaluateMovement(
     readonly standards?: LeagueStandards | null;
     /** 一軍門檻要額外加的分數。本土為 0。 */
     readonly importPremium?: number;
+    /** 升降級與戰力外都是關卡，吃個人尺——見 CONTEXT.md「個人尺 / 聯盟真尺」。 */
+    readonly tier: HandednessTier;
   },
 ): MovementResult {
   const rng = world.stream('career');
@@ -99,14 +102,23 @@ export function evaluateMovement(
   /** 門檻被外籍名額墊高時，理由要說出來——不然玩家只會看到一個對不上的數字。 */
   const noteAt = (level: string): string => (barAt(level) > 0 ? '，外籍名額' : '');
 
+  /**
+   * 這名球員在某層級的下限。
+   *
+   * `floating` 決定吃不吃當年浮動（見函式開頭與 ADR 0011、0029）；個人尺的
+   * 折扣則兩種都吃——那是他的身分，不是今年的行情。
+   */
+  const minOf = (level: string, floating: boolean): number =>
+    personalStandardOf(floating ? standards : null, level, options.tier).min;
+
   const above = index >= 0 && index < path.length - 1 ? path[index + 1] : undefined;
   if (above !== undefined) {
     const target = leagues.levels[above];
     if (target !== undefined) {
       // 門檻用當年的值：人才斷層的年份比較好擠上去，這正是浮動該有的效果。
       const barOf = (level: string): number =>
-        Math.round(standardOf(standards, level).min) + barAt(level) + mv.promote.margin;
-      const targetMin = Math.round(standardOf(standards, above).min) + barAt(above);
+        Math.round(minOf(level, true)) + barAt(level) + mv.promote.margin;
+      const targetMin = Math.round(minOf(above, true)) + barAt(above);
       const d = options.overall - (targetMin + mv.promote.margin);
       if (d >= 0 && rng.chance(chanceOf(mv.promote.chance, d))) {
         // **升到清得過的最高一階，不是只升一階。** 小聯盟有四層，逐年升階代表
@@ -140,7 +152,7 @@ export function evaluateMovement(
   const here = leagues.levels[options.level];
   if (here === undefined) throw new Error(`未知的聯盟層級：${options.level}`);
   // 基準值，不吃浮動——見函式開頭與 ADR 0029。
-  const hereMin = here.min + barAt(options.level);
+  const hereMin = Math.round(minOf(options.level, false)) + barAt(options.level);
   const shortfall = hereMin + mv.demote.margin - options.overall;
 
   if (shortfall > 0 && index > 0) {
@@ -163,7 +175,7 @@ export function evaluateMovement(
   // 每年都幫他把及格線調低，於是能力掉到二軍基準線下四五分還賴得住，一路撐到
   // 四十歲。下限用 leagues.json 的基準值，聯盟今年鬆一點可以保住你的位置，但不
   // 可能讓一個低於基準線的人無限期留著。
-  const floor = here.min;
+  const floor = Math.round(minOf(options.level, false));
   if (index === 0 && options.overall < floor - mv.release.margin) {
     if (options.yearsAtBottom >= mv.release.grace_years) {
       return {
