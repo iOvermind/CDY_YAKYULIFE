@@ -4822,13 +4822,18 @@ export class Game {
     const dbgBefore = this.#ability[key] ?? 0;
     const dbgCarry = this.#carry[key] ?? 0;
     const dbgCeiling = this.#ceilingOf(key);
-    const dbgCost = abilityCost(dbgBefore, dbgCeiling, growthCurve(this.isTwoWay));
+    const dbgCurve = growthCurve(this.isTwoWay);
+    const dbgCost = abilityCost(dbgBefore, dbgCeiling, dbgCurve);
     this.#applyPoints(key, value, { silent: true });
     console.info(
       `[alloc] ${key} ${source} 投 ${value} 點｜` +
         `能力 ${dbgBefore} → ${this.#ability[key] ?? 0}（潛力 ${dbgCeiling}` +
         `${dbgBefore >= dbgCeiling ? '，已在天花板之上' : ''}、上限 ${hardCap(this.#ceilingBonus[key] ?? 0)}）｜` +
-        `蓄力 ${dbgCarry}/${dbgCost} → ${this.#carry[key] ?? 0}/${abilityCost(this.#ability[key] ?? 0, dbgCeiling, growthCurve(this.isTwoWay))}` +
+        `蓄力 ${dbgCarry}/${dbgCost} → ${this.#carry[key] ?? 0}/${abilityCost(this.#ability[key] ?? 0, dbgCeiling, dbgCurve)}` +
+        // 天賦覆蓋層是全域可變狀態，掉了的話成本會靜靜地變回原價（破繭沒生效時
+        // 天花板外是 3 倍而不是 1.5 倍）。把當下的倍率與折扣一起印出來，下次
+        // 「同樣的能力怎麼價錢不一樣」就不必用算的去反推是哪一種。
+        `｜倍率 ${dbgCurve.curve.above_ceiling_multiplier}、折扣 ${dbgCurve.curve.discount}` +
         `${this.isTwoWay ? '｜二刀流' : ''}`,
     );
     if (source === 'dice' && this.#dice !== null) {

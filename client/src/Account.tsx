@@ -7,62 +7,17 @@
  * **這一層不做任何判定**：AP 夠不夠、天賦幾級、成就有沒有解鎖，全部由伺服器
  * 決定，這裡只把 `Me` 畫出來、把玩家的動作送回去（見 ADR 0007）。前端自己算
  * 一份會與伺服器分岔，而分岔的那一份一定是錯的那一份。
+ *
+ * **這個檔案只放元件。** `useAccount` 與型別在 `useAccount.ts`——一個模組同時
+ * export hook 與元件的話 Fast Refresh 會整包放棄（見那個檔案開頭）。
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { ApiError, isOffline, type Me, type ProgressStore } from './api/contract.ts';
+import { useEffect, useState } from 'react';
+import { type Account } from './useAccount.ts';
+import { ApiError, type Me } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
 import { cabinetSections, cabinetTiles } from './engine/achievements.ts';
 import { maxLevelOf } from './engine/overlay.ts';
-
-/** 帳號的連線狀態。 */
-export type Progress =
-  | { readonly kind: 'loading' }
-  /** 連不上伺服器——這個部署沒有帳號功能，不是玩家沒登入。 */
-  | { readonly kind: 'offline' }
-  | { readonly kind: 'anonymous' }
-  | { readonly kind: 'signed-in'; readonly me: Me };
-
-export interface Account {
-  readonly progress: Progress;
-  readonly store: ProgressStore;
-  /** 伺服器回了新的 `Me` 時把它裝回去。 */
-  readonly update: (me: Me) => void;
-  readonly signOut: () => Promise<void>;
-}
-
-/** 開機時問一次「我是誰」，之後由各個動作把新的 `Me` 裝回來。 */
-export function useAccount(store: ProgressStore): Account {
-  const [progress, setProgress] = useState<Progress>({ kind: 'loading' });
-
-  useEffect(() => {
-    let alive = true;
-    void store
-      .me()
-      .then((me) => {
-        if (!alive) return;
-        setProgress(me === null ? { kind: 'anonymous' } : { kind: 'signed-in', me });
-      })
-      .catch((e: unknown) => {
-        if (!alive) return;
-        // 連不上不是錯誤，是另一種正常的部署方式。其他錯誤也只能當成連不上——
-        // 開局畫面不該因為問了一句「我是誰」就整個掛掉。
-        if (!isOffline(e)) console.warn('[account]', e);
-        setProgress({ kind: 'offline' });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [store]);
-
-  const update = useCallback((me: Me) => setProgress({ kind: 'signed-in', me }), []);
-  const signOut = useCallback(async () => {
-    await store.logout().catch(() => undefined);
-    setProgress({ kind: 'anonymous' });
-  }, [store]);
-
-  return { progress, store, update, signOut };
-}
 
 /** 開局畫面右上角。 */
 export function AccountBar({ account }: { account: Account }) {

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './app.css';
-import { AccountBar, useAccount, type Account } from './Account.tsx';
+import { AccountBar } from './Account.tsx';
+import { useAccount, type Account } from './useAccount.ts';
 import { httpProgress } from './api/http.ts';
 import {
   abilities,
@@ -277,7 +278,22 @@ function StartScreen({
               firstCareer: me.achievements.length === 0,
               unlocked: new Set(me.achievements.map((a) => a.id)),
             };
-      const game = new Game({ ...setup, talents: t?.talents ?? {} }, progress).start();
+      /**
+       * 天賦從哪裡來。
+       *
+       * 優先用伺服器凍結的那一組（`t.talents`）——驗證時算數的是它。但登記失敗
+       * 時**不能退回「沒有天賦」**：玩家買了破繭卻在天花板外照付三倍價，畫面上
+       * 沒有任何提示，那一局就是靜靜地變難了（實際發生過：API 沒起來，同一個
+       * 存檔 6X 能力要 18 點蓄力，隔一局同樣的天賦只要 10 點）。
+       *
+       * 「這一局不入帳」與「這一局沒有天賦」是兩件事。不入帳的局本來就不會拿去
+       * 驗證，用本機那份 `me.talents` 開下去是安全的。
+       */
+      const talents = t?.talents ?? me?.talents ?? {};
+      if (t === null && me !== null) {
+        console.warn('[career] 沒拿到開局票，改用本機的天賦開局，這一局不入帳');
+      }
+      const game = new Game({ ...setup, talents }, progress).start();
       onStart(game, t?.careerId ?? null);
     });
   };
