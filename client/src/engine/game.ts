@@ -4815,7 +4815,22 @@ export class Game {
       ability: this.#ability[key] ?? 0,
       carry: this.#carry[key] ?? 0,
     });
+    // 配點是靜音的（一輪 8 顆骰寫 8 張卡片會把事件流洗掉），出事時沒有任何痕跡
+    // 可以追。這一行把整筆交易的前後值印進 console：能力、天花板、這一級的價
+    // 錢、蓄力槽、投進去幾點，以及升了幾級。回報「骰子怪怪的」時把它貼出來，
+    // 就分得出是引擎算錯還是畫面顯示的時機不對。
+    const dbgBefore = this.#ability[key] ?? 0;
+    const dbgCarry = this.#carry[key] ?? 0;
+    const dbgCeiling = this.#ceilingOf(key);
+    const dbgCost = abilityCost(dbgBefore, dbgCeiling, growthCurve(this.isTwoWay));
     this.#applyPoints(key, value, { silent: true });
+    console.info(
+      `[alloc] ${key} ${source} 投 ${value} 點｜` +
+        `能力 ${dbgBefore} → ${this.#ability[key] ?? 0}（潛力 ${dbgCeiling}` +
+        `${dbgBefore >= dbgCeiling ? '，已在天花板之上' : ''}、上限 ${hardCap(this.#ceilingBonus[key] ?? 0)}）｜` +
+        `蓄力 ${dbgCarry}/${dbgCost} → ${this.#carry[key] ?? 0}/${abilityCost(this.#ability[key] ?? 0, dbgCeiling, growthCurve(this.isTwoWay))}` +
+        `${this.isTwoWay ? '｜二刀流' : ''}`,
+    );
     if (source === 'dice' && this.#dice !== null) {
       this.#dice = { values: this.#dice.values, index: this.#dice.index + 1 };
     } else if (source === 'pool') {
