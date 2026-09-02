@@ -148,7 +148,7 @@
       "tone": "good",
       "rules_complete": false,
       "name": "高手高手高高手",
-      "effect_text": "訓練骰永久 4 點起，事件卡好結果機率 70%"
+      "effect_text": "訓練骰永久 4 點起，事件卡好結果機率 65%"
     },
     {
       "id": "iron",
@@ -162,7 +162,7 @@
       "tone": "good",
       "rules_complete": true,
       "name": "十里坡劍神",
-      "effect_text": "訓練骰永久 3 點起，事件卡好結果機率 70%",
+      "effect_text": "訓練骰永久 3 點起，事件卡好結果機率 65%",
       "desc": "長年的沉潛與摸索終於開花結果，你的棒球人生下半場才正要開始——<b class=\"hl\">季初擲骰進階至「3~6」</b>，基礎受傷率下降。",
       "conditions": {
         "operator": "AND",

@@ -10,6 +10,7 @@ import {
   type EventContext,
   type EventMode,
 } from './events.ts';
+import { applyTalents } from './overlay.ts';
 import { World } from './rng.ts';
 
 const ctx = (over: Partial<EventContext> = {}): EventContext => ({
@@ -117,6 +118,36 @@ describe('successChances', () => {
 
   it('保守的成功率有上限，不會逼近必勝', () => {
     expect(successChances(new Set(['genius'])).safe).toBeLessThanOrEqual(95);
+  });
+
+  it('三種應對的數字：一般人 35/50/70，天才級 50/65/85', () => {
+    expect(successChances(new Set())).toEqual({ bold: 35, normal: 50, safe: 70 });
+    expect(successChances(new Set(['genius']))).toEqual({ bold: 50, normal: 65, safe: 85 });
+  });
+
+  it('今晚打老虎的豪賭不會高過照常——豁免只是讓它齊平，不是讓它更划算', () => {
+    const clutch = successChances(new Set(['clutch']));
+    expect(clutch.bold).toBeLessThanOrEqual(clutch.normal);
+    expect(clutch).toEqual({ bold: 65, normal: 65, safe: 85 });
+  });
+
+  it('成功率一律是整數——天賦的乘算層會跑出 68.9 與 77.00000000000001 那種數字，而它會原樣印在選項上', () => {
+    // 天選之人 ×1.06 與梭哈 ×1.2 一起套：65 × 1.06 = 68.9，再乘 1.2 更難看。
+    const revert = applyTalents({ fortune: 1, allin: 2 });
+    try {
+      for (const traits of [
+        new Set<string>(),
+        new Set(['genius']),
+        new Set(['clutch']),
+        new Set(['thief']),
+      ]) {
+        for (const v of Object.values(successChances(traits))) {
+          expect(Number.isInteger(v)).toBe(true);
+        }
+      }
+    } finally {
+      revert();
+    }
   });
 });
 

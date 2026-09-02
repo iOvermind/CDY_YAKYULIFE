@@ -166,6 +166,10 @@ export function drawEvent(world: World, ctx: EventContext): GameEvent {
  *
  * 天賦一律走乘算層（見 ADR 0033），而且**三格都夾在 `cap`**：加算的天賦疊在「大心臟
  * 選豪賭」這種本來就沒有懲罰的組合上會直接破表，乘算不會，但仍要有上限收尾。
+ *
+ * **結果一律取整數。** 乘算層讓 `70 × 1.1` 這種算式跑出 77.00000000000001，那個數字
+ * 會原樣印在選項上（「成功率 77.00000000000001%」）。取整也讓**畫面上的數字就是真的
+ * 拿去擲的那一個**——`rng.chance()` 收的就是這裡回傳的百分比。
  */
 export function successChances(traits: ReadonlySet<string>): Record<EventMode, number> {
   const cfg = data.good_result_chance;
@@ -176,11 +180,11 @@ export function successChances(traits: ReadonlySet<string>): Record<EventMode, n
 
   const boldPenalty = traits.has(mod.bold_immune_trait) ? 0 : mod.bold;
   const talent = cfg.talent_multiplier;
-  const capped = (v: number): number => Math.min(mod.cap, v);
+  const settle = (v: number): number => Math.min(mod.cap, Math.round(v));
   return {
-    safe: capped((base + mod.safe) * talent),
-    normal: capped((base + mod.normal) * talent),
-    bold: capped((base + boldPenalty) * talent * mod.bold_multiplier),
+    safe: settle((base + mod.safe) * talent),
+    normal: settle((base + mod.normal) * talent),
+    bold: settle((base + boldPenalty) * talent * mod.bold_multiplier),
   };
 }
 

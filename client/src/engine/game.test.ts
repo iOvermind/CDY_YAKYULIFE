@@ -815,8 +815,11 @@ describe('生涯次數統計', () => {
 
 describe('國際賽年表', () => {
   it('職業期的每一屆都留下年份、賽事名與名次', () => {
-    // 職業期被徵召是少數事件（150 局裡約 4 局），掃描範圍要夠大。
-    for (let i = 0; i < 150; i++) {
+    // 職業期被徵召是少數事件（實測 400 局裡約 5 局），掃描範圍要夠大。
+    //
+    // **這個數字會隨平衡改動漂移**：任何動到成長或事件卡的改動都會重新洗牌，
+    // 哪幾顆種子撞得到那條路徑。掃到第 187 顆才第一次撞見，所以範圍留了兩倍餘裕。
+    for (let i = 0; i < 400; i++) {
       const game = playWell(started({ seed: `q-${i}` }));
       const rows = game.summary?.internationalSeasons ?? [];
       if (rows.length === 0) continue;
@@ -830,7 +833,7 @@ describe('國際賽年表', () => {
       expect(rows.length).toBeLessThanOrEqual(game.state?.counts.internationalCaps ?? -1);
       return;
     }
-    throw new Error('一百五十局都沒有人在職業期被徵召過');
+    throw new Error('四百局都沒有人在職業期被徵召過');
   });
 
   it('養成期的國際賽不進這一份——它併在該年的養成列裡', () => {
@@ -1563,7 +1566,9 @@ describe('合約', () => {
     // 自主引退一年只問一次；談約談到一半才反悔的人，手上不能只有簽或不簽兩個鍵。
     let seen = 0;
     let quit = 0;
-    for (let i = 0; i < 60; i++) {
+    // 打到「老將還在談約」本身就不常見，而哪幾顆種子走得到那裡會隨平衡改動漂移
+    // ——實測第一次撞見是第 76 顆。
+    for (let i = 0; i < 150; i++) {
       const game = new Game({
         seed: `quit-${i}`,
         name: '顧客',
@@ -1597,7 +1602,7 @@ describe('合約', () => {
       const log = JSON.stringify(game.flow.log);
       expect(log, `seed quit-${i} 選了引退卻沒有引退`).toContain('引退');
     }
-    expect(seen, '六十條生涯裡沒有任何一次合約問句掛出引退選項').toBeGreaterThan(0);
+    expect(seen, '一百五十條生涯裡沒有任何一次合約問句掛出引退選項').toBeGreaterThan(0);
     expect(quit).toBe(seen);
   });
 
