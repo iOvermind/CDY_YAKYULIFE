@@ -92,7 +92,7 @@ cd client && npm run dev     # 1420，/api 會轉給 8099
 > 但**兩邊的連接埠必須對得起來**（`vite.config.js` 的代理 ↔ `server/src/dev.ts`），
 > 對不上的表現跟「沒開伺服器」一模一樣，不會有任何錯誤訊息。
 
-**連接埠固定為 1420**：`vite.config.js` 設了 `strictPort: true`，因為 Tauri 期望固定連接埠。被佔用時會直接失敗而非換一個，這是刻意的。
+**連接埠固定為 1420**：`vite.config.js` 設了 `strictPort: true`。原本的理由是 Tauri 的 `devUrl` 寫死指向它（那一半已經 legacy），現在留著的理由是**被佔用時要直接失敗而不是安靜換一個**——換了埠之後 `/api` 的代理設定就對不上，而那個症狀看起來像「登入壞掉」而不是「開發伺服器換埠了」。
 
 **除錯**：瀏覽器開發者工具（F12）。
 
@@ -113,11 +113,14 @@ CDY_YAKYULIFE/
 │  ├─ design/       數值設計：公式總表與模擬數學模型
 │  ├─ adr/          架構決策紀錄
 │  └─ agents/       AI 代理設定
-├─ client/          新架構實作（Tauri + React，開發中）
+├─ client/          新架構實作（React + Vite）
 │  ├─ src/
 │  │  ├─ data/      規則資料（JSON）與型別化的載入層
 │  │  └─ engine/    模擬引擎；測試與被測檔案同層並列
-│  └─ src-tauri/    Tauri 桌面端封裝與 Rust 端
+│  └─ src-tauri/    legacy 的 Tauri 封裝，不再維護（ADR 0038）
+├─ server/          帳號、成就與重跑驗證；Postgres schema 與 image 版 compose
+├─ deploy.sh        一行架起整台服務
+├─ compose.yaml     掛載式部署（app + Postgres）
 ├─ index_legacy.html 舊版遊戲本體（HTML + CSS + JS 全部內嵌，唯讀保留）
 ├─ WIKI.md          遊戲設計文件與完整數值表
 ├─ CONTEXT.md       領域術語表
@@ -142,7 +145,8 @@ CDY_YAKYULIFE/
 | `client/src/data/` | 規則資料與載入層。10 個 JSON 加上型別定義 | 無 |
 | `client/src/engine/` | 模擬引擎。`rng.ts` 是確定性亂數層，其餘領域模組各自宣告使用哪一條子序列 | `data/` |
 | `client/src/*.tsx` | React 介面 | `engine/`、`data/` |
-| `client/src-tauri/` | 桌面端封裝 | Rust |
+| `server/src/` | 帳號、成就結算與重跑驗證。**直接 import client 的引擎原始碼**，所以兩邊永遠是同一份規則 | `client/src/engine/`、`client/src/data/` |
+| ~~`client/src-tauri/`~~ | legacy 的桌面端封裝，不再維護（ADR 0038） | Rust |
 
 依賴方向是單向的：介面依賴引擎，引擎依賴資料，資料不依賴任何東西。**引擎不得反向依賴介面**——伺服器端要能不經 UI 重跑一整段生涯來驗證成績（見 ADR 0002）。
 
@@ -159,7 +163,7 @@ CDY_YAKYULIFE/
 > **部分已被 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 取代**：Tauri 桌面端與兩棲防護機制都不再成立。資料解耦那一條仍然有效。
 
 - **決定**：放棄單一 HTML 檔案架構，採用 **Tauri + React (Vite)** 進行全端重建。
-- **理由**：為了支援跨局成就點數、歷史生涯比較、以及未來的線上功能。引入本地資料庫 (SQLite) 用於離線儲存，並透過 Token 簽章機制防範基礎修改器作弊。
+- **理由**：為了支援跨局成就點數、歷史生涯比較、以及未來的線上功能。引入本地資料庫 (SQLite) 用於離線儲存，並透過 Token 簽章機制防範基礎修改器作弊。**後兩者都已作廢**（ADR 0038）：離線儲存從來沒落地，Token 也不存在——伺服器直接重跑日誌自己算。
 - **代價**：開發流程需引入 Node.js 與 Rust 工具鏈，且需要維護前後端分離的狀態同步。
 
 > **注意**：舊版的單一檔案實作以 `index_legacy.html` 保留於 `main`，作為新架構的遊戲邏輯對照基準，**唯讀、不再修改**。保留方式見 §8。
@@ -190,17 +194,30 @@ npm run test:watch # 監看模式
 
 ---
 
-## 7. 建置與產物
+## 7. 建置與部署
 
 **建置**
 
 ```bash
 cd client
-npm run build        # 網頁版 → client/dist/
+npm run build        # → client/dist/
 npm run tauri build  # legacy，不再維護（ADR 0038）
 ```
 
 舊版的 `index_legacy.html` 不需建置，開啟即可執行。
+
+**部署**（見 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)）
+
+```bash
+./deploy.sh          # 產生 .env、起 compose、等到 HTTP 回話為止
+./deploy.sh logs     # 跟著看記錄
+./deploy.sh down     # 停掉，資料留著
+./deploy.sh reset-db # 清空資料庫（會先問一次）
+```
+
+程式碼是**掛載**進容器的（根目錄的 `compose.yaml`），所以更新是 `git pull && ./deploy.sh`，不必重新 build。資料在 `./data/`。
+
+另一種跑法是把程式碼建進 image：`server/compose.yaml` 是那一份（附 cloudflared），或用 `./build-image.sh` 只建不跑。**兩種跑法的資料不共用**——image 版用 Docker 具名 volume，`deploy.sh` 用 `./data`。
 
 **產物**
 
@@ -210,7 +227,7 @@ npm run tauri build  # legacy，不再維護（ADR 0038）
 
 | 產物 | 用途 |
 | :--- | :--- |
-| `client/dist/` | 網頁版的靜態檔，Tauri 打包時也吃這一份（`tauri.conf.json` 的 `frontendDist`） |
+| `client/dist/` | 前端的靜態檔。伺服器用 `STATIC_DIR` 指向它，同一個服務同時送前端與 `/api` |
 
 發佈時的產物形式將於首次發佈前在此明列，依 `docs/rules/RELEASE_RULES.md` §2.2 的形式標記（網頁版用 `Web`）。
 
@@ -222,8 +239,8 @@ npm run tauri build  # legacy，不再維護（ADR 0038）
 | :--- | :--- | :--- |
 | `client/package.json` | `version` | 手動（單一來源） |
 | ~~`package.json`（根目錄）~~ | — | **刻意不帶 `version`**。它只是指令轉發，不是第二個版本號來源 |
-| `client/src-tauri/tauri.conf.json` | `version` | 手動 |
-| `client/src-tauri/Cargo.toml` | `package.version` | 手動 |
+| ~~`client/src-tauri/tauri.conf.json`~~ | — | legacy，不再跟著遞增（ADR 0038） |
+| ~~`client/src-tauri/Cargo.toml`~~ | — | 同上 |
 | `CHANGELOG.md` | 版本標題 | 手動 |
 
 `index_legacy.html` 不帶版本號——它是唯讀保留的舊實作，不隨版本遞增（見 §8）。
@@ -275,7 +292,7 @@ npm run tauri build  # legacy，不再維護（ADR 0038）
 
 ### 9.3 依賴來源與鎖檔
 
-- 鎖檔：`client/package-lock.json` 與 `client/src-tauri/Cargo.lock`，兩者**皆已納入版本控制**。
+- 鎖檔：`client/package-lock.json` 與 `server/package-lock.json`**皆已納入版本控制**——部署時 `npm ci` 讀的就是它們。`client/src-tauri/Cargo.lock` 也還在版本控制裡，但那一半已經 legacy（ADR 0038）。
 - 安裝指令：新架構的相依安裝指令將於環境建置步驟定案後於 §2 補寫；安裝時應使用會遵守鎖檔的指令（`npm ci`），不使用 `npm install`。
 - 舊版的 `index_legacy.html` 無任何第三方相依，不從外部載入資源。
 
@@ -299,7 +316,7 @@ npm run tauri build  # legacy，不再維護（ADR 0038）
 
 - **症狀**：切到「電子看板」或「報紙版面」，顏色變了但字體還是系統預設，整體質感與原版不符
 - **原因**：`legacy.css` 的主題 b 指定 `DotGothic16`、主題 c 指定 `Noto Serif TC`，這些字體從 Google Fonts 載入。`client/index.html` 少了那兩行 `<link>`，或是離線狀態下載不到，字體就會 fallback。
-- **處置**：確認 `client/index.html` 的 `fonts.googleapis.com` 兩行還在。**桌面端離線時必然 fallback**——這是目前未解的問題，要讓離線也正確就必須把字體檔內嵌進產物。
+- **處置**：確認 `client/index.html` 的 `fonts.googleapis.com` 兩行還在。**玩家連不到 Google Fonts 時必然 fallback**（防火牆、離線、擋第三方網域），要讓那些情況也正確就必須把字體檔內嵌進產物。
 
 #### `Cannot find module @rollup/rollup-win32-x64-msvc`（或 `@esbuild/...`）
 
@@ -312,7 +329,7 @@ npm run tauri build  # legacy，不再維護（ADR 0038）
 #### 開發伺服器啟動失敗，說連接埠被佔用
 
 - **症狀**：`Port 1420 is already in use` 而且 Vite 直接結束，不會自動換一個連接埠
-- **原因**：`vite.config.js` 設了 `strictPort: true`。這是刻意的——Tauri 的 `devUrl` 寫死指向 1420，Vite 若擅自換埠，桌面端就會連到空白頁。
+- **原因**：`vite.config.js` 設了 `strictPort: true`。這是刻意的——安靜換埠之後 `/api` 的代理就對不上，症狀會長得像「登入壞掉」而不是「換埠了」。
 - **處置**：關掉佔用 1420 的行程（通常是另一個還開著的 `npm run dev`），不要改設定去換連接埠。
 
 ---
