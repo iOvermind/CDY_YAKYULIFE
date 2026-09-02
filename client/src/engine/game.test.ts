@@ -1203,6 +1203,22 @@ describe('引退與結算', () => {
     }
   });
 
+  it('起始守位選投手，養成列寫 DH 而不是留白（problems #27）', () => {
+    // 學生棒球的投手照樣站打席，打擊成績要有位置可標——那一欄留白等於在說
+    // 他那六年沒上過場。職業之後才真的回 null：那裡的純投手沒有野手成績。
+    for (let i = 0; i < 20; i++) {
+      const game = playWell(started({ seed: `p27-${i}`, startPosition: 'P' }));
+      const summary = game.summary;
+      if (summary === null) continue;
+      if (game.state?.lockedSide !== 'pitcher') continue;
+      expect(summary.amateurSeasons.length).toBeGreaterThan(0);
+      for (const a of summary.amateurSeasons) {
+        expect(a.position, `${a.year} 年的養成列留白了`).toBe('DH');
+      }
+      return;
+    }
+    throw new Error('二十局都沒有走成純投手');
+  });
   it('生涯表的守位欄不留白——養成與二軍也有登錄守位', () => {
     // 那幾列的守位本來只活在畫面上，沒有存進生涯紀錄，生涯表那幾列
     // 因此永遠是「—」。守住的是「野手在每一列都站得到某個位置」。
