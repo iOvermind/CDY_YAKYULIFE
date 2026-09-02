@@ -65,7 +65,8 @@ docker compose down           # 停掉，資料留著
 `git pull && ./deploy.sh`，然後讓 app 換上新 image（管理介面上重新部署，或
 `docker compose up -d app`）。
 
-資料在 `./data/`，備份就是複製那個資料夾。資料表在第一次啟動時自動建好
+資料在 `./data/`，備份就是複製那個資料夾。`.env` 的 `DATA_DIR` 記的是**絕對路徑**（`./deploy.sh` 會自動填好，舊的相對路徑也會就地換掉）——管理介面常把 compose 複製到
+自己的 stack 目錄下再跑，相對路徑在那時會指到別的地方，開出一個空的資料庫。資料表在第一次啟動時自動建好
 （`server/schema.sql` 每次啟動都跑，每一行都是冪等的）；DROP 不放在那裡，否則每重開
 一次就清空一次玩家的帳號與 AP。要打掉重來是
 `docker compose exec -T db psql -U yakyu -d yakyu < server/reset.sql`——**那會清光所有

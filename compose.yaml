@@ -49,9 +49,14 @@ services:
       # 沒設的話 postgres 會拒絕初始化並在記錄裡說明，不會安靜地開一個沒密碼的庫。
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: yakyu
-    # 資料放 repo 底下的 ./data，不用具名 volume：備份就是複製一個資料夾，搬機器
+    # 資料放 repo 底下的 data/，不用具名 volume：備份就是複製一個資料夾，搬機器
     # 就是搬那個資料夾。代價是那個目錄由 Postgres 容器持有，宿主機上要用 sudo
     # 才動得了。
+    #
+    # **DATA_DIR 請填絕對路徑**（`./deploy.sh` 產生的 .env 裡就是絕對路徑）。底下
+    # 的 `./data` 只是沒設時的退路，而相對路徑是相對於**compose 檔案所在的目錄**
+    # ——管理介面把這份 compose 複製到自己的 stack 目錄下再跑的話，它會指到那邊去，
+    # 開出一個空的資料庫，看起來像是所有帳號一夜蒸發。
     volumes:
       - ${DATA_DIR:-./data}/pg:/var/lib/postgresql/data
     # 資料庫不對外開埠。要進去下 SQL 用
