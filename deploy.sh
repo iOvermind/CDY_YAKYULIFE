@@ -57,7 +57,7 @@ POSTGRES_PASSWORD=$(gen)
 SESSION_SECRET=$(gen)
 
 # **這一格要自己填。** Cloudflare Zero Trust → Networks → Tunnels 建立通道後
-# 拿到的權杖。沒填的話 compose 會拒絕啟動（cloudflared 沒有權杖也連不上）。
+# 拿到的權杖。沒填的話 cloudflared 起得來但連不上通道，對外就是不通。
 TUNNEL_TOKEN=
 
 # 本機驗證用的埠與綁定位址。預設只綁 127.0.0.1——對外走 tunnel，而綁 0.0.0.0

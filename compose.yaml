@@ -8,6 +8,9 @@
 # 這裡不搶著做。
 #
 # 需要的環境變數在 `.env`（同目錄，compose 會自動讀）。範本見 `.env.example`。
+# **值一律用 `${VAR}` 帶進來，不加 `:?` 的必填檢查**——加了的話，管理介面在還沒
+# 給值之前連這份檔案都解析不開，等於逼所有人先去弄一個 .env 才看得到內容。要直接
+# 把值寫死在這裡（或填在管理介面的環境變數欄）都行。
 #
 # **不用 Redis**——這個規模 Postgres 一個人吃得下，多一個容器只是多一處狀態
 # 不一致的來源。
@@ -17,9 +20,9 @@ services:
     # 「重啟一下」變成「順手換了一個版本」。
     image: ${APP_IMAGE:-cdy_yakyulife:latest}
     environment:
-      DATABASE_URL: postgres://yakyu:${POSTGRES_PASSWORD:?請在 .env 設定}@db:5432/yakyu
-      # 沒設的話伺服器會用隨機金鑰，重啟後所有人被登出。
-      SESSION_SECRET: ${SESSION_SECRET:?請在 .env 設定}
+      DATABASE_URL: postgres://yakyu:${POSTGRES_PASSWORD}@db:5432/yakyu
+      # 沒設的話伺服器會用隨機金鑰，重啟後所有人被登出（伺服器會在記錄裡喊一聲）。
+      SESSION_SECRET: ${SESSION_SECRET}
       NODE_ENV: production
       PORT: 8080
     # 對外走 tunnel，這個埠是**給本機驗證用的**——tunnel 還沒設好之前也要能
@@ -43,7 +46,8 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: yakyu
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請在 .env 設定}
+      # 沒設的話 postgres 會拒絕初始化並在記錄裡說明，不會安靜地開一個沒密碼的庫。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: yakyu
     # 資料放 repo 底下的 ./data，不用具名 volume：備份就是複製一個資料夾，搬機器
     # 就是搬那個資料夾。代價是那個目錄由 Postgres 容器持有，宿主機上要用 sudo
@@ -64,7 +68,7 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       # Cloudflare Zero Trust → Networks → Tunnels 建立通道後拿到的權杖。
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?請在 .env 設定}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     # tunnel 的 public hostname 在 Cloudflare 的介面上設，service 填
     # **http://app:8080**——它跟 app 在同一個 compose 網路裡，不必經過上面那個
     # 綁在 127.0.0.1 的埠。

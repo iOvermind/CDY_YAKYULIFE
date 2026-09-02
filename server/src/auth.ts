@@ -55,9 +55,14 @@ export async function verifyPassword(password: string, stored: string): Promise<
  *
  * 沒有設環境變數時**隨機產生一把**——那會讓伺服器重啟後所有人被登出，但那遠好過
  * 內建一把寫死的金鑰：寫死的金鑰等於任何讀過原始碼的人都能偽造 session。
+ *
+ * **空字串也算沒設。** compose 把一個沒有值的 `${SESSION_SECRET}` 傳進來時，這裡
+ * 拿到的是 `''` 而不是 undefined——用 `??` 判斷的話那會變成一把空金鑰，而且靜悄悄
+ * 地不警告任何人。
  */
-const SECRET = process.env.SESSION_SECRET ?? randomBytes(32).toString('hex');
-if (process.env.SESSION_SECRET === undefined) {
+const CONFIGURED_SECRET = process.env.SESSION_SECRET?.trim();
+const SECRET = CONFIGURED_SECRET || randomBytes(32).toString('hex');
+if (!CONFIGURED_SECRET) {
   console.warn('[auth] 沒有設定 SESSION_SECRET，本次啟動使用隨機金鑰——重啟後所有人會被登出。');
 }
 
