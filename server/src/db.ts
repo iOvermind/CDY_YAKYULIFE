@@ -122,5 +122,25 @@ export async function balanceOf(userId: string, spent: number): Promise<{ ap: nu
     [userId],
   );
   const earned = Number(rows[0]?.earned ?? 0);
-  return { ap: earned - spent, earned };
+  const ap = earned - spent;
+
+  /**
+   * **AP 只能從成就來。**
+   *
+   * `earned` 是成就表的 SUM，而那張表只由 `finishCareer` 的伺服器端評估寫入——
+   * 沒有第二個入口。餘額為負代表「花掉的比賺過的多」，那在正常路徑上不可能發生：
+   * 買天賦時會先檢查夠不夠。真的出現只有兩種來源，兩種都該吵：有人直接動了資料庫，
+   * 或是成就 id 改版時刪掉了已經被花掉的那幾列（schema.sql 有過這種遷移）。
+   *
+   * **不自動修正**——把餘額夾成 0 會讓玩家的天賦憑空消失，而把 spent 歸零等於送
+   * AP。留著負數並記一筆，讓它在日誌裡看得見。
+   */
+  if (ap < 0) {
+    console.error(
+      `[ap] 使用者 ${userId} 的餘額是負的：賺過 ${earned}、花掉 ${spent}。` +
+        'AP 只能從成就來，出現負數代表成就表被外部動過，或有成就列在被花用之後遭到刪除。',
+    );
+  }
+
+  return { ap, earned };
 }

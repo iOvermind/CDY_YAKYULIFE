@@ -6,11 +6,20 @@
  */
 
 import { evaluateAchievements } from '../../client/src/engine/achievements.ts';
-import { Game } from '../../client/src/engine/game.ts';
+import { ENGINE_VERSION, Game } from '../../client/src/engine/game.ts';
+import { ladderRows } from '../../client/src/engine/ladder.ts';
 import { runBallots } from '../../client/src/engine/hall.ts';
 import { costOf, maxLevelOf } from '../../client/src/engine/overlay.ts';
-import { talents as talentData } from '../../client/src/data/index.ts';
-import type { CareerResult, CareerTicket, FinishRequest, Me } from '../../client/src/api/contract.ts';
+import { ladder as ladderCfg, leagues, talents as talentData } from '../../client/src/data/index.ts';
+import type {
+  CareerResult,
+  CareerTicket,
+  FinishRequest,
+  LadderBoard,
+  LadderEntry,
+  LadderResponse,
+  Me,
+} from '../../client/src/api/contract.ts';
 import { hashPassword, newCareerId, verifyPassword } from './auth.ts';
 import {
   achievementsOf,
@@ -151,6 +160,35 @@ export async function finishCareer(
         'UPDATE careers SET log = $1, verified = $2, ap_gained = $3, finished_at = now() WHERE id = $4',
         [JSON.stringify(body.log), verified, result.points, careerId],
       );
+
+      // 天梯的原料。**只在 verified 時寫**——規則資料由伺服器送出，玩家改了自己
+      // 那份，重跑必然對不上，那一局就不進榜（ADR 0038）。AP 仍然照給：伺服器
+      // 算的那份本來就是它自己的數字，不受影響。
+      if (verified) {
+        const playerName = game.player?.name ?? '';
+        for (const row of ladderRows(summary)) {
+          await client.query(
+            `INSERT INTO career_stats
+               (career_id, user_id, scope, seasons, batting, pitching, defense_runs,
+                qualified_batter, qualified_pitcher, engine_version, player_name)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             ON CONFLICT (career_id, scope) DO NOTHING`,
+            [
+              careerId,
+              user.id,
+              row.scope,
+              row.seasons,
+              row.batting === null ? null : JSON.stringify(row.batting),
+              row.pitching === null ? null : JSON.stringify(row.pitching),
+              row.defenseRuns,
+              row.qualifiedBatter,
+              row.qualifiedPitcher,
+              ENGINE_VERSION,
+              playerName,
+            ],
+          );
+        }
+      }
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -205,4 +243,129 @@ export async function setTalent(user: UserRow, id: string, level: number): Promi
     );
   }
   return meOf(user);
+}
+
+/**
+ * 天梯。
+ *
+ * 個人天梯與全伺服器天梯是同一支查詢，差別只在限不限 `user_id`——資料只有一份，
+ * 兩張榜就不可能對不起來（ADR 0038）。
+ *
+ * 每個欄位各排一張榜。率型欄位只收有資格的那些列（`qualified_*`，資格在結算當下
+ * 就算好了），累積欄位一律沒有門檻。
+ */
+export async function ladder(
+  user: UserRow | null,
+  scope: string,
+  self: boolean,
+): Promise<LadderResponse> {
+  // 個人天梯一定要有身分；全伺服器天梯不必登入也看得到。
+  if (self && user === null) throw new HttpError(401, '請先登入。');
+
+  const params: unknown[] = [scope];
+  let where = 'cs.scope = $1';
+  if (self && user !== null) {
+    params.push(user.id);
+    where += ' AND cs.user_id = $2';
+  }
+
+  const { rows } = await pool.query<StatRow>(
+    `SELECT cs.scope, cs.seasons, cs.batting, cs.pitching, cs.defense_runs,
+            cs.qualified_batter, cs.qualified_pitcher, cs.engine_version,
+            cs.player_name, cs.finished_at, u.account
+       FROM career_stats cs
+       JOIN users u ON u.id = cs.user_id
+      WHERE ${where}`,
+    params,
+  );
+
+  const boards: LadderBoard[] = [];
+  for (const side of ['batter', 'pitcher'] as const) {
+    for (const column of ladderCfg.columns[side]) {
+      const entries = rankOf(rows, side, column);
+      // 空的榜不出現——沒有人有資格的欄位畫出來只是一個空框。
+      if (entries.length > 0) boards.push({ column: column.key, side, entries });
+    }
+  }
+
+  return { boards, scopes: await scopesOf(self ? user : null) };
+}
+
+/** 資料庫回來的一列。`batting` / `pitching` 是整條成績的 JSONB。 */
+interface StatRow {
+  scope: string;
+  seasons: number;
+  batting: Record<string, number> | null;
+  pitching: Record<string, number> | null;
+  defense_runs: number;
+  qualified_batter: boolean;
+  qualified_pitcher: boolean;
+  engine_version: number;
+  player_name: string;
+  finished_at: string;
+  account: string;
+}
+
+/** 一個欄位的前 N 名。 */
+function rankOf(
+  rows: readonly StatRow[],
+  side: 'batter' | 'pitcher',
+  column: { key: string; rate: boolean; order: string },
+): readonly LadderEntry[] {
+  const picked: { row: StatRow; value: number }[] = [];
+  for (const row of rows) {
+    // 率型要有資格；累積型沒有門檻。
+    if (column.rate && !(side === 'batter' ? row.qualified_batter : row.qualified_pitcher)) continue;
+    const value = valueOf(row, side, column.key);
+    if (value === null) continue;
+    picked.push({ row, value });
+  }
+  picked.sort((a, b) => (column.order === 'asc' ? a.value - b.value : b.value - a.value));
+  return picked.slice(0, ladderCfg.top_n).map((p, i) => ({
+    rank: i + 1,
+    name: p.row.player_name,
+    account: p.row.account,
+    value: p.value,
+    seasons: p.row.seasons,
+    engineVersion: p.row.engine_version,
+    at: new Date(p.row.finished_at).toISOString(),
+  }));
+}
+
+/**
+ * 取一列在某個欄位上的值。
+ *
+ * 守備分不在 BattingLine 上，它是獨立一欄——這是唯一的特例，其餘都是直接取。
+ * 那一側整條是 null（例如純投手沒有打擊成績）時回 null，那一列就不進這張榜。
+ */
+function valueOf(
+  row: StatRow,
+  side: 'batter' | 'pitcher',
+  key: string,
+): number | null {
+  if (key === 'defenseRuns') return row.batting === null ? null : row.defense_runs;
+  const line = side === 'batter' ? row.batting : row.pitching;
+  if (line === null) return null;
+  const value = line[key];
+  return typeof value === 'number' ? value : null;
+}
+
+/**
+ * 有資料的範圍，供畫面畫分頁用。
+ *
+ * **沒去過的聯盟整組不出現**——與成就櫃「未解鎖的一律不顯示」同一個規矩。個人
+ * 天梯回他自己去過的，全伺服器天梯回所有人去過的聯集。順序照 leagues.json 的
+ * 體系順序，生涯放最後。
+ */
+async function scopesOf(user: UserRow | null): Promise<readonly string[]> {
+  const { rows } = await pool.query<{ scope: string }>(
+    user === null
+      ? 'SELECT DISTINCT scope FROM career_stats'
+      : 'SELECT DISTINCT scope FROM career_stats WHERE user_id = $1',
+    user === null ? [] : [user.id],
+  );
+  const have = new Set(rows.map((r) => r.scope));
+  const order = Object.keys(leagues.org_names).filter((org) => have.has(org));
+  if (have.has('CAREER')) order.push('CAREER');
+  return order;
 }

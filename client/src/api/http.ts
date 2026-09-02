@@ -11,6 +11,7 @@ import {
   ApiError,
   type CareerResult,
   type CareerTicket,
+  type LadderResponse,
   type Me,
   type ProgressStore,
 } from './contract.ts';
@@ -50,6 +51,10 @@ const post = <T>(path: string, data?: unknown): Promise<T> =>
   call<T>(path, data === undefined ? { method: 'POST' } : { method: 'POST', body: JSON.stringify(data) });
 
 export const httpProgress: ProgressStore = {
+  ladder(scope: string, self: boolean): Promise<LadderResponse> {
+    return call<LadderResponse>(API.ladder(scope, self));
+  },
+
   /** 未登入時伺服器回 401，那不是錯誤，是「還沒登入」。 */
   async me(): Promise<Me | null> {
     try {

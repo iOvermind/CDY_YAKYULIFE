@@ -30,11 +30,30 @@ interface CareerRow {
   finished_at: Date | null;
 }
 
+/** 天梯的原料。見 server/schema.sql 的 career_stats。 */
+interface StatRow {
+  career_id: string;
+  user_id: string;
+  scope: string;
+  seasons: number;
+  batting: Record<string, number> | null;
+  pitching: Record<string, number> | null;
+  defense_runs: number;
+  qualified_batter: boolean;
+  qualified_pitcher: boolean;
+  engine_version: number;
+  player_name: string;
+  finished_at: Date;
+  /** JOIN users 之後才有。查詢時補上，不存在表裡。 */
+  account?: string;
+}
+
 export class FakeDb implements Queryable {
   users: { id: string; account: string; password_hash: string }[] = [];
   achievements: AchievementRow[] = [];
   talents: { user_id: string; talent: string; level: number }[] = [];
   careers: CareerRow[] = [];
+  careerStats: StatRow[] = [];
   /** 每一句跑過的 SQL，讓測試可以斷言「真的有寫進去」。 */
   seen: string[] = [];
   /**
@@ -149,6 +168,45 @@ export class FakeDb implements Queryable {
         career.finished_at = new Date();
       }
       return [];
+    }
+    if (s.startsWith('INSERT INTO career_stats')) {
+      // 主鍵是 (career_id, scope)，ON CONFLICT DO NOTHING。
+      const careerId = String(v[0]);
+      const scope = String(v[2]);
+      if (this.careerStats.some((r) => r.career_id === careerId && r.scope === scope)) return [];
+      this.careerStats.push({
+        career_id: careerId,
+        user_id: String(v[1]),
+        scope,
+        seasons: Number(v[3]),
+        batting: v[4] === null ? null : (JSON.parse(String(v[4])) as Record<string, number>),
+        pitching: v[5] === null ? null : (JSON.parse(String(v[5])) as Record<string, number>),
+        defense_runs: Number(v[6]),
+        qualified_batter: Boolean(v[7]),
+        qualified_pitcher: Boolean(v[8]),
+        engine_version: Number(v[9]),
+        player_name: String(v[10]),
+        finished_at: new Date(),
+      });
+      return [];
+    }
+    if (s.startsWith('SELECT cs.scope, cs.seasons')) {
+      // WHERE cs.scope = $1 [AND cs.user_id = $2]，JOIN users 取 account。
+      const scope = String(v[0]);
+      const userId = v.length > 1 ? String(v[1]) : null;
+      return this.careerStats
+        .filter((r) => r.scope === scope && (userId === null || r.user_id === userId))
+        .map((r) => ({
+          ...r,
+          account: this.users.find((u) => u.id === r.user_id)?.account ?? '',
+        }));
+    }
+    if (s.startsWith('SELECT DISTINCT scope FROM career_stats')) {
+      const userId = v.length > 0 ? String(v[0]) : null;
+      const scopes = new Set(
+        this.careerStats.filter((r) => userId === null || r.user_id === userId).map((r) => r.scope),
+      );
+      return [...scopes].map((scope) => ({ scope }));
     }
     throw new Error(`假資料庫不認得這句 SQL，請補上：${s}`);
   }
