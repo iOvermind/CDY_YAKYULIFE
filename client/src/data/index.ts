@@ -376,6 +376,11 @@ export interface AchievementsData {
       readonly name: string;
       /** 各範圍從第幾階起算。生涯的第一階就是聯盟的第二階，級距不變。 */
       readonly first_rung: { readonly league: number; readonly career: number };
+      /**
+       * **AP** 最多認幾階，聯盟與生涯各自計算。封的是獎金不是成就——階梯照爬、
+       * 紀錄照顯示、生涯評價分照給平方，只有 AP 在這之後不再增加。
+       */
+      readonly ap_max_rungs: number;
       readonly rungs: Readonly<
         Record<
           string,

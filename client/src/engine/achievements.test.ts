@@ -4,6 +4,7 @@ import type { BattingLine } from './amateurStats.ts';
 import {
   cabinetSections,
   evaluateAchievements,
+  ladderAp,
   ladderTop,
   type AchievementContext,
 } from './achievements.ts';
@@ -85,14 +86,34 @@ describe('累積成就', () => {
     expect(got.list.filter((a) => a.id.startsWith('cum:career:hits'))).toHaveLength(0);
   });
 
-  it('跨過幾階就給幾點，但清單上只列最高的那一階', () => {
+  it('跨過幾階就給幾點，每階同價——AP 是線性的，但清單上只列最高的那一階', () => {
     const good = summary({ topTotal: { batting: bat({ hits: second }), pitching: null } });
     const rows = evaluateAchievements(ctx({ summary: good })).list.filter((a) =>
       a.id.startsWith('cum:career:hits'),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.points).toBe(spec.points * (firstRung + (firstRung + 1)));
+    // 兩階，每階 spec.points——不是 n×points 的平方累加，那一套留給生涯評價分。
+    expect(rows[0]?.points).toBe(spec.points * 2);
     expect(rows[0]?.name).toContain(String(second));
+  });
+
+  it('AP 封在第五階，但階梯本身不封頂——紀錄照爬，只是不再多給錢', () => {
+    const cap = cum.ap_max_rungs;
+    const far = spec.step * (firstRung + cap + 3);
+    const row = evaluateAchievements(
+      ctx({ summary: summary({ topTotal: { batting: bat({ hits: far }), pitching: null } }) }),
+    ).list.find((a) => a.id.startsWith('cum:career:hits'));
+    expect(row?.points).toBe(spec.points * cap);
+    // 顯示的仍然是他真正走到的那一階。
+    expect(row?.id).toBe(`cum:career:hits:${far}`);
+  });
+
+  it('生涯評價分不受 AP 封頂影響——那是兩把不同的尺', () => {
+    const cap = cum.ap_max_rungs;
+    const far = spec.step * (firstRung + cap + 3);
+    const near = spec.step * (firstRung + cap);
+    const score = (hits: number) => evaluateMilestones('career', bat({ hits }), null).points;
+    expect(score(far)).toBeGreaterThan(score(near));
   });
 
   it('不足一階的餘數不算，顯示的是走到的那一階', () => {
@@ -110,7 +131,7 @@ describe('累積成就', () => {
       ctx({ summary: good, unlocked: new Set([`cum:career:hits:${first}`]) }),
     ).list.find((a) => a.id.startsWith('cum:career:hits'));
     // 只拿第二階，不是從第一階重新加總。
-    expect(row?.points).toBe(spec.points * (firstRung + 1));
+    expect(row?.points).toBe(spec.points);
   });
 
   it('各聯盟各算一份，另外再算一份一軍通算', () => {
@@ -332,5 +353,48 @@ describe('階梯上不封頂', () => {
 
   it('級距必須為正，否則階梯無從生成', () => {
     expect(() => ladderTop(0, pts, 1, 100)).toThrow();
+  });
+});
+
+describe('AP 那一份：線性且封頂', () => {
+  // 安打：級距 500、每階 4 分。AP 最多認 5 階。
+  const step = 500;
+  const pts = 4;
+  const cap = 5;
+
+  it('每階同價，不是第 n 階給 n 倍', () => {
+    expect(ladderAp(step, pts, 1, cap, 500).points).toBe(4);
+    expect(ladderAp(step, pts, 1, cap, 1000).points).toBe(8);
+    expect(ladderAp(step, pts, 1, cap, 1500).points).toBe(12);
+  });
+
+  it('封在第五階：再打下去 AP 不再增加', () => {
+    expect(ladderAp(step, pts, 1, cap, 2500).points).toBe(20);
+    expect(ladderAp(step, pts, 1, cap, 50000).points).toBe(20);
+  });
+
+  it('封的是 AP 不是階梯——顯示的仍然是真正走到的那一階', () => {
+    expect(ladderAp(step, pts, 1, cap, 50000).top).toBe(50000);
+    expect(ladderAp(step, pts, 1, cap, 4200).top).toBe(4000);
+  });
+
+  it('生涯的門高一階，五階從那裡開始數', () => {
+    // 生涯第 2..6 階是它的五階；1000 安（第 2 階）只拿一階的分。
+    expect(ladderAp(step, pts, 2, cap, 500).points).toBe(0);
+    expect(ladderAp(step, pts, 2, cap, 1000).points).toBe(4);
+    expect(ladderAp(step, pts, 2, cap, 3000).points).toBe(20);
+    expect(ladderAp(step, pts, 2, cap, 9000).points).toBe(20);
+  });
+
+  it('同一個數字上，AP 一定不高於評價分——線性封頂 vs 平方不封頂', () => {
+    for (const value of [500, 1000, 2500, 4000, 20000]) {
+      expect(ladderAp(step, pts, 1, cap, value).points).toBeLessThanOrEqual(
+        ladderTop(step, pts, 1, value).points,
+      );
+    }
+  });
+
+  it('級距必須為正', () => {
+    expect(() => ladderAp(0, pts, 1, cap, 100)).toThrow();
   });
 });

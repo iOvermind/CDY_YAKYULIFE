@@ -156,15 +156,48 @@ export function ladderTop(
   firstRung: number,
   value: number,
 ): { readonly top: number | null; readonly points: number } {
-  if (step <= 0) throw new Error(`級距必須為正，收到 ${step}`);
-
-  const rung = Math.floor(value / step);
-  if (rung < firstRung) return { top: null, points: 0 };
+  const rung = rungOf(step, firstRung, value);
+  if (rung === null) return { top: null, points: 0 };
 
   // firstRung..rung 每階 n×points 的總和。逐階跑迴圈也對，但生涯可以走到幾十階，
   // 用公式省得有人日後把上限塞回迴圈裡。
   const sum = (n: number): number => (n * (n + 1)) / 2;
   return { top: rung * step, points: points * (sum(rung) - sum(firstRung - 1)) };
+}
+
+/** 跨到第幾階。沒跨過第一階就是 null。 */
+function rungOf(step: number, firstRung: number, value: number): number | null {
+  if (step <= 0) throw new Error(`級距必須為正，收到 ${step}`);
+  const rung = Math.floor(value / step);
+  return rung < firstRung ? null : rung;
+}
+
+/**
+ * 同一座階梯的 **AP** 那一份：**線性，而且只認前幾階**。
+ *
+ * 與 `ladderTop()` 共用級距、門檻與階名——玩家看到的仍然是同一座階梯，4200 安還是
+ * 顯示 4000 安。**分開的只有分數的算法**，因為那兩個數字回答的是不同的問題：
+ *
+ * - **評價分**問「這一生多強」。平方成長是對的：傳奇本來就該甩開一般人，而那把尺
+ *   只在這一局裡用。
+ * - **AP** 是跨局的**貨幣**。平方成長在貨幣上就是通膨——多打五年不是多值 1.5 倍，
+ *   是多值 4 倍。累積類因此吃掉了一段好生涯九成以上的 AP，而整棵天賦樹兩段生涯
+ *   就買得完。
+ *
+ * 天花板只封 **AP**：`maxRungs` 之後再怎麼打都不再多給點數，但階梯本身不封頂，
+ * 紀錄照爬、評價分照給。封的是獎金，不是成就。
+ */
+export function ladderAp(
+  step: number,
+  points: number,
+  firstRung: number,
+  maxRungs: number,
+  value: number,
+): { readonly top: number | null; readonly points: number } {
+  const rung = rungOf(step, firstRung, value);
+  if (rung === null) return { top: null, points: 0 };
+  const counted = Math.min(rung - firstRung + 1, maxRungs);
+  return { top: rung * step, points: points * counted };
 }
 
 /**
@@ -182,8 +215,10 @@ export function rungName(top: number, name: string): string {
 /**
  * 累積成就：一項數據只佔清單裡的一格，顯示跨過的**最高階**，點數是每一階加總。
  *
- * 級距讀 `step`，AP 階梯與生涯里程碑是同一個數字，`scope` 只決定從第幾階起算。
- * 兩邊分開寫過一次，結果就是聯盟盜壘 50 進得了成就櫃、生涯 350 卻不見蹤影。
+ * 級距讀 `step`，`scope` 只決定從第幾階起算。級距與門檻與生涯里程碑共用同一份
+ * ——兩邊分開寫過一次，結果就是聯盟盜壘 50 進得了成就櫃、生涯 350 卻不見蹤影。
+ * **分數的算法則不共用**：這裡給的是 AP（線性、封頂），里程碑給的是評價分
+ * （平方、不封頂）。見 `ladderAp()`。
  *
  * 跨不過第一階就什麼都沒有——打 300 安就引退的人不會出現在成就櫃上。那不是漏掉
  * 了他，是這個系統要說的話：養出一個廢物不該有回報。
@@ -204,14 +239,17 @@ function cumulative(
     const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
     if (value === null) continue;
 
-    // 同一份級距也餵給 career.ts 的里程碑分數——階梯與里程碑是同一件事，
-    // 不是兩套各自漂移的數字。
-    const { top, points } = ladderTop(spec.step, spec.points, c.first_rung[scope], value);
+    // 級距、門檻與階名都與 career.ts 的里程碑共用一份——同一階在兩張卡上得長成
+    // 同一個樣子。**只有分數的算法分家**：這裡是 AP，走線性並封在 ap_max_rungs
+    // 階；里程碑那邊是評價分，平方且不封頂。理由見 `ladderAp()`。
+    const ap = (v: number) =>
+      ladderAp(spec.step, spec.points, c.first_rung[scope], c.ap_max_rungs, v);
+    const { top, points } = ap(value);
     if (top === null) continue;
 
     // 扣掉上一段生涯已經領過的階，只補這一段新爬上來的部分。
     const prev = bestUnlockedRung(unlocked, `${prefix}:${stat}`);
-    const taken = prev === null ? 0 : ladderTop(spec.step, spec.points, c.first_rung[scope], prev).points;
+    const taken = prev === null ? 0 : ap(prev).points;
 
     out.push({
       id: `${prefix}:${stat}:${top}`,
