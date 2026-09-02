@@ -89,7 +89,7 @@ describe('abilityCost', () => {
     }
   });
 
-  it('天賦折扣（舉重若輕）每一級都少付，且在倍率之後才扣', () => {
+  it('天賦折扣（練武奇才）每一級都少付，且在倍率之後才扣', () => {
     const base = tiersOf();
     const discounted = { curve: { ...base, discount: 2 }, twoWay: false };
     for (let v = abilities.scale.min; v <= abilities.scale.max; v++) {
@@ -351,7 +351,7 @@ describe('rollTrainingDice', () => {
     }
   });
 
-  it('練武奇才的骰面下限被墊高', () => {
+  it('高手高手高高手的骰面下限被墊高', () => {
     const genius = new Set(['genius']);
     for (let i = 0; i < 200; i++) {
       for (const v of roll(`s${i}`, genius).values) {
@@ -360,7 +360,7 @@ describe('rollTrainingDice', () => {
     }
   });
 
-  it('練武奇才優先於十里坡劍神——兩者同時擁有時用練武奇才的區間', () => {
+  it('高手高手高高手優先於十里坡劍神——兩者同時擁有時用高手高手高高手的區間', () => {
     const both = new Set(['genius', 'late']);
     const geniusMin = abilities.training_dice.faces['genius']?.min ?? 0;
     for (let i = 0; i < 200; i++) {

@@ -254,7 +254,7 @@
     "discount": {
       "_note": "左投／左打／左右開弓在棒球裡有結構性優勢：左投稀缺、左打離一壘近且面對的反邊投手更多。這份優勢的對價是**兩把尺一起降**——個人尺（他被拿來比的 par／min）與潛力上限同時打折。降個人尺代表同樣的能力值，他的成績會被算得比別人好看；降潛力上限代表他天生就練不到那麼高。兩者一起，才是「用天花板換順風」而不是純扣分。",
       "_tier_note": "檔次**取代不累加**：左右開弓（bats S）或左右開投（switch_pitcher 特性）取最深的一檔，不是在左打那一檔上再疊。同一個球員只吃一個檔次。",
-      "_potential_note": "潛力折扣是**一次性的比例**，只作用在出生時抽到的潛力上。天賦異稟的 talent_bonus.ceiling 與事件的 ceilingBonus 全部原價加在折後的潛力上，硬上限 80 對誰都一樣。因此中途才拿到 switch_pitcher 的右投，折扣即時生效，但已經點超過的能力值不回扣——他只是接下來變貴。",
+      "_potential_note": "潛力折扣是**一次性的比例**，只作用在出生時抽到的潛力上。天生神力的 talent_bonus.ceiling 與事件的 ceilingBonus 全部原價加在折後的潛力上，硬上限 80 對誰都一樣。因此中途才拿到 switch_pitcher 的右投，折扣即時生效，但已經點超過的能力值不回扣——他只是接下來變貴。",
       "_standard_note": "個人尺折扣是**永久**的，par 與 min 同步下移。見 league.ts 的 personalStandardOf／leagueStandardOf：1〜5（升降級、簽約、守位、成績、生涯評價）吃個人尺；6、7（獎項、名人堂）吃聯盟真尺。",
       "_scope_note": "**全域**——所有能力一起降，不分投手組野手組。聯盟的尺變了是全域的事，臂力範圍縮小也可以解釋成那是練出來的、不是天生慣用手。守備不砍反而會變成「左打天生守備強」的語意。",
       "tiers": {
@@ -533,7 +533,7 @@
         }
       ],
       "above_ceiling_multiplier": 3,
-      "_discount_note": "天賦買來的全域折扣（見 talents.json 的「舉重若輕」）。**平常是 0**，存在的意義是給設定覆蓋層一個可以寫入的位置。在乘上 above_ceiling_multiplier **之後**才扣，理由同 two_way_discount：折扣是「每一級少付幾點」而不是「打幾折」，先扣的話天花板之外會被倍率放大成 −3。",
+      "_discount_note": "天賦買來的全域折扣（見 talents.json 的「練武奇才」）。**平常是 0**，存在的意義是給設定覆蓋層一個可以寫入的位置。在乘上 above_ceiling_multiplier **之後**才扣，理由同 two_way_discount：折扣是「每一級少付幾點」而不是「打幾折」，先扣的話天花板之外會被倍率放大成 −3。",
       "discount": 0,
       "min_cost": 1
     },
@@ -556,7 +556,7 @@
     },
     "count_when_injured": 2,
     "min_count": 2,
-    "_bonus_count_note": "天賦買來的固定骰數（見 talents.json 的「加練」）。**平常是 0。** 與 count_modifiers 不同，它不吃 min_count 的夾擠，也**照樣加在傷缺整季的球季上**——特性修正是那一季的境遇，天賦是玩家帶進場的東西，跟今年有沒有受傷無關（同 championship_bonus 的處理）。",
+    "_bonus_count_note": "天賦買來的固定骰數（見 talents.json 的「精神時光屋」）。**平常是 0。** 與 count_modifiers 不同，它不吃 min_count 的夾擠，也**照樣加在傷缺整季的球季上**——特性修正是那一季的境遇，天賦是玩家帶進場的東西，跟今年有沒有受傷無關（同 championship_bonus 的處理）。",
     "bonus_count": 0,
     "faces": {
       "_note": "依特性取用，命中第一個即採用；都沒有則用 default。",

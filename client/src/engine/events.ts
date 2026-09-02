@@ -44,14 +44,14 @@ interface EventsData {
     readonly boosted: number;
     readonly boost_traits: readonly string[];
     readonly fail_penalty: { readonly trait: string; readonly add_fail_percent: number };
-    /** 天賦「福將」的乘算層，平常是 1。 */
+    /** 天賦「天選之人」的乘算層，平常是 1。 */
     readonly talent_multiplier: number;
     readonly mode_modifier: {
       readonly safe: number;
       readonly normal: number;
       readonly bold: number;
       readonly bold_immune_trait: string;
-      /** 天賦「孤注一擲」的乘算層，只乘豪賭，平常是 1。 */
+      /** 天賦「梭哈」的乘算層，只乘豪賭，平常是 1。 */
       readonly bold_multiplier: number;
       readonly cap: number;
     };

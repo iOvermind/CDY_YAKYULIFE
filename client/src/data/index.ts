@@ -277,7 +277,7 @@ export interface LoveData {
     };
     readonly checkpoint: {
       readonly break_chance: number;
-      /** 天賦「青梅竹馬」的乘算層，平常是 1。乘存活率，不是分手率。見 ADR 0033。 */
+      /** 天賦「絕對真愛」的乘算層，平常是 1。乘存活率，不是分手率。見 ADR 0033。 */
       readonly talent_survive_multiplier: number;
     };
   };
@@ -308,7 +308,7 @@ export interface LoveData {
   };
   readonly turmoil: {
     readonly base_chance: number;
-    /** 天賦「心無旁騖」的乘算層，平常是 1。最後才乘。見 ADR 0033。 */
+    /** 天賦「練球機器」的乘算層，平常是 1。最後才乘。見 ADR 0033。 */
     readonly talent_multiplier: number;
     readonly swallow: { readonly crack_adds_chance: number; readonly reward_penalty_per_crack: number };
     readonly leave: { readonly ability_loss: number };

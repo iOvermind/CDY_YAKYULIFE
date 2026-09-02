@@ -63,7 +63,7 @@ export function standardDiscount(tier: HandednessTier): number {
 /**
  * 折後的潛力上限。
  *
- * 只作用在出生時抽到的潛力上——天賦異稟與事件的加成原價疊在折後的值上面，
+ * 只作用在出生時抽到的潛力上——天生神力與事件的加成原價疊在折後的值上面，
  * 硬上限 80 對誰都一樣。無條件捨去：折扣是代價，不四捨五入成免費的半點。
  */
 export function discountedPotential(base: number, tier: HandednessTier): number {

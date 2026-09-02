@@ -97,7 +97,7 @@ describe('successChances', () => {
     expect(c.normal).toBeGreaterThan(c.bold);
   });
 
-  it('練武奇才提升全部三種應對的成功率', () => {
+  it('高手高手高高手提升全部三種應對的成功率', () => {
     const plain = successChances(new Set());
     const genius = successChances(new Set(['genius']));
     expect(genius.normal).toBeGreaterThan(plain.normal);

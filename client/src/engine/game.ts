@@ -2554,7 +2554,7 @@ export class Game {
    * 的風險，改成身分轉換各擲一次。撐過去的對象會延續到職業生涯——那個在國中認識
    * 的人，可能就是日後在本壘板後方跪下來求婚的對象。
    *
-   * 天賦「青梅竹馬」乘的是**撐過去的機率**而不是分手機率（見 ADR 0033）：這個天賦
+   * 天賦「絕對真愛」乘的是**撐過去的機率**而不是分手機率（見 ADR 0033）：這個天賦
    * 要保證的就是「這段感情走得過身分轉換」。
    */
   #loveCheckpoint(label: string): void {
@@ -4830,7 +4830,7 @@ export class Game {
         `能力 ${dbgBefore} → ${this.#ability[key] ?? 0}（潛力 ${dbgCeiling}` +
         `${dbgBefore >= dbgCeiling ? '，已在天花板之上' : ''}、上限 ${hardCap(this.#ceilingBonus[key] ?? 0)}）｜` +
         `蓄力 ${dbgCarry}/${dbgCost} → ${this.#carry[key] ?? 0}/${abilityCost(this.#ability[key] ?? 0, dbgCeiling, dbgCurve)}` +
-        // 天賦覆蓋層是全域可變狀態，掉了的話成本會靜靜地變回原價（破繭沒生效時
+        // 天賦覆蓋層是全域可變狀態，掉了的話成本會靜靜地變回原價（突破極限沒生效時
         // 天花板外是 3 倍而不是 1.5 倍）。把當下的倍率與折扣一起印出來，下次
         // 「同樣的能力怎麼價錢不一樣」就不必用算的去反推是哪一種。
         `｜倍率 ${dbgCurve.curve.above_ceiling_multiplier}、折扣 ${dbgCurve.curve.discount}` +
@@ -4925,7 +4925,7 @@ export class Game {
     // 這個原值，後面兩項加成都是原價疊上去的（見 handedness.ts）。
     const rolled = this.#player?.potential[key] ?? abilities.scale.max;
     const base = discountedPotential(rolled, this.#handednessTier);
-    // 三個來源，但不是同一種東西：抽到的潛力與「天賦異稟」那類全域加成都只是
+    // 三個來源，但不是同一種東西：抽到的潛力與「天生神力」那類全域加成都只是
     // 在量表**之內**移動，加起來最多 80；只有事件卡提升的那一項有資格把量表
     // 本身頂過 80（hardCap 同樣只認它）。最後一項平常是 0，由設定覆蓋層寫入
     // （見 ADR 0007）。
@@ -5040,7 +5040,7 @@ export class Game {
     const name = abilities.abilities[key] ?? key;
     const price = showPrice ? `－${value} 點・` : '';
     // 反灰的判準是**硬上限**，不是潛力。潛力天花板是價錢的轉折點（之上每級
-    // 乘 above_ceiling_multiplier，破繭天賦可以把倍率壓低），不是牆——牆只有
+    // 乘 above_ceiling_multiplier，突破極限這個天賦可以把倍率壓低），不是牆——牆只有
     // 一道，就是量表的 80，事件提升過上限的能力才會往上挪。
     //
     // 舊版在 current >= ceiling 就擋掉，於是 abilityCost() 那條「天花板之上

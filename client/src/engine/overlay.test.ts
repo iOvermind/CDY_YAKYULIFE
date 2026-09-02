@@ -72,7 +72,7 @@ describe('套用與還原', () => {
   });
 
   it('夾擠會生效——「仍不超過」「不低於」就寫在那裡', () => {
-    // 破繭把突破天賦的成本倍率往下壓，但不會低於 1。
+    // 突破極限把突破天賦的成本倍率往下壓，但不會低於 1。
     const revert = applyTalents({ breakthrough: 2 });
     expect(injury.chance.base).toBeGreaterThanOrEqual(0);
     revert();
@@ -107,7 +107,7 @@ describe('套用與還原', () => {
   it('一個天賦改多個路徑時，全部都會還原', () => {
     const revert = applyTalents({ overseas_eyes: 2 });
     revert();
-    // 越洋的眼睛第二級動了三個體系的球探機率。
+    // 國際認證第二級動了三個體系的球探機率。
     expect(effectsOf('overseas_eyes', 2).length).toBeGreaterThan(1);
   });
 });

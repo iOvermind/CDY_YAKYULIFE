@@ -56,7 +56,7 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
     }
   }
 
-  // 倍率可以被天賦（破繭）拉成小數，乘完無條件進位——蓄力槽是整數，
+  // 倍率可以被天賦（突破極限）拉成小數，乘完無條件進位——蓄力槽是整數，
   // 寧可貴一點也不要出現半點。
   const aboveCeiling = current >= ceiling;
   if (aboveCeiling) cost = Math.ceil(cost * curve.above_ceiling_multiplier);
@@ -218,7 +218,7 @@ export interface TrainingDice {
 /**
  * 擲季初的自主訓練骰。
  *
- * 骰數依權重抽，再套用特性修正；每顆骰的點數區間也依特性而異——練武奇才與大器
+ * 骰數依權重抽，再套用特性修正；每顆骰的點數區間也依特性而異——高手高手高高手與大器
  * 晚成的下限被墊高，因此期望值更好。傷缺整季時骰數固定為最低值。
  *
  * 職業期走同一條路，只是把基礎骰數換成 `baseCount`（球季佔滿時間，骰數比養成

@@ -282,7 +282,7 @@ function StartScreen({
        * 天賦從哪裡來。
        *
        * 優先用伺服器凍結的那一組（`t.talents`）——驗證時算數的是它。但登記失敗
-       * 時**不能退回「沒有天賦」**：玩家買了破繭卻在天花板外照付三倍價，畫面上
+       * 時**不能退回「沒有天賦」**：玩家買了突破極限卻在天花板外照付三倍價，畫面上
        * 沒有任何提示，那一局就是靜靜地變難了（實際發生過：API 沒起來，同一個
        * 存檔 6X 能力要 18 點蓄力，隔一局同樣的天賦只要 10 點）。
        *
@@ -1662,7 +1662,7 @@ function AbilityRow({
   const carry = state.carry[abilityKey] ?? 0;
   const bonus = state.ceilingBonus[abilityKey] ?? 0;
   // 天花板一律問引擎要。這裡曾經拿 origin.potential 自己加 ceilingBonus，漏掉了
-  // 「天賦異稟」那類天賦加成（最高 +10），於是收錢按 80 收、畫面卻寫 70
+  // 「天生神力」那類天賦加成（最高 +10），於是收錢按 80 收、畫面卻寫 70
   // （problems.txt #56）。合成規則歸引擎，前端只負責畫。
   const ceiling = state.ceiling[abilityKey] ?? 0;
   // 天花板被事件頂過量表上限的那幾項（最多 +5，見 abilities.json 的
