@@ -32,6 +32,31 @@ import { sumShares, type Shares } from './metrics.ts';
  * 份額與 `k` 在球季當下就算好存進來，不在結算時回算：那些值取決於**當年**的
  * 聯盟水準，而聯盟水準逐年浮動，事後回算會全部套到引退那年的數字上。
  */
+/**
+ * 一屆國際賽的紀錄。
+ *
+ * **與聯盟成績分開存**：國際賽不屬於任何聯盟（見 summarizeCareer 的說明），
+ * 混進 SeasonRecord 會污染聯盟通算與階梯成就。
+ *
+ * 名次與賽事名存在這裡而不是只留一條榮譽字串：ADR 0031 之後榮譽字串不帶年份
+ * （帶了的話同一項成就每年都會被當成新解鎖），因此「哪一年代表隊拿了什麼」
+ * 沒有別的地方留得住。成就問「這輩子做到了嗎」，年表問「哪一年做到的」。
+ *
+ * **一屆一列，不逐場**：引擎沒有逐場的粒度，一屆賽會直接產出一條合計成績，
+ * 聯盟球季也是同一種模型。
+ */
+export interface InternationalRecord {
+  readonly year: number;
+  readonly age: number;
+  /** 賽事名稱，例如「世界棒球經典賽」。 */
+  readonly tournament: string;
+  /** 中華隊的最終名次。 */
+  readonly rank: string;
+  /** 是否獲選賽會 MVP。 */
+  readonly mvp: boolean;
+  readonly batting: BattingLine | null;
+  readonly pitching: PitchingLine | null;
+}
 export interface SeasonRecord {
   readonly year: number;
   readonly age: number;
@@ -192,6 +217,8 @@ export interface CareerSummary {
   readonly careerMilestones: readonly string[];
   /** 國際賽貢獻的總評價分。與生涯里程碑同一個桶，不進任何單一聯盟。 */
   readonly internationalScore: number;
+  /** 職業期的國際賽逐屆紀錄。養成期的國際賽併在該年的養成列裡，不進這一份。 */
+  readonly internationalSeasons: readonly InternationalRecord[];
   /** 生涯代表聯盟。沒打過頂級聯盟時為 null。 */
   readonly representative: LeagueCareer | null;
   /** 生涯最佳分級。沒打過頂級聯盟時為最低帶。 */
@@ -366,6 +393,7 @@ export function summarizeCareer(
   championships = 0,
   amateurSeasons: readonly AmateurSeasonRecord[] = [],
   internationalScore = 0,
+  internationalSeasons: readonly InternationalRecord[] = [],
 ): CareerSummary {
   // ---- 頂級聯盟：各算一份
   const byTop = new Map<string, SeasonRecord[]>();
@@ -469,6 +497,7 @@ export function summarizeCareer(
     totalScore,
     careerMilestones: careerMilestones.reached,
     internationalScore,
+    internationalSeasons,
     representative,
     bestTier: representative?.tier ?? cfg.tier_thresholds.values.length,
   };

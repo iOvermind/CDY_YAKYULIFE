@@ -65,7 +65,7 @@ import {
   DH,
   type PositionResult,
 } from './defense.ts';
-import type { AmateurSeasonRecord } from './career.ts';
+import type { AmateurSeasonRecord, InternationalRecord } from './career.ts';
 import {
   buyoutCost,
   isFreeAgentEligible,
@@ -562,6 +562,14 @@ export class Game {
   /** 國際賽的生涯成績。與聯盟成績分開——它不屬於任何聯盟。 */
   #intlBatting: BattingLine | null = null;
   #intlPitching: PitchingLine | null = null;
+  /**
+   * 職業期國際賽的逐屆紀錄。
+   *
+   * 生涯合計那兩條線回答「他這輩子替中華隊打成什麼樣」，這一份回答「哪一年、
+   * 哪一項賽事、打了什麼」——ADR 0031 把年份從榮譽字串裡拿掉之後，那個問題
+   * 沒有別的地方留得住。養成期的國際賽併在該年的養成列裡，不進這一份。
+   */
+  #intlSeasons: InternationalRecord[] = [];
   /** 今年最好的大賽名次。校園告白的成功率看它——打進四強的王牌與坐板凳的人不一樣。 */
   get #bestRankThisYear(): string | null {
     const ranks = this.#lastCupSeason?.honors ?? [];
@@ -2828,7 +2836,16 @@ export class Game {
     if (isHonorRank(result.rank)) this.#counts.internationalPodiums++;
     if (isPodium(result.rankIndex)) this.#intlPodiums++;
 
-    this.#accumulateNationalStats();
+    const line = this.#accumulateNationalStats();
+    this.#intlSeasons.push({
+      year: this.#year,
+      age: this.#age,
+      tournament: tournament.name,
+      rank: result.rank,
+      mvp: result.mvp,
+      batting: line.batting,
+      pitching: line.pitching,
+    });
     this.#grantPoints(result.points);
     // 一屆賽會打完，下季的受傷風險上升。國家隊不是免費的榮耀。
     this.#injuryRisk += result.injuryNextSeason;
@@ -2878,11 +2895,14 @@ export class Game {
    * **復用球季模型**：把國際賽的 par 與場次直接傳進去，不在 `leagues.json` 建一個
    * 假層級——那會污染階梯、落地與升降級的邏輯。欄位因此與職業完全一致。
    */
-  #accumulateNationalStats(): void {
+  #accumulateNationalStats(): { batting: BattingLine | null; pitching: PitchingLine | null } {
+    const empty = { batting: null, pitching: null };
     const pro = this.#pro;
     const player = this.#player;
     const r = this.rating;
-    if (pro === null || player === null || r === null) return;
+    if (pro === null || player === null || r === null) return empty;
+    let tourneyBatting: BattingLine | null = null;
+    let tourneyPitching: PitchingLine | null = null;
 
     const position = this.#fieldPosition ?? DH;
     // 用一個 par 相當於國際賽水準的層級當尺——場次另外指定，因此層級只借它的
@@ -2906,6 +2926,7 @@ export class Game {
         games / leagueGames,
       );
       this.#intlPitching = addPitching(this.#intlPitching, line);
+      tourneyPitching = line;
     }
     if (side === 'fielder' || this.isTwoWay) {
       const games = tournamentGames(this.world, 'batter');
@@ -2919,7 +2940,9 @@ export class Game {
         games / leagueGames,
       );
       this.#intlBatting = addBatting(this.#intlBatting, line);
+      tourneyBatting = line;
     }
+    return { batting: tourneyBatting, pitching: tourneyPitching };
   }
 
   /**
@@ -4346,6 +4369,7 @@ export class Game {
       this.#counts.domesticTitles,
       this.#amateurSeasons,
       this.#intlScore,
+      this.#intlSeasons,
     );
     this.#summary = summary;
 

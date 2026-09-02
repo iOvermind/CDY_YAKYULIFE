@@ -1094,6 +1094,96 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
 }
 
 /**
+ * 國際賽年表。
+ *
+ * **獨立一張表**：國際賽不屬於任何聯盟，混進聯盟通算會污染階梯成就與各聯盟的
+ * 評價分。它接在通算後面而不是併進生涯年表，理由同上——年表那幾列的「球隊」欄
+ * 是他當年效力的球團，中華隊不是其中之一。
+ *
+ * **一屆一列，不逐場**：引擎沒有逐場的粒度，一屆賽會直接產出一條合計成績。
+ *
+ * 只收職業期。養成期的國際賽併在該年的養成列裡——那幾屆與謝國城盃同一個季節，
+ * 是學生賽程的一部分。
+ */
+function InternationalTable({ summary }: { summary: CareerSummary }) {
+  const rows = summary.internationalSeasons;
+  if (rows.length === 0) return null;
+  const batting = rows.filter((r) => r.batting !== null);
+  const pitching = rows.filter((r) => r.pitching !== null);
+  if (batting.length === 0 && pitching.length === 0) return null;
+
+  // 基準線挑代表聯盟——國際賽沒有自己的聯盟可挑，而成績本來就是拿他當時所在
+  // 的層級換算出來的。沒有職業紀錄時退回中職一軍，與通算表同一個慣例。
+  const base = proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1');
+  const head = (
+    <>
+      <th title="年度">年</th>
+      <th title="年齡">齡</th>
+      <th style={{ textAlign: 'left' }}>賽事</th>
+      <th style={{ textAlign: 'left' }} title="中華隊最終名次">名次</th>
+    </>
+  );
+  const lead = (r: CareerSummary['internationalSeasons'][number]) => (
+    <>
+      <td>{r.year}</td>
+      <td>{r.age}</td>
+      <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.tournament}</td>
+      <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+        {r.rank}
+        {r.mvp && <span className="sub">・MVP</span>}
+      </td>
+    </>
+  );
+
+  return (
+    <>
+      <h4 style={{ marginTop: 14 }}>國際賽</h4>
+      {batting.length > 0 && (
+        <div className="fin-scroll">
+          <div className="fin-caption">野手</div>
+          <table className="fin">
+            <thead>
+              <tr>
+                {head}
+                <StatHeadCells columns={BATTING_COLUMNS} />
+              </tr>
+            </thead>
+            <tbody>
+              {batting.map((r) => (
+                <tr key={`intl-b-${r.year}-${r.tournament}`}>
+                  {lead(r)}
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {pitching.length > 0 && (
+        <div className="fin-scroll">
+          <div className="fin-caption">投手</div>
+          <table className="fin">
+            <thead>
+              <tr>
+                {head}
+                <StatHeadCells columns={PITCHING_COLUMNS} />
+              </tr>
+            </thead>
+            <tbody>
+              {pitching.map((r) => (
+                <tr key={`intl-p-${r.year}-${r.tournament}`}>
+                  {lead(r)}
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+/**
  * 生涯年表。
  *
  * **含國中與高中**——養成六年也是這段生涯的一部分。一段效力一列；目前一年
@@ -1190,6 +1280,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
       {summary.leagues.length > 1 && (
         <TotalsTable title="頂級聯盟通算" rows={[topTotalRow(summary)]} />
       )}
+      <InternationalTable summary={summary} />
     </div>
   );
 }

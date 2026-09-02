@@ -813,6 +813,33 @@ describe('生涯次數統計', () => {
   });
 });
 
+describe('國際賽年表', () => {
+  it('職業期的每一屆都留下年份、賽事名與名次', () => {
+    // 職業期被徵召是少數事件（150 局裡約 4 局），掃描範圍要夠大。
+    for (let i = 0; i < 150; i++) {
+      const game = playWell(started({ seed: `q-${i}` }));
+      const rows = game.summary?.internationalSeasons ?? [];
+      if (rows.length === 0) continue;
+      for (const r of rows) {
+        expect(r.year).toBeGreaterThan(0);
+        expect(r.tournament.length).toBeGreaterThan(0);
+        expect(r.rank.length).toBeGreaterThan(0);
+        expect(r.batting !== null || r.pitching !== null).toBe(true);
+      }
+      // 徵召次數含養成期那幾屆，逐屆紀錄只收職業——所以是不多於，不是等於。
+      expect(rows.length).toBeLessThanOrEqual(game.state?.counts.internationalCaps ?? -1);
+      return;
+    }
+    throw new Error('一百五十局都沒有人在職業期被徵召過');
+  });
+
+  it('養成期的國際賽不進這一份——它併在該年的養成列裡', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playAmateur(started({ seed: `intl-am-${i}` }));
+      expect(game.summary?.internationalSeasons ?? []).toHaveLength(0);
+    }
+  });
+});
 describe('入學後的守位說明卡', () => {
   it('只對 UTIL 發——那兩句話對其他起點都是假的（ADR 0009）', () => {
     const util = started({ seed: 'card-util', startPosition: 'UTIL' });
