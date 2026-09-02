@@ -1,0 +1,90 @@
+# 整台服務：前端 + API + Postgres。用 `./deploy.sh` 起，不要手動記參數。
+#
+# **掛載 repo 直接跑，不建 image。** 更新的方式是 `git pull` 然後
+# `docker compose restart app`——容器啟動時會重裝依賴並重新建置前端，所以你拉下來
+# 的就是跑起來的那一份。
+#
+# 資料都放在 repo 底下的 `./data/`，不用 Docker 具名 volume：備份就是複製一個
+# 資料夾，搬機器就是搬那個資料夾。代價是那個目錄由 Postgres 容器持有（uid 999），
+# 宿主機上要用 sudo 才動得了。
+#
+# **沒有 tunnel。** 對外怎麼接由你決定（cloudflared、nginx、直接開埠都行），
+# 對它們來說這裡就是一個 HTTP 服務。
+#
+# 另一份 `server/compose.yaml` 是 image 版：程式碼建進 image、附 cloudflared，
+# 適合「build 一次丟上去跑」。兩份共用同一組環境變數名稱，但**資料不共用**——
+# 那一份用 Docker 具名 volume，這一份用 ./data。
+
+services:
+  app:
+    image: node:24-alpine
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgres://yakyu:${POSTGRES_PASSWORD:?請先跑 ./deploy.sh 產生 .env}@db:5432/yakyu
+      # 沒設的話伺服器會用隨機金鑰，重啟後所有人被登出。
+      SESSION_SECRET: ${SESSION_SECRET:?請先跑 ./deploy.sh 產生 .env}
+      # 前端建置的產物在 volume 裡，不寫回掛進來的 repo。
+      STATIC_DIR: /repo/client/dist
+      PORT: 8080
+      # **NODE_ENV 不設在這裡。** 設了的話 client 的 npm ci 會跳過 devDependencies，
+      # 而 vite 與 typescript 都在那裡——前端建置會直接失敗。它只掛在最後那道
+      # 啟動指令上，讓伺服器自己跑在 production 模式。
+    volumes:
+      # repo 本體。改完 `git pull` 再 `restart app` 就生效，不必重建 image。
+      - .:/repo
+      # **node_modules 一定要蓋掉。** 掛進來的那份是宿主機裝的，rollup / esbuild /
+      # TypeScript 都是原生二進位，平台不對會直接炸；而
+      # client/scripts/native-platform.mjs 的自動修復是**就地重裝**，那會把容器裡
+      # 的 Linux 二進位寫回宿主機那一份，在 Windows 上開發的人下次跑就中獎。
+      # 用具名 volume 蓋住之後兩邊各有各的，互不影響。
+      - client_modules:/repo/client/node_modules
+      - server_modules:/repo/server/node_modules
+      # 建置產物同理：不要寫回掛進來的 repo。
+      - client_dist:/repo/client/dist
+    # 第一次啟動要裝依賴並建置前端，會跑幾分鐘（`docker compose logs -f app` 看得到
+    # 進度）。之後 volume 還在，npm ci 有 lock 會很快；**build 每次都跑**——掛載式
+    # 的重點就是「pull 完 restart 就是新版」，跳過 build 會讓你看到舊畫面卻以為更新了。
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "[compose] 安裝 client 依賴……"
+        cd /repo/client && npm ci --no-audit --no-fund
+        echo "[compose] 建置前端……"
+        npm run build
+        echo "[compose] 安裝 server 依賴……"
+        cd /repo/server && npm ci --omit=dev --no-audit --no-fund
+        echo "[compose] 啟動伺服器……"
+        export NODE_ENV=production
+        exec node --experimental-strip-types src/index.ts
+    depends_on:
+      db:
+        condition: service_healthy
+    # 預設只綁 127.0.0.1——這台機器如果有公網 IP，綁 0.0.0.0 等於直接對外開一個
+    # 沒有 TLS 的服務。tunnel 跑在同一台主機上時 127.0.0.1 就夠；要讓別的容器連
+    # 得到就設 BIND_ADDR=0.0.0.0，或把它接進這個 compose 的網路用 `app:8080`。
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: yakyu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請先跑 ./deploy.sh 產生 .env}
+      POSTGRES_DB: yakyu
+    volumes:
+      - ${DATA_DIR:-./data}/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yakyu"]
+      interval: 5s
+      retries: 10
+    # 資料庫不對外開埠。要進去下 SQL 用 `docker compose exec db psql -U yakyu -d yakyu`
+    # ——開一個 5432 出去只是多一個要防的東西。
+    restart: unless-stopped
+
+volumes:
+  client_modules:
+  server_modules:
+  client_dist:

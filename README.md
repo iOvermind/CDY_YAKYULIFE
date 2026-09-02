@@ -40,21 +40,35 @@
 
 帳號、成就點數與天賦需要伺服器——**成就點數是跨局累積並換成永久強化的貨幣，它一旦可以偽造，整個系統就沒有意義**，因此伺服器會用同一份引擎重跑重播日誌來驗證每一段生涯。設計見 [ADR 0007](docs/adr/0007-online-accounts-and-server-verification.md)。
 
-```bash
-cd server
-cp .env.example .env      # 填 POSTGRES_PASSWORD、SESSION_SECRET、TUNNEL_TOKEN
-docker compose up -d --build
-curl -sI localhost:8080   # 確認服務真的起來了（tunnel 還沒設好之前也看得到）
-```
-
-資料表在第一次啟動時自動建好（`schema.sql` 每次啟動都跑，而且每一行都是冪等的）。
-**要打掉重來**才需要手動跑一次 `reset.sql`——DROP 不放進自動執行的那份檔案，否則
-每重開一次就清空一次玩家的帳號與 AP：
+clone 完直接跑，不必先讀任何文件、也不必手動填金鑰：
 
 ```bash
-docker compose exec -T db psql -U yakyu -d yakyu < reset.sql
-docker compose restart app
+./deploy.sh
 ```
+
+它會檢查 Docker、產生 `.env`（密碼與 session 金鑰自動生成）、建好 `./data`，起
+compose 並**等到 HTTP 真的回話**才結束。第一次要在容器裡裝依賴並建置前端，會跑
+好幾分鐘，中途每半分鐘回報一次進度。
+
+```bash
+./deploy.sh              # 起服務；更新就 git pull 之後再跑一次
+./deploy.sh logs         # 跟著看記錄
+./deploy.sh down         # 停掉，資料留著
+./deploy.sh reset-db     # 清空資料庫（會先問你一次）
+```
+
+程式碼是**掛載**進容器的，不建 image——所以更新是 `git pull && ./deploy.sh`，不必
+重新 build。資料在 `./data/`，備份就是複製那個資料夾。資料表在第一次啟動時自動建好
+（`server/schema.sql` 每次啟動都跑，每一行都是冪等的）；DROP 不放在那裡，否則每重開
+一次就清空一次玩家的帳號與 AP，要打掉重來走 `./deploy.sh reset-db`。
+
+**對外怎麼接由你決定**——cloudflared、nginx、直接開埠都行，對它們來說這裡就是一個
+HTTP 服務。預設只綁 `127.0.0.1:8080`（tunnel 跑在同一台主機時這樣就夠，而綁 0.0.0.0
+等於在公網上開一個沒有 TLS 的服務）；要改就動 `.env` 的 `APP_PORT` 與 `BIND_ADDR`。
+
+另一種跑法是把程式碼建進 image：`server/compose.yaml` 是那一份，附一個 cloudflared
+服務，適合「build 一次丟上去跑」。**兩份的資料不共用**——那一份用 Docker 具名 volume，
+`./deploy.sh` 這一份用 `./data`。
 
 只要 image、部署另外處理的話，用專案根目錄的 `./build-image.sh`（建出 `cdy_yakyulife:latest`，不啟動任何東西）。執行時需要 `DATABASE_URL` 與 `SESSION_SECRET`。
 

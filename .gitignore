@@ -12,6 +12,9 @@ Thumbs.db
 # 伺服器
 server/node_modules/
 server/.env
+# ./deploy.sh 產生的：金鑰與整個資料庫。**絕對不能進版控。**
+/.env
+/data/
 # 本機開發的假資料庫——是某台機器上的測試資料，不是專案的一部分。
 server/.devdata.json
 docs/love描述.txt
