@@ -118,9 +118,10 @@ CDY_YAKYULIFE/
 │  │  ├─ data/      規則資料（JSON）與型別化的載入層
 │  │  └─ engine/    模擬引擎；測試與被測檔案同層並列
 │  └─ src-tauri/    legacy 的 Tauri 封裝，不再維護（ADR 0038）
-├─ server/          帳號、成就與重跑驗證；Postgres schema 與 image 版 compose
-├─ deploy.sh        一行架起整台服務
-├─ compose.yaml     掛載式部署（app + Postgres）
+├─ server/          帳號、成就與重跑驗證；Postgres schema 與 Dockerfile
+├─ deploy.sh        建出 image（不啟動任何東西）
+├─ compose.yaml     部署描述（app + Postgres + cloudflared）
+├─ .env.example     compose 需要的環境變數範本
 ├─ index_legacy.html 舊版遊戲本體（HTML + CSS + JS 全部內嵌，唯讀保留）
 ├─ WIKI.md          遊戲設計文件與完整數值表
 ├─ CONTEXT.md       領域術語表
@@ -208,16 +209,18 @@ npm run tauri build  # legacy，不再維護（ADR 0038）
 
 **部署**（見 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)）
 
+建 image 與跑容器是分開的兩步——「重啟一下」不該變成「順手換了一個版本」。
+
 ```bash
-./deploy.sh          # 產生 .env、起 compose、等到 HTTP 回話為止
-./deploy.sh logs     # 跟著看記錄
-./deploy.sh down     # 停掉，資料留著
-./deploy.sh reset-db # 清空資料庫（會先問一次）
+./deploy.sh                   # 產生 .env（若無）、建出 cdy_yakyulife:latest。不啟動任何東西
+docker compose up -d          # 或在 Dockhand 之類的管理介面上部署這個專案
+docker compose logs -f app
+docker compose down           # 停掉，資料留著
 ```
 
-程式碼是**掛載**進容器的（根目錄的 `compose.yaml`），所以更新是 `git pull && ./deploy.sh`，不必重新 build。資料在 `./data/`。
+根目錄的 `compose.yaml` 是**純描述式的**三個服務：`app`（image 版，前端已建進去）、`db`、`cloudflared`。沒有啟動時安裝依賴、沒有啟動時建置前端，所以起停與看記錄都可以交給容器管理介面。更新是 `git pull && ./deploy.sh`，然後讓 app 換上新 image。
 
-另一種跑法是把程式碼建進 image：`server/compose.yaml` 是那一份（附 cloudflared），或用 `./build-image.sh` 只建不跑。**兩種跑法的資料不共用**——image 版用 Docker 具名 volume，`deploy.sh` 用 `./data`。
+環境變數在 `.env`（範本 `.env.example`）；`TUNNEL_TOKEN` 要自己去 Cloudflare Zero Trust 拿，通道的 service 填 `http://app:8080`。資料在 `./data/`。清庫是 `docker compose exec -T db psql -U yakyu -d yakyu < server/reset.sql`，**不可復原**。
 
 **產物**
 

@@ -41,37 +41,42 @@
 
 帳號、成就點數與天賦需要伺服器——**成就點數是跨局累積並換成永久強化的貨幣，它一旦可以偽造，整個系統就沒有意義**，因此伺服器會用同一份引擎重跑重播日誌來驗證每一段生涯。設計見 [ADR 0007](docs/adr/0007-online-accounts-and-server-verification.md)。
 
-clone 完直接跑，不必先讀任何文件、也不必手動填金鑰：
+部署分兩步：**建 image**、**跑 compose**。分開的理由是「重啟一下」不該變成
+「順手換了一個版本」。
 
 ```bash
 ./deploy.sh
 ```
 
-它會檢查 Docker、產生 `.env`（密碼與 session 金鑰自動生成）、建好 `./data`，起
-compose 並**等到 HTTP 真的回話**才結束。第一次要在容器裡裝依賴並建置前端，會跑
-好幾分鐘，中途每半分鐘回報一次進度。
+`./deploy.sh` 只做建置：檢查 Docker、在沒有 `.env` 時產生一份（密碼與 session 金鑰
+自動生成）、建好 `./data`，然後建出 `cdy_yakyulife:latest`。**它不啟動任何東西。**
+
+建完之後把 `.env` 裡的 `TUNNEL_TOKEN` 填上（Cloudflare Zero Trust → Networks →
+Tunnels），再起 compose：
 
 ```bash
-./deploy.sh              # 起服務；更新就 git pull 之後再跑一次
-./deploy.sh logs         # 跟著看記錄
-./deploy.sh down         # 停掉，資料留著
-./deploy.sh reset-db     # 清空資料庫（會先問你一次）
+docker compose up -d          # 或在 Dockhand 之類的管理介面上部署這個專案
+docker compose logs -f app
+docker compose down           # 停掉，資料留著
 ```
 
-程式碼是**掛載**進容器的，不建 image——所以更新是 `git pull && ./deploy.sh`，不必
-重新 build。資料在 `./data/`，備份就是複製那個資料夾。資料表在第一次啟動時自動建好
+`compose.yaml` 是**純描述式的**——三個服務（app、db、cloudflared），沒有啟動時安裝
+依賴、沒有啟動時建置前端，所以起停與看記錄都可以交給容器管理介面。更新的流程是
+`git pull && ./deploy.sh`，然後讓 app 換上新 image（管理介面上重新部署，或
+`docker compose up -d app`）。
+
+資料在 `./data/`，備份就是複製那個資料夾。資料表在第一次啟動時自動建好
 （`server/schema.sql` 每次啟動都跑，每一行都是冪等的）；DROP 不放在那裡，否則每重開
-一次就清空一次玩家的帳號與 AP，要打掉重來走 `./deploy.sh reset-db`。
+一次就清空一次玩家的帳號與 AP。要打掉重來是
+`docker compose exec -T db psql -U yakyu -d yakyu < server/reset.sql`——**那會清光所有
+帳號、成就與生涯紀錄，不可復原。**
 
-**對外怎麼接由你決定**——cloudflared、nginx、直接開埠都行，對它們來說這裡就是一個
-HTTP 服務。預設只綁 `127.0.0.1:8080`（tunnel 跑在同一台主機時這樣就夠，而綁 0.0.0.0
-等於在公網上開一個沒有 TLS 的服務）；要改就動 `.env` 的 `APP_PORT` 與 `BIND_ADDR`。
+**對外走 Cloudflare Tunnel。** `cloudflared` 跟 app 在同一個 compose 網路裡，通道的
+public hostname 那一欄 service 填 `http://app:8080`。compose 另外把 app 綁在
+`127.0.0.1:8080` 上，那是**給本機驗證用的**（`curl http://127.0.0.1:8080/`）——要改就
+動 `.env` 的 `APP_PORT` 與 `BIND_ADDR`，但別綁 0.0.0.0，那等於在公網上開一個沒有 TLS
+的服務。不想用 tunnel 的話，把 `cloudflared` 那一段刪掉，自己接 nginx 或別的反向代理。
 
-另一種跑法是把程式碼建進 image：`server/compose.yaml` 是那一份，附一個 cloudflared
-服務，適合「build 一次丟上去跑」。**兩份的資料不共用**——那一份用 Docker 具名 volume，
-`./deploy.sh` 這一份用 `./data`。
-
-只要 image、部署另外處理的話，用專案根目錄的 `./build-image.sh`（建出 `cdy_yakyulife:latest`，不啟動任何東西）。執行時需要 `DATABASE_URL` 與 `SESSION_SECRET`。
 
 一個 image 同時服務前端與 `/api`，因此**前端與伺服器端的引擎永遠是同一份建置**；同源也讓 session 可以走 HttpOnly cookie。資料庫是 PostgreSQL，對外由 Cloudflare Tunnel 接上網域。
 
