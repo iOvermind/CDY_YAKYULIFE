@@ -13,9 +13,11 @@ import { beforeEach, describe, it } from 'node:test';
 import { Game, type ReplayLog } from '../../client/src/engine/game.ts';
 import { useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
+import { CAREER_SCOPE } from '../../client/src/engine/ladder.ts';
 import {
   finishCareer,
   HttpError,
+  ladder,
   login,
   meOf,
   setTalent,
@@ -64,6 +66,52 @@ function playToEnd(talents: Record<string, number> = {}): ReplayLog {
   }
 }
 
+/**
+ * 打完一局，而且**真的打上頂級聯盟**。
+ *
+ * `playToEnd()` 一律選第一個選項，也就是把點數全投進體力——那種球員上不了
+ * 一軍，天梯一列都不會寫（那是對的，不是漏算）。天梯的測試需要一個有頂級
+ * 聯盟成績的樣本，所以這裡把點數投進真正影響評價的能力。
+ *
+ * 種子是挑過的：`srv-0` 在這個策略下會打上頂級聯盟。跨版本不保證重現
+ * （ADR 0002），所以引擎大改之後這個種子可能要重挑——真的失效時
+ * `assert.ok(mine.length > 0)` 會直接說「一列都沒寫」。
+ *
+ * **連 `claimed` 一起回傳**：那是客戶端真正會送的東西（`App.tsx` 送的是
+ * `game.achievements.list` 的 id）。傳空陣列的話 `verified` 必然是 false，
+ * 而天梯只收 verified 的生涯——測試就會量到一個假的失敗。
+ */
+function playStrong(): { log: ReplayLog; claimed: string[] } {
+  const game = new Game({
+    seed: 'srv-0',
+    name: '測試員',
+    startPosition: 'SS',
+    throws: 'R',
+    bats: 'R',
+  }).start();
+  try {
+    while (game.flow.prompt !== null) {
+      const usable = game.flow.prompt.options.filter(
+        (o) => o.disabled !== true && o.id !== 'alloc:undo',
+      );
+      const pick =
+        ['con', 'pow', 'eye', 'spd', 'rng', 'fld']
+          .map((k) => usable.find((o) => o.id === `alloc:${k}`))
+          .find((o) => o !== undefined) ??
+        usable.find((o) => o.id === 'alloc:confirm') ??
+        usable[0];
+      if (pick === undefined) throw new Error('提問沒有選項');
+      game.choose(pick.id);
+    }
+    return {
+      log: game.toReplayLog(),
+      claimed: (game.achievements?.list ?? []).map((a) => a.id),
+    };
+  } finally {
+    game.dispose();
+  }
+}
+
 describe('註冊', () => {
   it('註冊即通過，不驗證任何東西', async () => {
     const user = await register('Overmind', 'hunter2');
@@ -106,49 +154,49 @@ describe('天賦', () => {
 
   it('買下去會扣掉 AP，餘額是算出來的', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 30);
-    assert.equal((await meOf(user)).ap, 30);
+    grant(user.id, 'test:rich', 100);
+    assert.equal((await meOf(user)).ap, 100);
 
-    const after = await setTalent(user, 'gifted', 1); // 第一級 5 點
+    const after = await setTalent(user, 'gifted', 1); // 第一級 10 點
     assert.equal(after.talents['gifted'], 1);
-    assert.equal(after.ap, 25);
+    assert.equal(after.ap, 90);
     // 賺過多少不會因為花掉而變少。
-    assert.equal(after.apEarned, 30);
+    assert.equal(after.apEarned, 100);
   });
 
   it('每一級各收各的價，不是重收一次全部', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 30);
-    await setTalent(user, 'gifted', 1); // Lv1：5
-    const after = await setTalent(user, 'gifted', 2); // Lv2 再收 12，累積 17
+    grant(user.id, 'test:rich', 100);
+    await setTalent(user, 'gifted', 1); // Lv1：10
+    const after = await setTalent(user, 'gifted', 2); // Lv2 再收 24，累積 34
     assert.equal(after.talents['gifted'], 2);
-    assert.equal(after.ap, 30 - 17);
+    assert.equal(after.ap, 100 - 34);
   });
 
   it('一次跳兩級收的是累積價，跟一級一級點一樣', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 30);
+    grant(user.id, 'test:rich', 100);
     const after = await setTalent(user, 'gifted', 2);
     assert.equal(after.talents['gifted'], 2);
-    assert.equal(after.ap, 30 - 17);
+    assert.equal(after.ap, 100 - 34);
   });
 
   it('重送同一個級數不會再扣一次', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 30);
+    grant(user.id, 'test:rich', 100);
     await setTalent(user, 'gifted', 2);
     const again = await setTalent(user, 'gifted', 2);
     assert.equal(again.talents['gifted'], 2);
-    assert.equal(again.ap, 30 - 17);
+    assert.equal(again.ap, 100 - 34);
   });
 
   it('降級退的是差價，不是全部', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 30);
-    await setTalent(user, 'gifted', 2); // 花掉 17
-    const down = await setTalent(user, 'gifted', 1); // 退回 Lv2 的 12
+    grant(user.id, 'test:rich', 100);
+    await setTalent(user, 'gifted', 2); // 花掉 34
+    const down = await setTalent(user, 'gifted', 1); // 退回 Lv2 的 24
     assert.equal(down.talents['gifted'], 1);
-    assert.equal(down.ap, 25);
+    assert.equal(down.ap, 90);
   });
 
   it('點滿之後買不下去', async () => {
@@ -174,14 +222,14 @@ describe('天賦', () => {
 
   it('退到零是全額，而且退完可以再買一次', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 30);
-    await setTalent(user, 'gifted', 2); // 花掉 5 + 12 = 17
+    grant(user.id, 'test:rich', 100);
+    await setTalent(user, 'gifted', 2); // 花掉 10 + 24 = 34
 
     const refunded = await setTalent(user, 'gifted', 0);
-    assert.equal(refunded.ap, 30);
+    assert.equal(refunded.ap, 100);
     assert.equal(refunded.talents['gifted'], undefined);
 
-    assert.equal((await setTalent(user, 'gifted', 1)).ap, 25);
+    assert.equal((await setTalent(user, 'gifted', 1)).ap, 90);
   });
 });
 
@@ -277,8 +325,8 @@ describe('結算', () => {
 
   it('用登記時凍結的天賦重跑，不是日誌裡寫的那一組', async () => {
     const user = await register('Overmind', 'hunter2');
-    grant(user.id, 'test:rich', 60);
-    await setTalent(user, 'gifted', 3); // 凍結 Lv3
+    grant(user.id, 'test:rich', 100);
+    await setTalent(user, 'gifted', 3); // 凍結 Lv3，累積 84
     const ticket = await startCareer(user);
 
     // 客戶端謊報成「我沒有天賦」，伺服器仍該用 Lv3 重跑。
@@ -302,5 +350,83 @@ describe('結算', () => {
       (e: HttpError) => e.status === 400,
     );
     assert.equal(db.achievements.length, 0);
+  });
+});
+
+describe('天梯', () => {
+  /** 打完一局並結算，回傳那一局的 id。 */
+  async function finish(account: string) {
+    const user = await register(account, 'hunter2');
+    const ticket = await startCareer(user);
+    const played = playStrong();
+    await finishCareer(user, ticket.careerId, played);
+    return user;
+  }
+
+  it('結算會寫下每個範圍的一列', async () => {
+    const user = await finish('Overmind');
+    const mine = db.careerStats.filter((r) => r.user_id === user.id);
+    assert.ok(mine.length > 0, '一列都沒寫');
+    // 生涯那一列一定在——只要他上過頂級聯盟。
+    assert.ok(mine.some((r) => r.scope === CAREER_SCOPE));
+    // 每一列都帶著引擎版本與姓名，榜上才寫得出這是誰、哪一版的規則。
+    for (const row of mine) {
+      assert.ok(row.engine_version > 0);
+      assert.equal(row.player_name, '測試員');
+    }
+  });
+
+  it('驗證失敗的生涯不進榜', async () => {
+    const user = await register('Overmind', 'hunter2');
+    const ticket = await startCareer(user);
+    // 客戶端謊報成就清單，伺服器算出來的與它對不上 → verified = false。
+    await finishCareer(user, ticket.careerId, {
+      log: playStrong().log,
+      claimed: ['這個成就不存在'],
+    });
+    assert.equal(db.careers[0]?.verified, false);
+    assert.equal(db.careerStats.length, 0);
+  });
+
+  it('個人天梯只看自己，全伺服器天梯看所有人', async () => {
+    const a = await finish('Overmind');
+    await finish('Someone');
+    assert.ok(db.careerStats.some((r) => r.user_id !== a.id), '第二個人沒有寫進去');
+
+    const mine = await ladder(a, CAREER_SCOPE, true);
+    const all = await ladder(a, CAREER_SCOPE, false);
+    const accountsOf = (r: Awaited<ReturnType<typeof ladder>>) =>
+      new Set(r.boards.flatMap((b) => b.entries.map((e) => e.account)));
+
+    assert.deepEqual([...accountsOf(mine)], ['Overmind']);
+    assert.ok(accountsOf(all).has('Someone'));
+  });
+
+  it('沒登入也看得到全伺服器天梯，但個人天梯要有身分', async () => {
+    await finish('Overmind');
+    const all = await ladder(null, CAREER_SCOPE, false);
+    assert.ok(all.boards.length > 0);
+    await assert.rejects(
+      () => ladder(null, CAREER_SCOPE, true),
+      (e: HttpError) => e.status === 401,
+    );
+  });
+
+  it('名次從 1 起算，而且照欄位的方向排', async () => {
+    await finish('Overmind');
+    const res = await ladder(null, CAREER_SCOPE, false);
+    for (const board of res.boards) {
+      assert.deepEqual(
+        board.entries.map((e) => e.rank),
+        board.entries.map((_, i) => i + 1),
+      );
+    }
+  });
+
+  it('沒去過的聯盟不會出現在範圍清單裡', async () => {
+    const user = await finish('Overmind');
+    const res = await ladder(user, CAREER_SCOPE, true);
+    const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
+    for (const scope of res.scopes) assert.ok(written.has(scope), `多出了 ${scope}`);
   });
 });
