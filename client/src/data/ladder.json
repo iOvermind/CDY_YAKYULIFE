@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "_note": "天梯的欄位清單與資格規則。見 CONTEXT.md 的「天梯」與 ADR 0038。",
+  "_vs_cumulative_note": "**與 achievements.json 的 `cumulative.rungs` 是兩份清單，刻意的。** 那一份問「什麼值得給 AP」——被三振最多、失分最多不是成就，所以它們不在那裡。這一份問「什麼值得被查」：生涯被三振數在真實棒球裡是人人查得到的紀錄，它只是不該給你點數。兩份清單會有重疊，但它們回答不同的問題，硬併成一份的話遲早有一邊要被扭曲。",
+  "_scope_note": "每一項在**各頂級聯盟**與**生涯**兩種範圍下各排一份。生涯範圍是跨聯盟通算；只出現玩家去過的聯盟（沒去過墨聯就沒有墨聯那一區），與成就櫃「未解鎖的不顯示」同一個規矩。",
+  "_qualify_note": "**門檻只管率型，累積數值一律沒有門檻。** 累積數值本來就要靠年資堆出來，再加一道年資門檻是重複收費。",
+  "top_n": 10,
+
+  "qualification": {
+    "_note": "率型數值的上榜資格。兩道門檻同時成立才算——季數擋掉「打五年就退休的高點生涯」，累積量擋掉「打十二年但年年都是代打」。兩道門各自招不同的人，不是重複。",
+    "_reality_note": "每季的量取自現實的規定打席／規定投球局數：打者 `3.1 × 球隊場次`、投手 `1.0 × 球隊場次`。**逐年累加**——在中職的那幾年用 120 場算、在大聯盟的那幾年用 162 場算，與現實的生涯榜同一個做法。原始回報寫的是「每年出賽數達該聯盟 8 成」，那條對打者近似成立，對投手則是不可能的門檻：先發投手一年出賽約 30 場，8 成場次是 96–130 場，沒有任何投手達得到，防禦率榜會永遠是空的。",
+    "min_seasons": 12,
+    "per_season": {
+      "batter": { "stat": "pa", "per_team_game": 3.1 },
+      "pitcher": { "stat": "outs", "per_team_game": 3 }
+    }
+  },
+
+  "columns": {
+    "_note": "`side` 決定它排進野手榜還是投手榜；`rate` 為真的要過 qualification。`order` 是排名方向——`desc` 是越多越前面，`asc` 是越少越前面（防禦率）。`unit` 是顯示用的換算：投球局數存的是出局數。",
+    "_negative_note": "被三振、失分、自責分、盜壘刺這幾項的第一名不是榮譽。它們照樣進榜，因為榜單問的是「誰最多」而不是「誰最好」——把它們藏起來等於假裝那些數字不存在。顯示時不特別褒揚，也不特別懲罰。",
+
+    "batter": [
+      { "key": "games", "name": "出賽", "rate": false, "order": "desc" },
+      { "key": "pa", "name": "打席", "rate": false, "order": "desc" },
+      { "key": "ab", "name": "打數", "rate": false, "order": "desc" },
+      { "key": "hits", "name": "安打", "rate": false, "order": "desc" },
+      { "key": "double", "name": "二壘安打", "rate": false, "order": "desc" },
+      { "key": "triple", "name": "三壘安打", "rate": false, "order": "desc" },
+      { "key": "hr", "name": "全壘打", "rate": false, "order": "desc" },
+      { "key": "rbi", "name": "打點", "rate": false, "order": "desc" },
+      { "key": "runs", "name": "得分", "rate": false, "order": "desc" },
+      { "key": "bb", "name": "四壞", "rate": false, "order": "desc" },
+      { "key": "ibb", "name": "故意四壞", "rate": false, "order": "desc" },
+      { "key": "so", "name": "被三振", "rate": false, "order": "desc" },
+      { "key": "sb", "name": "盜壘", "rate": false, "order": "desc" },
+      { "key": "cs", "name": "盜壘刺", "rate": false, "order": "desc" },
+      { "key": "defenseRuns", "name": "守備分", "rate": false, "order": "desc" },
+      { "key": "avg", "name": "打擊率", "rate": true, "order": "desc", "digits": 3 },
+      { "key": "obp", "name": "上壘率", "rate": true, "order": "desc", "digits": 3 },
+      { "key": "slg", "name": "長打率", "rate": true, "order": "desc", "digits": 3 }
+    ],
+
+    "pitcher": [
+      { "key": "games", "name": "出賽", "rate": false, "order": "desc" },
+      { "key": "starts", "name": "先發", "rate": false, "order": "desc" },
+      { "key": "outs", "name": "投球局數", "rate": false, "order": "desc", "unit": 3 },
+      { "key": "wins", "name": "勝投", "rate": false, "order": "desc" },
+      { "key": "losses", "name": "敗投", "rate": false, "order": "desc" },
+      { "key": "saves", "name": "救援成功", "rate": false, "order": "desc" },
+      { "key": "holds", "name": "中繼成功", "rate": false, "order": "desc" },
+      { "key": "so", "name": "奪三振", "rate": false, "order": "desc" },
+      { "key": "hits", "name": "被安打", "rate": false, "order": "desc" },
+      { "key": "runs", "name": "失分", "rate": false, "order": "desc" },
+      { "key": "er", "name": "自責分", "rate": false, "order": "desc" },
+      { "key": "bb", "name": "四壞", "rate": false, "order": "desc" },
+      { "key": "era", "name": "防禦率", "rate": true, "order": "asc", "digits": 2 }
+    ]
+  }
+}

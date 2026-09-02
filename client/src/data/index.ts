@@ -22,6 +22,7 @@ import eventsJson from './events.json' with { type: 'json' };
 import flavorJson from './flavor.json' with { type: 'json' };
 import hallOfFameJson from './hall_of_fame.json' with { type: 'json' };
 import injuryJson from './injury.json' with { type: 'json' };
+import ladderJson from './ladder.json' with { type: 'json' };
 import leaguesJson from './leagues.json' with { type: 'json' };
 import loveJson from './love.json' with { type: 'json' };
 import positionsJson from './positions.json' with { type: 'json' };
@@ -1279,6 +1280,32 @@ export interface TraitsData {
   >;
 }
 
+/** 天梯的一個欄位。見 ladder.json 與 ADR 0038。 */
+export interface LadderColumn {
+  /** 對應 BattingLine／PitchingLine 的欄位名；`defenseRuns` 是守備分，不在那兩張表上。 */
+  readonly key: string;
+  readonly name: string;
+  /** 率型數值要過 qualification 的兩道門檻；累積數值一律沒有門檻。 */
+  readonly rate: boolean;
+  /** 排名方向。防禦率是 asc，其餘都是 desc。 */
+  readonly order: "desc" | "asc";
+  /** 顯示小數位。累積數值沒有。 */
+  readonly digits?: number;
+  /** 顯示換算：投球局數存的是出局數，unit 為 3。 */
+  readonly unit?: number;
+}
+
+export interface LadderData {
+  readonly top_n: number;
+  readonly qualification: {
+    readonly min_seasons: number;
+    readonly per_season: Record<
+      "batter" | "pitcher",
+      { readonly stat: string; readonly per_team_game: number }
+    >;
+  };
+  readonly columns: Record<"batter" | "pitcher", readonly LadderColumn[]>;
+}
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
 export const awards = awardsJson as unknown as AwardsData;
@@ -1292,6 +1319,7 @@ export const hallOfFame = hallOfFameJson as unknown as HallOfFameData;
  */
 export const events = eventsJson as unknown as Record<string, unknown>;
 export const injury = injuryJson as unknown as InjuryData;
+export const ladder = ladderJson as unknown as LadderData;
 export const love = loveJson as unknown as LoveData;
 export const achievements = achievementsJson as unknown as AchievementsData;
 export const talents = talentsJson as unknown as TalentsData;
