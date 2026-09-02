@@ -42,7 +42,7 @@ export interface SeasonRecord {
   readonly levelName: string;
   readonly team: string;
   /**
-   * 這一季實際站的守位：頂級聯盟是登錄守位，二軍是暫定守位（見 ADR 0021）。
+   * 這一季實際站的守位。三個階段共用同一份登錄守位（ADR 0037）。
    *
    * 生涯表要的是「這個人當時站哪裡」，不是「他有沒有辦過登錄手續」——二軍
    * 那幾年留白等於在說他沒上場。純投手為 null，他們不進守位系統。
@@ -104,7 +104,7 @@ export interface AmateurSeasonRecord {
   /** 就讀的學校。年表的「球隊」欄顯示它。 */
   readonly school: string;
   /**
-   * 這一季的暫定守位（見 ADR 0021）。學生棒球沒有登錄手續，但人站在某個位置
+   * 這一季的登錄守位（見 ADR 0037）。學生棒球沒有登錄手續，但人站在某個位置
    * 上，生涯表就該寫出來；純投手掛 DH——他在學生時代照樣進打擊區。
    */
   readonly position: string | null;

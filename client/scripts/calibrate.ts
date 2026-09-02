@@ -180,6 +180,10 @@ function runCareer(setup: GameSetup, policy: PolicyName, overseas: boolean): Car
       options.find((o) => o.id === 'event:normal') ??
       // 被下放就接受；被釋出則接受最好的那條退路。
       options.find((o) => o.id === 'demote:accept') ??
+      // **升守位一律接受**——寫成明示的策略而不是讓它從最後的 fallback 掉下去。
+      // 那條 fallback 會挑第一個可選項，剛好也是 accept，但那是巧合不是決定：
+      // 選項順序一改，護欄與校準的玩家就會安靜地換一種人（ADR 0009 記過同樣的坑）。
+      options.find((o) => o.id === 'position:accept') ??
       options.find((o) => o.id === 'fallback:0') ??
       rotated
         .map((key) => options.find((o) => o.id === `alloc:${key}`))

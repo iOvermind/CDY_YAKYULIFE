@@ -63,6 +63,7 @@ import {
   positionLabel,
   requiredScore,
   DH,
+  type PositionResult,
 } from './defense.ts';
 import type { AmateurSeasonRecord } from './career.ts';
 import {
@@ -219,6 +220,7 @@ import {
   rate,
   ratingPosition,
   sideOfStartPosition,
+  UTIL,
   type Abilities,
 } from './rating.ts';
 import { abilitySpread } from './rivalPool.ts';
@@ -274,8 +276,10 @@ export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Se
  * 2：大賽點數改成一次付滿該級成本（ADR 0032）。
  * 3：事件扣點改走成本曲線（ADR 0033）。同一張事件卡，能力 64 的球員舊規則掉 3 級、
  *    新規則只掉半級——重播不會壞，但生涯會長成另一個樣子。
+ * 4：守位系統走遍三個階段（ADR 0037）。升守位變成一個可回答的選項，養成期每年
+ *    都可能插進一次——舊日誌的選項序號從那一刻起整串對不上。
  */
-export const ENGINE_VERSION = 3;
+export const ENGINE_VERSION = 4;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
@@ -354,14 +358,12 @@ export interface PlayerState {
   readonly injuryRisk: number;
   /** 當年成績。尚未打完大賽時為 null。 */
   /**
-   * 目前的守備位置代碼。頂級聯盟是**登錄守位**，養成期與二軍是**暫定守位**
-   * （見 CONTEXT.md）。純投手為 null。
+   * 目前的**登錄守位**代碼。養成期、二軍與一軍都是同一份登錄（ADR 0037）。
+   * 純投手為 null。
    */
   readonly position: string | null;
   /** 守位的中文名。 */
   readonly positionName: string | null;
-  /** 這個守位是不是暫定的——沒有登錄、每年重算，但仍會存進生涯紀錄。 */
-  readonly positionTentative: boolean;
   /** 這一季走不走野手側。純投手為 false，他們的守位欄只是打席的落點。 */
   readonly playsField: boolean;
   readonly seasonBatting: BattingLine | null;
@@ -592,14 +594,21 @@ export class Game {
     changedOrg: boolean;
     /** 這一季季中被交易前的球隊；沒有交易時為 null。逐段紀錄看它。 */
     tradedFrom: string | null;
-    /**
-     * 目前登錄的守備位置；尚未登錄時為 null。
-     *
-     * 只有頂級聯盟才登錄——二軍不挑守位。投手一律為 null，他們走投手定位那條
-     * 線（先發／後援），不進守位系統。
-     */
-    position: string | null;
   } | null = null;
+  /**
+   * 登錄守位。**養成期第一年就登錄，三個階段共用同一份**（ADR 0037）。
+   *
+   * 首次登錄是玩家選的起始守位，不掃描也不覆蓋——UTIL 例外，他沒有本位，
+   * 兩條光譜都掃並發卡告知。純投手為 null，他們走投手定位那條線。
+   */
+  #position: string | null = null;
+  /**
+   * 在**目前這個登錄守位上**被拒絕過的升防目標。
+   *
+   * 守位一有變動就整組清空：記住的是「我在這個位置上做過的決定」，不是
+   * 「我這輩子拒絕過什麼」——離開了那個位置，當初拒絕的理由也就不在了。
+   */
+  #declinedPromotions = new Set<string>();
   /** 掛靴的地方。見 PlayerState.retiredFrom。 */
   #retiredFrom: { team: string; levelName: string } | null = null;
   /**
@@ -799,7 +808,6 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: this.#fieldPosition,
       positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),
-      positionTentative: this.#pro?.position == null,
       playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
@@ -826,8 +834,8 @@ export class Game {
       year: pro.year,
       winRate: this.#league?.get(pro.team)?.winRate ?? 0,
       championshipOdds: this.#league === null ? 0 : championshipOdds(this.#league, pro.team),
-      position: pro.position,
-      positionName: pro.position === null ? null : positionLabel(pro.position),
+      position: this.#position,
+      positionName: this.#position === null ? null : positionLabel(this.#position),
       defenseRuns: this.#defenseRuns[pro.level] ?? 0,
       par: leagueStandardOf(this.#standards, pro.level).par,
       min: leagueStandardOf(this.#standards, pro.level).min,
@@ -970,7 +978,34 @@ export class Game {
         '投打俱佳的人，在選秀前有機會取得二刀流。',
     );
 
+    this.#registerInitialPosition();
+
     this.flow.push(() => this.#startYear());
+  }
+
+  /**
+   * 首次登錄守位，與入學卡同時發生。
+   *
+   * **不能等到第一次季初的守位檢視**——那在季初訓練之後，開局第一個提問時
+   * 記分板的守位欄會是空的，而入學卡上一行才剛寫過他是什麼守位。
+   *
+   * 用玩家選的起始守位，不掃描也不覆蓋。UTIL 沒有本位，交給掃描並發卡告知；
+   * 純投手不進這個系統（ADR 0037）。
+   */
+  #registerInitialPosition(): void {
+    const player = this.#player;
+    if (player === null || !this.#playsField) return;
+    if (player.startPosition !== UTIL) {
+      this.#setPosition(player.startPosition);
+      return;
+    }
+    const picked = this.#scanPosition(null);
+    this.#setPosition(picked.position);
+    this.flow.card(
+      'info',
+      '守位登錄',
+      `教練團評估守備工具後，將你登錄為 <b class="hl">${esc(positionLabel(picked.position))}</b>。`,
+    );
   }
 
   /** 一個年度：分隔線 → 季初訓練 → 事件卡 → 大賽 → 國際賽 → 分配點數 → 年度結束。 */
@@ -986,7 +1021,7 @@ export class Game {
     this.flow.push(
       () => this.#springTraining(),
       () => this.#switchPitcherRoll(),
-      () => this.#loveEvent(() => this.#drawEventCards()),
+      () => this.#positionReview(() => this.#loveEvent(() => this.#drawEventCards())),
       () => this.#cups(),
       () => this.#youthTournament(),
       () => this.#endYear(),
@@ -1244,7 +1279,7 @@ export class Game {
       stage: this.#stage,
       stageName: stageOf(this.#stage).name,
       school: this.#school,
-      // 當下就存：暫定守位每年重算，引退時回頭問只會拿到最後一年的答案。
+      // 當下就存：守位會隨移防改變，引退時回頭問只會拿到最後一年的答案。
       position: this.#fieldPosition,
       batting: line.batting,
       pitching: line.pitching,
@@ -1537,7 +1572,6 @@ export class Game {
       team,
       yearsAtBottom: 0,
       year: 1,
-      position: null,
       contract: rookieContract(),
       serviceYears: 0,
       changedOrg: false,
@@ -1570,8 +1604,7 @@ export class Game {
 
     this.flow.push(
       () => this.#proSpringTraining(),
-      () => this.#positionReview(),
-      () => this.#loveEvent(() => this.#drawEventCards()),
+      () => this.#positionReview(() => this.#loveEvent(() => this.#drawEventCards())),
       () => this.#healthCheck(),
       () => this.#tradeDeadline(),
       () => this.#proSeason(),
@@ -1580,45 +1613,118 @@ export class Game {
   }
 
   /**
-   * 球季前的守位檢視。
+   * 季初的守位檢視。**養成期、二軍與一軍跑同一套**（ADR 0037）。
    *
-   * 只在頂級聯盟登錄——二軍不挑守位，能上場就讓你上。純投手不進這個系統，
-   * 他們走投手定位那條線。
+   * 首次登錄用玩家選的起始守位，不掃描——入學卡已經說過他是什麼守位，系統
+   * 再覆蓋一次等於開局第一年就推翻他唯一親手做過的守位決定。UTIL 沒有本位，
+   * 兩條光譜都掃並發一張登錄卡：那正是他選「守位不定」的意思。
    *
-   * 每年都重跑一次：守備會退化，也會練回來。移防不是單向的。
+   * 之後每年重掃一次——守備會退化，也會練回來，移防不是單向的。掃描永遠取
+   * 守得動的最高階，所以升降都能跳階。
+   *
+   * **升降的話語權不對稱**：守不動就是守不動，那不是可以商量的事實，因此降
+   * 守位直接發卡告知；往上是機會不是判決，而且更吃重的守位意味著更高的門檻，
+   * 因此升守位要問過。兩者都不給「要守哪裡」的選擇——位置由守備能力決定，
+   * 玩家決定的是要不要動。
+   *
+   * 純投手不進這個系統，他們走投手定位那條線。
    */
-  #positionReview(): void {
-    const pro = this.#pro;
+  #positionReview(then: () => void): void {
     const player = this.#player;
-    if (pro === null || player === null) return;
-
-    if (levelOf(pro.level).top === undefined) {
-      // 離開頂級聯盟就撤銷登錄——回來時重新掃一次，不沿用兩年前的守位。
-      pro.position = null;
-      return;
-    }
-    if (!this.#playsField) {
-      pro.position = null;
+    if (player === null || !this.#playsField) {
+      this.#setPosition(null);
+      then();
       return;
     }
 
-    const result = assignPosition({
+    if (this.#position === null) {
+      // 還沒登錄過就補一次。正常路徑在入學時就登錄完了，這裡接的是中途才走回
+      // 野手側的人——例如定位還沒鎖、去年被判成投手側的 UTIL。
+      this.#registerInitialPosition();
+      then();
+      return;
+    }
+
+    const current = this.#position;
+    const result = this.#scanPosition(current);
+    if (result.move === 'stay') {
+      then();
+      return;
+    }
+
+    if (result.move === 'demote') {
+      this.#setPosition(result.position);
+      this.flow.card('bad', '守位會議', `${esc(result.reason)}。`);
+      then();
+      return;
+    }
+
+    // 升防：在這個位置上拒絕過就不再問。記憶在 #setPosition 裡隨守位變動清空。
+    if (this.#declinedPromotions.has(result.position)) {
+      then();
+      return;
+    }
+    const target = positionLabel(result.position);
+    this.flow.ask(
+      {
+        title: '守位會議：教練團想把你推上更吃重的位置',
+        options: [
+          {
+            id: 'position:accept',
+            label: `改守${target}`,
+            note: '更吃重的守位，門檻也更高',
+            role: 'main',
+          },
+          {
+            id: 'position:decline',
+            label: `留守${positionLabel(current)}`,
+            note: '這個位置上不再問',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'position:accept') {
+          this.#setPosition(result.position);
+          this.flow.card(
+            'good',
+            '守位調整',
+            `守備數據說服了所有人——新球季改守 <b class="hl">${esc(target)}</b>。`,
+          );
+        } else {
+          this.#declinedPromotions.add(result.position);
+          this.flow.card(
+            'info',
+            '留守原位',
+            `你婉拒了教練團的提議——<b class="hl">${esc(positionLabel(current))}</b>還是你的位置。`,
+          );
+        }
+        then();
+      },
+    );
+  }
+
+  /** 用當下的能力與尺掃一次守位。current 為 null 時是首次登錄的掃描。 */
+  #scanPosition(current: string | null): PositionResult {
+    const player = this.#player!;
+    return assignPosition({
       tier: this.#handednessTier,
       ability: this.#ability,
-      current: pro.position,
-      level: pro.level,
+      current,
+      level: this.#benchmarkLevel,
       age: this.#age,
       startPosition: player.startPosition,
       throws: player.throws,
     });
-    pro.position = result.position;
+  }
 
-    if (result.move === 'stay') return;
-    this.flow.card(
-      result.move === 'demote' ? 'bad' : result.move === 'promote' ? 'good' : 'info',
-      '守位會議',
-      `${esc(result.reason)}。`,
-    );
+  /**
+   * 換登錄守位。**守位一動就把拒絕記憶整組清空**——記住的是「我在這個位置上
+   * 做過的決定」，離開了那個位置，當初拒絕的理由也就不在了（ADR 0037）。
+   */
+  #setPosition(position: string | null): void {
+    if (position === this.#position) return;
+    this.#position = position;
+    this.#declinedPromotions.clear();
   }
 
   /**
@@ -1637,34 +1743,24 @@ export class Game {
   }
 
   /**
-   * 目前實際站的守備位置：登錄守位優先，沒登錄就用**暫定守位**。
+   * 目前實際站的守備位置，也就是**登錄守位**（ADR 0037）。
    *
-   * 暫定守位每次讀取都現算——養成期與二軍的守備能力天天在動，而它沒有登錄
-   * 這道手續把數字釘住。掃描規則與登錄完全一樣（同一把尺、同一條光譜），差別
-   * 只在不登錄、不經球員選擇、不會發「守位會議」卡。
+   * 它只在守位會議上改變，不再每次讀取都重算——出賽勞損與守備分吃的是同一個
+   * 值，一個會自己漂移的欄位餵不出穩定的勞損。
    *
-   * 生涯紀錄**會**存它：那張表問的是「這個人當年站哪裡」，二軍那幾年留白等於
-   * 在說他沒上場。存的是當季結算那一刻的值，不是引退時回算。
+   * 生涯紀錄存的是當季結算那一刻的值，不是引退時回算：那張表問的是「這個人
+   * 當年站哪裡」。
    *
-   * 純投手回傳 null：他們走先發／後援那條線，不進守位系統。
+   * 純投手在養成期回 DH、進職業後回 null：他們走先發／後援那條線，不進守位
+   * 系統（ADR 0021 第 3 點）。
    */
   get #fieldPosition(): string | null {
     if (this.#player === null) return null;
-    const registered = this.#pro?.position ?? null;
-    if (registered !== null) return registered;
     // 純投手：養成期照樣站打席（學生棒球沒有一輩子不打擊的投手），守位掛 DH，
     // 打擊成績才有位置可標；進了職業就真的不打了，回 null——那裡的純投手不該
     // 有野手成績。
     if (!this.#playsField) return this.#pro === null ? DH : null;
-    return assignPosition({
-      tier: this.#handednessTier,
-      ability: this.#ability,
-      current: null,
-      level: this.#benchmarkLevel,
-      age: this.#age,
-      startPosition: this.#player.startPosition,
-      throws: this.#player.throws,
-    }).position;
+    return this.#position;
   }
 
   /**
@@ -1730,8 +1826,8 @@ export class Game {
     const r = this.rating;
     if (pro === null || player === null || r === null) return;
 
-    // 登錄守位優先，二軍與養成期用暫定守位——兩者都是同一把尺掃出來的，出賽
-    // 勞損與守備分吃的都是這個位置（ADR 0021）。
+    // 三個階段共用的登錄守位（ADR 0037）。出賽勞損與守備分吃的都是這個位置——
+    // 它只在守位會議上改變，因此勞損不會因為守位每年重算而漂移。
     const position = this.#fieldPosition ?? DH;
     const line = playSeason(this.world, {
       level: pro.level,
@@ -1768,12 +1864,14 @@ export class Game {
     this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
 
-    // 守備分只在登錄了守位時才算——沒登錄就沒有守位權重可乘。
+    // 守備分只在頂級聯盟算。二軍現在也有登錄守位（ADR 0037），但守備分是拿來
+    // 與同層對手比的，二軍的守備不該進生涯的守備勝利份額。
     let def: number | null = null;
-    if (pro.position !== null && pro.position !== DH && line.batting !== null) {
+    const scoringPosition = levelOf(pro.level).top === undefined ? null : this.#position;
+    if (scoringPosition !== null && scoringPosition !== DH && line.batting !== null) {
       def = defenseRuns({
         ability: this.#ability,
-        position: pro.position,
+        position: scoringPosition,
         level: pro.level,
         standards: this.#standards,
         gamesShare: line.batting.games / levelOf(pro.level).games,
@@ -1877,7 +1975,7 @@ export class Game {
     const position =
       pro === null || player === null
         ? undefined
-        : (pro.position ??
+        : (this.#position ??
           ratingPosition(player.startPosition, {
             ability: this.#ability,
             level: pro.level,
@@ -3017,17 +3115,19 @@ export class Game {
     // 戰力表，那裡的球隊勝率視為未知，不做調整。
     const teamWinRate = this.#league?.get(team)?.winRate ?? null;
 
-    // 守備的份額：沒登錄守位（二軍、投手、指定打擊）就沒有守備責任。
+    // 守備的份額：投手與指定打擊沒有守備責任，二軍也不算——二軍現在同樣有
+    // 登錄守位（ADR 0037），但守備勝利份額是與同層對手比出來的，那一層不進帳。
     let fielding: Shares = { win: 0, loss: 0 };
     let fieldingK = 0;
-    if (pro.position !== null && pro.position !== DH && batting !== null) {
-      const average = positionAverage(pro.position, pro.level, this.#standards);
-      const threshold = requiredScore(pro.position, pro.level, this.#age, this.#handednessTier);
+    const fieldPosition = info.top === undefined ? null : this.#position;
+    if (fieldPosition !== null && fieldPosition !== DH && batting !== null) {
+      const average = positionAverage(fieldPosition, pro.level, this.#standards);
+      const threshold = requiredScore(fieldPosition, pro.level, this.#age, this.#handednessTier);
       if (average !== null) {
         fielding = fieldingShares({
-          defenseScore: defenseScore(this.#ability, pro.position),
+          defenseScore: defenseScore(this.#ability, fieldPosition),
           positionAverage: average,
-          positionShare: fieldingResponsibility(pro.position),
+          positionShare: fieldingResponsibility(fieldPosition),
           leagueGames: info.games,
           gamesShare: batting.games / info.games,
           teamWinRate,
@@ -3046,7 +3146,7 @@ export class Game {
       level: pro.level,
       levelName: info.name,
       team,
-      // 登錄守位優先，二軍沒登錄就寫暫定守位——生涯表問的是他站哪裡。
+      // 生涯表問的是他當年站哪裡。三個階段都有登錄守位，沒有留白的那幾列。
       position: this.#fieldPosition,
       batting,
       pitching,
@@ -3091,14 +3191,15 @@ export class Game {
     // 守備勝率：獎項判定看它而不是守備分的顯示數字——顯示尺度可以隨時調整，
     // 判定不該跟著跑掉。
     let fieldingWinPct: number | null = null;
-    if (pro.position !== null && pro.position !== DH && batting !== null) {
-      const average = positionAverage(pro.position, pro.level, this.#standards);
+    const fieldPosition = this.#position;
+    if (fieldPosition !== null && fieldPosition !== DH && batting !== null) {
+      const average = positionAverage(fieldPosition, pro.level, this.#standards);
       if (average !== null) {
         fieldingWinPct = winPct(
           fieldingShares({
-            defenseScore: defenseScore(this.#ability, pro.position),
+            defenseScore: defenseScore(this.#ability, fieldPosition),
             positionAverage: average,
-            positionShare: fieldingResponsibility(pro.position),
+            positionShare: fieldingResponsibility(fieldPosition),
             leagueGames: info.games,
             gamesShare: batting.games / info.games,
           }),
@@ -3119,7 +3220,7 @@ export class Game {
       batting,
       pitching,
       role: pitching?.role ?? null,
-      position: pro.position,
+      position: fieldPosition,
       fieldingWinPct,
       // 這一季的勝利份額。#recordSeason 已經在前一步算好並存進紀錄裡，
       // 直接取最後一筆——重算一次會有兩份實作，遲早對不起來。
@@ -3725,7 +3826,9 @@ export class Game {
 
     pro.level = offer.level;
     pro.team = offer.team;
-    pro.position = null;
+    // **登錄守位不隨轉會歸零。** 尺會換（ADR 0021 借新體系頂級聯盟的門檻），
+    // 但那是下一次守位會議該回答的事——歸零等於讓三十歲的老將回到他十三歲時
+    // 選的那個守位（ADR 0037 的首次登錄規則）。
     // **底層年資不因換體系歸零。** 它量的是「連續在最低層級掙扎了幾季」，那是
     // 球員的狀態，不是球團的帳。歸零的話，戰力外轉隊等於每次再送滿一次寬限期，
     // 六個體系就能讓一個早該收山的人一直再拼一年。落腳在底層以上才算真的重新

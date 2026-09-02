@@ -198,6 +198,9 @@ export function isSideVisible(key: string, locked: 'pitcher' | 'fielder' | null)
   return abilities.ability_groups[locked].includes(key as AbilityKey);
 }
 
+/** 守位不定。沒有本位，首次登錄因此交給掃描（ADR 0037），也是二刀流的唯一入口（ADR 0009）。 */
+export const UTIL = 'UTIL';
+
 /**
  * 起始守位屬於哪一側。UTIL 不屬於任何一側，回傳 null。
  *
@@ -206,7 +209,7 @@ export function isSideVisible(key: string, locked: 'pitcher' | 'fielder' | null)
  * 畢業時的二刀流判定對他們不可能成立。見 ADR 0009。
  */
 export function sideOfStartPosition(startPosition: string): 'pitcher' | 'fielder' | null {
-  if (startPosition === 'UTIL') return null;
+  if (startPosition === UTIL) return null;
   return startPosition === 'P' ? 'pitcher' : 'fielder';
 }
 
@@ -262,7 +265,7 @@ function amateurPar(stage: string): number | null {
  *
  * par 從哪裡來分兩條路：養成階段（JHS／HS）用 `amateur.cups[stage].par`，職業
  * 層級先過 `benchmarkLevelOf` 拿該體系**頂級聯盟**的 par。因此二軍與小聯盟拿到
- * 的是跟一軍同一組數字——暫定守位與登錄守位用同一套門檻，差別只在登不登錄
+ * 的是跟一軍同一組數字——三個階段共用同一份登錄守位，也共用同一套門檻
  * （ADR 0021）；而養成期自成一把尺，因為那六年他的對手是同齡人。
  *
  * 認不出來的層級回傳 null，而不是無條件放行：後者曾讓 KBO 一軍、墨西哥聯盟、

@@ -817,27 +817,111 @@ describe('守位登錄與移防', () => {
   /** 打完一整段生涯，回傳那局遊戲。 */
   const full = (seed: string) => playWell(started({ seed }));
 
+  /**
+   * 打完一段生涯，一路拒絕所有升防，並記下每一次守位提問當下的登錄守位。
+   *
+   * 記的是「問的時候他站哪裡、問的是哪一個目標」——拒絕記憶的規則就寫在這兩
+   * 個值的組合上（ADR 0037）。
+   */
+  function playDeclining(game: Game): { game: Game; asks: { at: string | null; to: string }[] } {
+    const asks: { at: string | null; to: string }[] = [];
+    while (game.flow.prompt !== null) {
+      const options = game.flow.prompt.options;
+      const promote = options.find((o) => o.id === 'position:accept');
+      if (promote !== undefined) {
+        asks.push({ at: game.state?.position ?? null, to: promote.label });
+        game.choose('position:decline');
+        continue;
+      }
+      const pick = defaultPick(game, EFFECTIVE);
+      if (pick === undefined) throw new Error('提問沒有選項');
+      game.choose(pick);
+    }
+    return { game, asks };
+  }
+
+  it('首次登錄就是玩家選的起始守位，不掃描也不發卡', () => {
+    // 一壘手是最嚴的檢查：掃描光譜是 [SS, 2B, 3B, 1B]，從游擊起跳，1B 永遠是
+    // 最後一個候選。舊行為會把守備堪用的一壘手直接登錄成游擊手。
+    const game = started({ seed: 'first-reg', startPosition: '1B' });
+    expect(game.state?.position).toBe('1B');
+    expect(JSON.stringify(game.flow.log)).not.toContain('守位登錄');
+  });
+
+  it('起始守位選 UTIL 的人交給掃描，並發一張守位登錄卡', () => {
+    // UTIL 的側別沒鎖，因此 #playsField 比的是投打兩側的評價（ADR 0009）——
+    // 初始擲骰投手側較高的人不進守位系統，掃種子而不是賭一顆。
+    for (let i = 0; i < 20; i++) {
+      const game = started({ seed: `util-reg-${i}`, startPosition: 'UTIL' });
+      // 純投手側的那幾局守位欄是 DH（打席的落點），不是登錄守位。
+      if (game.state?.playsField !== true) continue;
+      expect(game.flow.log.some((e) => e.kind === 'card' && e.title === '守位登錄')).toBe(true);
+      return;
+    }
+    throw new Error('二十局都沒有 UTIL 走上野手側');
+  });
+
+  it('一路拒絕升防的人，守位不會自己往上爬', () => {
+    for (let i = 0; i < 20; i++) {
+      const { game, asks } = playDeclining(started({ seed: `decline-${i}`, startPosition: '1B' }));
+      if (asks.length === 0) continue;
+      // 拒絕過就不會出現在更高階的位置上——1B 之上只有 3B/2B/SS。
+      const seasons = game.summary?.seasons ?? [];
+      expect(seasons.every((s) => s.position === null || s.position === '1B' || s.position === 'DH')).toBe(true);
+      return;
+    }
+    throw new Error('二十局都沒有人收到過升防的提問');
+  });
+
+  it('同一個守位上拒絕過的目標不會再問第二次', () => {
+    for (let i = 0; i < 20; i++) {
+      const { asks } = playDeclining(started({ seed: `once-${i}`, startPosition: '1B' }));
+      if (asks.length < 2) continue;
+      const seen = new Set<string>();
+      for (const ask of asks) {
+        const key = `${ask.at}→${ask.to}`;
+        expect(seen.has(key), `${key} 被問了第二次`).toBe(false);
+        seen.add(key);
+      }
+      return;
+    }
+  });
+
+  it('三個階段共用同一份登錄守位——二軍不再是空白', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = full(`dpos2-${i}`);
+      const rows = game.summary?.seasons ?? [];
+      const minor = rows.filter((s) => !s.levelName.includes('一軍') && s.batting !== null);
+      if (minor.length === 0) continue;
+      expect(minor.every((s) => s.position !== null)).toBe(true);
+      return;
+    }
+    throw new Error('四十局都沒有人在二軍留下打擊成績');
+  });
+
   it('進入頂級聯盟的野手會登錄守位', () => {
     for (let i = 0; i < 40; i++) {
       const game = full(`dpos-${i}`);
       const log = JSON.stringify(game.flow.log);
       if (!log.includes('守位會議')) continue;
-      expect(log).toMatch(/登錄為|改守|改任指定打擊/);
+      expect(log).toMatch(/登錄為|改守|改任指定打擊|守不住/);
       return;
     }
-    throw new Error('四十局都沒有人登錄過守位');
+    throw new Error('四十局都沒有人開過守位會議');
   });
 
-  it('二軍不登錄守位——那裡不挑位置', () => {
+  it('降守位不給選擇——它只發卡，不產生提問', () => {
     for (let i = 0; i < 40; i++) {
-      const game = full(`dpos2-${i}`);
-      const state = game.state;
-      if (state?.pro == null) continue;
-      if (state.pro.levelName.includes('二軍')) {
-        expect(state.pro.position).toBeNull();
-        return;
-      }
+      const game = full(`demote-${i}`);
+      const demotions = game.flow.log.filter(
+        (e) => e.kind === 'card' && e.title === '守位會議' && e.tone === 'bad',
+      );
+      if (demotions.length === 0) continue;
+      // 降守位的卡片存在，但選項清單裡從來沒有「往哪裡降」這種問題。
+      expect(game.flow.choices.some((c) => c.startsWith('position:demote'))).toBe(false);
+      return;
     }
+    throw new Error('四十局都沒有人被降過守位');
   });
 
   it('守備分只在登錄了守位之後才累積', () => {
@@ -855,7 +939,7 @@ describe('守位登錄與移防', () => {
       const game = playWell(started({ seed: `pit-${i}`, startPosition: 'P' }));
       const state = game.state;
       if (state?.lockedSide !== 'pitcher' || state.pro == null) continue;
-      expect(state.pro.position).toBeNull();
+      expect(state.position).toBeNull();
       return;
     }
   });
@@ -1082,8 +1166,8 @@ describe('引退與結算', () => {
     }
   });
 
-  it('生涯表的守位欄不留白——養成與二軍寫暫定守位', () => {
-    // 暫定守位（ADR 0021）本來只活在畫面上，沒有存進生涯紀錄，生涯表那幾列
+  it('生涯表的守位欄不留白——養成與二軍也有登錄守位', () => {
+    // 那幾列的守位本來只活在畫面上，沒有存進生涯紀錄，生涯表那幾列
     // 因此永遠是「—」。守住的是「野手在每一列都站得到某個位置」。
     let checked = 0;
     for (let i = 0; i < 40; i++) {
