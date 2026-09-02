@@ -813,6 +813,16 @@ describe('生涯次數統計', () => {
   });
 });
 
+describe('入學後的守位說明卡', () => {
+  it('只對 UTIL 發——那兩句話對其他起點都是假的（ADR 0009）', () => {
+    const util = started({ seed: 'card-util', startPosition: 'UTIL' });
+    expect(JSON.stringify(util.flow.log)).toContain('二刀流');
+    for (const pos of ['SS', '1B', 'C', 'P'] as const) {
+      const game = started({ seed: 'card-fixed', startPosition: pos });
+      expect(JSON.stringify(game.flow.log), pos).not.toContain('二刀流');
+    }
+  });
+});
 describe('守位登錄與移防', () => {
   /** 打完一整段生涯，回傳那局遊戲。 */
   const full = (seed: string) => playWell(started({ seed }));

@@ -971,12 +971,18 @@ export class Game {
         `${tier ? `（${esc(tier)}）` : ''}，在球隊裡的位置是<b class="hl">${esc(startName)}</b>。` +
         `投${handLabel(player.throws)}打${handLabel(player.bats)}。`,
     );
-    this.flow.card(
-      'info',
-      undefined,
-      '起始守位只決定你的天賦往哪邊長，不決定你只能練那一邊——' +
-        '投打俱佳的人，在選秀前有機會取得二刀流。',
-    );
+    // **只對 UTIL 發。** 原文寫給所有人看，內容卻與 ADR 0009 直接矛盾：起始守位
+    // 就是鎖側，選了一壘手的人投手側四項連加點選項都不會亮；而二刀流是「在鎖側
+    // 之後由 UTIL 這個單一入口開啟的後續狀態」，專精單側者的取得率實測是 0%。
+    // 對非 UTIL 的玩家，那兩句話都是假的。
+    if (player.startPosition === UTIL) {
+      this.flow.card(
+        'info',
+        undefined,
+        '守位不定的人投打兩側都練得到，也只有這條路走得到二刀流——' +
+          '代價是兩邊都不會頂尖。守備位置交給教練團，練到哪裡就站到哪裡。',
+      );
+    }
 
     this.#registerInitialPosition();
 
