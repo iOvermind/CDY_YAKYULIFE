@@ -16,7 +16,12 @@ client/dist
 
 # 只有本機開發與測試會用到的東西。dev.ts 跑的是記憶體假資料庫，
 # 不該出現在正式的 image 裡。
+#
+# **devdb.ts 也要排除**：它 import fakedb.ts，而 fakedb 已經被排掉了——留著它等於
+# 在 image 裡放一個 import 不存在檔案的模組。正式路徑沒有人載入它，所以不會炸，
+# 但那是一顆等著被誰 import 一下就爆的地雷。
 server/src/dev.ts
+server/src/devdb.ts
 server/src/fakedb.ts
 **/*.test.ts
 

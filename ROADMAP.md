@@ -1,13 +1,13 @@
 # 專案開發藍圖 (Roadmap)
 
-本文件記錄《棒球人生模擬器 2.0》的重大重構計畫與待辦清單 (To-Do List)。我們正從單一靜態 HTML 轉型為 **Tauri + React + 本地/雲端雙軌資料庫** 的現代化應用程式。
+本文件記錄《棒球人生模擬器 2.0》的重大重構計畫與待辦清單 (To-Do List)。我們正從單一靜態 HTML 轉型為 **React + 單一自架服務**（一個 image 同時服務前端與 API，資料在 Postgres）。原本的「Tauri 桌面端 + 本地/雲端雙軌」已於 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 撤回。
 
 ## 階段一：架構重構與本地儲存 (已啟動)
 
 *   [x] **資料解耦**：將硬編碼的天賦、事件、常數抽出為 `client/src/data/` 底下的 10 個 JSON（`abilities` / `leagues` / `positions` / `teams` / `events` / `traits` / `awards` / `hall_of_fame` / `amateur` / `flavor`）。
 *   [x] **Tauri + React 專案初始化**：建立 `client/` 目錄與 Tauri v2 + React 19 + Vite 7 的工具鏈。
 *   [ ] **UI 元件化**：將 `index_legacy.html` 的畫面拆分為 React Components 並移植樣式。`client/src/App.tsx` 已有開始畫面、事件卡日誌、狀態欄、能力表、成績表與訓練骰列；尚未拆成獨立元件，主題與周邊視覺也還沒動。
-*   [x] **確立防護與資料架構 (ADR 0001)**：制定「網頁端連線 PG，桌面端離線 SQLite」的兩棲存取策略，確立 Progression Isolation 機制。
+*   [x] ~~**確立防護與資料架構 (ADR 0001)**~~：那套「網頁端連線 PG，桌面端離線 SQLite」的兩棲策略**已被 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 撤回**——離線那一半從來沒落地，線上那一半長成了 ADR 0007 的事後重跑驗證。現在只有一種形狀：自架服務加 Postgres。
 *   [~] ~~**實作 SQLite / IndexedDB 介面卡**~~：**作廢**。[ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 把發行模型改成單一自架服務，離線不再是目標，Tauri 轉 legacy 不再維護。存檔只有一種形狀：伺服器上的 Postgres。
 *   [ ] **開發 `SimulationEngine.ts`**：將原本寫在 `index_legacy.html` 的擲骰、升降級與結算邏輯移植至 TypeScript，全面擁抱物件導向與資料驅動 (Data-Driven)。
 

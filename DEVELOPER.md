@@ -15,13 +15,13 @@
 | React | 19.1 | 介面框架 |
 | Vite | 7.0 | 開發伺服器與打包 |
 | Vitest | 4.1 | 測試 |
-| Tauri CLI | 2.x | 桌面端封裝 |
-| Rust 工具鏈 | stable | 僅桌面端封裝需要；只跑網頁版可略過 |
+| Docker | 最新 | 自架服務（app + Postgres + tunnel） |
 | Git | 最新 | 版本控制 |
+| ~~Tauri CLI / Rust~~ | — | **不再需要**。桌面端已轉 legacy、不再維護，見 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) |
 
 舊版預覽（`index_legacy.html`）：任何支援 ES6+ 的現代瀏覽器，無其他需求。
 
-**作業系統限制**：網頁版開發不受限。桌面端封裝需要各平台自己的 Tauri 前置需求（Windows 需 WebView2 與 MSVC build tools）。
+**作業系統限制**：不受限。`client/src-tauri/` 還留在儲存庫裡，但它是 legacy——[ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 之後發行模型是單一自架服務，桌面端不再打包，那些指令與設定不保證還跑得動。
 
 ---
 
@@ -65,7 +65,7 @@
 | `npm run test:watch` | 測試監看模式，改檔自動重跑 |
 | `npm run typecheck` | 型別檢查，不產出檔案 |
 | `npm run build` | 打包網頁版到 `client/dist/` |
-| `npm run tauri dev` | 以桌面視窗啟動（需要 Rust 工具鏈） |
+| ~~`npm run tauri dev`~~ | legacy，不再維護（ADR 0038） |
 
 > PowerShell 5.1 沒有 `&&`，要切目錄再執行請分兩行，或用 `;` 串接：
 > ```powershell
@@ -148,7 +148,15 @@ CDY_YAKYULIFE/
 
 ### 關鍵決策
 
+#### [ADR 0038: 一個自架服務，天梯信任的是重跑而不是連線](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)
+
+- **決定**：發行模型改成**單一自架服務**（`docker compose`：app + Postgres + tunnel），玩家連網址就玩。桌面端（Tauri）轉 legacy、不再維護，本機存檔（SQLite／IndexedDB）一併取消。
+- **決定**：**自選種子是合法玩法**——種子不改變任何一條計算，那段生涯仍然得由玩家親手打完。天梯的信任基礎因此是「伺服器重跑得出同一段生涯」，不是「全程連線」。
+- **影響**：取代 ADR 0001 的第 1 點與第 3 點；資料解耦那一條（第 2 點）保留。
+
 #### [ADR 0001: 系統架構重構為 Tauri + React，並採用兩棲防護機制](docs/adr/0001-tauri-react-architecture.md)
+
+> **部分已被 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 取代**：Tauri 桌面端與兩棲防護機制都不再成立。資料解耦那一條仍然有效。
 
 - **決定**：放棄單一 HTML 檔案架構，採用 **Tauri + React (Vite)** 進行全端重建。
 - **理由**：為了支援跨局成就點數、歷史生涯比較、以及未來的線上功能。引入本地資料庫 (SQLite) 用於離線儲存，並透過 Token 簽章機制防範基礎修改器作弊。
@@ -189,7 +197,7 @@ npm run test:watch # 監看模式
 ```bash
 cd client
 npm run build        # 網頁版 → client/dist/
-npm run tauri build  # 桌面版（需要 Rust 工具鏈）
+npm run tauri build  # legacy，不再維護（ADR 0038）
 ```
 
 舊版的 `index_legacy.html` 不需建置，開啟即可執行。

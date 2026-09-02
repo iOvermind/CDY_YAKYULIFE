@@ -44,6 +44,16 @@
 cd server
 cp .env.example .env      # 填 POSTGRES_PASSWORD、SESSION_SECRET、TUNNEL_TOKEN
 docker compose up -d --build
+curl -sI localhost:8080   # 確認服務真的起來了（tunnel 還沒設好之前也看得到）
+```
+
+資料表在第一次啟動時自動建好（`schema.sql` 每次啟動都跑，而且每一行都是冪等的）。
+**要打掉重來**才需要手動跑一次 `reset.sql`——DROP 不放進自動執行的那份檔案，否則
+每重開一次就清空一次玩家的帳號與 AP：
+
+```bash
+docker compose exec -T db psql -U yakyu -d yakyu < reset.sql
+docker compose restart app
 ```
 
 只要 image、部署另外處理的話，用專案根目錄的 `./build-image.sh`（建出 `cdy_yakyulife:latest`，不啟動任何東西）。執行時需要 `DATABASE_URL` 與 `SESSION_SECRET`。
@@ -65,14 +75,16 @@ cd client && npm run dev        # 另一個終端機；/api 會自動轉給 8099
 
 ### 網頁版（GitHub Pages）
 
-新架構的網頁版可以直接部署到 GitHub Pages——它沒有用到任何 Tauri 的執行期 API，`npm run build` 產出的就是一份純靜態網站。工作流在 `.github/workflows/pages.yml`，推到 `main` 就會建置並部署。
+`npm run build` 產出的是一份純靜態網站，可以直接部署到 GitHub Pages。工作流在 `.github/workflows/pages.yml`，推到 `main` 就會建置並部署。
+
+**但那是一個沒有帳號的版本**：Pages 只送靜態檔，沒有 `/api`，所以成就不會累積、天賦不開放、天梯是空的。完整的版本是上面那套 `docker compose`（見 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)）——Pages 適合拿來給人試玩，不適合當正式部署。
 
 首次啟用還要在 GitHub 網頁上做兩件事：
 
 1. **儲存庫必須是公開的**（免費方案的 Pages 不支援私有儲存庫）
 2. **Settings → Pages → Source 選「GitHub Actions」**
 
-網址會是 `https://<帳號>.github.io/<儲存庫名>/`。資源路徑靠環境變數 `PAGES_BASE` 帶前綴——**桌面版與本機開發不要設它**，那會讓資源指向不存在的子目錄。
+網址會是 `https://<帳號>.github.io/<儲存庫名>/`。資源路徑靠環境變數 `PAGES_BASE` 帶前綴——**自架服務與本機開發不要設它**，同源部署的資源就掛在根目錄，設了會讓它們指向不存在的子目錄。
 
 ```bash
 # 本機模擬 Pages 的產物

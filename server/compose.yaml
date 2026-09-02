@@ -15,6 +15,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # 對外走 tunnel，這個埠是**給本機驗證用的**——tunnel 還沒設好之前也要能
+    # `curl localhost:8080` 確認服務真的起來了。只綁 127.0.0.1，不對區網開。
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
     restart: unless-stopped
 
   db:
