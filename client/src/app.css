@@ -507,3 +507,10 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
   body.mobile-ui #app{max-width:560px;margin:0 auto}
   #fld-ui{display:block} /* unguarded: visible in both layouts so it can switch back */
 }
+
+/* 天梯：一項數值一塊，塊與塊之間自動排版。
+   欄位有十幾項，直排會捲到天荒地老；grid 讓寬螢幕一次看得到好幾項，窄螢幕自動
+   掉成單欄。每一塊自己是一張小表，不共用表頭——各欄的單位本來就不同。 */
+.ladder-grid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:8px}
+.ladder-board .fin{margin-top:4px}
+.ladder-board .fin td{padding:3px 4px}

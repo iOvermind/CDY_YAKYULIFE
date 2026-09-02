@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Ladder } from './Ladder.tsx';
 import { type Account } from './useAccount.ts';
 import { ApiError, type Me } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
@@ -189,7 +190,9 @@ function AchievementPanel({
   me: Me;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'achievements' | 'talents'>('achievements');
+  const [tab, setTab] = useState<'achievements' | 'talents' | 'ladder'>('achievements');
+  // 天梯的兩種範圍。個人是預設——玩家打開這一頁最先想看的是自己。
+  const [self, setSelf] = useState(true);
 
   return (
     <Modal title={`${me.account} · ${me.ap} AP`} onClose={onClose}>
@@ -209,12 +212,28 @@ function AchievementPanel({
         >
           天賦
         </button>
+        <button
+          type="button"
+          className={tab === 'ladder' ? 'on' : undefined}
+          onClick={() => setTab('ladder')}
+        >
+          天梯
+        </button>
       </div>
-      {tab === 'achievements' ? (
-        <AchievementList me={me} />
-      ) : (
-        <TalentPanel account={account} me={me} />
+      {tab === 'ladder' && (
+        // 個人／全伺服器是同一份資料的兩種查法，不是兩張榜（ADR 0038）。
+        <div className="seg" style={{ marginBottom: 12 }}>
+          <button type="button" className={self ? 'on' : undefined} onClick={() => setSelf(true)}>
+            我的
+          </button>
+          <button type="button" className={self ? undefined : 'on'} onClick={() => setSelf(false)}>
+            全伺服器
+          </button>
+        </div>
       )}
+      {tab === 'achievements' && <AchievementList me={me} />}
+      {tab === 'talents' && <TalentPanel account={account} me={me} />}
+      {tab === 'ladder' && <Ladder account={account} self={self} />}
     </Modal>
   );
 }
