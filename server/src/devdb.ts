@@ -20,6 +20,7 @@ interface Snapshot {
   talents: FakeDb['talents'];
   achievements: (Omit<FakeDb['achievements'][number], 'unlocked_at'> & { unlocked_at: string })[];
   careers: (Omit<FakeDb['careers'][number], 'finished_at'> & { finished_at: string | null })[];
+  careerStats: (Omit<FakeDb['careerStats'][number], 'finished_at'> & { finished_at: string })[];
   nextUserId: number;
 }
 
@@ -52,6 +53,7 @@ export class JsonDb extends FakeDb {
         ...c,
         finished_at: c.finished_at === null ? null : c.finished_at.toISOString(),
       })),
+      careerStats: this.careerStats.map((r) => ({ ...r, finished_at: r.finished_at.toISOString() })),
       nextUserId: this.nextUserId,
     };
     mkdirSync(dirname(this.path), { recursive: true });
@@ -73,6 +75,11 @@ export class JsonDb extends FakeDb {
     this.careers = snapshot.careers.map((c) => ({
       ...c,
       finished_at: c.finished_at === null ? null : new Date(c.finished_at),
+    }));
+    // 舊的存檔沒有這一欄——不存在時當成空的，不要讓它變成一個載入錯誤。
+    this.careerStats = (snapshot.careerStats ?? []).map((r) => ({
+      ...r,
+      finished_at: new Date(r.finished_at),
     }));
     this.nextUserId = snapshot.nextUserId;
   }
