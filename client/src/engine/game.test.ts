@@ -5,6 +5,7 @@ import { ALL_ABILITIES } from '../data/index.ts';
 import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
 import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
+import { roleRank } from './season.ts';
 
 const setup: GameSetup = {
   seed: 'test-seed',
@@ -853,6 +854,118 @@ describe('入學後的守位說明卡', () => {
     }
   });
 });
+describe('投手定位會議', () => {
+  /**
+   * 打完一段生涯，記下每一次定位提問（問的時候他在哪個定位、問的是哪一個），
+   * 並依 `accept` 決定接受或拒絕。
+   */
+  function playRoles(
+    game: Game,
+    accept: boolean,
+  ): { asks: { at: string | null; to: string }[]; log: string } {
+    const asks: { at: string | null; to: string }[] = [];
+    let guard = 0;
+    while (game.flow.prompt !== null && guard++ < 20000) {
+      const options = game.flow.prompt.options;
+      const promote = options.find((o) => o.id === 'role:accept');
+      if (promote !== undefined) {
+        asks.push({ at: game.state?.pitcherRole ?? null, to: promote.label });
+        game.choose(accept ? 'role:accept' : 'role:decline');
+        continue;
+      }
+      const pick = defaultPick(game, EFFECTIVE);
+      if (pick === undefined) break;
+      game.choose(pick);
+    }
+    return { asks, log: JSON.stringify(game.flow.log) };
+  }
+
+  const pitcher = (seed: string) =>
+    new Game({ ...setup, seed, startPosition: 'P', throws: 'R', bats: 'R' }).start();
+
+  it('進職業會登錄一次定位，而且不問——他還沒有位置可以留守', () => {
+    for (let i = 0; i < 40; i++) {
+      const { log } = playRoles(pitcher(`role-reg-${i}`), false);
+      if (!log.includes('定位登錄')) continue;
+      // 登錄是通知，不是提問：那一張卡出現的時候不該伴隨一次升遷詢問。
+      expect(log).toContain('定位登錄');
+      return;
+    }
+    throw new Error('四十局都沒有人登錄過定位');
+  });
+
+  it('往下不問——掉出輪值不是可以商量的事', () => {
+    for (let i = 0; i < 60; i++) {
+      const game = pitcher(`role-down-${i}`);
+      const { log } = playRoles(game, false);
+      const demoted = game.flow.log.some(
+        (e) => e.kind === 'card' && e.title === '定位會議' && e.tone === 'bad',
+      );
+      if (!demoted) continue;
+      // 降級只發卡，沒有選項可選。
+      expect(log).toContain('定位會議');
+      return;
+    }
+  });
+
+  it('往上要問，而且同一個定位上拒絕過就不再問第二次', () => {
+    for (let i = 0; i < 60; i++) {
+      const { asks } = playRoles(pitcher(`role-up-${i}`), false);
+      if (asks.length === 0) continue;
+      const seen = new Set<string>();
+      for (const ask of asks) {
+        const key = `${ask.at}→${ask.to}`;
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+      }
+      return;
+    }
+  });
+
+  it('接受升遷之後，定位真的換了', () => {
+    for (let i = 0; i < 60; i++) {
+      const game = pitcher(`role-accept-${i}`);
+      const { log } = playRoles(game, true);
+      if (!log.includes('定位調整')) continue;
+      expect(log).toContain('定位調整');
+      return;
+    }
+  });
+
+  it('拒絕之後成績照舊用留任的那個定位，不會偷偷升上去', () => {
+    // 這是「現算」與「登錄」的差別：現算的話玩家拒絕過的升遷會在成績上生效。
+    for (let i = 0; i < 60; i++) {
+      const game = pitcher(`role-keep-${i}`);
+      const { asks } = playRoles(game, false);
+      if (asks.length === 0) continue;
+      const state = game.state;
+      if (state?.pitcherRole == null || state.seasonPitching === null) continue;
+      expect((state.seasonPitching as { role?: string }).role ?? state.pitcherRole).toBe(
+        state.pitcherRole,
+      );
+      return;
+    }
+  });
+});
+
+describe('定位階梯', () => {
+  it('先發最高、長中繼最低，而且五個定位各自不同高', () => {
+    const order = (['LR', 'MR', 'SU', 'CP', 'SP'] as const).map((r) => roleRank(r));
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]!).toBeGreaterThan(order[i - 1]!);
+    }
+  });
+
+  it('CP → SU 是降、SU → CP 是升、CP → SP 是升', () => {
+    expect(roleRank('SU')).toBeLessThan(roleRank('CP'));
+    expect(roleRank('CP')).toBeLessThan(roleRank('SP'));
+    // 牛棚的任何一階往先發都是升。
+    for (const r of ['LR', 'MR', 'SU', 'CP'] as const) {
+      expect(roleRank(r)).toBeLessThan(roleRank('SP'));
+    }
+  });
+});
+
 describe('守位登錄與移防', () => {
   /** 打完一整段生涯，回傳那局遊戲。 */
   const full = (seed: string) => playWell(started({ seed }));

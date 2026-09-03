@@ -192,6 +192,7 @@ import {
   playSeason,
   pitcherRole,
   positionName,
+  roleRank,
   proBattingLine,
   proPitchingLine,
   ROLE_NAMES,
@@ -622,6 +623,10 @@ export class Game {
    * 「我這輩子拒絕過什麼」——離開了那個位置，當初拒絕的理由也就不在了。
    */
   #declinedPromotions = new Set<string>();
+  /** 已登錄的投手定位。與守位同一個立場：它只在定位會議上改變，不每季重算。 */
+  #pitcherRole: PitcherRole | null = null;
+  /** 在哪些定位上拒絕過升遷。與守位的拒絕記憶同一套規則。 */
+  #declinedRoles = new Set<PitcherRole>();
   /** 掛靴的地方。見 PlayerState.retiredFrom。 */
   #retiredFrom: { team: string; levelName: string } | null = null;
   /**
@@ -821,10 +826,9 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: this.#fieldPosition,
       positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),
-      // 現在的投手定位。**現算而不是抄上一季**：體力掉下來的當下就該看得到自己
-      // 從輪值變成牛棚，不必等球季打完。進職業之前沒有牛棚分工，因此是 null。
-      pitcherRole:
-        this.#pro === null ? null : pitcherRole(this.#seasonAbility, this.#pro.level, this.#standards),
+      // **已登錄的**定位，不是現算的。與守位同一個立場：它在定位會議上決定，
+      // 之後整季不變——現算會讓玩家拒絕過的升遷在畫面上偷偷生效。
+      pitcherRole: this.#pitcherRole,
       playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
@@ -1627,7 +1631,10 @@ export class Game {
 
     this.flow.push(
       () => this.#proSpringTraining(),
-      () => this.#positionReview(() => this.#loveEvent(() => this.#drawEventCards())),
+      () =>
+        this.#positionReview(() =>
+          this.#roleReview(() => this.#loveEvent(() => this.#drawEventCards())),
+        ),
       () => this.#healthCheck(),
       () => this.#tradeDeadline(),
       () => this.#proSeason(),
@@ -1741,6 +1748,109 @@ export class Game {
   }
 
   /**
+   * 定位會議：這一季他在牛棚還是輪值。
+   *
+   * **與守位會議同一套規則（ADR 0037）**：往下是事實，教練團不會問你要不要掉出
+   * 輪值；往上是機會，要問過你，而且**在同一個定位上拒絕過就不再問第二次**。
+   *
+   * 「即使體力到了也要問」是刻意的——體力只決定他撐不撐得住，不決定他想不想。
+   * 一個關門人被推去當先發是升遷，不是調度。
+   */
+  #roleReview(then: () => void): void {
+    const pro = this.#pro;
+    // 只有走投球側的人有定位。養成期沒有牛棚分工，職業之前不判。
+    if (pro === null || !this.#pitches) {
+      this.#setPitcherRole(null);
+      then();
+      return;
+    }
+
+    const natural = pitcherRole(this.#seasonAbility, pro.level, this.#standards);
+    const current = this.#pitcherRole;
+
+    if (current === null) {
+      // 首次登錄：照能力放，不問——他還沒有位置可以留守。
+      this.#setPitcherRole(natural);
+      this.flow.card(
+        'info',
+        '定位登錄',
+        `教練團評估之後，把你放在 <b class="hl">${esc(ROLE_NAMES[natural])}</b>。`,
+      );
+      then();
+      return;
+    }
+
+    if (natural === current) {
+      then();
+      return;
+    }
+
+    if (roleRank(natural) < roleRank(current)) {
+      // 往下不問。那不是可以商量的事。
+      this.#setPitcherRole(natural);
+      this.flow.card(
+        'bad',
+        '定位會議',
+        `你撐不住${esc(ROLE_NAMES[current])}的份量了——新球季改任 <b class="dn">${esc(ROLE_NAMES[natural])}</b>。`,
+      );
+      then();
+      return;
+    }
+
+    // 升遷：在這個定位上拒絕過就不再問。記憶在 #setPitcherRole 裡隨定位變動清空。
+    if (this.#declinedRoles.has(natural)) {
+      then();
+      return;
+    }
+    this.flow.ask(
+      {
+        title: '定位會議：教練團想把你放到更吃重的位置',
+        options: [
+          {
+            id: 'role:accept',
+            label: `改任${ROLE_NAMES[natural]}`,
+            note: '更吃重的定位，責任也更大',
+            role: 'main',
+          },
+          {
+            id: 'role:decline',
+            label: `留任${ROLE_NAMES[current]}`,
+            note: '這個定位上不再問',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'role:accept') {
+          this.#setPitcherRole(natural);
+          this.flow.card(
+            'good',
+            '定位調整',
+            `牛棚的數字說服了所有人——新球季改任 <b class="hl">${esc(ROLE_NAMES[natural])}</b>。`,
+          );
+        } else {
+          this.#declinedRoles.add(natural);
+          this.flow.card(
+            'info',
+            '留任原位',
+            `你婉拒了教練團的提議——<b class="hl">${esc(ROLE_NAMES[current])}</b>還是你的位置。`,
+          );
+        }
+        then();
+      },
+    );
+  }
+
+  /**
+   * 換登錄定位。**定位一動就把拒絕記憶整組清空**——與守位同一個理由：記住的是
+   * 「我在那個位置上做過的決定」，離開了那個位置，當初拒絕的理由也就不在了。
+   */
+  #setPitcherRole(role: PitcherRole | null): void {
+    if (role === this.#pitcherRole) return;
+    this.#pitcherRole = role;
+    this.#declinedRoles.clear();
+  }
+
+  /**
    * 換登錄守位。**守位一動就把拒絕記憶整組清空**——記住的是「我在這個位置上
    * 做過的決定」，離開了那個位置，當初拒絕的理由也就不在了（ADR 0037）。
    */
@@ -1803,6 +1913,19 @@ export class Game {
     if (side !== null) return side === 'fielder';
     const r = this.rating;
     return r !== null && r.fielder > r.pitcher;
+  }
+
+  /**
+   * 這一季上不上場投球。`#playsField` 的另一面，同一套判斷。
+   *
+   * 二刀流兩邊都算——那正是二刀流在數據上的樣子，也是他為什麼要開兩場會議。
+   */
+  get #pitches(): boolean {
+    if (this.isTwoWay) return true;
+    const side = this.#activeSide;
+    if (side !== null) return side === 'pitcher';
+    const r = this.rating;
+    return r !== null && r.pitcher >= r.fielder;
   }
 
   /**
@@ -1874,6 +1997,8 @@ export class Game {
       better: this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder'),
       twoWay: this.isTwoWay,
       standards: this.#standards,
+      // 定位是定位會議決定的，成績這邊照著用——現算會讓玩家拒絕過的升遷偷偷生效。
+      pitcherRole: this.#pitcherRole,
       // 輪值線掛在球隊戰力上——在爛隊當先發、去強隊只能進牛棚。
       teamWinRate: this.#league?.get(pro.team)?.winRate ?? null,
       // 傷病的結果。乘的是出賽量，不是事後把數據打折。

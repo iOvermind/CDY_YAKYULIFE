@@ -70,6 +70,13 @@ export interface SeasonContext {
   /** 球隊勝率。輪值線掛在它上面——強隊難擠、弱隊容易占。二軍沒有戰力表，未知時視為 .500。 */
   readonly teamWinRate?: number | null;
   /**
+   * 這一季**已登錄的**投手定位。
+   *
+   * 與守位同一個立場：定位是每季在定位會議上決定的，不是每次算成績時重新判定。
+   * 省略時現算——測試與還沒接上會議的呼叫端走這條。
+   */
+  readonly pitcherRole?: PitcherRole | null;
+  /**
    * 這一季的出賽係數，1 為全勤、0 為整季報銷。傷病落在這裡。
    *
    * **它乘的是出賽量，不是事後把數據打折**——他真的只上場了那麼多，因此率型
@@ -429,6 +436,13 @@ export interface SeasonLineOptions {
    */
   readonly appearances?: number;
   /**
+   * 指定投手定位，不要現算。
+   *
+   * 定位是在定位會議上決定的（升要問過玩家、降不問），所以成績這邊只能照著用——
+   * 現算會讓玩家拒絕過的升遷在成績上偷偷生效。
+   */
+  readonly role?: PitcherRole;
+  /**
    * 覆寫對手水準。
    *
    * 國際賽借用聯盟層級換算場次，但對手是各國的一線球員。紀錄錨定模型的每一格都拿
@@ -604,6 +618,25 @@ export function proBattingLine(
 /** 場上的三種投手角色。中繼與終結者在出賽結構上相同，差別在拿到的是中繼還是救援。 */
 export type PitcherRole = 'SP' | 'CP' | 'SU' | 'MR' | 'LR';
 
+/**
+ * 定位的高低。**先發最高，長中繼最低。**
+ *
+ * 這條順序只回答一件事：這次異動是升是降。升要問過玩家，降不問——與守位會議
+ * 同一套規則（ADR 0037）。一個人從牛棚被推上輪值是機會，從輪值掉進牛棚是事實。
+ */
+const ROLE_RANK: Readonly<Record<PitcherRole, number>> = {
+  LR: 0,
+  MR: 1,
+  SU: 2,
+  CP: 3,
+  SP: 4,
+};
+
+/** 這個定位在階梯上的高度。 */
+export function roleRank(role: PitcherRole): number {
+  return ROLE_RANK[role];
+}
+
 /** 牛棚的三階，由高到低。LR 不在裡面——它是 fallback。 */
 const BULLPEN_LADDER: readonly (readonly [PitcherRole, 'closer_line' | 'setup_line' | 'middle_line'])[] = [
   ['CP', 'closer_line'],
@@ -692,6 +725,7 @@ export function proPitchingLine(
     appearances,
     par: parOverride,
     innings: inningsOverride,
+    role: roleOverride,
   } = options;
   const rng = world.stream('season');
   const p = cfg.pitching;
@@ -703,7 +737,7 @@ export function proPitchingLine(
   const noise = (): number => p.noise.min + rng.next() * (p.noise.max - p.noise.min);
   const jit = (n: number): number => rng.int(-n, n);
 
-  const role = pitcherRole(ability, level, standards);
+  const role = roleOverride ?? pitcherRole(ability, level, standards);
   // **成績看的是實力，不是身價。** 評價低不代表成績差——角色折扣是責任額的折價，
   // 折過的數字拿去算防禦率，會讓終結者的自責分比 par 先發還多。
   const rating = pitcherStuff(ability, isStarterRole(role) ? 'SP' : 'RP');
@@ -931,7 +965,14 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
             ctx.level,
             ctx.pitchingOverall ?? ctx.overall,
             standards,
-            { teamWinRate: ctx.teamWinRate ?? null, seasonFactor: ctx.seasonFactor ?? 1 },
+            {
+              teamWinRate: ctx.teamWinRate ?? null,
+              seasonFactor: ctx.seasonFactor ?? 1,
+              // 沒登錄過就現算——測試與還沒接上定位會議的呼叫端走這條。
+              ...(ctx.pitcherRole === null || ctx.pitcherRole === undefined
+                ? {}
+                : { role: ctx.pitcherRole }),
+            },
           )
         : null,
     ),
