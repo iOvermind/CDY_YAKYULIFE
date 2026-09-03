@@ -174,15 +174,26 @@ export function unlocksTaiwan(options: {
   return options.caps > t.min_count;
 }
 
-/** 一屆賽會打幾場。投手依先發或後援分開——先發王牌一屆扛一兩場，牛棚頻繁上陣。 */
+/**
+ * 一屆賽會這個人上了幾場。
+ *
+ * **場次由名次決定。** 走得越遠打得越多——冠軍與亞軍同樣打滿決賽，季軍輸在準決賽，
+ * 複賽止步輸在複賽，預賽出局只打了分組賽。舊版是從一個固定區間亂數抽、完全不看
+ * 名次，於是「複賽止步打了八場、亞軍只打五場」是必然會發生的事。
+ *
+ * 個人的成績變化交給成績模型自己的抖動，不靠場次亂跳——場次是賽制決定的事實，
+ * 不是隨機事件。
+ */
 export function tournamentGames(
-  world: World,
+  rankIndex: number,
   side: 'batter' | 'starter' | 'reliever',
 ): number {
   const s = cfg.stats;
-  const spec =
-    side === 'batter' ? s.batter_games : side === 'starter' ? s.starter_games : s.reliever_games;
-  return world.stream('season').int(spec.min, spec.max);
+  const values = s.games_by_rank.values;
+  const teamGames = values[Math.min(Math.max(0, rankIndex), values.length - 1)] ?? 0;
+  const share =
+    side === 'batter' ? s.batter_share : side === 'starter' ? s.starter_share : s.reliever_share;
+  return Math.max(s.min_games, Math.round(teamGames * share));
 }
 
 /** 國際賽的水準。一屆賽會的對手是各國的一線球員。 */

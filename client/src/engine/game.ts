@@ -2836,7 +2836,7 @@ export class Game {
     if (isHonorRank(result.rank)) this.#counts.internationalPodiums++;
     if (isPodium(result.rankIndex)) this.#intlPodiums++;
 
-    const line = this.#accumulateNationalStats();
+    const line = this.#accumulateNationalStats(result.rankIndex);
     this.#intlSeasons.push({
       year: this.#year,
       age: this.#age,
@@ -2895,7 +2895,10 @@ export class Game {
    * **復用球季模型**：把國際賽的 par 與場次直接傳進去，不在 `leagues.json` 建一個
    * 假層級——那會污染階梯、落地與升降級的邏輯。欄位因此與職業完全一致。
    */
-  #accumulateNationalStats(): { batting: BattingLine | null; pitching: PitchingLine | null } {
+  #accumulateNationalStats(rankIndex: number): {
+    batting: BattingLine | null;
+    pitching: PitchingLine | null;
+  } {
     const empty = { batting: null, pitching: null };
     const pro = this.#pro;
     const player = this.#player;
@@ -2905,17 +2908,20 @@ export class Game {
     let tourneyPitching: PitchingLine | null = null;
 
     const position = this.#fieldPosition ?? DH;
-    // 用一個 par 相當於國際賽水準的層級當尺——場次另外指定，因此層級只借它的
-    // 「一季有幾場」來換算比例。
+    // 層級只借它的守位表與角色設定，**水準與場次都另外指定**：par 直接傳賽會的，
+    // 場次直接傳這一屆上了幾場。
+    //
+    // 舊做法是把 `overall` 平移到聯盟的尺上、不動 par。在「率 = base + d × 斜率」
+    // 的年代那是等價的（每條率只吃 d），但紀錄錨定模型的每一格都拿**個別能力**去
+    // 比 par——平移 overall 動不到那些格子，國際賽的門檻會悄悄退回中職。
     const level = pro.level;
-    const leagueGames = levelOf(level).games;
     const side = this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder');
     const par = tournamentPar();
-    const overall = (r.overall ?? 0) - par + leagueStandardOf(this.#standards, level).par;
+    const overall = r.overall ?? 0;
 
     if (side === 'pitcher' || this.isTwoWay) {
       const role = (this.#seasonPitching as ProPitchingLine | null)?.role ?? 'SP';
-      const games = tournamentGames(this.world, role === 'SP' ? 'starter' : 'reliever');
+      const games = tournamentGames(rankIndex, role === 'SP' ? 'starter' : 'reliever');
       const line = proPitchingLine(
         this.world,
         this.#seasonAbility,
@@ -2923,13 +2929,15 @@ export class Game {
         overall,
         this.#standards,
         null,
-        games / leagueGames,
+        1,
+        games,
+        par,
       );
       this.#intlPitching = addPitching(this.#intlPitching, line);
       tourneyPitching = line;
     }
     if (side === 'fielder' || this.isTwoWay) {
-      const games = tournamentGames(this.world, 'batter');
+      const games = tournamentGames(rankIndex, 'batter');
       const line = proBattingLine(
         this.world,
         this.#seasonAbility,
@@ -2937,7 +2945,9 @@ export class Game {
         level,
         overall,
         this.#standards,
-        games / leagueGames,
+        1,
+        games,
+        par,
       );
       this.#intlBatting = addBatting(this.#intlBatting, line);
       tourneyBatting = line;

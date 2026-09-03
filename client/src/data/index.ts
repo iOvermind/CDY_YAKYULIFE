@@ -720,9 +720,13 @@ export interface AmateurData {
     };
     readonly stats: {
       readonly par: number;
-      readonly batter_games: Range;
-      readonly starter_games: Range;
-      readonly reliever_games: Range;
+      /** 球隊打幾場，由名次決定。對應 ranks 的順序。 */
+      readonly games_by_rank: { readonly values: readonly number[] };
+      /** 球隊那幾場之中，這個位置上得了幾場。 */
+      readonly batter_share: number;
+      readonly starter_share: number;
+      readonly reliever_share: number;
+      readonly min_games: number;
     };
     readonly injury_next_season: number;
     readonly intlace_effect: {

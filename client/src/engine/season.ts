@@ -525,20 +525,33 @@ export function proBattingLine(
   overall: number,
   standards: LeagueStandards | null = null,
   seasonFactor = 1,
+  appearances?: number,
+  parOverride?: number,
 ): ProBattingLine {
   const rng = world.stream('season');
   const b = cfg.batting;
-  const par = leagueStandardOf(standards, level).par;
+  // **par 要能被覆寫。** 國際賽借用聯盟層級來換算場次，但對手的水準是賽會自己的
+  // ——而紀錄錨定模型的每一格都拿個別能力去比 par，不是比一個純量 d。只平移
+  // `overall` 的舊做法在率型模型下等價，在這裡不等價：那會讓國際賽的門檻悄悄
+  // 退回中職。
+  const par = parOverride ?? leagueStandardOf(standards, level).par;
 
   // 抽取次數必須固定：每一格各拿一次噪音、一次抖動，順序寫死。條件式抽取會讓
   // 同一顆種子在改版前後對不起來（ADR 0002）。
   const noise = (): number => b.noise.min + rng.next() * (b.noise.max - b.noise.min);
   const jit = (n: number): number => rng.int(-n, n);
 
-  const games = Math.round(
-    gamesPlayed(world, ability, position, level, overall, standards) * seasonFactor,
-  );
-  const starts = Math.min(games, Math.round(games * startShare(overall, par) * noise()));
+  // `appearances` 是「這次只上了這麼多場」的直接指定（國際賽用）。**不能用比例去
+  // 縮**：一屆賽會兩場對上一季一百二十場是 0.017，整季場次乘完再四捨五入就是 0
+  // ——職業期國際賽的投手成績一直是空的，就是這麼來的。
+  const games =
+    appearances ??
+    Math.round(gamesPlayed(world, ability, position, level, overall, standards) * seasonFactor);
+  // 國際賽每一場都是先發——被叫去打國家隊的人不會坐板凳。
+  const starts =
+    appearances === undefined
+      ? Math.min(games, Math.round(games * startShare(overall, par) * noise()))
+      : games;
   const bench = games - starts;
   const pa = plateAppearances(world, starts, bench, overall, par);
 
@@ -633,11 +646,14 @@ export function proPitchingLine(
   standards: LeagueStandards | null = null,
   teamWinRate: number | null = null,
   seasonFactor = 1,
+  appearances?: number,
+  parOverride?: number,
 ): ProPitchingLine {
   const rng = world.stream('season');
   const p = cfg.pitching;
   const info = levelOf(level);
-  const par = leagueStandardOf(standards, level).par;
+  // 見 `proBattingLine` 的說明：國際賽的對手水準是賽會自己的。
+  const par = parOverride ?? leagueStandardOf(standards, level).par;
   const d = overall - par;
 
   const noise = (): number => p.noise.min + rng.next() * (p.noise.max - p.noise.min);
@@ -686,9 +702,17 @@ export function proPitchingLine(
     games = starts + relief;
   }
 
-  // 傷病落在出賽量上：他真的只上場了那麼多，因此率型數據不受影響。
-  games = Math.max(0, Math.round(games * seasonFactor));
-  starts = Math.min(games, Math.max(0, Math.round(starts * seasonFactor)));
+  if (appearances === undefined) {
+    // 傷病落在出賽量上：他真的只上場了那麼多，因此率型數據不受影響。
+    games = Math.max(0, Math.round(games * seasonFactor));
+    starts = Math.min(games, Math.max(0, Math.round(starts * seasonFactor)));
+  } else {
+    // 直接指定上了幾場（國際賽用）。**不能用比例去縮**：一屆兩場對上一季一百二十
+    // 場是 0.017，整季場次乘完再四捨五入就是 0——職業期國際賽的投手成績一直是空的，
+    // 就是這麼來的。
+    games = Math.max(0, appearances);
+    starts = isStarterRole(role) ? games : 0;
+  }
 
   // 投手側的信任度判定。放在抽完之後，理由見 `gamesPlayed`。
   //
