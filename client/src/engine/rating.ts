@@ -15,7 +15,6 @@ import {
   amateur,
   leagues,
   positions,
-  season,
   type AbilityKey,
   type Hand,
 } from '../data/index.ts';
@@ -89,7 +88,26 @@ export function pitcherRating(ability: Abilities, role: PitcherRole | null = nul
   if (role === null) {
     return Math.max(pitcherRating(ability, 'SP'), pitcherRating(ability, 'RP'));
   }
+  const w = abilities.overall.pitcher.roles[role];
+  if (w === undefined) return 0;
+  return pitcherStuff(ability, role) - w.discount;
+}
 
+/**
+ * 同一個投手，**沒有角色折扣**的那個數字。
+ *
+ * 折扣回答的是「他值多少」——同一組能力當後援，責任額比先發小，身價因此低一截。
+ * 那是**留不留得住在聯盟**的判斷，不是他投得好不好。
+ *
+ * **成績模型要的是後者。** 把折扣算進去的話，一個能力 58 的火球男折完只剩 39，
+ * 在 CPBL（par 44）會發生兩件事：牛棚的定位線沒有人構得到，整個牛棚被判成長中繼；
+ * 而他的自責分會算得比一個 par 先發還多——那與他被放在關門位置的理由正好相反。
+ *
+ * 因此 `season.ts` 的每一格都走這一支，先發與後援用的是**同一把尺**。角色之間
+ * 唯一的差別留在球種加權上（後援靠的球種比較少，見 ADR 0005），那是實力的一部分，
+ * 不是折價。
+ */
+export function pitcherStuff(ability: Abilities, role: PitcherRole): number {
   const cfg = abilities.overall.pitcher;
   const w = cfg.roles[role];
   if (w === undefined) return 0;
@@ -99,26 +117,9 @@ export function pitcherRating(ability: Abilities, role: PitcherRole | null = nul
       weightedSum(topValues(ability, ['vel', ...cfg.pitches], weights.length), weights),
     ),
   );
-  return (
-    arsenal * w.arsenal_share + (ability['ctl'] ?? 0) * w.control_weight - w.discount
-  );
+  return arsenal * w.arsenal_share + (ability['ctl'] ?? 0) * w.control_weight;
 }
 
-/**
- * 牛棚分：掉進牛棚之後，決定他是關門人還是中繼。
- *
- * 以球速為主——**一局的工作，用力塞進去就對了**。與評價分開一條公式，因為問的
- * 是不同的問題：評價問「他有多好」，牛棚分問「他適不適合關門」。
- */
-export function bullpenScore(ability: Abilities): number {
-  const cfg = season.pitching.bullpen;
-  const pitches = topValues(ability, abilities.overall.pitcher.pitches, cfg.pitch_weights.length);
-  return (
-    (ability['vel'] ?? 0) * cfg.velocity_weight +
-    (ability['ctl'] ?? 0) * cfg.control_weight +
-    weightedSum(pitches, cfg.pitch_weights)
-  );
-}
 
 /**
  * 純打擊評價。

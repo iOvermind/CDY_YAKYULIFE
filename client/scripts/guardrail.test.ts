@@ -127,7 +127,10 @@ describe('聯盟基準環境', () => {
    */
   it('打線產出的分數與聯盟平均防禦率對得起來', () => {
     const runsPerGame = base.runsCreatedPerPa * seasonCfg.advanced.shares.team_pa_per_game;
-    const impliedEra = runsPerGame / seasonCfg.pitching.runs_per_earned_run.value;
+    // 失分裡有一段是非自責的（野手掉的球），兩個錨點的比值就是那個係數。
+    const rec = seasonCfg.pitching.records;
+    const runsPerEarnedRun = (rec.er.anchor + rec.unearned.anchor) / rec.er.anchor;
+    const impliedEra = runsPerGame / runsPerEarnedRun;
     expect(Math.abs(impliedEra - base.era)).toBeLessThan(0.5);
   });
 

@@ -11,7 +11,14 @@
 import { amateur, season as cfg } from '../data/index.ts';
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
-import { battingCore, dominanceAt, intentionalWalksFrom, levelOf, startShare } from './season.ts';
+import {
+  battingCore,
+  dominanceAt,
+  eraAt,
+  intentionalWalksFrom,
+  levelOf,
+  startShare,
+} from './season.ts';
 
 /** 聯盟平均：一名平均球員的打擊率、上壘率、長打率與防禦率。 */
 export interface Baseline {
@@ -66,7 +73,7 @@ export function proBaselineAt(level: string, d: number): Baseline {
     line.double,
     line.triple,
     line.hr,
-    rateAt(cfg.pitching.era, d),
+    eraAt(d),
     levelOf(level).name,
   );
 }
@@ -127,13 +134,6 @@ export function proPaAt(d: number, leagueGames: number): number {
   return (share * per + (1 - share) * cfg.batting.bench_pa_per_game.value) * leagueGames;
 }
 
-/** 一條率在 d 值下的值，套上該率自己的上下限。 */
-function rateAt(
-  spec: { base: number; per_point: number; min: number; max: number },
-  d: number,
-): number {
-  return Math.max(spec.min, Math.min(spec.max, spec.base + d * spec.per_point));
-}
 
 /** 養成期的平均水準。門檻與職業不同，因此基準線也不同。 */
 export function amateurBaseline(): Baseline {

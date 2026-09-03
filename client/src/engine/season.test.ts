@@ -16,7 +16,7 @@ import {
   trustFactor,
   offRoster,
 } from './season.ts';
-import { pitcherRating, type Abilities } from './rating.ts';
+import type { Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
 const KEYS = ['sta','vel','ctl','swp','drp','chg','gim','con','pow','spd','eye','rng','fld','arm','cat'];
@@ -370,34 +370,45 @@ describe('proBattingLine', () => {
 });
 
 describe('pitcherRole', () => {
-  const role = (ability: Abilities, teamWinRate = 0.5) =>
-    pitcherRole(new World('role'), ability, 'CPBL1', {
-      teamWinRate,
-      starterRating: pitcherRating(ability, 'SP'),
-    });
+  const role = (ability: Abilities) => pitcherRole(ability, 'CPBL1');
+  const staMin = cfg.pitching.role.starter_sta_min;
 
-  it('體力夠、評價擠得進輪值的人先發', () => {
-    expect(role(with_(CPBL1.par, { sta: 60, ctl: 60, vel: 60, swp: 60, drp: 55 }))).toBe('SP');
+  it('體力是先決條件：撐得住就走先發那條路', () => {
+    expect(role(with_(CPBL1.par, { sta: staMin + 5, ctl: 60, vel: 60, swp: 60, drp: 55 }))).toBe('SP');
   });
 
-  it('體力不足的人進牛棚——體力是絕對的生理條件', () => {
-    expect(role(with_(CPBL1.par, { sta: 25, ctl: 60, vel: 60, swp: 60 }))).not.toBe('SP');
+  it('體力不足的人整組落到牛棚——撐不了一百五十局就是撐不了', () => {
+    expect(role(with_(CPBL1.par, { sta: staMin - 5, ctl: 60, vel: 60, swp: 60 }))).not.toBe('SP');
   });
 
-  it('控球差不再擋先發——那一關已經拿掉，交給保送與防禦率去罰', () => {
-    expect(role(with_(CPBL1.par, { sta: 60, ctl: 25, vel: 70, swp: 65, drp: 60 }))).toBe('SP');
+  it('控球差不擋先發——那一關交給保送與防禦率去罰', () => {
+    expect(role(with_(CPBL1.par, { sta: staMin + 5, ctl: 25, vel: 70, swp: 65, drp: 60 }))).toBe('SP');
   });
 
-  it('同一隻手在爛隊當先發，去強隊只能進牛棚', () => {
-    // 評價剛好卡在輪值線附近的人。強弱隊的差別因此看得出來。
-    const ability = with_(CPBL1.par, { sta: 60, vel: 46, ctl: 46, swp: 46 });
-    expect(role(ability, 0.4)).toBe('SP');
-    expect(role(ability, 0.6)).not.toBe('SP');
+  it('體力夠但評價不到先發線的人變長中繼', () => {
+    expect(role(with_(20, { sta: staMin + 5, ctl: 20, vel: 20, swp: 20, drp: 20 }))).toBe('LR');
   });
 
-  it('牛棚裡球速高的關門、其餘中繼', () => {
-    expect(role(with_(CPBL1.par, { sta: 20, vel: 85, ctl: 70, swp: 70, drp: 60 }))).toBe('CL');
-    expect(role(with_(CPBL1.par, { sta: 20, vel: 35, ctl: 35, swp: 35 }))).toBe('RP');
+  it('牛棚由高到低：終結 → 布局 → 中繼', () => {
+    const strong = role(with_(CPBL1.par + 20, { sta: staMin - 10 }));
+    const mid = role(with_(CPBL1.par + 2, { sta: staMin - 10 }));
+    expect(['CP', 'SU']).toContain(strong);
+    expect(['SU', 'MR', 'LR']).toContain(mid);
+  });
+
+  it('牛棚沒有一階收得下的人是長中繼——門檻之間不留洞', () => {
+    // 這正是舊寫法的漏洞：CP ≥ 1.05、SU ≥ 1.02、MR ≥ 0.97 之外還寫一條
+    // 「LR < 0.95」，於是 0.95 與 0.97 之間的人無家可歸。
+    expect(role(with_(20, { sta: staMin - 10, ctl: 20, vel: 20, swp: 20 }))).toBe('LR');
+  });
+
+  it('五種角色都指派得出來，而且只會是這五種', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      seen.add(role(with_(CPBL1.par - 20 + i, { sta: 20 + i })));
+    }
+    for (const r of seen) expect(['SP', 'CP', 'SU', 'MR', 'LR']).toContain(r);
+    expect(seen.size).toBeGreaterThan(1);
   });
 });
 
@@ -406,37 +417,56 @@ describe('proPitchingLine', () => {
     proPitchingLine(new World(seed), ability, 'CPBL1', ovr);
 
   it('先發場次不超過輪值容量', () => {
-    const max = CPBL1.games / cfg.pitching.starter.rotation_divisor.value;
+    const max = CPBL1.games / cfg.pitching.appearances.rotation_divisor.value;
     for (let i = 0; i < 200; i++) {
       const p = pitch(`s${i}`, with_(65, { sta: 70, ctl: 70 }), 65);
       expect(p.starts).toBeLessThanOrEqual(Math.ceil(max));
     }
   });
 
-  it('後援投手沒有先發場次，先發投手沒有救援成功', () => {
+  it('純牛棚沒有先發場次，先發沒有救援成功', () => {
     for (let i = 0; i < 100; i++) {
       const rp = pitch(`s${i}`, with_(45, { sta: 25 }), 45);
-      expect(rp.role).toBe('RP');
-      expect(rp.starts).toBe(0);
+      expect(['CP', 'SU', 'MR', 'LR']).toContain(rp.role);
+      if (rp.role !== 'LR') expect(rp.starts).toBe(0);
       const sp = pitch(`s${i}`, with_(55, { sta: 65, ctl: 65 }), 55);
       expect(sp.role).toBe('SP');
       expect(sp.saves).toBe(0);
+      expect(sp.holds).toBe(0);
     }
   });
 
-  it('勝敗場合計不超過先發場次', () => {
+  it('救援與中繼夾在剩下的出賽裡——不會生出比出場次數還多的紀錄', () => {
+    for (let i = 0; i < 200; i++) {
+      const p = pitch(`sv${i}`, with_(50, { sta: 30, vel: 60, ctl: 55 }), 50);
+      expect(p.wins + p.losses + p.saves + p.holds).toBeLessThanOrEqual(p.games);
+      expect(p.hr).toBeLessThanOrEqual(p.hits);
+      expect(p.er).toBeLessThanOrEqual(p.runs);
+      for (const v of [p.wins, p.losses, p.saves, p.holds, p.hits, p.hr, p.bb, p.so, p.outs]) {
+        expect(v).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it('勝敗場合計不超過出賽場次', () => {
     for (let i = 0; i < 100; i++) {
       const p = pitch(`s${i}`, with_(55, { sta: 65, ctl: 65 }), 55);
-      expect(p.wins + p.losses).toBeLessThanOrEqual(p.starts);
+      expect(p.wins + p.losses).toBeLessThanOrEqual(p.games);
       expect(p.losses).toBeGreaterThanOrEqual(0);
     }
   });
 
-  it('防禦率落在設定的上下限之內', () => {
+  it('防禦率是自責分導出的，不是自己生成的', () => {
+    // 舊版兩個數字各生各的，遲早對不起來。
     for (let i = 0; i < 300; i++) {
       const p = pitch(`s${i}`, flat(20 + (i % 60)), 20 + (i % 60));
-      expect(p.era).toBeGreaterThanOrEqual(cfg.pitching.era.min);
-      expect(p.era).toBeLessThanOrEqual(cfg.pitching.era.max);
+      if (p.outs === 0) {
+        expect(p.era).toBe(0);
+        continue;
+      }
+      expect(p.era).toBeCloseTo((p.er * 27) / p.outs, 10);
+      expect(p.era).toBeGreaterThanOrEqual(0);
+      expect(p.era).toBeLessThan(20);
     }
   });
 

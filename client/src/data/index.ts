@@ -527,7 +527,8 @@ export interface LeaderAward {
   readonly base?: number;
   /** 那條線的年度波動。低於下緣一定拿不到，高於上緣一定拿得到。 */
   readonly band: number;
-  readonly requires_role?: 'SP' | 'RP';
+  /** 限定角色。救援王與中繼王刻意不限——救援與中繼不是角色專屬，只是機率不同。 */
+  readonly requires_role?: 'SP' | 'CP' | 'SU' | 'MR' | 'LR';
   readonly min_pa?: number;
   /** 局數需達該聯盟的場次數。 */
   readonly min_ip_equals_games?: boolean;
@@ -840,6 +841,29 @@ export interface CupStage {
  * `±jitter` 的整數抖動。能力佔比是 `Σ(weights × 能力) - par_slope × (par - reference_par)`
  * 除以 `divisor`；`offset`、`floor` 與 `gate_*` 是少數幾格自己的形狀，見 season.json 的註解。
  */
+/** 投球局數：先發那一段與後援那一段各自的錨點，加上單場的物理上限。 */
+export interface InningsSpec {
+  readonly start_anchor: number;
+  readonly relief_anchor: number;
+  readonly per_start: number;
+  readonly per_relief: number;
+  /** 能力佔比的下限——再爛的先發也要吃掉一定的局數，不然輪值就空了。 */
+  readonly floor: number;
+  readonly cap_per_start: number;
+  readonly cap_per_relief: number;
+}
+
+/** 「投得越好越少」的那一類：`base - slope × 能力佔比`，夾在 floor。 */
+export interface SlopeSpec {
+  readonly anchor: number;
+  readonly per: number;
+  readonly base: number;
+  readonly slope: number;
+  readonly floor: number;
+  readonly cap_per_inning: number;
+  readonly jitter: number;
+}
+
 export interface RecordSpec {
   readonly anchor: number;
   readonly per?: number;
@@ -1123,46 +1147,86 @@ export interface SeasonData {
     readonly noise: Range;
   };
   readonly pitching: {
+    readonly reference_par: number;
+    readonly ratio_cap: number;
+    readonly ability_divisor: number;
     readonly role: {
-      readonly starter: {
-        readonly sta_min_d: number;
-        /** 輪值線。掛在球隊戰力上——強隊難擠、弱隊容易占。 */
-        readonly rotation: { readonly base_d: number; readonly per_win_rate: number };
-      };
-      /** 終結者的當年聯盟線。一隊只有一個關門人，稀缺性由這條線表達。 */
-      readonly closer: { readonly line_d: number; readonly band: number };
+      /** 先發的體力先決線。撐不住就整組落到牛棚。 */
+      readonly starter_sta_min: number;
+      readonly starter_line: number;
+      readonly closer_line: number;
+      readonly setup_line: number;
+      readonly middle_line: number;
     };
-    /** 牛棚分的權重。決定他是關門人還是中繼。 */
-    readonly bullpen: {
-      readonly velocity_weight: number;
-      readonly control_weight: number;
-      readonly pitch_weights: readonly number[];
-    };
-    readonly starter: {
+    readonly appearances: {
       readonly rotation_divisor: { readonly value: number };
       readonly gs_factor: { readonly base: number; readonly per_point: number } & Range;
-      readonly innings_per_start: RateSpec;
-      readonly noise: Range;
+      readonly lr_start_share: number;
+      /** 後援出賽錨點對應的球季長度。短季聯盟依比例縮。 */
+      readonly reference_games: number;
+      readonly relief_games: Readonly<
+        Record<'CP' | 'SU' | 'MR' | 'LR', { readonly base: number; readonly per_point: number } & Range>
+      >;
+      readonly jitter_games: number;
+      readonly jitter_starts: number;
     };
-    readonly reliever: {
-      readonly games: { readonly base: number; readonly per_point: number } & Range;
-      readonly innings_per_game: Range;
-      readonly noise: Range;
+    readonly innings: Readonly<Record<'SP' | 'CP' | 'SU' | 'MR' | 'LR', InningsSpec>> & {
+      readonly jitter: number;
     };
-    readonly strikeout_rate: RateSpec;
-    readonly hits_per_inning: RateSpec;
-    readonly runs_per_earned_run: { readonly value: number };
-    readonly walk_rate: RateSpec;
-    readonly era: RateSpec;
     readonly decision: {
-      readonly starter_decision_rate: number;
-      /** 後援出賽中有勝敗的比例。後援本來就會掃勝也會背敗。 */
-      readonly relief_decision_rate: number;
-      /** 中繼的出賽中有中繼機會的比例。 */
-      readonly hold_chance: number;
-      readonly win_rate: { readonly base: number; readonly per_point: number } & Range;
-      /** 終結者的出賽中有救援機會的比例。 */
-      readonly closer_save_chance: number;
+      readonly win_anchor: number;
+      /** 勝敗與救援自己的能力係數。par 球員必須落在「勝敗各半」。 */
+      readonly skill: { readonly base: number; readonly per_point: number } & Range;
+      readonly loss_anchor: number;
+      readonly relief_decision_anchor: number;
+      readonly save_anchor: number;
+      readonly hold_anchor: number;
+      readonly per_start: number;
+      readonly per_relief: number;
+      readonly loss_base: number;
+      readonly loss_floor: number;
+      readonly team_win_reference: number;
+      readonly save_coefficient: Readonly<Record<string, number>>;
+      readonly hold_coefficient: Readonly<Record<string, number>>;
+      readonly jitter_decision: number;
+      readonly jitter_relief: number;
+    };
+    readonly records: {
+      readonly hits: SlopeSpec;
+      readonly er: SlopeSpec;
+      readonly unearned: { readonly anchor: number; readonly per: number; readonly jitter: number };
+      readonly bb: {
+        readonly floor_anchor: number;
+        readonly range_anchor: number;
+        readonly per: number;
+        readonly ability: string;
+        readonly reference: number;
+        readonly span: number;
+        readonly cap_per_inning: number;
+        readonly jitter: number;
+      };
+      readonly so: {
+        readonly floor_anchor: number;
+        readonly range_anchor: number;
+        readonly per: number;
+        readonly weights: Readonly<Record<string, number>>;
+        readonly par_slope: number;
+        readonly divisor: number;
+        readonly exponent: number;
+        readonly cap_per_inning: number;
+        readonly jitter: number;
+      };
+      readonly hr: {
+        readonly floor_anchor: number;
+        readonly range_anchor: number;
+        readonly per: number;
+        readonly reference: number;
+        readonly deficit_weights: Readonly<Record<string, number>>;
+        readonly plus_weights: Readonly<Record<string, number>>;
+        readonly par_slope: number;
+        readonly divisor: number;
+        readonly jitter: number;
+      };
     };
     readonly noise: Range;
   };

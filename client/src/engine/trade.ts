@@ -127,51 +127,38 @@ export function splitPitching(
     const first = Math.round(v * ratio);
     return [first, v - first];
   };
-  const [g1, g2] = cut(line.games);
-  const [s1, s2] = cut(line.starts);
-  const [w1, w2] = cut(line.wins);
-  const [l1, l2] = cut(line.losses);
-  const [sv1, sv2] = cut(line.saves);
-  const [hd1, hd2] = cut(line.holds);
-  const [o1, o2] = cut(line.outs);
-  const [h1, h2] = cut(line.hits);
-  const [r1, r2] = cut(line.runs);
-  const [er1, er2] = cut(line.er);
-  const [bb1, bb2] = cut(line.bb);
-  const [so1, so2] = cut(line.so);
+  // 累計欄位一次列完，用鍵去切——十四個位置參數的寫法，加一個欄位就得數位置。
+  const COUNTS = [
+    'games',
+    'starts',
+    'wins',
+    'losses',
+    'saves',
+    'holds',
+    'outs',
+    'hits',
+    'hr',
+    'runs',
+    'er',
+    'bb',
+    'so',
+  ] as const;
 
-  const build = (
-    games: number,
-    starts: number,
-    wins: number,
-    losses: number,
-    saves: number,
-    holds: number,
-    outs: number,
-    hits: number,
-    runs: number,
-    er: number,
-    bb: number,
-    so: number,
-  ): ProPitchingLine => ({
+  const first: Record<string, number> = {};
+  const second: Record<string, number> = {};
+  for (const key of COUNTS) {
+    const whole = line[key];
+    const c = cut(whole);
+    first[key] = c[0];
+    second[key] = c[1];
+  }
+
+  const build = (c: Record<string, number>): ProPitchingLine => ({
     role: line.role,
-    games,
-    starts,
-    wins,
-    losses,
-    saves,
-    holds,
-    outs,
-    hits,
-    runs,
-    er,
-    bb,
-    so,
-    era: outs === 0 ? 0 : (er * 27) / outs,
+    ...(c as unknown as Omit<ProPitchingLine, 'role' | 'era'>),
+    // 防禦率用這一段自己的局數重算。
+    era: (c['outs'] ?? 0) === 0 ? 0 : ((c['er'] ?? 0) * 27) / (c['outs'] ?? 1),
   });
 
-  return [
-    build(g1, s1, w1, l1, sv1, hd1, o1, h1, r1, er1, bb1, so1),
-    build(g2, s2, w2, l2, sv2, hd2, o2, h2, r2, er2, bb2, so2),
-  ];
+  return [build(first), build(second)];
 }

@@ -12,18 +12,9 @@
 import { leagues, positions, season as cfg, type RecordSpec } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
-import { bullpenScore, pitcherRating, type Abilities } from './rating.ts';
+import { pitcherStuff, type Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
-/** 一條率的設定：與聯盟 par 同水準時是 base，每高一點加 per_point。 */
-interface RateSpec {
-  readonly base: number;
-  readonly per_point: number;
-  readonly min: number;
-  readonly max: number;
-  readonly ability?: string;
-  readonly abilities?: Readonly<Record<string, number>>;
-}
 
 /** 職業打擊成績。與養成期共用同一組欄位，生涯累計才不會在升上職業時斷掉。 */
 export type ProBattingLine = BattingLine;
@@ -31,8 +22,10 @@ export type ProBattingLine = BattingLine;
 /** 投手定位的中文名。 */
 export const ROLE_NAMES: Readonly<Record<PitcherRole, string>> = {
   SP: '先發',
-  RP: '中繼',
-  CL: '終結者',
+  CP: '終結者',
+  SU: '布局',
+  MR: '中繼',
+  LR: '長中繼',
 };
 
 /** 職業投球成績。只多一個角色標記——三種角色的敘述與獎項都不同。 */
@@ -98,24 +91,6 @@ export function levelOf(level: string) {
   return info;
 }
 
-/** 依能力算出一條率並套上下限。支援單一能力或加權組合。 */
-function rateOf(spec: RateSpec, ability: Abilities, par: number): number {
-  let value = par;
-  if (spec.abilities !== undefined) {
-    // 權重和不必為 1——除以總權重讓加權組合仍落在能力值的量綱上。
-    let sum = 0;
-    let weight = 0;
-    for (const [key, w] of Object.entries(spec.abilities)) {
-      sum += (ability[key] ?? par) * w;
-      weight += w;
-    }
-    value = weight === 0 ? par : sum / weight;
-  } else if (spec.ability !== undefined) {
-    value = ability[spec.ability] ?? par;
-  }
-  const raw = spec.base + (value - par) * spec.per_point;
-  return Math.max(spec.min, Math.min(spec.max, raw));
-}
 
 /**
  * 實際出賽場次。
@@ -574,53 +549,82 @@ export function proBattingLine(
 }
 
 /** 場上的三種投手角色。中繼與終結者在出賽結構上相同，差別在拿到的是中繼還是救援。 */
-export type PitcherRole = 'SP' | 'RP' | 'CL';
+export type PitcherRole = 'SP' | 'CP' | 'SU' | 'MR' | 'LR';
+
+/** 牛棚的三階，由高到低。LR 不在裡面——它是 fallback。 */
+const BULLPEN_LADDER: readonly (readonly [PitcherRole, 'closer_line' | 'setup_line' | 'middle_line'])[] = [
+  ['CP', 'closer_line'],
+  ['SU', 'setup_line'],
+  ['MR', 'middle_line'],
+];
 
 /**
  * 這一季的投手角色。見 ADR 0005。
  *
- * **先發與牛棚的分界是體力**——體力是絕對的生理條件，撐不了一百五十局就是撐
- * 不了，跟同年度有沒有別人更強無關，因此用固定的 d 值門檻。
+ * **體力是先決條件**：撐得住就走先發那條路，撐不住就整組落到牛棚。體力是絕對的
+ * 生理條件——撐不了一百五十局就是撐不了，跟同年度有沒有別人更強無關。
  *
- * 體力過關之後還要擠得進輪值，而**輪值線掛在球隊戰力上**：強隊難擠、弱隊容易
- * 占。引擎沒有隊友名單，球隊戰力表就是同隊水準的代理。「在爛隊當先發、去強隊
- * 只能進牛棚」因此不必另外寫。
- *
- * 掉進牛棚之後由牛棚分決定關門還是中繼，用的是**當年的聯盟線**——一隊只有一個
- * 關門人，稀缺性得有地方表達，與單項王同一套模型。
+ * 兩條路各自比對評價與 par 的比值。牛棚三階由高到低比，**沒有一階收得下的人就是
+ * 長中繼**——LR 寫成 fallback 而不是再給一條 `< 0.95` 的線，是因為兩條線之間會
+ * 開洞：0.95 與 0.97 之間的人以前無家可歸。
  */
 export function pitcherRole(
-  world: World,
   ability: Abilities,
   level: string,
-  options: {
-    readonly standards?: LeagueStandards | null;
-    /** 球隊勝率。二軍沒有戰力表，未知時視為 .500。 */
-    readonly teamWinRate?: number | null;
-    /** 先發評價。輪值線比的是它，不是綜合能力。 */
-    readonly starterRating: number;
-  },
+  standards: LeagueStandards | null = null,
 ): PitcherRole {
-  const par = leagueStandardOf(options.standards ?? null, level).par;
-  const r = cfg.pitching.role.starter;
-  const rng = world.stream('season');
+  const r = cfg.pitching.role;
+  const par = leagueStandardOf(standards, level).par;
 
-  // 抽取次數必須與資格無關，否則同一個種子會因為某年差一分而讓後面所有判定
-  // 整串偏移。終結者的線每年都要抽，不管他有沒有掉進牛棚。
-  const wobble = 1 + (rng.next() * 2 - 1) * cfg.pitching.role.closer.band;
-
-  const sta = (ability['sta'] ?? par) - par;
-  if (sta >= r.sta_min_d) {
-    const winRate = options.teamWinRate ?? 0.5;
-    const line = par + r.rotation.base_d + (winRate - 0.5) * r.rotation.per_win_rate;
-    if (options.starterRating >= line) return 'SP';
+  // 兩條路都比**沒有折扣**的實力（`pitcherStuff`）。折扣是身價、是留不留得住在
+  // 聯盟的判斷，拿它跟聯盟 par 比大小等於拿兩把不同的尺量同一件事。
+  if ((ability['sta'] ?? 0) >= r.starter_sta_min) {
+    return pitcherStuff(ability, 'SP') >= par * r.starter_line ? 'SP' : 'LR';
   }
-
-  const closerLine = par + cfg.pitching.role.closer.line_d * wobble;
-  return bullpenScore(ability) >= closerLine ? 'CL' : 'RP';
+  const relief = pitcherStuff(ability, 'RP');
+  for (const [role, line] of BULLPEN_LADDER) {
+    if (relief >= par * r[line]) return role;
+  }
+  return 'LR';
 }
 
-/** 投出一季職業投球成績。先發與後援的出賽結構完全不同，因此分開算。 */
+/** 這個角色算先發還是後援。獎項資格與國際賽的出賽結構都只分這兩種。 */
+export function isStarterRole(role: PitcherRole): boolean {
+  return role === 'SP' || role === 'LR';
+}
+
+/**
+ * 能力平移到基準聯盟之後，除以 `ability_divisor` 的佔比，夾在 `ratio_cap`。
+ *
+ * 與打者那側同一個立場：低階聯盟的門檻自動下修，同樣的絕對能力在中職投得比在
+ * 大聯盟好。
+ */
+function pitcherRatio(value: number, par: number, floor = 0): number {
+  const p = cfg.pitching;
+  const adj = value - (par - p.reference_par);
+  return Math.min(p.ratio_cap, Math.max(floor, adj / p.ability_divisor));
+}
+
+/**
+ * 能力比聯盟平均高 `d` 點的投手，防禦率是多少。
+ *
+ * 基準線（ERA+ 的分母）與門檻線要的都是這個數字。**與 `proPitchingLine` 走同一組
+ * 設定**：自責分的錨點乘上「投得越好越少」那條係數，換算成每九局。兩邊各寫一份的
+ * 話，「聯盟平均防禦率」會跟真正產生出來的成績對不起來。
+ */
+export function eraAt(d: number, par = cfg.pitching.reference_par): number {
+  const er = cfg.pitching.records.er;
+  const skill = pitcherRatio(par + d, par);
+  return (er.anchor * Math.max(er.floor, er.base - er.slope * skill) * 9) / er.per;
+}
+
+/**
+ * 一季的投球成績。
+ *
+ * 順序是相依的，**不可以重排**：角色 → 出賽與先發 → 局數 → 勝敗 → 救援 → 中繼
+ * → 被安打 → 自責分 → 失分 → 四壞 → 三振 → 被全壘打。每一格的上限只引用比它早
+ * 算的東西（ADR 0002 要的抽取次數也因此固定）。
+ */
 export function proPitchingLine(
   world: World,
   ability: Abilities,
@@ -635,98 +639,203 @@ export function proPitchingLine(
   const info = levelOf(level);
   const par = leagueStandardOf(standards, level).par;
   const d = overall - par;
-  const role = pitcherRole(world, ability, level, {
-    standards,
-    teamWinRate,
-    starterRating: pitcherRating(ability, 'SP'),
-  });
 
-  let games: number;
-  let starts: number;
-  let ip: number;
-  
+  const noise = (): number => p.noise.min + rng.next() * (p.noise.max - p.noise.min);
+  const jit = (n: number): number => rng.int(-n, n);
 
+  const role = pitcherRole(ability, level, standards);
+  // **成績看的是實力，不是身價。** 評價低不代表成績差——角色折扣是責任額的折價，
+  // 折過的數字拿去算防禦率，會讓終結者的自責分比 par 先發還多。
+  const rating = pitcherStuff(ability, isStarterRole(role) ? 'SP' : 'RP');
+  // 投得好不好那條係數，勝敗、被安打、自責分與救援都吃它。
+  const skill = pitcherRatio(rating, par);
+  const stamina = p.innings[role];
+
+  // ── 出賽與先發
+  const app = p.appearances;
+  const slots = info.games / app.rotation_divisor.value;
+  const share = clamp(
+    app.gs_factor.base + d * app.gs_factor.per_point,
+    app.gs_factor.min,
+    app.gs_factor.max,
+  );
+  let starts = 0;
+  let games = 0;
   if (role === 'SP') {
-    const slots = info.games / p.starter.rotation_divisor.value;
-    const share = clamp(
-      p.starter.gs_factor.base + d * p.starter.gs_factor.per_point,
-      p.starter.gs_factor.min,
-      p.starter.gs_factor.max,
-    );
-    starts = Math.round(slots * share);
+    // **夾在輪值容量內**：一隊十三個投手只有五個輪值位置，抖動不該推破那件事。
+    starts = clampInt(Math.round(slots * share) + jit(app.jitter_starts), Math.ceil(slots));
     games = starts;
-    const perStart = rateOf(p.starter.innings_per_start, ability, par);
-    const n = p.starter.noise;
-    ip = starts * perStart * (n.min + rng.next() * (n.max - n.min));
   } else {
-    starts = 0;
-    games = Math.round(
-      clamp(p.reliever.games.base + d * p.reliever.games.per_point, p.reliever.games.min, p.reliever.games.max),
+    // 長中繼偶爾遞補先發；純牛棚的三階一場都不先發。
+    starts =
+      role === 'LR'
+        ? clampInt(
+            Math.round(slots * share * app.lr_start_share) + jit(app.jitter_starts),
+            Math.ceil(slots * app.lr_start_share),
+          )
+        : 0;
+    const g = app.relief_games[role];
+    // **依球季長度縮放**：錨點是照 162 場訂的，照抄會讓 120 場的中職出現一年
+    // 出賽七十場的終結者。
+    const seasonScale = info.games / app.reference_games;
+    const relief = Math.max(
+      0,
+      Math.round(clamp(g.base + d * g.per_point, g.min, g.max) * seasonScale) +
+        jit(app.jitter_games),
     );
-    const per =
-      p.reliever.innings_per_game.min +
-      rng.next() * (p.reliever.innings_per_game.max - p.reliever.innings_per_game.min);
-    const n = p.reliever.noise;
-    ip = games * per * (n.min + rng.next() * (n.max - n.min));
+    games = starts + relief;
   }
-  // 傷病落在出賽量上：他真的只上場了那麼多，因此率型數據不受影響。
-  games = Math.round(games * seasonFactor);
-  starts = Math.round(starts * seasonFactor);
-  ip *= seasonFactor;
 
-  // 投手側的信任度判定。同樣放在抽完之後，理由見 `gamesPlayed`。
+  // 傷病落在出賽量上：他真的只上場了那麼多，因此率型數據不受影響。
+  games = Math.max(0, Math.round(games * seasonFactor));
+  starts = Math.min(games, Math.max(0, Math.round(starts * seasonFactor)));
+
+  // 投手側的信任度判定。放在抽完之後，理由見 `gamesPlayed`。
   //
-  // 這裡的 `overall` 已經是投球側的（見 SeasonContext.pitchingOverall），
-  // 所以強打弱投的二刀流會被這道判定清出投手名單，而他的打擊側不受影響。
+  // 這裡的 `overall` 已經是投球側的（見 SeasonContext.pitchingOverall），所以強打
+  // 弱投的二刀流會被這道判定清出投手名單，而他的打擊側不受影響。
   if (offRoster(overall, par)) {
     games = 0;
     starts = 0;
-    ip = 0;
   }
 
-  // 出局數才是原子單位——存小數會生出 29.5 這種棒球裡不存在的局數。
-  const outs = Math.max(0, Math.round(ip * 3));
-  ip = outs / 3;
-
-  const noise = () => p.noise.min + rng.next() * (p.noise.max - p.noise.min);
-  const kPerInning = rateOf(p.strikeout_rate, ability, par) * noise();
-  const bbPerInning = rateOf(p.walk_rate, ability, par) * noise();
-  const era = clamp(rateOf(p.era, ability, par) * noise(), p.era.min, p.era.max);
-
-  // 勝敗、救援成功與中繼成功**全部掛在主數據上**——先發乘先發場次，後援乘後援
-  // 出賽數，沒有任何欄位自己擲點數。後援本來就會掃勝也會背敗，舊版讓後援永遠
-  // 0 勝 0 敗是錯的。
-  const winRate = clamp(
-    p.decision.win_rate.base + d * p.decision.win_rate.per_point,
-    p.decision.win_rate.min,
-    p.decision.win_rate.max,
+  // ── 局數
+  const relief = games - starts;
+  const staminaRatio = pitcherRatio(ability['sta'] ?? 0, par, stamina.floor);
+  const ipRaw =
+    (stamina.start_anchor * (starts / stamina.per_start) +
+      stamina.relief_anchor * (relief / stamina.per_relief)) *
+    staminaRatio *
+    noise();
+  // **局數不先取整**——換成出局數時才取整，`.1`／`.2` 才出得來。
+  const ipCap = starts * stamina.cap_per_start + relief * stamina.cap_per_relief;
+  const outs = Math.max(
+    0,
+    Math.min(Math.round(ipCap * 3), Math.round(ipRaw * 3) + jit(p.innings.jitter)),
   );
-  const decisions =
-    role === 'SP'
-      ? Math.round(starts * p.decision.starter_decision_rate)
-      : Math.round(games * p.decision.relief_decision_rate);
-  const wins = Math.round(decisions * winRate);
+  const ip = outs / 3;
 
-  const er = Math.round((ip * era) / 9);
+  // ── 勝敗、救援、中繼
+  const dec = p.decision;
+  // 勝敗與救援用自己的除數：par 球員必須落在「勝敗各半」，共用 ability_divisor
+  // 會讓能力剛好等於聯盟平均的先發投出 .680 的勝率。
+  const decSkill = clamp(
+    dec.skill.base + (rating - par) * dec.skill.per_point,
+    dec.skill.min,
+    dec.skill.max,
+  );
+  const teamFactor = (teamWinRate ?? dec.team_win_reference) / dec.team_win_reference;
+  const loseFactor = (1 - (teamWinRate ?? dec.team_win_reference)) / dec.team_win_reference;
+  const startShareOf = starts / dec.per_start;
+  const reliefShareOf = relief / dec.per_relief;
+
+  const wins = clampInt(
+    Math.round(
+      (dec.win_anchor * startShareOf + dec.relief_decision_anchor * reliefShareOf) *
+        decSkill *
+        noise() *
+        teamFactor,
+    ) + jit(dec.jitter_decision),
+    games,
+  );
+  const losses = clampInt(
+    Math.round(
+      (dec.loss_anchor * startShareOf + dec.relief_decision_anchor * reliefShareOf) *
+        Math.max(dec.loss_floor, dec.loss_base - decSkill) *
+        noise() *
+        loseFactor,
+    ) + jit(dec.jitter_decision),
+    games - wins,
+  );
+  const left = games - starts - wins - losses;
+  const saves = clampInt(
+    Math.round(
+      dec.save_anchor * reliefShareOf * (dec.save_coefficient[role] ?? 0) * decSkill * noise() * teamFactor,
+    ) + jit(dec.jitter_relief),
+    left,
+  );
+  const holds = clampInt(
+    Math.round(
+      dec.hold_anchor * reliefShareOf * (dec.hold_coefficient[role] ?? 0) * decSkill * noise() * teamFactor,
+    ) + jit(dec.jitter_relief),
+    left - saves,
+  );
+
+  // ── 被安打、自責分、失分、四壞、三振、被全壘打
+  const rec = p.records;
+  const volume = (per: number): number => ip / per;
+
+  const hits = clampInt(
+    Math.round(rec.hits.anchor * volume(rec.hits.per) * Math.max(rec.hits.floor, rec.hits.base - rec.hits.slope * skill) * noise()) +
+      jit(rec.hits.jitter),
+    Math.round(ip * rec.hits.cap_per_inning),
+  );
+  const er = clampInt(
+    Math.round(rec.er.anchor * volume(rec.er.per) * Math.max(rec.er.floor, rec.er.base - rec.er.slope * skill) * noise()) +
+      jit(rec.er.jitter),
+    Math.round(ip * rec.er.cap_per_inning),
+  );
+  // 非自責的失分與能力無關——那是野手掉的球。
+  const runs = er + Math.max(0, Math.round(rec.unearned.anchor * volume(rec.unearned.per) * noise()) + jit(rec.unearned.jitter));
+
+  const ctlAdj = (ability['ctl'] ?? 0) - (par - p.reference_par);
+  const wildness = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
+  const bb = clampInt(
+    Math.round((rec.bb.floor_anchor + rec.bb.range_anchor * wildness) * volume(rec.bb.per) * noise()) +
+      jit(rec.bb.jitter),
+    Math.round(ip * rec.bb.cap_per_inning),
+  );
+
+  let arsenal = 0;
+  for (const [key, w] of Object.entries(rec.so.weights)) arsenal += (ability[key] ?? 0) * w;
+  arsenal -= rec.so.par_slope * (par - p.reference_par);
+  // **三次方**：會投的人才三振得到人，普通球種再多也只是被打。
+  const stuff = Math.pow(clamp(arsenal / rec.so.divisor, 0, 1), rec.so.exponent);
+  const so = clampInt(
+    Math.round((rec.so.floor_anchor + rec.so.range_anchor * stuff) * volume(rec.so.per) * noise()) +
+      jit(rec.so.jitter),
+    Math.round(ip * rec.so.cap_per_inning),
+  );
+
+  // 被全壘打看的是**投不好的地方**：控球、縱向與球速離基準差多少。
+  let deficit = 0;
+  for (const [key, w] of Object.entries(rec.hr.deficit_weights)) {
+    deficit += (rec.hr.reference - (ability[key] ?? 0)) * w;
+  }
+  for (const [key, w] of Object.entries(rec.hr.plus_weights)) deficit += (ability[key] ?? 0) * w;
+  deficit -= rec.hr.par_slope * (par - p.reference_par);
+  const gopher = clamp(deficit / rec.hr.divisor, 0, 1);
+  const hr = clampInt(
+    Math.round((rec.hr.floor_anchor + rec.hr.range_anchor * gopher) * volume(rec.hr.per) * noise()) +
+      jit(rec.hr.jitter),
+    // 全壘打是安打的一種。
+    hits,
+  );
 
   return {
     role,
     games,
     starts,
     outs,
-    hits: Math.round(ip * rateOf(p.hits_per_inning, ability, par) * noise()),
-    runs: Math.round(er * p.runs_per_earned_run.value),
+    hits,
+    runs,
     er,
-    bb: Math.round(ip * bbPerInning),
-    so: Math.round(ip * kPerInning),
-    era,
+    bb,
+    so,
+    hr,
+    // 防禦率是**導出**的，不再自己生成一個再反推自責分——兩個數字各生各的，遲早
+    // 會對不起來。
+    era: ip === 0 ? 0 : (er * 9) / ip,
     wins,
-    losses: decisions - wins,
-    // 救援成功只給關門人，中繼成功只給中繼——舊版是「只要是後援就發救援成功」，
-    // 於是牛棚裡人人都是終結者。
-    saves: role === 'CL' ? Math.round(games * p.decision.closer_save_chance * winRate) : 0,
-    holds: role === 'RP' ? Math.round(games * p.decision.hold_chance * winRate) : 0,
+    losses,
+    saves,
+    holds,
   };
+}
+
+/** 夾在 0 與上限之間的整數。抖動加完才夾——夾在抖動之前等於沒夾。 */
+function clampInt(value: number, cap: number): number {
+  return Math.max(0, Math.min(Math.max(0, cap), value));
 }
 
 /**

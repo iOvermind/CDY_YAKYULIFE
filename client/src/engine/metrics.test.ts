@@ -25,6 +25,7 @@ import {
   winPct,
 } from './metrics.ts';
 import { World } from './rng.ts';
+import { eraAt } from './season.ts';
 
 const base = proBaseline('CPBL1');
 
@@ -37,7 +38,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 
 const pit = (over: Partial<PitchingLine> = {}): PitchingLine => ({
   games: 25, starts: 25, wins: 10, losses: 8, saves: 0, holds: 0, outs: 450, hits: 145,
-  runs: 70, er: 65, bb: 45, so: 120, era: 3.9,
+  runs: 70, er: 65, bb: 45, so: 120, hr: 16, era: 3.9,
   ...over,
 });
 
@@ -52,7 +53,8 @@ describe('baseline', () => {
   });
 
   it('防禦率就是設定裡的 base', () => {
-    expect(base.era).toBe(cfg.pitching.era.base);
+    // 基準防禦率由新模型導出，不再是設定裡的一個常數。
+    expect(base.era).toBeCloseTo(eraAt(0), 10);
   });
 
   it('養成期與職業的基準線不同——門檻本來就不一樣', () => {

@@ -52,6 +52,7 @@ const pitching: ProPitchingLine = {
   er: 66,
   bb: 44,
   so: 158,
+  hr: 14,
   era: (66 * 27) / 511,
 };
 

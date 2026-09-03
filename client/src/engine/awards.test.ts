@@ -35,7 +35,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 
 const pit = (over: Partial<ProPitchingLine> = {}): ProPitchingLine => ({
   role: 'SP', games: 26, starts: 26, wins: 12, losses: 8, saves: 0, holds: 0, outs: 480, hits: 150,
-  runs: 65, er: 60, bb: 40, so: 120, era: 3.38,
+  runs: 65, er: 60, bb: 40, so: 120, hr: 14, era: 3.38,
   ...over,
 });
 
@@ -144,21 +144,22 @@ describe('單項王', () => {
     expect(rate({ batting: bat({ avg: monster, pa: 480 }) }, 'batting_king')).toBe(1);
   });
 
-  it('救援王限終結者——中繼投手拿的是中繼王', () => {
+  it('救援王與中繼王不限角色——數字說了算', () => {
+    // 救援與中繼**不是角色專屬**，只是機率不同：終結者偶爾也拿中繼，布局與中繼
+    // 偶爾也關門（比賽情境不由投手決定）。一個中繼投手真的救了三十場，那就是他的
+    // 救援王——用角色去擋等於宣告那三十場不算數。
     const sv = Math.ceil(winningLine(titleOf('save_king'), CPBL, 1)!) + 5;
-    expect(
-      rate({ pitching: pit({ role: 'CL', saves: sv }), role: 'CL' }, 'save_king'),
-    ).toBeGreaterThan(0);
-    expect(rate({ pitching: pit({ role: 'RP', saves: sv }), role: 'RP' }, 'save_king')).toBe(0);
-    expect(rate({ pitching: pit({ role: 'SP', saves: sv }), role: 'SP' }, 'save_king')).toBe(0);
+    for (const role of ['CP', 'SU', 'MR'] as const) {
+      expect(rate({ pitching: pit({ role, saves: sv }), role }, 'save_king')).toBeGreaterThan(0);
+    }
+    const hld = Math.ceil(winningLine(titleOf('hold_king'), CPBL, 1)!) + 5;
+    for (const role of ['SU', 'MR', 'CP'] as const) {
+      expect(rate({ pitching: pit({ role, holds: hld }), role }, 'hold_king')).toBeGreaterThan(0);
+    }
   });
 
-  it('中繼王限中繼投手', () => {
-    const hld = Math.ceil(winningLine(titleOf('hold_king'), CPBL, 1)!) + 5;
-    expect(
-      rate({ pitching: pit({ role: 'RP', holds: hld }), role: 'RP' }, 'hold_king'),
-    ).toBeGreaterThan(0);
-    expect(rate({ pitching: pit({ role: 'CL', holds: hld }), role: 'CL' }, 'hold_king')).toBe(0);
+  it('沒有救援就沒有救援王——角色不擋，數字擋', () => {
+    expect(rate({ pitching: pit({ role: 'SP', saves: 0 }), role: 'SP' }, 'save_king')).toBe(0);
   });
 
   it('投手不會拿到打擊類的單項王', () => {
@@ -181,12 +182,14 @@ describe('年度最佳投手', () => {
   const a = cfg.pitcher_of_year;
   const lineAt = (roll: number) => winningLine(a, CPBL, roll)!;
 
-  it('限先發——後援投手拿不到', () => {
+  it('限先發——牛棚拿不到', () => {
     const era = lineAt(0) - 0.5;
     expect(rate({ pitching: pit({ era, outs: 600 }), role: 'SP', batting: null }, 'pitcher_of_year')).toBe(1);
-    expect(
-      rate({ pitching: pit({ role: 'RP', era, outs: 600 }), role: 'RP', batting: null }, 'pitcher_of_year'),
-    ).toBe(0);
+    for (const role of ['CP', 'SU', 'MR', 'LR'] as const) {
+      expect(
+        rate({ pitching: pit({ role, era, outs: 600 }), role, batting: null }, 'pitcher_of_year'),
+      ).toBe(0);
+    }
   });
 
   it('局數不足該聯盟場次就沒有資格', () => {

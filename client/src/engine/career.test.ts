@@ -26,7 +26,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 
 const pitch = (over: Partial<PitchingLine> = {}): PitchingLine => ({
   games: 28, starts: 28, wins: 12, losses: 9, saves: 0, holds: 0, outs: 510, hits: 160,
-  runs: 70, er: 64, bb: 45, so: 140, era: 3.39,
+  runs: 70, er: 64, bb: 45, so: 140, hr: 15, era: 3.39,
   ...over,
 });
 

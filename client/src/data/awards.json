@@ -95,10 +95,9 @@
         "stat": "sv",
         "kind": "counting",
         "base": 30,
-        "band": 0.2,
-        "requires_role": "CL"
+        "band": 0.2
       },
-      { "code": "hold_king", "name": "中繼王", "side": "pitcher", "stat": "hld", "kind": "counting", "base": 25, "band": 0.2, "requires_role": "RP" }
+      { "code": "hold_king", "name": "中繼王", "side": "pitcher", "stat": "hld", "kind": "counting", "base": 25, "band": 0.2 }
     ]
   },
   "mvp": {

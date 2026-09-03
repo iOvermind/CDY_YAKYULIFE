@@ -278,143 +278,111 @@
     }
   },
   "pitching": {
-    "_note": "先發與後援的出賽結構完全不同，因此分開算。角色由能力決定，不由玩家指定。",
+    "_note": "**紀錄錨定模型**，與打者同一個形狀：每一格 = 現實的單季紀錄 × 機會比例 × 能力佔比 × 噪音 + 小整數抖動，夾在 0 與該格的邏輯上限之間。公式的形狀寫在 season.ts，這裡只放數字。",
+    "_par_note": "能力先平移到基準聯盟：`ability - (par - reference_par)`。與打者同一套做法。",
+    "reference_par": 59,
+    "ratio_cap": 1.05,
+    "ability_divisor": 75,
     "role": {
-      "_note": "投手定位。三種角色：先發、中繼、終結者。每季重新判定，見 ADR 0005。",
-      "starter": {
-        "_note": "**先發與牛棚的分界是體力**。體力是絕對的生理條件——撐不了一百五十局就是撐不了，跟同年度有沒有別人更強無關，因此用固定的 d 值門檻，不用「當年聯盟線」。",
-        "_control_note": "舊版還要求控球 d ≥ −4。那一關已經拿掉：控球差的先發自然會被保送與防禦率修理，不需要再擋一次；控球改在牛棚分裡用。",
-        "sta_min_d": -2,
-        "rotation": {
-          "_note": "先發位置是稀缺的——一隊十三個投手只有五個輪值位置。體力過關之後還要擠得進輪值，而**輪值線掛在球隊戰力上**：強隊難擠、弱隊容易占。引擎沒有隊友名單，但球隊戰力表本來就存在，直接拿來當同隊水準的代理。",
-          "_shape_note": "線 = 當年 par + (球隊勝率 − 0.5) × per_win_rate。勝率 .600 的球隊線比 par 高 2 分，.400 的低 2 分。球隊勝率未知時（二軍沒有戰力表）視為 .500。",
-          "base_d": 1,
-          "per_win_rate": 40
-        }
+      "_note": "五種角色：先發 SP、終結 CP、布局 SU、中繼 MR、長中繼 LR。每季重新判定。",
+      "_order_note": "**體力是先決條件**：撐得住就走先發那條路，撐不住就整組落到牛棚。體力是絕對的生理條件——撐不了一百五十局就是撐不了，跟同年度有沒有別人更強無關。",
+      "_threshold_note": "牛棚三階由高到低比對，**LR 是 fallback**：沒有一階收得下的人就是長中繼。寫成 fallback 而不是再給一條 `< 0.95` 的線，是因為兩條線之間會開洞——0.95 與 0.97 之間的人以前無家可歸。",
+      "starter_sta_min": 55,
+      "starter_line": 0.95,
+      "closer_line": 1.05,
+      "setup_line": 1.02,
+      "middle_line": 0.97
+    },
+    "appearances": {
+      "_note": "出賽與先發場次。先發位置是稀缺的——一隊十三個投手只有五個輪值位置。",
+      "rotation_divisor": { "value": 5 },
+      "gs_factor": { "base": 0.8, "per_point": 0.03, "min": 0.3, "max": 1.0 },
+      "_lr_note": "長中繼偶爾遞補先發。他佔的是輪值的殘缺那一塊，不是一個完整的位置。",
+      "lr_start_share": 0.3,
+      "_reference_games_note": "後援的出賽錨點是照這個球季長度訂的。短季聯盟依比例縮——照抄會讓 120 場的中職出現一年出賽七十場的終結者。",
+      "reference_games": 162,
+      "relief_games": {
+        "_note": "牛棚的出賽數。終結與布局出賽多、局數短；中繼略少；長中繼最少但一次吃得多。",
+        "CP": { "base": 58, "per_point": 1.2, "min": 20, "max": 70 },
+        "SU": { "base": 62, "per_point": 1.2, "min": 20, "max": 75 },
+        "MR": { "base": 52, "per_point": 1.4, "min": 18, "max": 70 },
+        "LR": { "base": 34, "per_point": 1.0, "min": 12, "max": 55 }
       },
-      "closer": {
-        "_note": "終結者。一隊只有一個關門人，因此用**當年的聯盟線**——與單項王同一套模型，稀缺性自動成立。強聯盟的線高，旅外之後從關門人變成中繼是自然發生的。",
-        "line_d": 6,
-        "band": 0.1
-      }
+      "jitter_games": 3,
+      "jitter_starts": 2
     },
-    "bullpen": {
-      "_note": "牛棚分：掉進牛棚之後，決定他是關門人還是中繼。**一局的工作，用力塞進去就對了**，因此球速為主。與評價分開一條公式，因為問的是不同的問題——評價問「他有多好」，牛棚分問「他適不適合關門」。",
-      "velocity_weight": 0.5,
-      "control_weight": 0.25,
-      "pitch_weights": [
-        0.15,
-        0.06,
-        0.03,
-        0.01
-      ]
-    },
-    "starter": {
-      "rotation_divisor": {
-        "_note": "先發場次上限為聯盟場次除以此值——五人輪值。",
-        "value": 5
-      },
-      "gs_factor": {
-        "base": 0.8,
-        "per_point": 0.03,
-        "min": 0.3,
-        "max": 1.0
-      },
-      "innings_per_start": {
-        "base": 5.2,
-        "per_point": 0.09,
-        "min": 4.0,
-        "max": 7.0,
-        "ability": "sta"
-      },
-      "noise": {
-        "min": 0.95,
-        "max": 1.05
-      }
-    },
-    "reliever": {
-      "games": {
-        "base": 45,
-        "per_point": 1.8,
-        "min": 20,
-        "max": 70
-      },
-      "innings_per_game": {
-        "min": 1.0,
-        "max": 1.2
-      },
-      "noise": {
-        "min": 0.93,
-        "max": 1.07
-      }
-    },
-    "hits_per_inning": {
-      "_note": "每局被安打數。壓制力越好被打得越少。",
-      "base": 0.98,
-      "per_point": -0.014,
-      "min": 0.45,
-      "max": 1.6,
-      "abilities": {
-        "vel": 0.35,
-        "ctl": 0.3,
-        "swp": 0.15,
-        "drp": 0.15,
-        "chg": 0.05
-      }
-    },
-    "runs_per_earned_run": {
-      "_note": "失分與自責分的比例。守備失誤造成的非自責分讓失分永遠略高於自責分。",
-      "value": 1.08
-    },
-    "strikeout_rate": {
-      "_note": "每局三振數。由球威與變化球決定。",
-      "base": 0.72,
-      "per_point": 0.022,
-      "min": 0.3,
-      "max": 1.5,
-      "abilities": {
-        "vel": 0.5,
-        "swp": 0.2,
-        "drp": 0.2,
-        "chg": 0.1
-      }
-    },
-    "walk_rate": {
-      "_note": "每局保送數。控球越好越少。",
-      "base": 0.35,
-      "per_point": -0.012,
-      "min": 0.08,
-      "max": 0.9,
-      "ability": "ctl"
-    },
-    "era": {
-      "_note": "自責分率。base 是與聯盟同水準時的防禦率，也就是聯盟平均防禦率。",
-      "_range_note": "設計要求：聯盟平均防禦率落在 3.5–4.5。護欄測試看著這條線——調 per_point 或各項能力權重都不會動到它，但直接改 base 會。",
-      "base": 4.2,
-      "per_point": -0.11,
-      "min": 1.4,
-      "max": 9.0,
-      "abilities": {
-        "vel": 0.3,
-        "ctl": 0.35,
-        "swp": 0.15,
-        "drp": 0.15,
-        "chg": 0.05
-      }
+    "innings": {
+      "_note": "投球局數依角色各一條式子。`per_start`／`per_relief` 是紀錄錨點對應的場次數，`floor` 是能力佔比的下限——再爛的先發也要吃掉一定的局數，不然輪值就空了。`cap_per_start`／`cap_per_relief` 是單場的物理上限（一場九局、後援吃不了三局以上）。",
+      "_outs_note": "算出來的局數會換成**出局數**再存。棒球的原子單位是出局，存小數會生出 29.5 這種不存在的局數——因此局數不先四捨五入，換成出局數時才取整，`.1`／`.2` 自然出得來。",
+      "SP": { "start_anchor": 260, "relief_anchor": 70, "per_start": 35, "per_relief": 65, "floor": 0.2, "cap_per_start": 9, "cap_per_relief": 3 },
+      "CP": { "start_anchor": 0, "relief_anchor": 65, "per_start": 35, "per_relief": 65, "floor": 0.85, "cap_per_start": 9, "cap_per_relief": 2 },
+      "SU": { "start_anchor": 0, "relief_anchor": 65, "per_start": 35, "per_relief": 65, "floor": 0.85, "cap_per_start": 9, "cap_per_relief": 2 },
+      "MR": { "start_anchor": 0, "relief_anchor": 55, "per_start": 35, "per_relief": 65, "floor": 0.7, "cap_per_start": 9, "cap_per_relief": 3 },
+      "LR": { "start_anchor": 240, "relief_anchor": 120, "per_start": 35, "per_relief": 65, "floor": 0.4, "cap_per_start": 9, "cap_per_relief": 4 },
+      "jitter": 3
     },
     "decision": {
-      "_note": "勝敗場、救援成功與中繼成功。**全部掛在主數據上**——先發乘先發場次，後援乘後援出賽數，沒有任何欄位自己擲點數。",
-      "_relief_note": "後援投手本來就會掃勝也會背敗。舊版讓後援永遠 0 勝 0 敗，那是錯的。",
-      "starter_decision_rate": 0.62,
-      "relief_decision_rate": 0.18,
-      "hold_chance": 0.45,
-      "win_rate": {
-        "base": 0.5,
-        "per_point": 0.028,
-        "min": 0.15,
-        "max": 0.85
+      "_note": "勝敗、救援成功與中繼成功。**全部掛在出賽結構上**——先發那一段乘先發場次、後援那一段乘後援出賽，而且依序互相夾住：SV 夾在 `G−GS−W−L`、HLD 再夾掉 SV。沒有任何一格自己擲點數。",
+      "_role_note": "救援與中繼**不是角色專屬**，只是機率不同：終結者偶爾也拿中繼（比賽情境不由他決定），布局與中繼偶爾也關門。寫死成專屬的年代，牛棚裡人人都是終結者。",
+      "_center_note": "勝敗的能力係數**不共用** ability_divisor，而且不是「評價除以除數」的形狀，是 `base + d × per_point`。兩個理由：一、par 球員必須落在勝敗各半——`win × s = loss × (base_loss - s)` 解出 s = 0.533，而 ability_divisor 在 par 給的是 0.787，那會讓能力剛好等於聯盟平均的先發投出 10 勝 5 敗；二、除數形式在高端沒有解析度——把中心壓回 0.533 之後，一個 ERA 2.5 的王牌只剩 .607 的勝率，因為 par 到王牌之間的差距被除數吃掉了。中心與斜率分開，兩件事才調得動。",
+      "_slope_note": "斜率由「d = +16 的王牌該有 .700 勝率」反解：W/L = 2.333 → s = 0.781 → 每點 0.0155。",
+      "_anchor_note": "錨點從紀錄的 25／20 下修成 20／16，是為了讓決勝場次的比例落在現實：一個先發大約 62% 的先發場次會留下勝敗，25／20 在 par 會給到 77%。單季 25 勝仍然到得了——那要靠球隊勝率那一乘（強隊 ×1.3），本來就該如此。",
+      "win_anchor": 20,
+      "loss_anchor": 16,
+      "skill": { "base": 0.533, "per_point": 0.0155, "min": 0.15, "max": 1.05 },
+      "relief_decision_anchor": 8,
+      "save_anchor": 65,
+      "hold_anchor": 40,
+      "per_start": 35,
+      "per_relief": 65,
+      "loss_base": 1.2,
+      "loss_floor": 0.2,
+      "team_win_reference": 0.5,
+      "save_coefficient": { "SP": 0, "CP": 1.0, "SU": 0.15, "MR": 0.05, "LR": 0 },
+      "hold_coefficient": { "SP": 0, "CP": 0.05, "SU": 1.0, "MR": 0.7, "LR": 0.1 },
+      "jitter_decision": 2,
+      "jitter_relief": 3
+    },
+    "records": {
+      "_note": "被安打、自責分、四壞、三振、被全壘打。`per` 是紀錄錨點對應的局數。被安打與自責分的能力係數是**倒過來的**（投得越好被打得越少），所以是 `base - slope × 能力佔比`，並各有一道地板——再強的投手也會被打安打。",
+      "hits": { "anchor": 260, "per": 200, "base": 1.4, "slope": 0.8, "floor": 0.55, "cap_per_inning": 3, "jitter": 3 },
+      "er": { "anchor": 140, "per": 200, "base": 1.55, "slope": 1.15, "floor": 0.35, "cap_per_inning": 2, "jitter": 2 },
+      "unearned": { "_note": "非自責的失分。與能力無關——那是野手掉的球。", "anchor": 12, "per": 200, "jitter": 1 },
+      "bb": {
+        "_note": "四壞只看控球，而且是**倒過來**的：控球 75 以上幾乎不保送，越低越接近上限。",
+        "floor_anchor": 20,
+        "range_anchor": 100,
+        "per": 200,
+        "ability": "ctl",
+        "reference": 75,
+        "span": 55,
+        "cap_per_inning": 2,
+        "jitter": 3
       },
-      "closer_save_chance": 0.55
+      "so": {
+        "_note": "三振看球速與球種，而且是**三次方**的——會投的人才三振得到人，普通球種再多也只是被打。縱向與特殊不在裡面：那兩顆的認定與三振無關（見被全壘打，它用的是另一組球種）。",
+        "floor_anchor": 50,
+        "range_anchor": 310,
+        "per": 240,
+        "weights": { "vel": 1.5, "ctl": 1, "swp": 1.5, "chg": 1 },
+        "par_slope": 5,
+        "divisor": 375,
+        "exponent": 3,
+        "cap_per_inning": 3,
+        "jitter": 5
+      },
+      "hr": {
+        "_note": "被全壘打看的是**投不好的地方**：控球、縱向與球速離 75 差多少。橫向是正權重——橫move 的球被拉起來的機會反而高。上限夾在被安打數：全壘打是安打的一種。",
+        "floor_anchor": 10,
+        "range_anchor": 35,
+        "per": 200,
+        "reference": 75,
+        "deficit_weights": { "ctl": 1.5, "drp": 1.2, "vel": 0.8 },
+        "plus_weights": { "swp": 0.4 },
+        "par_slope": -3.1,
+        "divisor": 220,
+        "jitter": 2
+      }
     },
     "noise": {
       "min": 0.94,
@@ -521,8 +489,10 @@
       "leverage": {
         "_calibration_note": "全部設 1.0 不是因為機制沒做，而是量出來不需要：我們的終結者一季投 77 局（真實約 65），已經足以把他推進 James 的 6–9 分帶——實測王牌先發 16.1、頂尖終結者 8.0、一般中繼 2.9，三個都在靶內。等後援的局數收斂到真實值時，這裡就是補回來的旋鈕。",
         "SP": 1.0,
-        "CL": 1.0,
-        "RP": 1.0
+   "CP": 1.0,
+   "SU": 1.0,
+   "MR": 1.0,
+   "LR": 1.0
       },
       "team_pa_per_game": 38,
       "team_ip_per_game": 9,

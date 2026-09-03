@@ -105,6 +105,8 @@ export interface PitchingLine {
   readonly er: number;
   readonly bb: number;
   readonly so: number;
+  /** 被全壘打。養成期不模擬，一律 0。 */
+  readonly hr: number;
   readonly era: number;
 }
 
@@ -340,6 +342,8 @@ export function pitchingLine(
     hits: Math.round((ip * h9) / 9),
     runs: Math.round(er * cfg.runs_per_earned_run.value),
     er,
+    // 養成期不模擬被全壘打。
+    hr: 0,
     bb: Math.round((ip * bb9) / 9),
     so: Math.round((ip * k9) / 9),
     era,
@@ -425,6 +429,7 @@ export function addPitching(a: PitchingLine | null, b: PitchingLine | null): Pit
     saves: a.saves + b.saves,
     holds: a.holds + b.holds,
     hits: a.hits + b.hits,
+    hr: a.hr + b.hr,
     runs: a.runs + b.runs,
     er,
     bb: a.bb + b.bb,
