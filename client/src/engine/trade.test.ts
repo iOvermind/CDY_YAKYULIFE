@@ -17,6 +17,7 @@ const trade = cfg.trade;
 
 const batting: BattingLine = {
   games: 141,
+  starts: 133,
   pa: 601,
   ab: 537,
   runs: 83,
@@ -30,6 +31,8 @@ const batting: BattingLine = {
   so: 97,
   sb: 13,
   cs: 5,
+  hbp: 6,
+  sac: 3,
   avg: 161 / 537,
   obp: 216 / 601,
   slg: 259 / 537,
@@ -160,7 +163,8 @@ describe('成績的切分', () => {
   it('率用自己那一段的分母重算，不沿用全季', () => {
     const [a, b] = splitBatting(batting, 0.5);
     expect(a.avg).toBeCloseTo(a.hits / a.ab, 10);
-    expect(b.obp).toBeCloseTo((b.hits + b.bb) / b.pa, 10);
+    // 觸身球算上壘，犧牲打不進分母——與 season.ts 同一條式子。
+    expect(b.obp).toBeCloseTo((b.hits + b.bb + b.ibb + b.hbp) / (b.pa - b.sac), 10);
 
     const [p1] = splitPitching(pitching, 0.5);
     expect(p1.era).toBeCloseTo((p1.er * 27) / p1.outs, 10);

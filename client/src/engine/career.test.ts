@@ -18,8 +18,8 @@ import {
 const NONE = { win: 0, loss: 0 };
 
 const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
-  games: 120, pa: 500, ab: 450, runs: 60, hits: 130, double: 25, triple: 2, hr: 15,
-  rbi: 70, bb: 45, ibb: 5, so: 80, sb: 10, cs: 4,
+  games: 120, starts: 120, pa: 500, ab: 450, runs: 60, hits: 130, double: 25, triple: 2, hr: 15,
+  rbi: 70, bb: 45, ibb: 5, so: 80, sb: 10, cs: 4, hbp: 0, sac: 0,
   avg: 130 / 450, obp: 0.35, slg: 0.44,
   ...over,
 });

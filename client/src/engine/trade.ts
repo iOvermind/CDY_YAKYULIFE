@@ -63,70 +63,59 @@ export function tradeSplit(world: World): number {
  * 否則生涯累積與逐年表會對不起來——2000 安差一支就是另一個故事。
  */
 export function splitBatting(line: BattingLine, ratio: number): readonly [BattingLine, BattingLine] {
-  const cut = (v: number): readonly [number, number] => {
-    const first = Math.round(v * ratio);
-    return [first, v - first];
-  };
-  const [g1, g2] = cut(line.games);
-  const [pa1, pa2] = cut(line.pa);
-  const [ab1, ab2] = cut(line.ab);
-  const [r1, r2] = cut(line.runs);
-  const [h1, h2] = cut(line.hits);
-  const [d1, d2] = cut(line.double);
-  const [t1, t2] = cut(line.triple);
-  const [hr1, hr2] = cut(line.hr);
-  const [rbi1, rbi2] = cut(line.rbi);
-  const [bb1, bb2] = cut(line.bb);
-  const [ibb1, ibb2] = cut(line.ibb);
-  const [so1, so2] = cut(line.so);
-  const [sb1, sb2] = cut(line.sb);
-  const [cs1, cs2] = cut(line.cs);
+  // 累計欄位一次列完。**用鍵去切而不是十四個位置參數**——加一個欄位就得數位置的
+  // 寫法，遲早會有人把 sb 填進 cs 的格子裡。
+  const COUNTS = [
+    'games',
+    'starts',
+    'pa',
+    'ab',
+    'runs',
+    'hits',
+    'double',
+    'triple',
+    'hr',
+    'rbi',
+    'bb',
+    'ibb',
+    'so',
+    'sb',
+    'cs',
+    'hbp',
+    'sac',
+  ] as const;
 
-  const build = (
-    games: number,
-    pa: number,
-    ab: number,
-    runs: number,
-    hits: number,
-    double: number,
-    triple: number,
-    hr: number,
-    rbi: number,
-    bb: number,
-    ibb: number,
-    so: number,
-    sb: number,
-    cs: number,
-  ): BattingLine => {
-    const single = hits - double - triple - hr;
-    const bases = single + double * 2 + triple * 3 + hr * 4;
+  const first: Record<string, number> = {};
+  const second: Record<string, number> = {};
+  for (const key of COUNTS) {
+    const whole = line[key];
+    const cut = Math.round(whole * ratio);
+    first[key] = cut;
+    // 第二段是相減出來的，不是各自四捨五入——兩段相加必須精確等於全季，否則
+    // 生涯累積與逐年表會對不起來，2000 安差一支就是另一個故事。
+    second[key] = whole - cut;
+  }
+
+  const build = (c: Record<string, number>): BattingLine => {
+    const single = (c['hits'] ?? 0) - (c['double'] ?? 0) - (c['triple'] ?? 0) - (c['hr'] ?? 0);
+    const bases = single + (c['double'] ?? 0) * 2 + (c['triple'] ?? 0) * 3 + (c['hr'] ?? 0) * 4;
+    const ab = c['ab'] ?? 0;
+    const pa = c['pa'] ?? 0;
+    const obpDen = Math.max(0, pa - (c['sac'] ?? 0));
     return {
-      games,
-      pa,
-      ab,
-      runs,
-      hits,
-      double,
-      triple,
-      hr,
-      rbi,
-      bb,
-      ibb,
-      so,
-      sb,
-      cs,
+      ...(c as unknown as Omit<BattingLine, 'avg' | 'obp' | 'slg'>),
       // 率是導出的，必須用這一段自己的分母重算——沿用全季的率會讓兩段看起來
       // 打得一模一樣。
-      avg: ab === 0 ? 0 : hits / ab,
-      obp: pa === 0 ? 0 : (hits + bb) / pa,
+      avg: ab === 0 ? 0 : (c['hits'] ?? 0) / ab,
+      obp:
+        obpDen === 0
+          ? 0
+          : ((c['hits'] ?? 0) + (c['bb'] ?? 0) + (c['ibb'] ?? 0) + (c['hbp'] ?? 0)) / obpDen,
       slg: ab === 0 ? 0 : bases / ab,
     };
   };
 
-  return [
-    build(g1, pa1, ab1, r1, h1, d1, t1, hr1, rbi1, bb1, ibb1, so1, sb1, cs1),
-    build(g2, pa2, ab2, r2, h2, d2, t2, hr2, rbi2, bb2, ibb2, so2, sb2, cs2),
-  ];
+  return [build(first), build(second)];
 }
 
 /** 投球成績的切分。出局數是整數的原子單位，切起來精確。 */

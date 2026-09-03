@@ -14,8 +14,8 @@ import { evaluateMilestones, type CareerSummary, type LeagueCareer } from './car
 const NONE = { win: 0, loss: 0 };
 
 const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
-  games: 0, pa: 0, ab: 0, runs: 0, hits: 0, double: 0, triple: 0, hr: 0,
-  rbi: 0, bb: 0, ibb: 0, so: 0, sb: 0, cs: 0, avg: 0, obp: 0, slg: 0,
+  games: 0, starts: 0, pa: 0, ab: 0, runs: 0, hits: 0, double: 0, triple: 0, hr: 0,
+  rbi: 0, bb: 0, ibb: 0, so: 0, sb: 0, cs: 0, hbp: 0, sac: 0, avg: 0, obp: 0, slg: 0,
   ...over,
 });
 

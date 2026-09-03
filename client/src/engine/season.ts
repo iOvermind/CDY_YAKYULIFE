@@ -9,7 +9,7 @@
  * 抽取一律走 season 子序列（見 ADR 0002 的歸屬規則）。
  */
 
-import { leagues, positions, season as cfg } from '../data/index.ts';
+import { leagues, positions, season as cfg, type RecordSpec } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
 import { bullpenScore, pitcherRating, type Abilities } from './rating.ts';
@@ -285,15 +285,79 @@ export function paPerGame(overall: number, par: number): number {
  * 絕對噪音除以場次而非用固定值——這讓隨機性隨出賽動態縮放，只打 20 場的人
  * 不會因為一個固定的 ±40 打席而數據崩壞。
  */
-export function plateAppearances(world: World, games: number, overall: number, par: number): number {
+export function plateAppearances(
+  world: World,
+  starts: number,
+  bench: number,
+  overall: number,
+  par: number,
+): number {
   const rng = world.stream('season');
   const pt = cfg.playing_time;
 
+  // 先發那幾場站棒次決定的次數，替補那幾場站的少得多——代打通常就是一個打席。
   const perGame = paPerGame(overall, par);
+  const perBench = cfg.batting.bench_pa_per_game.value;
 
   const mult = pt.pa_noise.min + rng.next() * (pt.pa_noise.max - pt.pa_noise.min);
-  const abs = games / pt.pa_absolute_noise_divisor.value;
-  return Math.max(0, Math.round(games * perGame * mult + rng.next() * abs * 2 - abs));
+  const abs = (starts + bench) / pt.pa_absolute_noise_divisor.value;
+  return Math.max(
+    0,
+    Math.round((starts * perGame + bench * perBench) * mult + rng.next() * abs * 2 - abs),
+  );
+}
+
+/**
+ * 先發率：有上場的那些場次裡，幾場是先發。
+ *
+ * **出賽不等於先發。** 一個整季一百場都是第七局才上去代打的人，用「出賽 × 棒次」
+ * 算會得到三百多個打席——那是先發球員的量。
+ *
+ * 刻意不重用 `trustFactor`：信任度已經乘在 `gamesPlayed()` 裡了，再乘一次等於 d 的
+ * 效果平方，邊緣球員被砍兩刀。不過**它飽和在 1.0 這件事在這裡反而是對的**——明顯
+ * 強過 par 的人，他有上場的每一場本來就都是先發。
+ */
+export function startShare(overall: number, par: number): number {
+  const s = cfg.batting.start_share;
+  return clamp(s.at_par + (overall - par) * s.per_point, s.min, s.max);
+}
+
+/**
+ * 一格紀錄錨定的數據。
+ *
+ * `anchor × (機會數 / per) × ratio × noise`，四捨五入之後加上抖動，**最後才夾**。
+ * 夾在最後是關鍵：抖動寫在 `min()` 外面的話，`HR = min(H, …) + 3` 會生出比安打還多
+ * 的全壘打，`3B = 0 + (-3)` 會生出負的三壘打。
+ */
+function anchored(
+  anchor: number,
+  volume: number,
+  ratio: number,
+  noise: number,
+  jitter: number,
+  cap: number,
+): number {
+  const raw = Math.round(anchor * volume * ratio * noise) + jitter;
+  return Math.max(0, Math.min(cap, raw));
+}
+
+/** 一格能力加權和，先平移到基準聯盟。 */
+function weightedShifted(spec: RecordSpec, ability: Abilities, par: number): number {
+  let sum = spec.offset ?? 0;
+  for (const [key, w] of Object.entries(spec.weights ?? {})) sum += (ability[key] ?? 0) * w;
+  return sum - (spec.par_slope ?? 0) * (par - cfg.batting.reference_par);
+}
+
+/** 一格的能力佔比，夾在 `ratio_cap`，下限由 `floor` 決定。 */
+function abilityRatio(spec: RecordSpec, ability: Abilities, par: number): number {
+  const ratio = weightedShifted(spec, ability, par) / (spec.divisor ?? 1);
+  return Math.min(cfg.batting.ratio_cap, Math.max(spec.floor ?? 0, ratio));
+}
+
+/** 盜壘的啟動門檻：腳程低於 `gate_start` 一次都不跑，跨過 `gate_span` 之後滿檔。 */
+function gateRatio(spec: RecordSpec, ability: Abilities, par: number): number {
+  const adj = weightedShifted(spec, ability, par);
+  return clamp((adj - (spec.gate_start ?? 0)) / (spec.gate_span ?? 1), 0, 1);
 }
 
 /**
@@ -370,54 +434,87 @@ export function intentionalWalksFrom(dom: number, pa: number, noise: () => numbe
 }
 
 /** 打出一季職業打擊成績。 */
-export function proBattingLine(
-  world: World,
+/**
+ * 一條打擊成績單的核心：**從打席數開始，把每一格算出來**。
+ *
+ * 抽離成純函式是為了讓 `proLineAt()`（門檻線與基準線用的那條假想成績單）走的是
+ * **同一條式子**，只是把噪音餵成 1、抖動餵成 0。兩邊各寫一份的年代出過的事：
+ * 門檻線用的率和實際產生成績的率悄悄分岔，於是「聯盟平均」跟真實的聯盟平均對不上。
+ *
+ * 計算順序是相依的，**不可以重排**：BB → IBB → HBP → SAC → AB → H → HR → 3B → 2B
+ * → SO → SB → CS → RBI → R。每一格的上限只引用比它早算的東西，所以
+ * `HR + 3B + 2B ≤ H`、`SO ≤ AB − H`、`SB ≤ 上壘數 − HR` 全部恆成立。
+ */
+export function battingCore(
   ability: Abilities,
-  position: string,
-  level: string,
-  overall: number,
-  standards: LeagueStandards | null = null,
-  seasonFactor = 1,
-): ProBattingLine {
-  const rng = world.stream('season');
+  par: number,
+  pa: number,
+  noise: () => number,
+  jit: (n: number) => number,
+  ibbOf: (pa: number) => number,
+): Omit<BattingLine, 'games' | 'starts'> {
   const b = cfg.batting;
-  const par = leagueStandardOf(standards, level).par;
-  const noise = () => b.noise.min + rng.next() * (b.noise.max - b.noise.min);
+  const r = b.records;
 
-  const games = Math.round(
-    gamesPlayed(world, ability, position, level, overall, standards) * seasonFactor,
+  const bb = anchored(r.bb.anchor, pa / (r.bb.per ?? 1), abilityRatio(r.bb, ability, par), noise(), jit(r.bb.jitter), pa);
+  const ibb = Math.max(0, Math.min(pa - bb, Math.round(ibbOf(pa))));
+
+  // 觸身球與犧牲打掛在打席上，不是打數——打數要扣掉它們才算得出來，掛在打數上
+  // 是循環定義。
+  const hbp = anchored(pa, b.hbp_rate.value, 1, noise(), jit(b.hbp_rate.jitter), pa - bb - ibb);
+  const sac = anchored(pa, b.sac_rate.value, 1, noise(), jit(b.sac_rate.jitter), pa - bb - ibb - hbp);
+
+  const ab = Math.max(0, pa - bb - ibb - hbp - sac);
+
+  const hits = anchored(r.h.anchor, ab / (r.h.per ?? 1), abilityRatio(r.h, ability, par), noise(), jit(r.h.jitter), ab);
+  // 全壘打夾在安打之內，長打再從剩下的安打裡切——三者相加因此不可能超過 H。
+  const hr = anchored(r.hr.anchor, ab / (r.hr.per ?? 1), abilityRatio(r.hr, ability, par), noise(), jit(r.hr.jitter), hits);
+  const triple = anchored(r.triple.anchor, ab / (r.triple.per ?? 1), abilityRatio(r.triple, ability, par), noise(), jit(r.triple.jitter), hits - hr);
+  const double = anchored(r.double.anchor, ab / (r.double.per ?? 1), abilityRatio(r.double, ability, par), noise(), jit(r.double.jitter), hits - hr - triple);
+  const single = hits - hr - triple - double;
+
+  // 三振的機會數是「出局的那些打數」——安打與三振加起來不可能超過打數。
+  const outs = Math.max(0, ab - hits);
+  const so = anchored(r.so.anchor, outs / (r.so.per ?? 1), abilityRatio(r.so, ability, par), noise(), jit(r.so.jitter), outs);
+
+  // 盜壘的上限是「站上壘包而且還在跑壘」的次數：全壘打不算，他直接回本壘了。
+  const onBase = hits + bb + ibb + hbp;
+  const sb = anchored(r.sb.anchor, pa / (r.sb.per ?? 1), gateRatio(r.sb, ability, par), noise(), jit(r.sb.jitter), Math.max(0, onBase - hr));
+  const spdAdj = (ability['spd'] ?? 0) - (par - b.reference_par);
+  const csRate = b.cs.base - b.cs.per_ability * Math.min(1, spdAdj / b.cs.divisor);
+  const cs = Math.max(0, Math.min(sb, Math.round(sb * csRate * noise()) + jit(b.cs.jitter)));
+
+  // 打點與得分由**打出來的東西**推導，不是由安打數乘一個係數。
+  const rw = b.rbi.weights;
+  const rbiRaw =
+    hr * (rw['hr'] ?? 0) + triple * (rw['triple'] ?? 0) + double * (rw['double'] ?? 0) + single * (rw['single'] ?? 0);
+  // 不低於全壘打數——每一支全壘打至少是一分打點，那是規則不是模型。
+  const rbi = Math.max(
+    hr,
+    anchored(b.rbi.anchor, 1, Math.min(b.ratio_cap, rbiRaw / b.rbi.anchor), noise(), jit(b.rbi.jitter), Number.MAX_SAFE_INTEGER),
   );
-  const pa = plateAppearances(world, games, overall, par);
 
-  const bb = Math.round(pa * rateOf(b.walk_rate, ability, par) * noise());
-  const ibb = intentionalWalks(world, ability, pa, par);
-  const ab = Math.max(0, pa - bb - ibb);
-
-  const hits = Math.min(ab, Math.round(ab * rateOf(b.hit_rate, ability, par) * noise()));
-  const hr = Math.min(hits, Math.round(ab * rateOf(b.hr_rate, ability, par) * noise()));
-
-  // 長打依速度分配：快腿的三壘打明顯較多。剩下的才是一壘安打。
-  const rest = hits - hr;
-  const double = Math.min(rest, Math.round(rest * rateOf(b.extra_base.double_rate, ability, par)));
-  const triple = Math.min(
-    rest - double,
-    Math.round(rest * rateOf(b.extra_base.triple_rate, ability, par)),
+  // 全壘打以外的每一次上壘都要靠腳程回本壘，所以先加權再整組乘上腳程係數；
+  // 全壘打不乘——他自己走回來。
+  const nw = b.runs.weights;
+  const legs = Math.min(b.ratio_cap, spdAdj / b.runs.speed_divisor);
+  const runsRaw =
+    hr * b.runs.hr_weight +
+    (triple * (nw['triple'] ?? 0) +
+      double * (nw['double'] ?? 0) +
+      single * (nw['single'] ?? 0) +
+      (bb + ibb) * (nw['bb'] ?? 0)) *
+      legs;
+  const runs = Math.max(
+    hr,
+    anchored(b.runs.anchor, 1, Math.min(b.ratio_cap, runsRaw / b.runs.anchor), noise(), jit(b.runs.jitter), Number.MAX_SAFE_INTEGER),
   );
 
-  const rbi = Math.round(hits * b.rbi_per_hit + hr * b.rbi_per_hr_extra);
-
-  const onBase = hits + bb + ibb;
-  const attempts = Math.round(onBase * rateOf(b.steal.attempt_rate, ability, par) * noise());
-  const sb = Math.round(attempts * rateOf(b.steal.success_rate, ability, par));
-
-  const single = rest - double - triple;
   const bases = single + double * 2 + triple * 3 + hr * 4;
-
-  const so = Math.min(ab - hits, Math.round(ab * rateOf(b.strikeout_rate, ability, par) * noise()));
-  const runs = Math.round(onBase * rateOf(b.runs_per_time_on_base, ability, par));
+  // 上壘率的分母是 PA − SAC：犧牲打不算在內（見 BattingLine.sac 的說明）。
+  const obpDen = Math.max(0, pa - sac);
 
   return {
-    games,
     pa,
     ab,
     runs,
@@ -430,11 +527,50 @@ export function proBattingLine(
     ibb,
     so,
     sb,
-    cs: Math.max(0, attempts - sb),
+    cs,
+    hbp,
+    sac,
     avg: ab === 0 ? 0 : hits / ab,
-    obp: pa === 0 ? 0 : (hits + bb + ibb) / pa,
+    obp: obpDen === 0 ? 0 : (hits + bb + ibb + hbp) / obpDen,
     slg: ab === 0 ? 0 : bases / ab,
   };
+}
+
+/**
+ * 一季的打擊成績。
+ *
+ * 出賽先拆成先發與替補（見 `startShare`），打席由兩者各自的棒次組出來，其餘每一格
+ * 走 `battingCore`。
+ */
+export function proBattingLine(
+  world: World,
+  ability: Abilities,
+  position: string,
+  level: string,
+  overall: number,
+  standards: LeagueStandards | null = null,
+  seasonFactor = 1,
+): ProBattingLine {
+  const rng = world.stream('season');
+  const b = cfg.batting;
+  const par = leagueStandardOf(standards, level).par;
+
+  // 抽取次數必須固定：每一格各拿一次噪音、一次抖動，順序寫死。條件式抽取會讓
+  // 同一顆種子在改版前後對不起來（ADR 0002）。
+  const noise = (): number => b.noise.min + rng.next() * (b.noise.max - b.noise.min);
+  const jit = (n: number): number => rng.int(-n, n);
+
+  const games = Math.round(
+    gamesPlayed(world, ability, position, level, overall, standards) * seasonFactor,
+  );
+  const starts = Math.min(games, Math.round(games * startShare(overall, par) * noise()));
+  const bench = games - starts;
+  const pa = plateAppearances(world, starts, bench, overall, par);
+
+  const core = battingCore(ability, par, pa, noise, jit, (n) =>
+    intentionalWalks(world, ability, n, par),
+  );
+  return { games, starts, ...core };
 }
 
 /** 場上的三種投手角色。中繼與終結者在出賽結構上相同，差別在拿到的是中繼還是救援。 */

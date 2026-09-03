@@ -201,7 +201,7 @@ describe('trustFactor', () => {
 describe('plateAppearances', () => {
   it('打席數大致落在場次的 4 倍上下', () => {
     for (let i = 0; i < 100; i++) {
-      const pa = plateAppearances(new World(`s${i}`), 120, CPBL1.par, CPBL1.par);
+      const pa = plateAppearances(new World(`s${i}`), 120, 0, CPBL1.par, CPBL1.par);
       expect(pa).toBeGreaterThan(120 * 3.5);
       expect(pa).toBeLessThan(120 * 5);
     }
@@ -210,14 +210,14 @@ describe('plateAppearances', () => {
   it('絕對噪音隨場次縮放——少場次者的數據不會崩壞', () => {
     // 只打 10 場的人，打席不該出現負值或誇張的數字
     for (let i = 0; i < 200; i++) {
-      const pa = plateAppearances(new World(`s${i}`), 10, CPBL1.par, CPBL1.par);
+      const pa = plateAppearances(new World(`s${i}`), 10, 0, CPBL1.par, CPBL1.par);
       expect(pa).toBeGreaterThanOrEqual(0);
       expect(pa).toBeLessThan(60);
     }
   });
 
   it('沒有出賽就沒有打席', () => {
-    expect(plateAppearances(new World('a'), 0, CPBL1.par, CPBL1.par)).toBe(0);
+    expect(plateAppearances(new World('a'), 0, 0, CPBL1.par, CPBL1.par)).toBe(0);
   });
 });
 
@@ -275,10 +275,27 @@ describe('proBattingLine', () => {
   const bat = (seed: string, ability: Abilities, ovr: number) =>
     proBattingLine(new World(seed), ability, 'SS', 'CPBL1', ovr);
 
-  it('打數等於打席扣掉保送', () => {
+  it('打數等於打席扣掉四壞、敬遠、觸身球與犧牲打', () => {
     for (let i = 0; i < 100; i++) {
       const b = bat(`s${i}`, flat(50), 50);
-      expect(b.ab).toBe(b.pa - b.bb - b.ibb);
+      expect(b.ab).toBe(b.pa - b.bb - b.ibb - b.hbp - b.sac);
+    }
+  });
+
+  it('先發不會多於出賽，替補那幾場只站一次多打擊區', () => {
+    for (let i = 0; i < 100; i++) {
+      const b = bat(`s${i}`, flat(50), 50);
+      expect(b.starts).toBeLessThanOrEqual(b.games);
+      expect(b.starts).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('整季代打的人不會刷出先發球員的打席', () => {
+    // 這正是舊模型的洞：PA = 出賽 × 棒次，把每一場出賽都當成先發。
+    const weak = bat('bench', flat(30), 30);
+    const strong = bat('bench', flat(60), 60);
+    if (weak.games > 0 && strong.games > 0) {
+      expect(weak.pa / weak.games).toBeLessThan(strong.pa / strong.games);
     }
   });
 
@@ -288,6 +305,24 @@ describe('proBattingLine', () => {
       expect(b.hits).toBeLessThanOrEqual(b.ab);
       expect(b.hr).toBeLessThanOrEqual(b.hits);
       expect(b.double + b.triple + b.hr).toBeLessThanOrEqual(b.hits);
+    }
+  });
+
+  it('抖動推不破任何一道上限——這正是抖動寫在 min() 外面時會壞掉的地方', () => {
+    // ±3 的整數抖動如果加在夾具之後，`HR = min(H, …) + 3` 就會生出比安打還多的
+    // 全壘打、`3B = 0 + (-3)` 會生出負的三壘打。四種能力水準都掃一遍。
+    for (const ovr of [30, 45, 60, 75]) {
+      for (let i = 0; i < 120; i++) {
+        const b = bat(`cap-${ovr}-${i}`, flat(ovr), ovr);
+        expect(b.so).toBeLessThanOrEqual(b.ab - b.hits);
+        expect(b.sb).toBeLessThanOrEqual(b.hits + b.bb + b.ibb + b.hbp - b.hr);
+        expect(b.cs).toBeLessThanOrEqual(b.sb);
+        expect(b.rbi).toBeGreaterThanOrEqual(b.hr);
+        expect(b.runs).toBeGreaterThanOrEqual(b.hr);
+        for (const v of [b.hits, b.hr, b.double, b.triple, b.bb, b.ibb, b.so, b.sb, b.cs, b.hbp, b.sac]) {
+          expect(v).toBeGreaterThanOrEqual(0);
+        }
+      }
     }
   });
 

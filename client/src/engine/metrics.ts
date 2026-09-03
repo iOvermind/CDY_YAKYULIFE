@@ -11,7 +11,7 @@
 import { amateur, season as cfg } from '../data/index.ts';
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
-import { dominanceAt, intentionalWalksFrom, levelOf } from './season.ts';
+import { battingCore, dominanceAt, intentionalWalksFrom, levelOf, startShare } from './season.ts';
 
 /** 聯盟平均：一名平均球員的打擊率、上壘率、長打率與防禦率。 */
 export interface Baseline {
@@ -88,37 +88,21 @@ export function proBaselineAt(level: string, d: number): Baseline {
  * 在參數列的唯一理由：Dom 的門檻吃絕對能力值，光有 d 算不出來。
  */
 export function proLineAt(d: number, pa: number, par: number): BattingLine {
-  const b = cfg.batting;
-  const bb = pa * rateAt(b.walk_rate, d);
-  // 期望值取 noise 區間的中點——這條線本來就不抽亂數。
-  const ibb = intentionalWalksFrom(dominanceAt(par + d, par), pa, () => 0.5);
-  const ab = pa - bb - ibb;
-  const hits = ab * rateAt(b.hit_rate, d);
-  const hr = ab * rateAt(b.hr_rate, d);
-  const rest = hits - hr;
-  const double = rest * rateAt(b.extra_base.double_rate, d);
-  const triple = rest * rateAt(b.extra_base.triple_rate, d);
-
-  const rbi = hits * b.rbi_per_hit + hr * b.rbi_per_hr_extra;
-  const onBase = hits + bb + ibb;
-  const sb = onBase * rateAt(b.steal.attempt_rate, d) * rateAt(b.steal.success_rate, d);
-  const runs = onBase * rateAt(b.runs_per_time_on_base, d);
-  const so = ab * rateAt(b.strikeout_rate, d);
-
-  return {
+  // 全能力齊平在 par + d 的假想球員。紀錄錨定模型吃的是**個別能力**而不是一個
+  // 純量，所以門檻線得先具體化成一個人——「每一項都比聯盟平均高 d 點」是那條線
+  // 一直以來的定義，只是以前藏在每條率的 `base + d × per_point` 裡。
+  const ability = new Proxy({} as Record<string, number>, { get: () => par + d });
+  const core = battingCore(
+    ability,
+    par,
     pa,
-    ab,
-    bb,
-    ibb,
-    hits,
-    double,
-    triple,
-    hr,
-    rbi,
-    sb,
-    runs,
-    so,
-  } as unknown as BattingLine;
+    // 這條線不抽亂數：噪音取 1，抖動取 0。
+    () => 1,
+    () => 0,
+    // 期望值取 noise 區間的中點。
+    (n) => intentionalWalksFrom(dominanceAt(par + d, par), n, () => 0.5),
+  );
+  return { games: 0, starts: 0, ...core };
 }
 
 /**
@@ -137,7 +121,10 @@ export function positionPlayerShares(battingWin: number): number {
 export function proPaAt(d: number, leagueGames: number): number {
   const s = cfg.playing_time.pa_per_game;
   const per = Math.max(s.min, Math.min(s.max, s.at_par + d * s.per_point));
-  return per * leagueGames;
+  // **出賽不等於先發**：替補上場那幾場只站一次多打擊區。門檻線也得照這個形狀
+  // 算，否則邊緣球員的假想打席會比他真的站得到的多出一大截。
+  const share = startShare(d, 0);
+  return (share * per + (1 - share) * cfg.batting.bench_pa_per_game.value) * leagueGames;
 }
 
 /** 一條率在 d 值下的值，套上該率自己的上下限。 */

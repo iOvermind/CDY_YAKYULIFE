@@ -29,8 +29,8 @@ import { World } from './rng.ts';
 const base = proBaseline('CPBL1');
 
 const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
-  games: 120, pa: 500, ab: 450, runs: 60, hits: 120, double: 24, triple: 3, hr: 12,
-  rbi: 60, bb: 45, ibb: 5, so: 80, sb: 8, cs: 3,
+  games: 120, starts: 120, pa: 500, ab: 450, runs: 60, hits: 120, double: 24, triple: 3, hr: 12,
+  rbi: 60, bb: 45, ibb: 5, so: 80, sb: 8, cs: 3, hbp: 0, sac: 0,
   avg: 120 / 450, obp: 170 / 500, slg: (81 + 48 + 9 + 48) / 450,
   ...over,
 });

@@ -833,6 +833,32 @@ export interface CupStage {
 }
 
 /** 一條率的設定：與對手同水準時是 base，每高一點加 per_point。 */
+/**
+ * 紀錄錨定的一格。
+ *
+ * `anchor × (機會數 / per) × min(ratio_cap, 能力佔比) × noise`，四捨五入後加
+ * `±jitter` 的整數抖動。能力佔比是 `Σ(weights × 能力) - par_slope × (par - reference_par)`
+ * 除以 `divisor`；`offset`、`floor` 與 `gate_*` 是少數幾格自己的形狀，見 season.json 的註解。
+ */
+export interface RecordSpec {
+  readonly anchor: number;
+  readonly per?: number;
+  /** 機會數看哪一個：打數、打席，或「出局的那些打數」。 */
+  readonly on?: 'ab' | 'pa' | 'outs';
+  readonly weights?: Readonly<Record<string, number>>;
+  readonly par_slope?: number;
+  readonly divisor?: number;
+  /** 三振專用：把負的能力和推回正區間。 */
+  readonly offset?: number;
+  /** 三振專用：再會打的人也三振得到。 */
+  readonly floor?: number;
+  /** 盜壘專用：腳程低於這個值一次都不跑。 */
+  readonly gate_start?: number;
+  /** 盜壘專用：從門檻到滿檔的跨距。 */
+  readonly gate_span?: number;
+  readonly jitter: number;
+}
+
 export interface RateSpec {
   readonly base: number;
   readonly per_point: number;
@@ -1040,7 +1066,6 @@ export interface SeasonData {
     readonly pa_absolute_noise_divisor: { readonly value: number };
   };
   readonly batting: {
-    readonly walk_rate: RateSpec;
     readonly intentional_walk: {
       readonly abilities: Readonly<Record<string, number>>;
       readonly divisor: number;
@@ -1056,14 +1081,45 @@ export interface SeasonData {
       readonly exponent: number;
       readonly noise: Range;
     };
-    readonly hit_rate: RateSpec;
-    readonly hr_rate: RateSpec;
-    readonly extra_base: { readonly double_rate: RateSpec; readonly triple_rate: RateSpec };
-    readonly strikeout_rate: RateSpec;
-    readonly runs_per_time_on_base: RateSpec;
-    readonly rbi_per_hit: number;
-    readonly rbi_per_hr_extra: number;
-    readonly steal: { readonly attempt_rate: RateSpec; readonly success_rate: RateSpec };
+    /** 能力平移的基準聯盟（大聯盟 par 59）。 */
+    readonly reference_par: number;
+    /** 能力佔比的上限。留 5% 給打破紀錄的怪物。 */
+    readonly ratio_cap: number;
+    /** 有上場的那些場次裡，幾場是先發。 */
+    readonly start_share: { readonly at_par: number; readonly per_point: number } & Range;
+    /** 替補上場那幾場站幾次打擊區。 */
+    readonly bench_pa_per_game: { readonly value: number };
+    readonly hbp_rate: { readonly value: number; readonly jitter: number };
+    readonly sac_rate: { readonly value: number; readonly jitter: number };
+    /** 紀錄錨定的每一格。鍵寫死，才不會打錯一個字就靜靜地少算一項。 */
+    readonly records: {
+      readonly pa: RecordSpec;
+      readonly h: RecordSpec;
+      readonly hr: RecordSpec;
+      readonly triple: RecordSpec;
+      readonly double: RecordSpec;
+      readonly bb: RecordSpec;
+      readonly so: RecordSpec;
+      readonly sb: RecordSpec;
+    };
+    readonly cs: {
+      readonly base: number;
+      readonly per_ability: number;
+      readonly divisor: number;
+      readonly jitter: number;
+    };
+    readonly rbi: {
+      readonly anchor: number;
+      readonly weights: Readonly<Record<string, number>>;
+      readonly jitter: number;
+    };
+    readonly runs: {
+      readonly anchor: number;
+      readonly hr_weight: number;
+      readonly weights: Readonly<Record<string, number>>;
+      readonly speed_divisor: number;
+      readonly jitter: number;
+    };
     readonly noise: Range;
   };
   readonly pitching: {

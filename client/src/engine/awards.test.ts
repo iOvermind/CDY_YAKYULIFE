@@ -27,8 +27,8 @@ const BASE = proBaseline('CPBL1');
 const titleOf = (code: string) => cfg.titles.list.find((t) => t.code === code)!;
 
 const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
-  games: 115, pa: 480, ab: 430, runs: 70, hits: 120, double: 24, triple: 2, hr: 12,
-  rbi: 60, bb: 45, ibb: 5, so: 80, sb: 10, cs: 4,
+  games: 115, starts: 115, pa: 480, ab: 430, runs: 70, hits: 120, double: 24, triple: 2, hr: 12,
+  rbi: 60, bb: 45, ibb: 5, so: 80, sb: 10, cs: 4, hbp: 0, sac: 0,
   avg: 120 / 430, obp: 0.34, slg: 0.42,
   ...over,
 });
@@ -100,9 +100,10 @@ describe('winningLine', () => {
     const sb = titleOf('steal_king');
     const short = winningLine(sb, CPBL, 0.5)!;
     const long = winningLine(sb, { ...CPBL, leagueGames: MLB_GAMES }, 0.5)!;
-    // 不是嚴格等比：上壘數含敬遠，而敬遠數是整數（`intentionalWalksFrom` 取整），
-    // 在兩個球季長度上各自捨入 → 殘留千分之二左右的偏差。
-    expect(long / short).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 2);
+    // 不是嚴格等比：打席裡有三個各自取整的整數欄位（敬遠、觸身球、犧牲打），
+    // 在兩個球季長度上各自捨入，偏差因此比單一來源的年代大一些。等比是意圖，
+    // 不是恆等式——真正該擋的是「短季聯盟的門檻沒有跟著縮」。
+    expect(long / short).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 1);
   });
 
   it('全壘打王已改由對手池推導，不再是場次的線性放大', () => {

@@ -28,6 +28,16 @@ interface RateSpec {
  */
 export interface BattingLine {
   readonly games: number;
+  /**
+   * 先發出賽場次。
+   *
+   * **出賽不等於先發**——第七局才上去代打的那一場也算一場出賽，但他只站一次
+   * 打擊區。打席因此由「先發場次 × 棒次 + 替補場次 × 替補打席率」組成，而不是
+   * 「出賽場次 × 棒次」：後者會把一個整季代打的人算成四百打席。
+   *
+   * 養成期不分先發與替補（那裡的出賽本來就是整場），因此恆等於 `games`。
+   */
+  readonly starts: number;
   readonly pa: number;
   readonly ab: number;
   /** 得分。 */
@@ -45,6 +55,16 @@ export interface BattingLine {
   readonly sb: number;
   /** 盜壘刺。 */
   readonly cs: number;
+  /** 觸身球。上壘率算它，打數不算。 */
+  readonly hbp: number;
+  /**
+   * 犧牲打（高飛與觸擊合計）。
+   *
+   * 兩者沒有分開記——分開只為了上壘率的分母（現實裡高飛犧牲算進分母、觸擊不算），
+   * 而那個差距小到不值得多一個欄位與一顆旋鈕。這裡一律當觸擊處理：上壘率的分母是
+   * `PA − SAC`。
+   */
+  readonly sac: number;
   /** 打擊率，安打除以打數。 */
   readonly avg: number;
   /** 上壘率。 */
@@ -218,6 +238,8 @@ export function battingLine(
 
   const line: BattingLine = {
     games,
+    // 養成期不分先發與替補——那裡的出賽本來就是整場。
+    starts: games,
     pa,
     ab,
     runs,
@@ -228,6 +250,9 @@ export function battingLine(
     rbi,
     bb,
     ibb: 0,
+    // 養成期不模擬觸身球與犧牲打。
+    hbp: 0,
+    sac: 0,
     so,
     sb,
     cs: Math.max(0, attempts - sb),
@@ -368,12 +393,19 @@ export function addBatting(a: BattingLine | null, b: BattingLine | null): Battin
     so: a.so + b.so,
     sb: a.sb + b.sb,
     cs: a.cs + b.cs,
+    starts: a.starts + b.starts,
+    hbp: a.hbp + b.hbp,
+    sac: a.sac + b.sac,
   };
   const line: BattingLine = { ...merged, avg: 0, obp: 0, slg: 0 };
   return {
     ...merged,
     avg: merged.ab === 0 ? 0 : merged.hits / merged.ab,
-    obp: merged.pa === 0 ? 0 : (merged.hits + merged.bb + merged.ibb) / merged.pa,
+    // 與 season.ts 同一條式子：觸身球算上壘，犧牲打不進分母。
+    obp:
+      merged.pa - merged.sac <= 0
+        ? 0
+        : (merged.hits + merged.bb + merged.ibb + merged.hbp) / (merged.pa - merged.sac),
     slg: slugging(line),
   };
 }
