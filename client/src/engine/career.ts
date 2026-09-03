@@ -19,6 +19,7 @@
 import { achievements, hallOfFame as cfg, leagues } from '../data/index.ts';
 import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { ladderTop, rungName } from './achievements.ts';
+import type { PitcherRole } from './season.ts';
 import type { AwardRecord } from './awards.ts';
 import { sumShares, type Shares } from './metrics.ts';
 
@@ -73,6 +74,14 @@ export interface SeasonRecord {
    * 那幾年留白等於在說他沒上場。純投手為 null，他們不進守位系統。
    */
   readonly position: string | null;
+  /**
+   * 這一季的投手定位（SP／CP／SU／MR／LR）。非投手與養成期為 null。
+   *
+   * 與 `position` 同一個立場：生涯表問的是「這個人當年在做什麼」。投手的定位每季
+   * 重新判定——體力掉下來的那一年他從輪值變成牛棚，那是他生涯的轉折，年表上看得到
+   * 才有意義。
+   */
+  readonly pitcherRole: PitcherRole | null;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
   /**

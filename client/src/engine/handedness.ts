@@ -21,7 +21,7 @@
 import { abilities } from '../data/index.ts';
 import type { Hand } from '../data/index.ts';
 
-export type HandednessTier = 'none' | 'left' | 'switch';
+export type HandednessTier = 'none' | 'left' | 'switch' | 'switch_pitcher';
 
 /** 左右開投是隱藏特性，不是出生時選的慣用手——見 abilities.json 的 throws._note。 */
 export const SWITCH_PITCHER_TRAIT = 'switch_pitcher';
@@ -31,6 +31,10 @@ export const SWITCH_PITCHER_TRAIT = 'switch_pitcher';
  *
  * 左右開投是後天拿到的，因此這裡吃 traits：中途拿到的右投當下就換檔，
  * 尺與上限同時改變。已經點超過新上限的能力值不回扣，他只是接下來變貴。
+ *
+ * **左右開投自己一檔**，不併進左右開弓：順風同級（標準都降 15%），但潛力上限只降
+ * 15% 而不是 25%——那個特性是養成期擲出來的，折扣卻會回頭咬他出生時抽到的潛力，
+ * 用打者那一檔的 25% 等於在事後追罰一件他沒得選的事。
  */
 export function handednessTier(player: {
   readonly throws: Hand;
@@ -45,7 +49,10 @@ export function handednessTier(player: {
         ? traits.includes(SWITCH_PITCHER_TRAIT)
         : false;
 
-  if (player.bats === 'S' || player.throws === 'S' || switchPitcher) return 'switch';
+  // 左右開弓的打者在前：一個人若兩者都有，順風更大的那一檔才對——左右開投自己
+  // 那一檔的潛力折扣比較輕（見 abilities.json），不該讓「多會一件事」變成折扣變便宜。
+  if (player.bats === 'S' || player.throws === 'S') return 'switch';
+  if (switchPitcher) return 'switch_pitcher';
   if (player.bats === 'L' || player.throws === 'L') return 'left';
   return 'none';
 }

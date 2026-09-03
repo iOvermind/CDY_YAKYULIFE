@@ -156,7 +156,7 @@ export interface AbilitiesData {
     /** 左投左打的結構性優勢對價：個人尺與潛力上限一起打折。檔次取代不累加。 */
     readonly discount: {
       readonly tiers: Readonly<
-        Record<'left' | 'switch', { readonly standard: number; readonly potential: number }>
+        Record<'left' | 'switch' | 'switch_pitcher', { readonly standard: number; readonly potential: number }>
       >;
     };
   };

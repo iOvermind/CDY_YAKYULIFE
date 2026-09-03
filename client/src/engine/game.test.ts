@@ -2073,6 +2073,6 @@ describe('左右開投', () => {
     }
     expect(found).not.toBeNull();
     const state = found!.state!;
-    expect(handednessTier({ ...state.origin, traits: state.traits })).toBe('switch');
+    expect(handednessTier({ ...state.origin, traits: state.traits })).toBe('switch_pitcher');
   });
 });

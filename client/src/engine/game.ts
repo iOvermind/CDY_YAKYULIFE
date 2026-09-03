@@ -190,10 +190,12 @@ import {
 import {
   levelOf,
   playSeason,
+  pitcherRole,
   positionName,
   proBattingLine,
   proPitchingLine,
   ROLE_NAMES,
+  type PitcherRole,
   type ProPitchingLine,
 } from './season.ts';
 import {
@@ -365,6 +367,8 @@ export interface PlayerState {
   readonly position: string | null;
   /** 守位的中文名。 */
   readonly positionName: string | null;
+  /** 現在的投手定位（SP／CP／SU／MR／LR）。進職業之前沒有牛棚分工，為 null。 */
+  readonly pitcherRole: PitcherRole | null;
   /** 這一季走不走野手側。純投手為 false，他們的守位欄只是打席的落點。 */
   readonly playsField: boolean;
   readonly seasonBatting: BattingLine | null;
@@ -817,6 +821,10 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: this.#fieldPosition,
       positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),
+      // 現在的投手定位。**現算而不是抄上一季**：體力掉下來的當下就該看得到自己
+      // 從輪值變成牛棚，不必等球季打完。進職業之前沒有牛棚分工，因此是 null。
+      pitcherRole:
+        this.#pro === null ? null : pitcherRole(this.#seasonAbility, this.#pro.level, this.#standards),
       playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
@@ -3183,6 +3191,8 @@ export class Game {
       team,
       // 生涯表問的是他當年站哪裡。三個階段都有登錄守位，沒有留白的那幾列。
       position: this.#fieldPosition,
+      // 投手的定位同理：體力掉下來的那一年他從輪值變成牛棚，那是生涯的轉折。
+      pitcherRole: (pitching as ProPitchingLine | null)?.role ?? null,
       batting,
       pitching,
       injured: this.#seasonInjury,

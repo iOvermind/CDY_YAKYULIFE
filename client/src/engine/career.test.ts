@@ -38,6 +38,7 @@ const season = (over: Partial<SeasonRecord> = {}): SeasonRecord => ({
   levelName: '中職一軍',
   team: '台中猛瑪',
   position: 'SS',
+  pitcherRole: null,
   batting: bat(),
   pitching: null,
   injured: null,

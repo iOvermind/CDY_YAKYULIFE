@@ -47,7 +47,7 @@ import {
 import { joinName } from './engine/naming.ts';
 import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
-import { positionName } from './engine/season.ts';
+import { positionName, ROLE_NAMES } from './engine/season.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -385,10 +385,10 @@ function StartScreen({
             ))}
           </div>
           <p style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6, lineHeight: 1.6 }}>
-            左投與左打在棒球裡有結構性優勢，因此天賦上限會相應降低。
-            <b style={{ color: 'var(--bad)' }}>
-              注意：那份優勢（同邊／反邊對決）尚未接上賽季模擬，目前選左手只有扣分。
-            </b>
+            左投與左打在棒球裡有結構性優勢，對價是**兩把尺一起降**：他被拿來比的門檻
+            （升降級、戰力外、簽約、守位、國家隊徵召）整條下移，代價是天賦上限打折。
+            左右開弓更深一檔。獎項與生涯評價分吃的是聯盟真尺，不受折扣影響——那是比較，
+            比較必須全聯盟同一條線。
           </p>
         </div>
 
@@ -982,6 +982,8 @@ interface CareerRow {
   /** 層級或學制的補充說明；頂級聯盟不必寫。 */
   readonly note: string | null;
   readonly position: string | null;
+  /** 這一年的投手定位。養成期沒有牛棚分工，一律 null。 */
+  readonly pitcherRole: SeasonRecord['pitcherRole'];
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
   /** 這一年帶著什麼傷。養成期不追蹤傷病，一律 null。 */
@@ -1261,6 +1263,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
             <thead>
               <tr>
                 {headLead}
+                <th title="投手定位">定位</th>
                 <StatHeadCells columns={PITCHING_COLUMNS} />
               </tr>
             </thead>
@@ -1268,6 +1271,11 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
               {pitching.map((r, i) => (
                 <tr key={r.key} className={rowClass(r)}>
                   {rowLead(r, pitching[i - 1]?.year === r.year)}
+                  {/* 與野手那張表的「守位」對稱：他那一年在做什麼。養成期沒有
+                      牛棚分工，留白。 */}
+                  <td title={r.pitcherRole === null ? undefined : ROLE_NAMES[r.pitcherRole]}>
+                    {r.pitcherRole ?? '—'}
+                  </td>
                   <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
                 </tr>
               ))}
@@ -1295,6 +1303,8 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     // 學制不寫——校名已經說了那是國中還是高中。
     note: null,
     position: a.position,
+    // 養成期沒有牛棚分工。
+    pitcherRole: null,
     batting: a.batting,
     pitching: a.pitching,
     injured: null,
@@ -1311,6 +1321,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     // 由同一格的球隊名說完了，「桃園金剛・中職二軍」裡的「中職」是贅字。
     note: s.top === null ? shortLevelName(s.levelName, s.org) : null,
     position: s.position,
+    pitcherRole: s.pitcherRole,
     batting: s.batting,
     pitching: s.pitching,
     injured: s.injured,
@@ -1473,10 +1484,14 @@ function Board({
   //
   // 純投手只寫 P。養成期他的守位欄是 DH（那是打席的落點，成績要標），但姓名旁
   // 寫 P＋DH 會把他說成二刀流——他只是還沒被免除打擊而已。
+  // 投手寫**定位**而不是一個沒有資訊量的 P——先發、終結、布局、中繼、長中繼是
+  // 五種不同的球員，跟守位一樣每季重新判定。還沒進職業之前沒有牛棚分工，那時
+  // 就是 P。
+  const pitcherRole = state.pitcherRole ?? 'P';
   const roleLabel = !state.playsField
-    ? 'P'
+    ? pitcherRole
     : state.traits.has('two_way')
-      ? `P＋${state.position ?? 'DH'}`
+      ? `${pitcherRole}＋${state.position ?? 'DH'}`
       : (state.position ?? 'DH');
   return (
     <div id="board">
