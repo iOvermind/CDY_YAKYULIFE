@@ -134,6 +134,7 @@ import {
   lockYearsLeft,
   playTournament,
   tournamentGames,
+  tournamentInnings,
   tournamentOf,
   tournamentPar,
   tournamentScore,
@@ -2928,10 +2929,7 @@ export class Game {
         level,
         overall,
         this.#standards,
-        null,
-        1,
-        games,
-        par,
+        { appearances: games, par, innings: tournamentInnings() },
       );
       this.#intlPitching = addPitching(this.#intlPitching, line);
       tourneyPitching = line;
@@ -2945,9 +2943,7 @@ export class Game {
         level,
         overall,
         this.#standards,
-        1,
-        games,
-        par,
+        { appearances: games, par },
       );
       this.#intlBatting = addBatting(this.#intlBatting, line);
       tourneyBatting = line;

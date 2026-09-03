@@ -606,7 +606,7 @@ describe('playSeason', () => {
   it('0 局的投手不會生出勝投或救援——率型欄位不該自己長出成績', () => {
     // 直接測底層那條線：playSeason 會把它整條收掉，但收掉不是零化的替代品，
     // 兩層各自成立才行——別讓「反正外面會擋」變成裡面可以長出勝投的理由。
-    const p = proPitchingLine(new World('a'), flat(20), 'CPBL1', 20, null, 0.5);
+    const p = proPitchingLine(new World('a'), flat(20), 'CPBL1', 20, null, { seasonFactor: 0.5 });
     expect(p.games).toBe(0);
     expect(p.outs).toBe(0);
     expect(p.wins).toBe(0);

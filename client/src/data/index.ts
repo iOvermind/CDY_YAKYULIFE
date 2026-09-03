@@ -727,6 +727,16 @@ export interface AmateurData {
       readonly starter_share: number;
       readonly reliever_share: number;
       readonly min_games: number;
+      /**
+       * 國際賽的投球局數。`per_*` 是期望值、`cap_per_*` 是天花板——只設上限的話
+       * 每一場都會剛好卡在上限，成績反而變得一模一樣。
+       */
+      readonly innings: {
+        readonly per_start: number;
+        readonly per_relief: number;
+        readonly cap_per_start: number;
+        readonly cap_per_relief: number;
+      };
     };
     readonly injury_next_season: number;
     readonly intlace_effect: {

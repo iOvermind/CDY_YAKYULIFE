@@ -196,6 +196,31 @@ export function tournamentGames(
   return Math.max(s.min_games, Math.round(teamGames * share));
 }
 
+/**
+ * 國際賽的投球局數：期望值與天花板。
+ *
+ * 投球數限制是既定的規矩——經典賽分組賽 65 球、複賽 80、決賽 95，一場撐不到五局，
+ * 全季先發那個七局多的節奏在這裡不成立。
+ *
+ * **上限是天花板，不是常態。** 只設上限的話每一場都會剛好卡在 5.0 局，成績反而變得
+ * 一模一樣；真實的變化來自投球效率——同樣 65 球，好的時候撐五局，被打的時候三局就
+ * 下來。所以期望值訂得比上限低，體力與噪音在中間浮動。
+ */
+export function tournamentInnings(): {
+  readonly perStart: number;
+  readonly perRelief: number;
+  readonly capPerStart: number;
+  readonly capPerRelief: number;
+} {
+  const c = cfg.stats.innings;
+  return {
+    perStart: c.per_start,
+    perRelief: c.per_relief,
+    capPerStart: c.cap_per_start,
+    capPerRelief: c.cap_per_relief,
+  };
+}
+
 /** 國際賽的水準。一屆賽會的對手是各國的一線球員。 */
 export function tournamentPar(): number {
   return cfg.stats.par;

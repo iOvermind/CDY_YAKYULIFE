@@ -708,7 +708,15 @@
       "batter_share": 1.0,
       "starter_share": 0.28,
       "reliever_share": 0.6,
-      "min_games": 1
+      "min_games": 1,
+      "_innings_note": "投球數限制。經典賽分組賽 65 球、複賽 80、決賽 95——一場撐不到五局，全季先發那個七局多的節奏在國際賽不成立。牛棚同理，一屆賽會沒有人被丟兩局以上。",
+      "_cap_vs_target_note": "**上限是天花板，不是常態。** 只設上限的話每一場都會剛好卡在 5.0 局，成績反而變得一模一樣——真實的變化來自投球效率：同樣 65 球，好的時候撐五局，被打的時候三局就下來。所以期望值（per_start）訂得比上限低，體力與噪音在中間浮動，上限只在狀況好的那幾場才咬住。",
+      "innings": {
+        "per_start": 4.4,
+        "per_relief": 1.1,
+        "cap_per_start": 5,
+        "cap_per_relief": 2
+      }
     },
     "injury_next_season": 10,
     "intlace_effect": {

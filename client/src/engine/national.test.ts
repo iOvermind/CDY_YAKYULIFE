@@ -9,6 +9,8 @@ import {
   isPodium,
   lockYearsLeft,
   playTournament,
+  tournamentGames,
+  tournamentInnings,
   tournamentOf,
   tournamentScore,
   unlocksAce,
@@ -160,5 +162,34 @@ describe('特性的解鎖', () => {
     const t = cfg.taiwan_trigger;
     expect(unlocksTaiwan({ caps: t.min_count, traits: none })).toBe(false);
     expect(unlocksTaiwan({ caps: t.min_count + 1, traits: none })).toBe(true);
+  });
+});
+
+
+describe('一屆賽會的場次', () => {
+  // 走得越遠打得越多。舊版是從一個固定區間亂數抽、完全不看名次，於是「複賽止步
+  // 打了八場、亞軍只打五場」是必然會發生的事。
+  it('場次隨名次遞減，而且冠亞軍同樣打滿決賽', () => {
+    for (const side of ['batter', 'starter', 'reliever'] as const) {
+      const games = [0, 1, 2, 3, 4].map((rank) => tournamentGames(rank, side));
+      expect(games[0]).toBe(games[1]);
+      for (let i = 1; i < games.length - 1; i++) {
+        expect(games[i]!).toBeGreaterThanOrEqual(games[i + 1]!);
+      }
+      expect(games[0]!).toBeGreaterThan(games[4]!);
+      // 被徵召卻一場都沒上，那不是成績，是另一件事。
+      for (const g of games) expect(g).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('野手打得比先發投手多——一屆賽會的先發只扛一兩場', () => {
+    expect(tournamentGames(0, 'batter')).toBeGreaterThan(tournamentGames(0, 'starter'));
+    expect(tournamentGames(0, 'reliever')).toBeGreaterThan(tournamentGames(0, 'starter'));
+  });
+
+  it('投球局數的期望值低於上限——上限是天花板，不是常態', () => {
+    const i = tournamentInnings();
+    expect(i.perStart).toBeLessThan(i.capPerStart);
+    expect(i.perRelief).toBeLessThan(i.capPerRelief);
   });
 });

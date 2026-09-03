@@ -410,6 +410,47 @@ export function intentionalWalksFrom(dom: number, pa: number, noise: () => numbe
 
 /** 打出一季職業打擊成績。 */
 /**
+ * 兩支成績函式共用的尾巴參數。
+ *
+ * **收成一個物件而不是一串位置參數。** 到 `parOverride` 為止已經是第九個尾巴了，
+ * 而位置參數多到某個程度，加一格就會有人把值填進隔壁的洞——`trade.ts` 的兩支
+ * split 就是這樣被我修掉兩次的。
+ */
+export interface SeasonLineOptions {
+  /** 球隊勝率。勝敗場掛在它上面；投手才用得到。 */
+  readonly teamWinRate?: number | null;
+  /** 出賽量的縮放。傷病落在這裡——他真的只上場了那麼多，率型數據不受影響。 */
+  readonly seasonFactor?: number;
+  /**
+   * 直接指定上了幾場。
+   *
+   * **國際賽用，不能改用比例去縮**：一屆兩場對上一季一百二十場是 0.017，整季場次
+   * 乘完再四捨五入就是 0。
+   */
+  readonly appearances?: number;
+  /**
+   * 覆寫對手水準。
+   *
+   * 國際賽借用聯盟層級換算場次，但對手是各國的一線球員。紀錄錨定模型的每一格都拿
+   * **個別能力**去比 par，所以平移 `overall` 動不到那些格子——par 得自己傳。
+   */
+  readonly par?: number;
+  /**
+   * 覆寫投球局數：**期望值與天花板都要給**。
+   *
+   * 國際賽有投球數限制，全季先發那個七局多的節奏在那裡不成立。只覆寫上限的話每一
+   * 場都會剛好卡在上限，成績反而變得一模一樣——期望值訂得比上限低，體力與噪音才有
+   * 浮動的空間。
+   */
+  readonly innings?: {
+    readonly perStart: number;
+    readonly perRelief: number;
+    readonly capPerStart: number;
+    readonly capPerRelief: number;
+  };
+}
+
+/**
  * 一條打擊成績單的核心：**從打席數開始，把每一格算出來**。
  *
  * 抽離成純函式是為了讓 `proLineAt()`（門檻線與基準線用的那條假想成績單）走的是
@@ -524,10 +565,9 @@ export function proBattingLine(
   level: string,
   overall: number,
   standards: LeagueStandards | null = null,
-  seasonFactor = 1,
-  appearances?: number,
-  parOverride?: number,
+  options: SeasonLineOptions = {},
 ): ProBattingLine {
+  const { seasonFactor = 1, appearances, par: parOverride } = options;
   const rng = world.stream('season');
   const b = cfg.batting;
   // **par 要能被覆寫。** 國際賽借用聯盟層級來換算場次，但對手的水準是賽會自己的
@@ -644,11 +684,15 @@ export function proPitchingLine(
   level: string,
   overall: number,
   standards: LeagueStandards | null = null,
-  teamWinRate: number | null = null,
-  seasonFactor = 1,
-  appearances?: number,
-  parOverride?: number,
+  options: SeasonLineOptions = {},
 ): ProPitchingLine {
+  const {
+    teamWinRate = null,
+    seasonFactor = 1,
+    appearances,
+    par: parOverride,
+    innings: inningsOverride,
+  } = options;
   const rng = world.stream('season');
   const p = cfg.pitching;
   const info = levelOf(level);
@@ -727,12 +771,16 @@ export function proPitchingLine(
   const relief = games - starts;
   const staminaRatio = pitcherRatio(ability['sta'] ?? 0, par, stamina.floor);
   const ipRaw =
-    (stamina.start_anchor * (starts / stamina.per_start) +
-      stamina.relief_anchor * (relief / stamina.per_relief)) *
+    (inningsOverride === undefined
+      ? stamina.start_anchor * (starts / stamina.per_start) +
+        stamina.relief_anchor * (relief / stamina.per_relief)
+      : starts * inningsOverride.perStart + relief * inningsOverride.perRelief) *
     staminaRatio *
     noise();
   // **局數不先取整**——換成出局數時才取整，`.1`／`.2` 才出得來。
-  const ipCap = starts * stamina.cap_per_start + relief * stamina.cap_per_relief;
+  const ipCap =
+    starts * (inningsOverride?.capPerStart ?? stamina.cap_per_start) +
+    relief * (inningsOverride?.capPerRelief ?? stamina.cap_per_relief);
   const outs = Math.max(
     0,
     Math.min(Math.round(ipCap * 3), Math.round(ipRaw * 3) + jit(p.innings.jitter)),
@@ -883,8 +931,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
             ctx.level,
             ctx.pitchingOverall ?? ctx.overall,
             standards,
-            ctx.teamWinRate ?? null,
-            ctx.seasonFactor ?? 1,
+            { teamWinRate: ctx.teamWinRate ?? null, seasonFactor: ctx.seasonFactor ?? 1 },
           )
         : null,
     ),
@@ -897,7 +944,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
             ctx.level,
             ctx.battingOverall ?? ctx.overall,
             standards,
-            ctx.seasonFactor ?? 1,
+            { seasonFactor: ctx.seasonFactor ?? 1 },
           )
         : null,
     ),
