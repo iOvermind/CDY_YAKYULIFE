@@ -12,7 +12,7 @@
 import { leagues, positions, season as cfg, type RecordSpec } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
-import { pitcherStuff, type Abilities } from './rating.ts';
+import { bullpenScore, pitcherStuff, type Abilities } from './rating.ts';
 import type { World } from './rng.ts';
 
 
@@ -662,12 +662,14 @@ export function pitcherRole(
   const r = cfg.pitching.role;
   const par = leagueStandardOf(standards, level).par;
 
-  // 兩條路都比**沒有折扣**的實力（`pitcherStuff`）。折扣是身價、是留不留得住在
-  // 聯盟的判斷，拿它跟聯盟 par 比大小等於拿兩把不同的尺量同一件事。
+  // 兩條路都比**原始能力**，不比帶著角色折扣的評價。折扣是身價、是升降與留隊那
+  // 一側的判斷，拿它跟聯盟 par 比大小等於拿兩把不同的尺量同一件事。
   if ((ability['sta'] ?? 0) >= r.starter_sta_min) {
     return pitcherStuff(ability, 'SP') >= par * r.starter_line ? 'SP' : 'LR';
   }
-  const relief = pitcherStuff(ability, 'RP');
+  // **牛棚內部用牛棚分**，不是投手評價：問的是「他適不適合關門」而不是「他有多好」
+  // ——一局的工作，球威才是那個排序的依據。
+  const relief = bullpenScore(ability);
   for (const [role, line] of BULLPEN_LADDER) {
     if (relief >= par * r[line]) return role;
   }

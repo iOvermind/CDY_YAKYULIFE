@@ -12,6 +12,7 @@
 
 import {
   abilities,
+  season,
   amateur,
   leagues,
   positions,
@@ -120,6 +121,25 @@ export function pitcherStuff(ability: Abilities, role: PitcherRole): number {
   return arsenal * w.arsenal_share + (ability['ctl'] ?? 0) * w.control_weight;
 }
 
+
+/**
+ * 牛棚分：掉進牛棚之後，決定他是關門人、布局還是中繼。
+ *
+ * 以球速為主——**一局的工作，用力塞進去就對了**。與評價分開一條公式，因為問的是
+ * 不同的問題：評價問「他有多好」，牛棚分問「他適不適合關門」。
+ *
+ * **吃的是原始能力，沒有角色折扣。** 折扣是身價的折價，用在升降評價那一側；牛棚
+ * 內部誰去關門與身價無關，那是球威的排序。
+ */
+export function bullpenScore(ability: Abilities): number {
+  const cfg = season.pitching.bullpen;
+  const pitches = topValues(ability, abilities.overall.pitcher.pitches, cfg.pitch_weights.length);
+  return (
+    (ability['vel'] ?? 0) * cfg.velocity_weight +
+    (ability['ctl'] ?? 0) * cfg.control_weight +
+    weightedSum(pitches, cfg.pitch_weights)
+  );
+}
 
 /**
  * 純打擊評價。

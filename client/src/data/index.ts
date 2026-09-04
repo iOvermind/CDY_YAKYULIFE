@@ -1164,6 +1164,12 @@ export interface SeasonData {
     readonly reference_par: number;
     readonly ratio_cap: number;
     readonly ability_divisor: number;
+    /** 牛棚分的權重。決定牛棚內部誰去關門——吃原始能力，沒有角色折扣。 */
+    readonly bullpen: {
+      readonly velocity_weight: number;
+      readonly control_weight: number;
+      readonly pitch_weights: readonly number[];
+    };
     readonly role: {
       /** 先發的體力先決線。撐不住就整組落到牛棚。 */
       readonly starter_sta_min: number;

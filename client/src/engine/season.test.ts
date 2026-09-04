@@ -7,6 +7,7 @@ import {
   intentionalWalksFrom,
   levelOf,
   pitcherRole,
+  roleRank,
   plateAppearances,
   playSeason,
   proBattingLine,
@@ -16,7 +17,7 @@ import {
   trustFactor,
   offRoster,
 } from './season.ts';
-import type { Abilities } from './rating.ts';
+import { bullpenScore, pitcherRating, type Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
 const KEYS = ['sta','vel','ctl','swp','drp','chg','gim','con','pow','spd','eye','rng','fld','arm','cat'];
@@ -394,6 +395,22 @@ describe('pitcherRole', () => {
     const mid = role(with_(CPBL1.par + 2, { sta: staMin - 10 }));
     expect(['CP', 'SU']).toContain(strong);
     expect(['SU', 'MR', 'LR']).toContain(mid);
+  });
+
+  it('牛棚內部由牛棚分排序——同樣的整體能力，球速高的那個關門', () => {
+    // 牛棚分問的是「他適不適合關門」，不是「他有多好」：一局的工作，球威才是
+    // 那個排序的依據。
+    const flame = with_(40, { sta: 20, vel: 80 });
+    const command = with_(40, { sta: 20, ctl: 80 });
+    expect(bullpenScore(flame)).toBeGreaterThan(bullpenScore(command));
+    expect(roleRank(role(flame))).toBeGreaterThanOrEqual(roleRank(role(command)));
+  });
+
+  it('牛棚分吃原始能力，不吃角色折扣——折扣是身價，不是球威', () => {
+    const ability = with_(50, { sta: 20 });
+    // 折過的評價比原始能力低一大截；若牛棚線拿它去比，CPBL 的牛棚會沒有人構得到。
+    expect(bullpenScore(ability)).toBeGreaterThan(pitcherRating(ability, 'RP'));
+    expect(role(ability)).not.toBe('LR');
   });
 
   it('牛棚沒有一階收得下的人是長中繼——門檻之間不留洞', () => {
