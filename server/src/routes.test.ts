@@ -429,4 +429,28 @@ describe('天梯', () => {
     const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
     for (const scope of res.scopes) assert.ok(written.has(scope), `多出了 ${scope}`);
   });
+
+  /**
+   * 反方向：**去過的聯盟一個都不能漏**。
+   *
+   * 原本的清單是拿 `leagues.org_names` 的鍵去 filter 的，而那張表是「旅日／旅美」
+   * 這種體系用語的**覆蓋表**，只寫體系名與頂級聯盟名不同的那幾個——韓職、墨聯、
+   * 澳職兩者同名，所以表裡沒有它們，分頁就整組被濾掉了。成績有寫進 career_stats，
+   * 玩家卻永遠看不到。上面那條測試只擋「多出來」，擋不住「少掉」。
+   */
+  it('去過的聯盟一個都不會少——韓職、墨聯、澳職也要有分頁', async () => {
+    const user = await finish('Overmind');
+    // 直接補幾列：走完整局才進得了那三個聯盟，而這裡要測的是清單怎麼算出來的。
+    const seed = db.careerStats[0];
+    assert.ok(seed !== undefined);
+    for (const scope of ['KBO', 'LMB', 'ABL']) {
+      db.careerStats.push({ ...seed, scope });
+    }
+
+    const res = await ladder(user, CAREER_SCOPE, true);
+    const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
+    for (const scope of written) assert.ok(res.scopes.includes(scope), `少掉了 ${scope}`);
+    // 順序照聯盟階梯，生涯永遠殿後。
+    assert.equal(res.scopes.at(-1), CAREER_SCOPE);
+  });
 });

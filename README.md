@@ -155,4 +155,4 @@ PAGES_BASE=/CDY_YAKYULIFE/ npm run build
 
 想了解未來的開發計畫與待辦清單？請看 [ROADMAP.md](ROADMAP.md)。
 想修改或自行建置？請看 [DEVELOPER.md](DEVELOPER.md)。
-變更紀錄請看 [CHANGELOG.md](CHANGELOG.md)。
+變更紀錄請看 [CHANGELOG.md](CHANGELOG.md)——**遊戲裡也看得到**，在成就那一頁最右邊的「更新」分頁。

@@ -313,6 +313,11 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
   display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto}
 .modal{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);
   width:100%;max-width:620px;box-shadow:0 18px 50px var(--shadow,rgba(0,0,0,.5))}
+/* 成就櫃那一張。1200 是從天梯反推的：野手側要放得下兩塊 260px 的榜（260×2＋18
+   ＝538），投手側同寬，中間一個 18 的溝，加上左右內距 36，共 1130。抓整數留餘裕。
+   成就與天賦切兩欄之後每欄約 575px，與原本單欄的 584px 幾乎同寬——卡片與榜單
+   的內部排版一行都不用動。登入框不吃這一條：一排輸入欄拉到 1200 只會變成一條。 */
+.modal.wide{max-width:1200px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:16px 18px;border-bottom:1px solid var(--edge);position:sticky;top:0;background:var(--panel);
   border-radius:var(--r) var(--r) 0 0}
@@ -339,6 +344,30 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .achtiles{display:flex;flex-wrap:wrap;gap:6px}
 .achtiles li{border:1px solid var(--edge);border-radius:var(--r);background:var(--panel2);
   padding:6px 10px;font-size:12.5px;line-height:1.3;cursor:default}
+
+/* 成就櫃與天賦的兩欄。**用多欄而不是 grid**：多欄的閱讀順序是「左欄由上往下、
+   再跳右欄」，成就櫃的固定排序（依聯盟階梯、生涯與名人堂放最後，ADR 0031）與
+   天賦的 JSON 順序都因此原封不動；grid 會把相鄰兩組並排成一列，順序就散了。
+   欄高由瀏覽器自己平衡，落單的那一組留在左欄。
+   `break-inside:avoid` 是這裡的重點——一個聯盟、一組天賦不能被切成兩半。它要
+   同時掛在區塊與區塊裡的每一層（h3、ul、卡片），否則瀏覽器仍會從裡層切開。 */
+.twocol{column-count:2;column-gap:22px}
+.twocol > .achgroup{break-inside:avoid;-webkit-column-break-inside:avoid}
+/* 裡層也要擋。只擋外層的話，瀏覽器仍會從 h3 與 ul 之間、或天賦卡之間切開，
+   標題留在左欄底、內容跑到右欄頂。 */
+.twocol > .achgroup > *{break-inside:avoid}
+
+/* 更新紀錄。**兩欄切在條目上，不是切在版本上**：0.1.0 一版就有一百多條，把版本
+   當成不可切開的區塊等於要求瀏覽器把一根一千像素高的柱子塞進半欄，結果是左欄爆出
+   去、右欄全空。條目本身則不能被切開——一條變更橫跨兩欄要來回掃兩次才讀得完。 */
+.changelist{list-style:none;margin:0;padding:0;column-count:2;column-gap:22px}
+.changelist li{break-inside:avoid;-webkit-column-break-inside:avoid;
+  font-size:12.5px;line-height:1.85;color:var(--dim);margin:0 0 10px;
+  padding-left:11px;border-left:2px solid var(--edge)}
+.changelist li b{color:var(--text)}
+.changelist code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+/* 版本標題右邊的日期，與成就櫃大標右邊的 AP 同一個位置與寫法。 */
+.changelist + .achsub{margin-top:9px}
 
 /* 整張卡片就是按鈕：左鍵升一級、右鍵降一級。做成 <button> 是為了鍵盤與
    焦點框都自己來，因此外觀要先歸零回一張卡片的樣子。 */
@@ -512,5 +541,22 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
    欄位有十幾項，直排會捲到天荒地老；grid 讓寬螢幕一次看得到好幾項，窄螢幕自動
    掉成單欄。每一塊自己是一張小表，不共用表頭——各欄的單位本來就不同。 */
 .ladder-grid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:8px}
+/* 野手一側、投手一側，左右並排。**這是語意分欄，不是平衡分欄**：野手 18 塊榜、
+   投手 13 塊，兩側高度本來就不齊，硬要等高就得把投手的榜混進野手那一側。換到的
+   是「不必滑過整個野手才看得到投手」。每側內部仍是上面那條 auto-fill，1200px 的
+   視窗下各自再排成兩欄。 */
+.ladder-sides{display:grid;gap:18px;grid-template-columns:1fr 1fr;align-items:start}
+.ladder-sides h4{margin-top:0}
 .ladder-board .fin{margin-top:4px}
 .ladder-board .fin td{padding:3px 4px}
+
+/* 窄視窗一律退回單欄。兩欄各 300px 時，天賦卡的「升到 Lv2 需 24 AP（還差 8）」
+   那一行會折成三四行，兩欄反而比一欄還長；天梯的名次列（球員名・帳號是 nowrap）
+   則會直接爆出去。寬度不夠就不分欄，比擠成兩條長條好。
+   **斷點與主畫面共用 920px**（INTERFACE.md §8）——同一份介面有兩個斷點的話，
+   縮視窗時會看到兩段各自跳一次的重排。 */
+@media (max-width:920px){
+  .twocol{column-count:1}
+  .changelist{column-count:1}
+  .ladder-sides{grid-template-columns:1fr}
+}

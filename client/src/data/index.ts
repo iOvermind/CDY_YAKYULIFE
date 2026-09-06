@@ -18,6 +18,7 @@ import achievementsJson from './achievements.json' with { type: 'json' };
 import abilitiesJson from './abilities.json' with { type: 'json' };
 import amateurJson from './amateur.json' with { type: 'json' };
 import awardsJson from './awards.json' with { type: 'json' };
+import changelogJson from './changelog.json' with { type: 'json' };
 import eventsJson from './events.json' with { type: 'json' };
 import flavorJson from './flavor.json' with { type: 'json' };
 import hallOfFameJson from './hall_of_fame.json' with { type: 'json' };
@@ -1451,6 +1452,41 @@ export interface LadderData {
   };
   readonly columns: Record<"batter" | "pitcher", readonly LadderColumn[]>;
 }
+/**
+ * 更新紀錄。
+ *
+ * **這一份是產生出來的**（`client/scripts/changelog.mjs` 從根目錄的 `CHANGELOG.md`
+ * 轉出來，由 predev / prebuild / pretest 帶著跑），因此不要手改 `changelog.json`。
+ * 遊戲裡的「更新」那一頁讀的就是它。
+ *
+ * 行內語法只留 CHANGELOG 實際用到的三種：粗體、行內程式碼、以及**轉成純文字的
+ * 連結**——那些連結指向 repo 裡的 ADR 與原始碼，玩家點了也打不開。
+ */
+export interface ChangelogPart {
+  readonly kind: 'text' | 'strong' | 'code';
+  readonly text: string;
+}
+export interface ChangelogCategory {
+  /** `Added` / `Changed` / `Fixed`——給程式用的英文鍵。 */
+  readonly key: string;
+  /** 「新增」「變更」「修正」——給玩家看的中文。 */
+  readonly name: string;
+  readonly entries: readonly (readonly ChangelogPart[])[];
+}
+export interface ChangelogVersion {
+  /** 版本號，或未發佈區塊的 `Unreleased`。 */
+  readonly version: string;
+  /** 發佈日 `YYYY-MM-DD`；`Unreleased` 沒有日期。 */
+  readonly date: string | null;
+  /** 版本標題底下、第一個類別之前的那段散文。沒有就是空陣列。 */
+  readonly note: readonly ChangelogPart[];
+  readonly categories: readonly ChangelogCategory[];
+}
+export interface ChangelogData {
+  readonly versions: readonly ChangelogVersion[];
+}
+export const changelog = changelogJson as unknown as ChangelogData;
+
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
 export const awards = awardsJson as unknown as AwardsData;

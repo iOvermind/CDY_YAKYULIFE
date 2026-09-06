@@ -226,7 +226,13 @@ docker compose down           # 停掉，資料留著
 
 **產物**
 
-目前無正式發佈。本專案尚未發佈任何版本，首個正式版本為 `1.0.0`。
+目前無正式發佈。首個**正式**版本為 `1.0.0`；在那之前走 `0.y.z` 開發階段（`VERSION_RULES.md`
+§4.3），第一刀切在 `0.1.0`（2026-09-06）——那不是「發佈」，是為了讓遊戲裡的「更新」
+分頁有版本界線可以顯示，否則玩家永遠只看到一塊 `[Unreleased]`。
+
+**每做完一批就要收一版**：照 `CHANGELOG_RULES.md` §4.2 把 `## [Unreleased]` 改成
+`## [<版本號>] - <日期>`、在上面新開一個空的 `[Unreleased]`，並同步 `client/package.json`
+的 `version`。忘了收版不會有任何錯誤訊息，只會讓那一頁停在上一版。
 
 建置**中間產物**（不對外發佈）：
 
@@ -247,6 +253,7 @@ docker compose down           # 停掉，資料留著
 | ~~`client/src-tauri/tauri.conf.json`~~ | — | legacy，不再跟著遞增（ADR 0038） |
 | ~~`client/src-tauri/Cargo.toml`~~ | — | 同上 |
 | `CHANGELOG.md` | 版本標題 | 手動 |
+| `client/src/data/changelog.json` | — | **自動**。由 `client/scripts/changelog.mjs` 從 `CHANGELOG.md` 產生（predev／prebuild／pretest 帶著跑），遊戲的「更新」分頁讀它。**禁止手改**，測試會比對它與 `CHANGELOG.md` 是否一致 |
 
 `index_legacy.html` 不帶版本號——它是唯讀保留的舊實作，不隨版本遞增（見 §8）。
 
