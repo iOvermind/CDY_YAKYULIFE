@@ -8,6 +8,8 @@ WORKDIR /build
 COPY client/package*.json ./client/
 RUN cd client && npm ci
 COPY client ./client
+# prebuild 的 changelog.mjs 從儲存庫根目錄讀這一份，產生遊戲裡的更新紀錄資料。
+COPY CHANGELOG.md ./
 # 同源部署，資源就掛在根目錄——不要設 PAGES_BASE。
 RUN cd client && npm run build
 

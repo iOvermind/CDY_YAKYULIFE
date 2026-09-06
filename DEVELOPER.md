@@ -222,7 +222,7 @@ docker compose down           # 停掉，資料留著
 
 根目錄的 `compose.yaml` 是**純描述式的**三個服務：`app`（image 版，前端已建進去）、`db`、`cloudflared`。沒有啟動時安裝依賴、沒有啟動時建置前端，所以起停與看記錄都可以交給容器管理介面。更新是 `git pull && ./deploy.sh`，然後讓 app 換上新 image。
 
-環境變數在 `.env`（範本 `.env.example`）；`TUNNEL_TOKEN` 要自己去 Cloudflare Zero Trust 拿，通道的 service 填 `http://app:8080`。compose 裡沒有必填檢查，值填在 `.env`、管理介面的環境變數欄或直接寫死在 compose 裡都行。資料在 `./data/`，而 `DATA_DIR` 記的是絕對路徑——相對路徑是相對於 compose 檔案所在的目錄，管理介面把它複製到別處跑時會指錯地方。清庫是 `./reset-db.sh`（問過一次才動手，`-y` 跳過詢問），**不可復原**。
+環境變數在 `.env`（範本 `.env.example`）；`TUNNEL_TOKEN` 要自己去 Cloudflare Zero Trust 拿，通道的 service 填 `http://app:8080`。compose 裡沒有必填檢查，值填在 `.env`、管理介面的環境變數欄或直接寫死在 compose 裡都行。**只有秘密走環境變數**：資料庫路徑是寫死在 compose 裡的絕對路徑（`/home/overmind/docker/CDY_YAKYULIFE/data/pg`），因為相對路徑是相對於 compose 檔案所在的目錄，管理介面把它複製到別處跑時會指錯地方（見 [ADR 0040](docs/adr/0040-the-data-path-is-not-a-secret.md)）。清庫是 `./reset-db.sh`（問過一次才動手，`-y` 跳過詢問），**不可復原**。
 
 **產物**
 

@@ -64,36 +64,18 @@ TUNNEL_TOKEN=
 # 等於在公網上開一個沒有 TLS 的服務。
 APP_PORT=8080
 BIND_ADDR=127.0.0.1
-
-# 資料放哪。**寫絕對路徑**——相對路徑是相對於 compose 檔案所在的目錄，管理介面
-# 把 compose 複製到別的地方跑時就會指到別的資料夾去。
-DATA_DIR=$ROOT/data
 EOF
   chmod 600 "$ENV_FILE"
   warn '金鑰已經產生好了，但 TUNNEL_TOKEN 要自己去 Cloudflare 拿並填進 .env。'
 fi
 
 # ── 資料目錄 ──────────────────────────────────────────────
-# **DATA_DIR 一律是絕對路徑。** compose 裡的相對路徑是相對於 compose 檔案所在的
-# 目錄，在命令列上這樣沒問題；但管理介面（Dockhand 之類）常把 compose 複製到自己的
-# stack 目錄下再跑，那時 ./data 會落在那個目錄底下，開出一個空的資料庫——看起來
-# 像是所有帳號一夜蒸發，其實舊的還躺在 repo 底下沒人理。
+# 資料庫的路徑寫死在 compose.yaml 裡（見 ADR 0040），這裡不需要也不該再產生一個
+# DATA_DIR 環境變數——同一件事有兩個來源，遲早會有一邊說謊。
 #
-# 舊的 .env 寫的是相對路徑，這裡就地換成絕對路徑。**指的是同一個資料夾**（相對
-# 路徑本來就以 repo 為基準），所以資料不會搬家，只是從此不受工作目錄影響。
-if grep -qE '^DATA_DIR=[^/]' "$ENV_FILE"; then
-  rel="$(sed -n 's/^DATA_DIR=//p' "$ENV_FILE" | head -n 1)"
-  abs="$(cd "$ROOT" && realpath -m "$rel" 2>/dev/null || printf '%s/%s' "$ROOT" "${rel#./}")"
-  # 用 | 當分隔符：路徑裡有 / 而幾乎不會有 |。
-  sed -i "s|^DATA_DIR=.*|DATA_DIR=$abs|" "$ENV_FILE"
-  say "把 .env 的 DATA_DIR 從 $rel 改成絕對路徑 $abs（同一個資料夾，資料沒有搬）"
-fi
-
 # 目錄先建好再交給 Docker：讓 Docker 自己建的話，某些平台上會建成 root 擁有的
 # 空目錄，Postgres 進去之後才發現寫不了。
-# shellcheck disable=SC1090
-set -a; . "$ENV_FILE"; set +a
-mkdir -p "${DATA_DIR:-$ROOT/data}/pg"
+mkdir -p "$ROOT/data/pg"
 
 # ── 建 image ──────────────────────────────────────────────
 say "建置 ${IMAGE}（context：${ROOT}）……"
