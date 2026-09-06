@@ -98,24 +98,6 @@ cd client && npm run dev        # 另一個終端機；/api 會自動轉給 8099
 
 不架伺服器也完全玩得起來——只是沒有帳號、成就不會累積、天賦不開放。
 
-### 網頁版（GitHub Pages）
-
-`npm run build` 產出的是一份純靜態網站，可以直接部署到 GitHub Pages。工作流在 `.github/workflows/pages.yml`，推到 `main` 就會建置並部署。
-
-**但那是一個沒有帳號的版本**：Pages 只送靜態檔，沒有 `/api`，所以成就不會累積、天賦不開放、天梯是空的。完整的版本是上面那套 `docker compose`（見 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)）——Pages 適合拿來給人試玩，不適合當正式部署。
-
-首次啟用還要在 GitHub 網頁上做兩件事：
-
-1. **儲存庫必須是公開的**（免費方案的 Pages 不支援私有儲存庫）
-2. **Settings → Pages → Source 選「GitHub Actions」**
-
-網址會是 `https://<帳號>.github.io/<儲存庫名>/`。資源路徑靠環境變數 `PAGES_BASE` 帶前綴——**自架服務與本機開發不要設它**，同源部署的資源就掛在根目錄，設了會讓它們指向不存在的子目錄。
-
-```bash
-# 本機模擬 Pages 的產物
-PAGES_BASE=/CDY_YAKYULIFE/ npm run build
-```
-
 ---
 
 ## 快速開始

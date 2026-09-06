@@ -1,45 +1,25 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const host = process.env.TAURI_DEV_HOST;
-
-/**
- * 資源的根路徑。
- *
- * 桌面版與本機開發都是從根目錄提供檔案，因此預設 '/'。GitHub Pages 的專案頁面
- * 掛在 `https://<帳號>.github.io/<repo>/` 底下，資源必須帶著那一層前綴，否則
- * 產物會去 `/assets/...` 找而整頁空白——**那是上 Pages 最常見的第一個坑**。
- *
- * 用環境變數而不是寫死：同一份設定要同時服務 `tauri build` 與網頁部署，寫死
- * 任何一邊都會弄壞另一邊。工作流會設 `PAGES_BASE=/CDY_YAKYULIFE/`。
- */
-const base = process.env.PAGES_BASE ?? "/";
-
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  base,
+  // 資源掛在根目錄。同源部署（前端與 API 是同一個服務）沒有子路徑前綴的問題，
+  // 而需要前綴的那個場景——GitHub Pages 的專案頁面——已經隨桌面端一起移到
+  // `legacy` 分支上了。
+  base: "/",
   plugins: [react()],
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
-  clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
+    /**
+     * **連接埠固定為 1420，被佔用時直接失敗。**
+     *
+     * 原本是 Tauri 的 `devUrl` 寫死指向它，那一半已經不在了；現在留著的理由是
+     * 底下的 `/api` 代理——Vite 安靜換一個埠的話代理設定就對不上，而那個症狀
+     * 看起來像「登入壞掉」而不是「開發伺服器換埠了」。
+     */
     port: 1420,
     strictPort: true,
-    host: host || false,
-    hmr: host
-      ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
-      : undefined,
-    watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
-    },
+
     /**
      * 把 /api 轉給本機的伺服器。
      *

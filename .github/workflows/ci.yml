@@ -1,0 +1,41 @@
+# 型別檢查與測試。**這是這個儲存庫唯一的自動化護欄**，所以它不做別的事——
+# 不部署、不建 image、不推任何東西。
+#
+# 前身是 `pages.yml`：那支工作流在部署到 GitHub Pages 之前順便跑測試。Pages 已經
+# 隨桌面端一起移到 `legacy` 分支（見 ADR 0038 的 Addendum），但測試那一段沒有理由
+# 跟著走——它跟部署到哪裡無關。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一條分支上連續推兩個 commit 時，前一個還沒跑完就取消——測試的答案只有最新
+# 那一版有意義。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+
+      # typecheck 與 test 的 pre 腳本都會跑 changelog.mjs，所以 CHANGELOG.md
+      # 長歪了在這裡就會停——不必等到有人建 image。
+      - run: npm run typecheck
+      - run: npm test

@@ -29,7 +29,7 @@ export function AccountBar({ account }: { account: Account }) {
   const offline = progress.kind === 'offline';
 
   // 還在問「我是誰」的那一瞬間先不畫。**只有這個狀態隱藏**——連不上伺服器時
-  // 仍然要畫出來反灰，不然單機執行（Vite dev、Tauri、GitHub Pages）的人會
+  // 仍然要畫出來反灰，不然只跑前端的人（例如 `npm run dev` 沒開伺服器）會
   // 以為功能根本沒做，而不是「這個版本沒接上伺服器」。
   if (progress.kind === 'loading') return null;
 

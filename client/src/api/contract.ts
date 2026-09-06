@@ -180,7 +180,7 @@ export class ApiError extends Error {
  * 「根本沒有伺服器」的狀態碼。
  *
  * 與 401（沒登入）**必須分開**：沒登入是「去登入」，連不上是「這個部署沒有帳號
- * 功能」——例如 GitHub Pages 上的純前端版本。兩者在畫面上要說不同的話。
+ * 功能」——例如只開了 `npm run dev`、沒開伺服器的時候。兩者在畫面上要說不同的話。
  */
 export const OFFLINE = 0;
 

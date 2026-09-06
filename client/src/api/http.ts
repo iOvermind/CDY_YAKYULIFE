@@ -28,7 +28,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
 
   /**
-   * 沒有 API 的部署（例如 GitHub Pages）會把 `/api/*` 交給單頁應用的 fallback，
+   * 沒有 API 的部署會把 `/api/*` 交給單頁應用的 fallback，
    * 於是回傳 200 與一整份 index.html。**不檢查型別的話那份 HTML 會被當成登入
    * 成功的回應**，畫面就會顯示成登入了卻什麼都沒有。
    */

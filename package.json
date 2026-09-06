@@ -8,7 +8,6 @@
     "test": "npm --prefix client run test",
     "test:watch": "npm --prefix client run test:watch",
     "typecheck": "npm --prefix client run typecheck",
-    "tauri": "npm --prefix client run tauri",
     "install:client": "npm --prefix client ci"
   }
 }

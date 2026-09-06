@@ -17,11 +17,14 @@
 | Vitest | 4.1 | 測試 |
 | Docker | 最新 | 自架服務（app + Postgres + tunnel） |
 | Git | 最新 | 版本控制 |
-| ~~Tauri CLI / Rust~~ | — | **不再需要**。桌面端已轉 legacy、不再維護，見 [ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) |
 
 舊版預覽（`index_legacy.html`）：任何支援 ES6+ 的現代瀏覽器，無其他需求。
 
-**作業系統限制**：不受限。`client/src-tauri/` 還留在儲存庫裡，但它是 legacy——[ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md) 之後發行模型是單一自架服務，桌面端不再打包，那些指令與設定不保證還跑得動。
+**作業系統限制**：不受限。發行模型是單一自架服務（[ADR 0038](docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)），沒有需要特定平台工具鏈的建置步驟。
+
+> **桌面端（Tauri）在 `legacy` 分支上，`main` 不再追蹤。** `client/src-tauri/`、
+> GitHub Pages 的部署工作流與相關設定都留在那條分支，`main` 上已經沒有它們。
+> 需要回頭看的話 `git switch legacy`。
 
 ---
 
@@ -65,7 +68,6 @@
 | `npm run test:watch` | 測試監看模式，改檔自動重跑 |
 | `npm run typecheck` | 型別檢查，不產出檔案 |
 | `npm run build` | 打包網頁版到 `client/dist/` |
-| ~~`npm run tauri dev`~~ | legacy，不再維護（ADR 0038） |
 
 > PowerShell 5.1 沒有 `&&`，要切目錄再執行請分兩行，或用 `;` 串接：
 > ```powershell
@@ -92,7 +94,7 @@ cd client && npm run dev     # 1420，/api 會轉給 8099
 > 但**兩邊的連接埠必須對得起來**（`vite.config.js` 的代理 ↔ `server/src/dev.ts`），
 > 對不上的表現跟「沒開伺服器」一模一樣，不會有任何錯誤訊息。
 
-**連接埠固定為 1420**：`vite.config.js` 設了 `strictPort: true`。原本的理由是 Tauri 的 `devUrl` 寫死指向它（那一半已經 legacy），現在留著的理由是**被佔用時要直接失敗而不是安靜換一個**——換了埠之後 `/api` 的代理設定就對不上，而那個症狀看起來像「登入壞掉」而不是「開發伺服器換埠了」。
+**連接埠固定為 1420**：`vite.config.js` 設了 `strictPort: true`。留著的理由是**被佔用時要直接失敗而不是安靜換一個**——換了埠之後 `/api` 的代理設定就對不上，而那個症狀看起來像「登入壞掉」而不是「開發伺服器換埠了」。
 
 **除錯**：瀏覽器開發者工具（F12）。
 
@@ -117,7 +119,6 @@ CDY_YAKYULIFE/
 │  ├─ src/
 │  │  ├─ data/      規則資料（JSON）與型別化的載入層
 │  │  └─ engine/    模擬引擎；測試與被測檔案同層並列
-│  └─ src-tauri/    legacy 的 Tauri 封裝，不再維護（ADR 0038）
 ├─ server/          帳號、成就與重跑驗證；Postgres schema 與 Dockerfile
 ├─ deploy.sh        建出 image（不啟動任何東西）
 ├─ reset-db.sh      清空資料庫並重建結構（會先問一次）
@@ -148,7 +149,6 @@ CDY_YAKYULIFE/
 | `client/src/engine/` | 模擬引擎。`rng.ts` 是確定性亂數層，其餘領域模組各自宣告使用哪一條子序列 | `data/` |
 | `client/src/*.tsx` | React 介面 | `engine/`、`data/` |
 | `server/src/` | 帳號、成就結算與重跑驗證。**直接 import client 的引擎原始碼**，所以兩邊永遠是同一份規則 | `client/src/engine/`、`client/src/data/` |
-| ~~`client/src-tauri/`~~ | legacy 的桌面端封裝，不再維護（ADR 0038） | Rust |
 
 依賴方向是單向的：介面依賴引擎，引擎依賴資料，資料不依賴任何東西。**引擎不得反向依賴介面**——伺服器端要能不經 UI 重跑一整段生涯來驗證成績（見 ADR 0002）。
 
@@ -203,7 +203,6 @@ npm run test:watch # 監看模式
 ```bash
 cd client
 npm run build        # → client/dist/
-npm run tauri build  # legacy，不再維護（ADR 0038）
 ```
 
 舊版的 `index_legacy.html` 不需建置，開啟即可執行。
@@ -250,8 +249,6 @@ docker compose down           # 停掉，資料留著
 | :--- | :--- | :--- |
 | `client/package.json` | `version` | 手動（單一來源） |
 | ~~`package.json`（根目錄）~~ | — | **刻意不帶 `version`**。它只是指令轉發，不是第二個版本號來源 |
-| ~~`client/src-tauri/tauri.conf.json`~~ | — | legacy，不再跟著遞增（ADR 0038） |
-| ~~`client/src-tauri/Cargo.toml`~~ | — | 同上 |
 | `CHANGELOG.md` | 版本標題 | 手動 |
 | `client/src/data/changelog.json` | — | **自動**。由 `client/scripts/changelog.mjs` 從 `CHANGELOG.md` 產生（predev／prebuild／pretest 帶著跑），遊戲的「更新」分頁讀它。**禁止手改**，測試會比對它與 `CHANGELOG.md` 是否一致 |
 
@@ -304,7 +301,7 @@ docker compose down           # 停掉，資料留著
 
 ### 9.3 依賴來源與鎖檔
 
-- 鎖檔：`client/package-lock.json` 與 `server/package-lock.json`**皆已納入版本控制**——部署時 `npm ci` 讀的就是它們。`client/src-tauri/Cargo.lock` 也還在版本控制裡，但那一半已經 legacy（ADR 0038）。
+- 鎖檔：`client/package-lock.json` 與 `server/package-lock.json`**皆已納入版本控制**——部署時 `npm ci` 讀的就是它們。
 - 安裝指令：新架構的相依安裝指令將於環境建置步驟定案後於 §2 補寫；安裝時應使用會遵守鎖檔的指令（`npm ci`），不使用 `npm install`。
 - 舊版的 `index_legacy.html` 無任何第三方相依，不從外部載入資源。
 
