@@ -365,7 +365,11 @@ async function scopesOf(user: UserRow | null): Promise<readonly string[]> {
     user === null ? [] : [user.id],
   );
   const have = new Set(rows.map((r) => r.scope));
-  const order = Object.keys(leagues.org_names).filter((org) => have.has(org));
+  // **順序讀 `top_league_names`，不是 `org_names`。** 後者是「旅日／旅美」那種
+  // 體系用語的**覆蓋表**，只寫體系名與頂級聯盟名不同的那幾個（韓職、墨聯、澳職
+  // 兩者同名，因此表裡沒有它們）。拿它當完整體系清單來 filter，等於把韓墨澳的
+  // 分頁整組濾掉——打過那些聯盟的成績有寫進 career_stats，只是玩家看不到。
+  const order = Object.keys(leagues.top_league_names).filter((org) => have.has(org));
   if (have.has('CAREER')) order.push('CAREER');
   return order;
 }

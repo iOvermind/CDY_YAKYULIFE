@@ -17,10 +17,18 @@ import { ladder as ladderCfg, leagues } from './data/index.ts';
 import { CAREER_SCOPE } from './engine/ladder.ts';
 import { ENGINE_VERSION } from './engine/game.ts';
 
-/** 範圍的中文名。生涯是跨聯盟通算，其餘是體系名。 */
+/**
+ * 範圍的中文名。生涯是跨聯盟通算，其餘是**頂級聯盟名**。
+ *
+ * 用 `top_league_names`（中職／日職／韓職／墨聯／澳職／大聯盟）而不是 `org_names`
+ * （中職／旅日／旅美），有兩個理由。一是語意：天梯只收頂級聯盟的成績，榜上問的是
+ * 「誰在這個聯盟最強」，不是「你待過哪個體系」——與獎項前綴同一把尺（見
+ * `career.ts` 的 `orgNameOf`）。二是完整性：`org_names` 是刻意只寫幾個體系的覆蓋表，
+ * 拿它當清單會讓韓職、墨聯、澳職顯示成生的代碼。
+ */
 function scopeName(scope: string): string {
   if (scope === CAREER_SCOPE) return '生涯';
-  return leagues.org_names[scope] ?? scope;
+  return leagues.top_league_names[scope] ?? scope;
 }
 
 /** 一個欄位的設定。找不到就不畫——資料檔是唯一來源，這裡不自己編一份備援。 */
@@ -138,26 +146,34 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
         ))}
       </div>
 
-      {batter.length > 0 && (
-        <>
-          <h4>野手</h4>
-          <div className="ladder-grid">
-            {batter.map((b) => (
-              <Board key={b.column} board={b} />
-            ))}
-          </div>
-        </>
-      )}
-      {pitcher.length > 0 && (
-        <>
-          <h4 style={{ marginTop: 14 }}>投手</h4>
-          <div className="ladder-grid">
-            {pitcher.map((b) => (
-              <Board key={b.column} board={b} />
-            ))}
-          </div>
-        </>
-      )}
+      {/*
+        野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是
+        平衡分欄**——野手 18 塊、投手 13 塊，高度本來就不齊，硬要等高就得把投手的
+        榜混進野手那一側。左右並排換到的是「不必滑過整個野手才看得到投手」。
+        欄寬不夠時（窄視窗）兩側自己疊回上下，見 app.css 的 media query。
+      */}
+      <div className="ladder-sides">
+        {batter.length > 0 && (
+          <section>
+            <h4>野手</h4>
+            <div className="ladder-grid">
+              {batter.map((b) => (
+                <Board key={b.column} board={b} />
+              ))}
+            </div>
+          </section>
+        )}
+        {pitcher.length > 0 && (
+          <section>
+            <h4>投手</h4>
+            <div className="ladder-grid">
+              {pitcher.map((b) => (
+                <Board key={b.column} board={b} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </>
   );
 }
