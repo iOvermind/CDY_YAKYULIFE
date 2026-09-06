@@ -6,7 +6,12 @@
  * 這裡不重新分類、不重新排序：變更紀錄的版面規則寫在 `docs/rules/CHANGELOG_RULES.md`，
  * 顯示端再編一套等於多一個會走鐘的地方。
  *
- * `[Unreleased]` 空著是常態（剛切完一版），空的時候寫一句話而不是留一塊白。
+ * **版本區塊是摺疊的，只有最新一版預設展開。** CHANGELOG_RULES §3.4 要求每條變更
+ * 是能獨立看懂的單行，那讓條目數量隨版本累積——0.1.0 一版就有兩百多條。全部攤開
+ * 的話，第二次進來想看「這次改了什麼」的人要先滑過上一版的全部歷史。
+ *
+ * **展開狀態不記憶。** 這一頁是偶爾點進來看一次的東西；記住上次展開了哪三版，只會
+ * 讓下次進來的畫面看起來像壞掉。
  */
 
 import { changelog } from './data/index.ts';
@@ -29,21 +34,24 @@ function Parts({ parts }: { parts: readonly ChangelogPart[] }) {
   );
 }
 
-function Version({ v }: { v: ChangelogVersion }) {
-  const empty = v.categories.length === 0;
+function Version({ v, open }: { v: ChangelogVersion; open: boolean }) {
   return (
-    <div className="achgroup">
-      <h3>
-        {v.version}
-        {/* 日期掛在版本標題上，不逐條標——CHANGELOG_RULES §3.2。 */}
-        {v.date !== null && <span className="sub">{v.date}</span>}
-      </h3>
+    // 用原生 <details>，不自己接 useState：摺疊、鍵盤操作與瀏覽器的頁內搜尋
+    // （Chrome 會自動展開命中的區塊）都是免費的，自己做只會少掉最後那一項。
+    <details className="achgroup" open={open}>
+      <summary>
+        <h3>
+          {v.version}
+          {/* 日期掛在版本標題上，不逐條標——CHANGELOG_RULES §3.2。 */}
+          {v.date !== null && <span className="sub">{v.date}</span>}
+        </h3>
+      </summary>
+      {/* 版本導言：這一版整體是什麼（CHANGELOG_RULES §3.1.1）。 */}
       {v.note.length > 0 && (
         <p className="modal-note">
           <Parts parts={v.note} />
         </p>
       )}
-      {empty && <p className="modal-note">這一版之後還沒有新的變更。</p>}
       {v.categories.map((c) => (
         <div key={c.key} className="achsub">
           <h4>{c.name}</h4>
@@ -56,25 +64,24 @@ function Version({ v }: { v: ChangelogVersion }) {
           </ul>
         </div>
       ))}
-    </div>
+    </details>
   );
 }
 
 export function Changelog() {
+  // 空的 `[Unreleased]` 不顯示。它在 CHANGELOG.md 裡必須永遠存在（規範 §3.1），
+  // 但在摺疊的清單裡會變成一個點開只有一句「還沒有新東西」的假項目——那比不放
+  // 更糟，因為它看起來像有東西。
+  const shown = changelog.versions.filter((v) => v.categories.length > 0);
   return (
     <>
       <p className="modal-note">
-        由新到舊。<b>版本號本身就是資訊</b>——中間那位跳動代表多了新東西，最後一位
-        跳動代表只修了錯。
+        由新到舊，點版本號展開。<b>版本號本身就是資訊</b>——中間那位跳動代表多了新
+        東西，最後一位跳動代表只修了錯。
       </p>
-      {/*
-        版本一塊一塊往下疊，**兩欄切在條目上而不是版本上**。成就與天賦那邊一組
-        頂多十來格，整組不切開剛好；這裡 0.1.0 一版就有一百多條，把版本當成不可
-        切開的區塊等於要求瀏覽器把一根一千像素高的柱子塞進半欄——它塞不下，只會
-        讓左欄爆出去、右欄全空。
-      */}
-      {changelog.versions.map((v) => (
-        <Version key={v.version} v={v} />
+      {shown.map((v, i) => (
+        // 最新一版展開，其餘收起：進來想知道的是「這次改了什麼」。
+        <Version key={v.version} v={v} open={i === 0} />
       ))}
     </>
   );

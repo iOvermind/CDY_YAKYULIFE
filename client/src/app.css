@@ -329,6 +329,17 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .loginform .field:first-child{margin-top:0}
 
 .achgroup{margin-bottom:20px}
+/* 更新紀錄的版本區塊是 <details>。摺疊三角自己畫——原生的 marker 在各家瀏覽器
+   上大小與間距都不一樣，而這裡的大標是有字距的小字，差一點就歪得很明顯。 */
+.achgroup > summary{list-style:none;cursor:pointer}
+.achgroup > summary::-webkit-details-marker{display:none}
+.achgroup > summary h3::before{content:'▸';display:inline-block;margin-right:8px;
+  font-size:10px;color:var(--dim);opacity:.6;transition:transform .12s}
+.achgroup[open] > summary h3::before{transform:rotate(90deg)}
+@media (hover:hover){ .achgroup > summary:hover h3{color:var(--text)} }
+/* h3 本身是 flex（日期靠右），放進 summary 之後要讓它撐滿那一行。 */
+.achgroup > summary h3{margin-bottom:0}
+.achgroup[open] > summary h3{margin-bottom:9px}
 .achgroup h3{font-family:var(--head);font-size:12px;letter-spacing:.24em;color:var(--dim);
   margin:0 0 9px;display:flex;justify-content:space-between;align-items:baseline}
 .achgroup h3 .sub{font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:0}
