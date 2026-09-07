@@ -18,6 +18,62 @@ const twoWay = growthCurve(true);
 const tiersOf = () => abilities.growth_cost.default;
 const noTraits = new Set<string>();
 
+describe('年齡附加費', () => {
+  const at = (age: number, twoWayPlayer = false) => growthCurve(twoWayPlayer, age);
+  const s = abilities.growth_cost.aging_surcharge;
+
+  /**
+   * 這幾個數字是規則本身，不是從公式反推的——它們定義了「每四年 +1」是什麼
+   * 意思。公式改寫的時候，對得上這張表才算沒改壞。
+   */
+  it('每四年 +1，與能力段無關', () => {
+    // 31–34 +1
+    expect(abilityCost(50, 80, at(31))).toBe(3); // 基礎 2
+    expect(abilityCost(65, 80, at(31))).toBe(7); // 基礎 6
+    // 35–38 +2
+    expect(abilityCost(50, 80, at(36))).toBe(4);
+    expect(abilityCost(65, 80, at(36))).toBe(8);
+    // 43–46 +4
+    expect(abilityCost(50, 80, at(43))).toBe(6);
+  });
+
+  it('巔峰期與更年輕的時候完全沒有附加費', () => {
+    for (const age of [18, 25, 26, 30]) {
+      expect(abilityCost(65, 80, at(age))).toBe(abilityCost(65, 80, curve));
+    }
+  });
+
+  it('能力低於門檻不吃附加費——那是還沒開發的東西', () => {
+    expect(abilityCost(s.from_ability - 1, 80, at(43))).toBe(
+      abilityCost(s.from_ability - 1, 80, curve),
+    );
+  });
+
+  /** 附加費加在倍率之前：31 歲、能力 51 超出天花板 = (2+1)×3 = 9。 */
+  it('天花板的倍率乘在加過附加費之後', () => {
+    expect(abilityCost(51, 51, at(31))).toBe(9);
+  });
+
+  /** 天賦折扣扣在最後：二刀流 −1、練武奇才 −1，31 歲的 51→52 仍然只要 1 點。 */
+  it('天賦折扣仍然扣得到，而且扣在最後', () => {
+    const discounted = {
+      ...at(31, true),
+      curve: { ...abilities.growth_cost.default, discount: 1 },
+    };
+    expect(abilityCost(51, 80, discounted)).toBe(1);
+  });
+
+  /** 上下同一條座標：扣點的借位吃同一份成本（ADR 0033）。 */
+  it('扣點的借位吃同一條曲線', () => {
+    const old = at(43);
+    const cost = abilityCost(64, 80, old); // 基礎 6 + 4 = 10
+    expect(cost).toBe(10);
+    const back = untrain(65, 5, 80, 0, old);
+    expect(back.value).toBe(64);
+    expect(back.carry).toBe(cost - 5);
+  });
+});
+
 describe('abilityCost', () => {
   // 期望值一律從資料推導，不寫死——曲線是平衡參數，調整時測試不該跟著紅。
   const tiers = [...tiersOf().tiers].sort((a, b) => a.from - b.from);

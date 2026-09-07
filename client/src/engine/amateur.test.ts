@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { amateur } from '../data/index.ts';
 import { academyUnlocked, playCups, winsForRank, type CupContext } from './amateur.ts';
-import { amateurRole, starterStaminaBar } from './amateurStats.ts';
+import { amateurRole } from './amateurStats.ts';
 import { World } from './rng.ts';
 
 const flat = (value: number): Record<string, number> =>
@@ -217,14 +217,28 @@ describe('單淘汰的名次、場次與勝敗', () => {
 });
 
 describe('養成期的投手定位', () => {
-  it('體力達標才是先發', () => {
-    const bar = starterStaminaBar('HS');
-    expect(amateurRole('HS', { sta: bar } as never)).toBe('SP');
-    expect(amateurRole('HS', { sta: bar - 1 } as never)).toBe('RP');
+  const par = (stage: 'JHS' | 'HS' | 'U' | 'AMA') => amateur.cups[stage].par;
+  /** 球威（vel/ctl 那一組）拉滿的一個能力表，體力另外指定。 */
+  const arm = (sta: number, stuff = 80) =>
+    ({ sta, vel: stuff, ctl: stuff, swp: stuff, drp: stuff, chg: stuff, gim: stuff }) as never;
+
+  it('體力達到該階段的 par 才走先發那條路', () => {
+    expect(amateurRole('HS', arm(par('HS')))).toBe('SP');
+    expect(amateurRole('HS', arm(par('HS') - 1))).not.toBe('SP');
   });
 
   /** 球賽變長、對手變強，同一個體力值在國中撐得完一場，在高中撐不完。 */
-  it('階段越高，先發門檻越高', () => {
-    expect(starterStaminaBar('HS')).toBeGreaterThan(starterStaminaBar('JHS'));
+  it('階段越高，先發門檻越高——因為 par 越高', () => {
+    expect(par('HS')).toBeGreaterThan(par('JHS'));
+    const sta = (par('JHS') + par('HS')) / 2;
+    expect(amateurRole('JHS', arm(sta))).toBe('SP');
+    expect(amateurRole('HS', arm(sta))).not.toBe('SP');
+  });
+
+  /** 撐不住的人整組落到牛棚，牛棚內部再依球威由高到低排。 */
+  it('體力不足時依球威落進 CP／SU／MR／LR', () => {
+    const weak = par('HS') - 10;
+    expect(amateurRole('HS', arm(weak, 80))).toBe('CP');
+    expect(amateurRole('HS', arm(weak, 20))).toBe('LR');
   });
 });

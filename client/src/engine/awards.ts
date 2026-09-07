@@ -32,7 +32,6 @@ import {
   proPaAt,
   type Baseline,
 } from './metrics.ts';
-import { winnerAbilityFrom } from './rivalPool.ts';
 import type { World } from './rng.ts';
 import { levelOf, type PitcherRole } from './season.ts';
 
@@ -159,11 +158,14 @@ function countingOf(line: BattingLine, stat: string): number | null {
  * 的則往下壓。方向雖然相反，語意是一致的。
  */
 export function winningLine(award: LeaderAward, at: LineInput, roll: number): number | null {
-  const { level, org, spread } = at;
+  const { level } = at;
   const swing = 1 + (roll * 2 - 1) * award.band;
   const games = at.leagueGames;
-  // 有對手池就用推導的 d，沒有就用寫死的——後者正在退場，見 ADR 0017。
-  const d = award.pool === undefined ? award.d : winnerAbilityFrom(spread, org, award.pool);
+  // 門檻線的球員是**能力 75 的那個人**（d = 16），也就是成績錨點的定義。
+  // 這取代了對手池推導（ADR 0017）：對手池算的是「聯盟最強的那個人」，在大聯盟
+  // 推出 d +22.5——那個人每一項能力都 81.5，現實中不存在，而且他已經超過錨點線，
+  // 於是門檻每年都貼著紀錄。錨點線是一個講得出來的人；極值不是。
+  const d = award.d;
 
   if (award.kind === 'rate') {
     if (d === undefined) return null;

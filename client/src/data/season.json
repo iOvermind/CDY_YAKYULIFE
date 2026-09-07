@@ -143,7 +143,7 @@
       "jitter": 2
     },
     "records": {
-      "_note": "每一格：`anchor` 是現實的單季紀錄基準，`per` 是它對應的機會數（安打類看打數 600、四壞與盜壘看打席 720），`weights` 是能力加權，`par_slope` 是 (par - reference_par) 的係數，`divisor` 是能力加權和的除數，`jitter` 是最後的整數抖動幅度。",
+      "_note": "每一格：`錨點 × (機會數/per) × 比值^次方 × 噪音 + 抖動`，比值夾在 ratio_cap。\n**比值 = (加權平均能力 − par + 59) / 75**，也就是「納入的能力都到 75 就打到錨點」——因此 divisor 必然是 75 × 權重和，par_slope 必然等於權重和，兩者都不是自由參數。這條式子來自 docs/成績計算.xlsx。\n**錨點是打得到的**：它取「現實的單季紀錄 ÷ 1.05」，剩下的頭空間留給 ratio_cap(1.05)、噪音(1.06) 與抖動(+3)——紀錄因此會被打破，但要靠運氣，不是靠能力堆到頂。\n**中段由次方壓下去**：兩端釘死之後，曲線的彎度是唯一還可以調的東西，每一格一個數字。這裡曾經改用 offset + 重新解出的 divisor 來壓低端，代價是兩個沒有語意的數字，而且『能力 75 打到錨點』這條線就此消失——錨點變成沒有人到得了的裝飾品。",
       "_order_note": "**計算順序是相依的，不可以重排**：PA → BB → IBB → HBP → SAC → AB → H → HR → 3B → 2B → SO → SB → CS → RBI → R。每一格的上限只引用比它早算的東西，所以 `HR + 3B + 2B ≤ H` 恆成立。順序一變，同一顆種子就會長出另一個人（ADR 0002）。",
       "pa": {
         "_note": "打席不走這個模型——它由 `先發場次 × 棒次 + 替補場次 × 替補打席率` 組出來，anchor 只是拿來對照的現實紀錄。",
@@ -151,61 +151,91 @@
         "jitter": 3
       },
       "h": {
-        "anchor": 260,
+        "anchor": 240,
         "per": 600,
         "on": "ab",
-        "weights": { "con": 1, "eye": 1, "spd": 0.5 },
+        "weights": {
+          "con": 1,
+          "eye": 1,
+          "spd": 0.5
+        },
         "par_slope": 2.5,
-        "divisor": 281.5,
-        "offset": 24.5,
-        "jitter": 3
+        "divisor": 187.5,
+        "jitter": 3,
+        "exponent": 1.72,
+        "_note": "安打。"
       },
       "hr": {
-        "anchor": 80,
+        "anchor": 65,
         "per": 600,
         "on": "ab",
-        "weights": { "con": 1, "pow": 2 },
+        "weights": {
+          "con": 1,
+          "pow": 2
+        },
         "par_slope": 3,
-        "divisor": 178.6,
-        "offset": -142.3,
-        "jitter": 3
+        "divisor": 225,
+        "jitter": 3,
+        "exponent": 5.97,
+        "_note": "全壘打。",
+        "noise": {
+          "min": 0.85,
+          "max": 1.15
+        },
+        "_noise_note": "全壘打自己的噪音範圍，比全域那組（0.94–1.06）寬。破紀錄的頭空間是 `夾子(1.05) × 噪音上緣 × 錨點 + 抖動`：65 × 1.05 × 1.15 + 3 ≈ 81 轟。全壘打是「一年會有一個瘋子」的項目，其他格收斂得快，維持全域範圍。"
       },
       "triple": {
-        "anchor": 30,
+        "anchor": 20,
         "per": 600,
         "on": "ab",
-        "weights": { "pow": 1, "con": 1, "spd": 3 },
-        "par_slope": 5,
-        "divisor": 306.9,
-        "offset": -272.3,
-        "jitter": 3
+        "weights": {
+          "pow": 1,
+          "con": 1,
+          "spd": 4
+        },
+        "par_slope": 6,
+        "divisor": 450,
+        "jitter": 3,
+        "exponent": 14.61,
+        "_note": "三壘打。腳程權重最高（4），而且次方最陡：三壘打不是「比較快就多一點」，是快到某個程度才跑得出來的東西。"
       },
       "double": {
-        "anchor": 50,
+        "anchor": 55,
         "per": 600,
         "on": "ab",
-        "weights": { "con": 1, "spd": 2 },
-        "par_slope": 3,
-        "divisor": 260.6,
-        "offset": -26.4,
-        "jitter": 3
+        "weights": {
+          "con": 1,
+          "spd": 2.5
+        },
+        "par_slope": 3.5,
+        "divisor": 262.5,
+        "jitter": 3,
+        "exponent": 2.68,
+        "_note": "二壘打。腳程吃重（權重 2.5）——長二壘打靠的是跑得到二壘。"
       },
       "bb": {
-        "anchor": 120,
+        "anchor": 100,
         "per": 720,
         "on": "pa",
-        "weights": { "eye": 1 },
+        "weights": {
+          "eye": 1
+        },
         "par_slope": 1,
-        "divisor": 101.4,
-        "offset": -10.3,
-        "jitter": 3
+        "divisor": 75,
+        "jitter": 3,
+        "exponent": 2.3,
+        "_note": "四壞。只看選球。"
       },
       "so": {
         "_note": "三振的能力佔比是**倒過來的**：揮大棒的人多、會打會選的人少，所以 con 與 eye 是負權重。offset 把那個負數推回正的區間，floor 保證再會打的人也三振得到。機會數看的是「出局的那些打數」(AB − H)，不是全部打數。",
         "anchor": 220,
         "per": 600,
         "on": "outs",
-        "weights": { "pow": 1.2, "con": -1, "eye": -0.5 },
+        "weights": {
+          "pow": 1.2,
+          "con": -1,
+          "eye": -0.5
+        },
         "par_slope": 0.3,
         "offset": 112.5,
         "divisor": 134,
@@ -213,15 +243,17 @@
         "jitter": 3
       },
       "sb": {
-        "_note": "盜壘只看腳程，而且有一道**啟動門檻**：`(spd_adj - 35) / 40` 夾在 0 與 1，腳程 35 以下一次都不跑，75 以上滿檔。慢腳不是「盜得少」，是根本不上跑壘板。",
-        "anchor": 80,
+        "_note": "盜壘。**從門檻式改成同一套次方曲線**：以前用 gate_start／gate_span 表達「慢腳根本不上跑壘板」，但那道門檻寫在加權後的單位上，一調權重就整條平移，而且與其他五格是兩種寫法。次方 8.5 表達同一件事——d 值低的人算出來的比值接近 0，只是不再有一道硬邊。",
+        "anchor": 75,
         "per": 720,
         "on": "pa",
-        "weights": { "spd": 1 },
-        "par_slope": 1,
-        "gate_start": 52.9,
-        "gate_span": 51.0,
-        "jitter": 3
+        "weights": {
+          "spd": 1.5
+        },
+        "par_slope": 1.5,
+        "jitter": 3,
+        "exponent": 8.57,
+        "divisor": 112.5
       }
     },
     "cs": {
@@ -234,14 +266,24 @@
     "rbi": {
       "_note": "打點由**打出來的東西**推導，不是由安打數乘一個係數。全壘打權重最高（他至少送自己回來），一壘安打最低。`anchor` 是現實的單季紀錄。結果不低於全壘打數——每一支全壘打至少是一分打點，那是規則不是模型。",
       "anchor": 160,
-      "weights": { "hr": 1.4, "triple": 0.6, "double": 0.4, "single": 0.5 },
+      "weights": {
+        "hr": 1.4,
+        "triple": 0.6,
+        "double": 0.4,
+        "single": 0.5
+      },
       "jitter": 3
     },
     "runs": {
       "_note": "得分同樣由打出來的東西推導，但**除了全壘打以外都要靠腳程回本壘**——所以四壞與非全壘打的長打先加權，再整組乘上腳程係數。全壘打不乘：他自己走回來。結果不低於全壘打數。",
       "anchor": 140,
       "hr_weight": 1.0,
-      "weights": { "triple": 0.873, "double": 0.561, "single": 0.312, "bb": 0.249 },
+      "weights": {
+        "triple": 0.873,
+        "double": 0.561,
+        "single": 0.312,
+        "bb": 0.249
+      },
       "speed_divisor": 75,
       "jitter": 3
     },
@@ -275,7 +317,8 @@
       "_note": "各項的最終隨機波動。窄於養成期——職業一季上百場，樣本數足以收斂。",
       "min": 0.94,
       "max": 1.06
-    }
+    },
+    "_ratio_cap_note": "比值的夾子。**它不是「錨點的上限」，是「能力超過 75 之後還能再多拿多少」**——能力 80 的人算出來的比值超過 1，夾在 1.05 表示靠能力最多打到錨點的 105%。再往上就是噪音與抖動的事了，紀錄從那裡跑出來。"
   },
   "pitching": {
     "_note": "**紀錄錨定模型**，與打者同一個形狀：每一格 = 現實的單季紀錄 × 機會比例 × 能力佔比 × 噪音 + 小整數抖動，夾在 0 與該格的邏輯上限之間。公式的形狀寫在 season.ts，這裡只放數字。",
@@ -298,34 +341,107 @@
       "_raw_note": "**吃的是原始能力，沒有角色折扣。** 折扣是身價的折價，用在升降評價那一側；牛棚內部誰去關門與身價無關，那是球威的排序。",
       "velocity_weight": 0.5,
       "control_weight": 0.25,
-      "pitch_weights": [0.15, 0.06, 0.03, 0.01]
+      "pitch_weights": [
+        0.15,
+        0.06,
+        0.03,
+        0.01
+      ]
     },
     "appearances": {
       "_note": "出賽與先發場次。先發位置是稀缺的——一隊十三個投手只有五個輪值位置。",
-      "rotation_divisor": { "value": 5 },
-      "gs_factor": { "base": 0.8, "per_point": 0.03, "min": 0.3, "max": 1.0 },
+      "rotation_divisor": {
+        "value": 5
+      },
+      "gs_factor": {
+        "base": 0.8,
+        "per_point": 0.03,
+        "min": 0.3,
+        "max": 1.0
+      },
       "_lr_note": "長中繼偶爾遞補先發。他佔的是輪值的殘缺那一塊，不是一個完整的位置。",
       "lr_start_share": 0.3,
       "_reference_games_note": "後援的出賽錨點是照這個球季長度訂的。短季聯盟依比例縮——照抄會讓 120 場的中職出現一年出賽七十場的終結者。",
       "reference_games": 162,
       "relief_games": {
         "_note": "牛棚的出賽數。終結與布局出賽多、局數短；中繼略少；長中繼最少但一次吃得多。",
-        "CP": { "base": 58, "per_point": 1.2, "min": 20, "max": 70 },
-        "SU": { "base": 62, "per_point": 1.2, "min": 20, "max": 75 },
-        "MR": { "base": 52, "per_point": 1.4, "min": 18, "max": 70 },
-        "LR": { "base": 34, "per_point": 1.0, "min": 12, "max": 55 }
+        "CP": {
+          "base": 58,
+          "per_point": 1.2,
+          "min": 20,
+          "max": 70
+        },
+        "SU": {
+          "base": 62,
+          "per_point": 1.2,
+          "min": 20,
+          "max": 75
+        },
+        "MR": {
+          "base": 52,
+          "per_point": 1.4,
+          "min": 18,
+          "max": 70
+        },
+        "LR": {
+          "base": 34,
+          "per_point": 1.0,
+          "min": 12,
+          "max": 55
+        }
       },
       "jitter_games": 3,
-      "jitter_starts": 2
+      "jitter_starts": 3,
+      "_jitter_note": "出賽數與先發數都帶 ±3 的抖動。先發的上限是**輪值容量再加抖動**：一隊五個輪值位置給出 32.4 個先發，但補休與跳過第五號讓王牌多投幾場——2000 年後的單季局數紀錄 266 局就是這樣來的，所以那個上限不能夾死在 33。"
     },
     "innings": {
       "_note": "投球局數依角色各一條式子。`per_start`／`per_relief` 是紀錄錨點對應的場次數，`floor` 是能力佔比的下限——再爛的先發也要吃掉一定的局數，不然輪值就空了。`cap_per_start`／`cap_per_relief` 是單場的物理上限（一場九局、後援吃不了三局以上）。",
       "_outs_note": "算出來的局數會換成**出局數**再存。棒球的原子單位是出局，存小數會生出 29.5 這種不存在的局數——因此局數不先四捨五入，換成出局數時才取整，`.1`／`.2` 自然出得來。",
-      "SP": { "start_anchor": 260, "relief_anchor": 70, "per_start": 35, "per_relief": 65, "floor": 0.2, "cap_per_start": 9, "cap_per_relief": 3 },
-      "CP": { "start_anchor": 0, "relief_anchor": 65, "per_start": 35, "per_relief": 65, "floor": 0.85, "cap_per_start": 9, "cap_per_relief": 2 },
-      "SU": { "start_anchor": 0, "relief_anchor": 65, "per_start": 35, "per_relief": 65, "floor": 0.85, "cap_per_start": 9, "cap_per_relief": 2 },
-      "MR": { "start_anchor": 0, "relief_anchor": 55, "per_start": 35, "per_relief": 65, "floor": 0.7, "cap_per_start": 9, "cap_per_relief": 3 },
-      "LR": { "start_anchor": 240, "relief_anchor": 120, "per_start": 35, "per_relief": 65, "floor": 0.4, "cap_per_start": 9, "cap_per_relief": 4 },
+      "SP": {
+        "start_anchor": 260,
+        "relief_anchor": 70,
+        "per_start": 35,
+        "per_relief": 65,
+        "floor": 0.2,
+        "cap_per_start": 9,
+        "cap_per_relief": 3
+      },
+      "CP": {
+        "start_anchor": 0,
+        "relief_anchor": 65,
+        "per_start": 35,
+        "per_relief": 65,
+        "floor": 0.85,
+        "cap_per_start": 9,
+        "cap_per_relief": 2
+      },
+      "SU": {
+        "start_anchor": 0,
+        "relief_anchor": 65,
+        "per_start": 35,
+        "per_relief": 65,
+        "floor": 0.85,
+        "cap_per_start": 9,
+        "cap_per_relief": 2
+      },
+      "MR": {
+        "start_anchor": 0,
+        "relief_anchor": 55,
+        "per_start": 35,
+        "per_relief": 65,
+        "floor": 0.7,
+        "cap_per_start": 9,
+        "cap_per_relief": 3
+      },
+      "LR": {
+        "start_anchor": 240,
+        "relief_anchor": 120,
+        "per_start": 35,
+        "per_relief": 65,
+        "floor": 0.4,
+        "cap_per_start": 9,
+        "cap_per_relief": 4
+      },
       "jitter": 3
     },
     "decision": {
@@ -333,28 +449,68 @@
       "_role_note": "救援與中繼**不是角色專屬**，只是機率不同：終結者偶爾也拿中繼（比賽情境不由他決定），布局與中繼偶爾也關門。寫死成專屬的年代，牛棚裡人人都是終結者。",
       "_center_note": "勝敗的能力係數**不共用** ability_divisor，而且不是「評價除以除數」的形狀，是 `base + d × per_point`。兩個理由：一、par 球員必須落在勝敗各半——`win × s = loss × (base_loss - s)` 解出 s = 0.533，而 ability_divisor 在 par 給的是 0.787，那會讓能力剛好等於聯盟平均的先發投出 10 勝 5 敗；二、除數形式在高端沒有解析度——把中心壓回 0.533 之後，一個 ERA 2.5 的王牌只剩 .607 的勝率，因為 par 到王牌之間的差距被除數吃掉了。中心與斜率分開，兩件事才調得動。",
       "_slope_note": "斜率由「d = +16 的王牌該有 .700 勝率」反解：W/L = 2.333 → s = 0.781 → 每點 0.0155。",
-      "_anchor_note": "錨點從紀錄的 25／20 下修成 20／16，是為了讓決勝場次的比例落在現實：一個先發大約 62% 的先發場次會留下勝敗，25／20 在 par 會給到 77%。單季 25 勝仍然到得了——那要靠球隊勝率那一乘（強隊 ×1.3），本來就該如此。",
-      "win_anchor": 20,
+      "_anchor_note": "錨點＝**能力 75 的投手在一支勝率五成的球隊**打一整季的量。強隊會往上推（teamFactor＝球隊勝率/0.5），所以 25 勝的錨點在超級強隊可以變成 28 勝以上——紀錄就是從那裡破的。",
+      "win_anchor": 25,
       "loss_anchor": 16,
-      "skill": { "base": 0.533, "per_point": 0.0155, "min": 0.15, "max": 1.05 },
+      "skill": {
+        "base": 0.533,
+        "per_point": 0.0292,
+        "min": 0.15,
+        "max": 1.05,
+        "_per_point_note": "斜率由兩點決定：d=0 是 0.533（勝敗各半），d=+16（能力 75）剛好是 1.0——也就是打到錨點。舊值 0.0155 在 d+16 只有 0.78，於是勝投與救援的錨點永遠是裝飾品，跟打者側 offset 版的病一樣。"
+      },
       "relief_decision_anchor": 8,
-      "save_anchor": 65,
-      "hold_anchor": 40,
+      "save_anchor": 60,
+      "hold_anchor": 35,
       "per_start": 35,
       "per_relief": 65,
       "loss_base": 1.2,
       "loss_floor": 0.2,
       "team_win_reference": 0.5,
-      "save_coefficient": { "SP": 0, "CP": 1.0, "SU": 0.15, "MR": 0.05, "LR": 0 },
-      "hold_coefficient": { "SP": 0, "CP": 0.05, "SU": 1.0, "MR": 0.7, "LR": 0.1 },
+      "save_coefficient": {
+        "SP": 0,
+        "CP": 1.0,
+        "SU": 0.15,
+        "MR": 0.05,
+        "LR": 0
+      },
+      "hold_coefficient": {
+        "SP": 0,
+        "CP": 0.05,
+        "SU": 1.0,
+        "MR": 0.7,
+        "LR": 0.1
+      },
       "jitter_decision": 2,
-      "jitter_relief": 3
+      "jitter_relief": 3,
+      "_hold_note": "中繼的錨點寫 35 而不是 40，因為布局投手一年出賽 75 場、而分母 per_relief 是 65——實際打出來會是 40 左右，那才是「能力 75 的量」。救援沒有這個問題：終結者的救援數會先撞上「可救援的比賽數」那道上限。"
     },
     "records": {
       "_note": "被安打、自責分、四壞、三振、被全壘打。`per` 是紀錄錨點對應的局數。被安打與自責分的能力係數是**倒過來的**（投得越好被打得越少），所以是 `base - slope × 能力佔比`，並各有一道地板——再強的投手也會被打安打。",
-      "hits": { "anchor": 260, "per": 200, "base": 1.4, "slope": 0.8, "floor": 0.55, "cap_per_inning": 3, "jitter": 3 },
-      "er": { "anchor": 140, "per": 200, "base": 1.55, "slope": 1.15, "floor": 0.35, "cap_per_inning": 2, "jitter": 2 },
-      "unearned": { "_note": "非自責的失分。與能力無關——那是野手掉的球。", "anchor": 12, "per": 200, "jitter": 1 },
+      "hits": {
+        "anchor": 260,
+        "per": 200,
+        "base": 1.4,
+        "slope": 0.8,
+        "floor": 0.55,
+        "cap_per_inning": 3,
+        "jitter": 3
+      },
+      "er": {
+        "anchor": 140,
+        "per": 200,
+        "base": 1.55,
+        "slope": 1.15,
+        "floor": 0.35,
+        "cap_per_inning": 2,
+        "jitter": 2
+      },
+      "unearned": {
+        "_note": "非自責的失分。與能力無關——那是野手掉的球。",
+        "anchor": 12,
+        "per": 200,
+        "jitter": 1
+      },
       "bb": {
         "_note": "四壞只看控球，而且是**倒過來**的：控球 75 以上幾乎不保送，越低越接近上限。",
         "floor_anchor": 20,
@@ -371,7 +527,12 @@
         "floor_anchor": 50,
         "range_anchor": 310,
         "per": 240,
-        "weights": { "vel": 1.5, "ctl": 1, "swp": 1.5, "chg": 1 },
+        "weights": {
+          "vel": 1.5,
+          "ctl": 1,
+          "swp": 1.5,
+          "chg": 1
+        },
         "par_slope": 5,
         "divisor": 375,
         "exponent": 3,
@@ -384,8 +545,14 @@
         "range_anchor": 35,
         "per": 200,
         "reference": 75,
-        "deficit_weights": { "ctl": 1.5, "drp": 1.2, "vel": 0.8 },
-        "plus_weights": { "swp": 0.4 },
+        "deficit_weights": {
+          "ctl": 1.5,
+          "drp": 1.2,
+          "vel": 0.8
+        },
+        "plus_weights": {
+          "swp": 0.4
+        },
         "par_slope": -3.1,
         "divisor": 220,
         "jitter": 2
@@ -496,10 +663,10 @@
       "leverage": {
         "_calibration_note": "全部設 1.0 不是因為機制沒做，而是量出來不需要：我們的終結者一季投 77 局（真實約 65），已經足以把他推進 James 的 6–9 分帶——實測王牌先發 16.1、頂尖終結者 8.0、一般中繼 2.9，三個都在靶內。等後援的局數收斂到真實值時，這裡就是補回來的旋鈕。",
         "SP": 1.0,
-   "CP": 1.0,
-   "SU": 1.0,
-   "MR": 1.0,
-   "LR": 1.0
+        "CP": 1.0,
+        "SU": 1.0,
+        "MR": 1.0,
+        "LR": 1.0
       },
       "team_pa_per_game": 38,
       "team_ip_per_game": 9,

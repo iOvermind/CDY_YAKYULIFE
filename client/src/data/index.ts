@@ -169,6 +169,15 @@ export interface AbilitiesData {
   readonly growth_cost: {
     readonly default: GrowthCurve;
     readonly two_way_discount: TwoWayDiscount;
+    /** 年齡附加費：開始老化之後，每一級再多付幾點。 */
+    readonly aging_surcharge: {
+      /** 只對這個能力值以上生效。 */
+      readonly from_ability: number;
+      /** 幾年加一階。 */
+      readonly years_per_step: number;
+      /** 每階加幾點。 */
+      readonly per_step: number;
+    };
   };
   readonly training_dice: {
     /** 鍵為骰數，值為相對權重。 */
@@ -518,11 +527,9 @@ export interface LeaderAward {
    */
   readonly kind: 'rate' | 'counting' | 'shares';
   /**
-   * 對手池代碼。給了就由 `rival_pool` 推導門檻，`d` / `base` 一律忽略。
-   * 見 ADR 0017。
+   * 門檻線的球員比聯盟平均高幾點。**打者側一律是 16**——那是成績錨點的定義
+   * （能力 75），因此「拿到單項王」等於「打出錨點水準的一季」。
    */
-  readonly pool?: string;
-  /** 率型的門檻：相對聯盟平均的能力差。**有 `pool` 的獎不再需要它。** */
   readonly d?: number;
   /** 累積型的門檻，以 reference_games 場的聯盟為準。 */
   readonly base?: number;
@@ -648,13 +655,16 @@ export interface GrowthCurve {
 /** 養成期投手的定位與勝敗設定。 */
 export interface AmateurPitchingExtras {
   readonly role: {
-    readonly starter_min_stamina: Readonly<Record<string, number>>;
-    readonly default_min_stamina: number;
     readonly reliever_innings_factor: { readonly value: number };
   };
   readonly decision: {
-    readonly starter_share: { readonly value: number };
-    readonly reliever_save_share: { readonly value: number };
+    /** 王牌在賽會裡先發球隊幾成的場次。 */
+    readonly starts_per_game: { readonly value: number };
+    /** 一場先發最多投幾局。學生賽事沒有完投。 */
+    readonly max_innings_per_start: { readonly value: number };
+    readonly closer_save_share: { readonly value: number };
+    readonly setup_hold_share: { readonly value: number };
+    readonly middle_hold_share: { readonly value: number };
   };
 }
 
@@ -885,16 +895,26 @@ export interface RecordSpec {
   /** 機會數看哪一個：打數、打席，或「出局的那些打數」。 */
   readonly on?: 'ab' | 'pa' | 'outs';
   readonly weights?: Readonly<Record<string, number>>;
+  /** **必須等於權重和**：能力先平移到基準聯盟，同一個 d 值才會在任何聯盟打出同樣的率。 */
   readonly par_slope?: number;
+  /** **必然是 `75 × 權重和`**：納入的能力都到 75 就打到錨點（見 season.json 的 records._note）。 */
   readonly divisor?: number;
+  /**
+   * 這一格自己的噪音範圍，覆寫 `batting.noise`。
+   *
+   * 破紀錄的頭空間 = `夾子(1.05) × 噪音上緣 + 抖動`。全壘打這種「一年會有一個
+   * 瘋子」的項目可以把噪音拉大，安打這種收斂得快的則不必。省略就用全域那組。
+   */
+  readonly noise?: Range;
   /** 三振專用：把負的能力和推回正區間。 */
   readonly offset?: number;
   /** 三振專用：再會打的人也三振得到。 */
   readonly floor?: number;
-  /** 盜壘專用：腳程低於這個值一次都不跑。 */
-  readonly gate_start?: number;
-  /** 盜壘專用：從門檻到滿檔的跨距。 */
-  readonly gate_span?: number;
+  /**
+   * 比值的次方。**作用在已經正規化的比值上**，因此上限不動（1 的任何次方都是
+   * 1），只有中段被壓下去——與 IBB 的 `exponent` 同一個意思。省略時是 1（線性）。
+   */
+  readonly exponent?: number;
   readonly jitter: number;
 }
 

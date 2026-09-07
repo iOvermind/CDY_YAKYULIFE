@@ -35,9 +35,9 @@
         "side": "batter",
         "stat": "avg",
         "kind": "rate",
-        "pool": "batter",
         "band": 0.12,
-        "min_pa": 350
+        "min_pa": 350,
+        "d": 16
       },
       {
         "code": "obp_king",
@@ -45,9 +45,9 @@
         "side": "batter",
         "stat": "obp",
         "kind": "rate",
-        "pool": "batter",
         "band": 0.12,
-        "min_pa": 350
+        "min_pa": 350,
+        "d": 16
       },
       {
         "code": "hr_king",
@@ -55,9 +55,10 @@
         "side": "batter",
         "stat": "hr",
         "kind": "counting",
-        "pool": "batter",
-        "band": 0.35,
-        "min_pa": 300
+        "band": 0.2,
+        "min_pa": 300,
+        "d": 16,
+        "_band_note": "±20%：門檻在 50–74 轟之間跳（大聯盟）。原本 0.35 是對手池那條線的波動，那條線本身就高得多。"
       },
       {
         "code": "rbi_king",
@@ -65,9 +66,9 @@
         "side": "batter",
         "stat": "rbi",
         "kind": "counting",
-        "pool": "batter",
         "band": 0.2,
-        "min_pa": 300
+        "min_pa": 300,
+        "d": 16
       },
       {
         "code": "steal_king",
@@ -75,9 +76,9 @@
         "side": "batter",
         "stat": "sb",
         "kind": "counting",
-        "pool": "batter",
         "band": 0.2,
-        "min_pa": 300
+        "min_pa": 300,
+        "d": 16
       },
       {
         "code": "strikeout_king",
@@ -97,8 +98,17 @@
         "base": 30,
         "band": 0.2
       },
-      { "code": "hold_king", "name": "中繼王", "side": "pitcher", "stat": "hld", "kind": "counting", "base": 25, "band": 0.2 }
-    ]
+      {
+        "code": "hold_king",
+        "name": "中繼王",
+        "side": "pitcher",
+        "stat": "hld",
+        "kind": "counting",
+        "base": 25,
+        "band": 0.2
+      }
+    ],
+    "_reference_d_note": "門檻線的球員是**能力 75 的那個人**（d = 75 − 59 = 16），也就是成績錨點的定義（見 season.json 的 records._note）。門檻因此自動隨聯盟平均浮動：同一個 d 在中職與大聯盟指的是不同的絕對能力，但都是「這個聯盟裡達到錨點水準的人」。\n這取代了對手池推導（ADR 0017）。對手池算的是「這個聯盟最強的那個人比平均高多少」，在大聯盟推出 d +22.5——**那個人每一項能力都 81.5，現實中不存在**，而且他的 d 已經超過錨點線，於是門檻每年都貼著紀錄。錨點線是一個具體、講得出來的人；對手池的極值不是。"
   },
   "mvp": {
     "code": "mvp",
@@ -108,14 +118,14 @@
     "_two_way_note": "二刀流的投打份額本來就相加，因此他在 MVP 這個獎上有結構性的優勢。那是對的：一個投打都達到聯盟前段的球員，本來就該是那年最有價值的人。",
     "stat": "win_shares",
     "kind": "shares",
-    "pool": "all",
     "band": 0.15,
     "qualify": {
       "_note": "出場量的門檻。再有價值也要先站上場。",
       "starter_min_ip": 120,
       "reliever_min_games": 45,
       "batter_pa_per_game": 3.4
-    }
+    },
+    "d": 16
   },
   "fielding": {
     "_note": "守備獎項。判定看**守備勝率**（守備分相對該守位平均換算而得），不看守備分那個顯示數字——顯示的尺度可以隨時放大縮小，判定不該跟著跑掉。",
@@ -196,18 +206,27 @@
     "side": "pitcher",
     "stat": "era",
     "kind": "rate",
-    "pool": "starter",
     "band": 0.12,
     "requires_role": "SP",
-    "min_ip_equals_games": true
+    "min_ip_equals_games": true,
+    "d": 16
   },
   "aliases": {
     "_note": "**聯盟獨有的獎項名稱。** 同一個獎在不同聯盟有不同的名字——那不只是換皮，那是這個獎在那個聯盟的歷史。鍵是體系代碼，值是獎項代碼到名稱的對照；查不到就用獎項自己的預設名稱。",
     "_scope_note": "只改顯示名稱，判定與計分完全共用同一套規則。新增聯盟時不寫這裡也不會壞，只是沿用預設名。",
-    "NPB": { "pitcher_of_year": "澤村賞" },
-    "KBO": { "pitcher_of_year": "崔東源獎" },
-    "MLB": { "pitcher_of_year": "賽揚獎", "batter_of_year": "漢克阿倫獎" },
-    "ABL": { "mvp": "海姆斯獎" }
+    "NPB": {
+      "pitcher_of_year": "澤村賞"
+    },
+    "KBO": {
+      "pitcher_of_year": "崔東源獎"
+    },
+    "MLB": {
+      "pitcher_of_year": "賽揚獎",
+      "batter_of_year": "漢克阿倫獎"
+    },
+    "ABL": {
+      "mvp": "海姆斯獎"
+    }
   },
   "_two_way_note": "二刀流球員的投手獎項與打擊獎項分開判定，各自對照自己那側的門檻，互不稀釋——同一年拿下年度最佳投手與打擊王是允許的。",
   "_closer_award_merged": "舊的 closer_award 與 titles 裡的 save_king 是同一個獎（legacy 的終結者分支產生的就是「救援王」），已合併到 titles。"

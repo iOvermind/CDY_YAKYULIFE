@@ -546,6 +546,27 @@ describe('職業階段的狀態', () => {
     }
     expect(checked).toBeGreaterThan(0);
   });
+
+  /**
+   * 季末成績卡要帶相對聯盟平均的指標。
+   *
+   * 手機沒有常駐的成績面板（見 app.css 的手機段），OPS+／ERA+ 只剩這張卡講得
+   * 出來——絕對數字讀不出「3.80 在這個聯盟算好還算壞」。
+   */
+  it('季末成績卡帶著 OPS+ 或 ERA+', () => {
+    let checked = 0;
+    for (let i = 0; i < 10; i++) {
+      const game = playToEnd(started({ seed: `plus-${i}` }));
+      const bodies = game.flow.log
+        .filter((e): e is Extract<typeof e, { kind: 'card' }> => e.kind === 'card')
+        .map((c) => c.body);
+      // 打過職業球季的人一定有一張帶著打擊率或防禦率的卡
+      if (!bodies.some((b) => b.includes('打擊率') || b.includes('防禦率'))) continue;
+      checked++;
+      expect(bodies.some((b) => b.includes('OPS+ ') || b.includes('ERA+ '))).toBe(true);
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
 });
 
 describe('定位鎖定', () => {

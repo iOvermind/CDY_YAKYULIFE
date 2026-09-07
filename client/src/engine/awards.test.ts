@@ -9,7 +9,6 @@ import {
   type AwardRecord,
 } from './awards.ts';
 import { proBaseline, proBaselineAt } from './metrics.ts';
-import { winnerAbilityFrom } from './rivalPool.ts';
 import { World } from './rng.ts';
 import type { ProPitchingLine } from './season.ts';
 
@@ -69,13 +68,17 @@ function rate(over: Partial<AwardContext>, code: string, runs = 400): number {
 
 describe('winningLine', () => {
   const batting = titleOf('batting_king');
-  /** 門檻線的 d 不再寫死，是從對手池推出來的——見 ADR 0017。 */
-  const dOf = (a: { pool?: string }, org: string) => winnerAbilityFrom(SPREAD, org, a.pool!);
+  /**
+   * 門檻線的球員是**能力 75 的那個人**（d = 16），也就是成績錨點的定義。
+   * 這取代了對手池推導：那條線算的是「聯盟最強的那個人」，推出來的 d 已經超過
+   * 錨點線，於是門檻每年都貼著紀錄。
+   */
+  const dOf = (a: { d?: number }) => a.d!;
 
   it('波動加在超出聯盟平均的幅度上，不是加在絕對值上', () => {
     const low = winningLine(batting, CPBL, 0)!;
     const high = winningLine(batting, CPBL, 1)!;
-    const target = proBaselineAt('CPBL1', dOf(batting, 'CPBL')).avg;
+    const target = proBaselineAt('CPBL1', dOf(batting)).avg;
     const excess = target - BASE.avg;
     expect(low).toBeCloseTo(BASE.avg + excess * (1 - batting.band), 10);
     expect(high).toBeCloseTo(BASE.avg + excess * (1 + batting.band), 10);
@@ -85,7 +88,7 @@ describe('winningLine', () => {
 
   it('抽到中間值時就是門檻本身', () => {
     expect(winningLine(batting, CPBL, 0.5)).toBeCloseTo(
-      proBaselineAt('CPBL1', dOf(batting, 'CPBL')).avg,
+      proBaselineAt('CPBL1', dOf(batting)).avg,
       10,
     );
   });
@@ -95,8 +98,6 @@ describe('winningLine', () => {
   });
 
   it('累積型門檻依球季場次等比放大', () => {
-    // 只能在同一個 org 內比：盜壘王已接上對手池（ADR 0017），org 不同 →
-    // 競爭者人數不同 → d 不同，跨聯盟的門檻本來就不該是純場次等比。
     const sb = titleOf('steal_king');
     const short = winningLine(sb, CPBL, 0.5)!;
     const long = winningLine(sb, { ...CPBL, leagueGames: MLB_GAMES }, 0.5)!;
@@ -106,11 +107,23 @@ describe('winningLine', () => {
     expect(long / short).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 1);
   });
 
-  it('全壘打王已改由對手池推導，不再是場次的線性放大', () => {
+  /**
+   * 門檻線是「錨點水準的那個人在這個聯盟打一整季」，因此跨聯盟的差別只剩球季
+   * 長度——**d 在每個聯盟都是 16**，它指的是相對那個聯盟平均的高度，不是絕對能力。
+   */
+  it('全壘打王的門檻跨聯盟只差球季長度', () => {
     const hr = titleOf('hr_king');
     const ratio = winningLine(hr, MLB, 0.5)! / winningLine(hr, CPBL, 0.5)!;
-    // 大聯盟對手池更深（30 隊 × 9 人），門檻抬得比單純的場次比例更凶。
-    expect(ratio).toBeGreaterThan(MLB_GAMES / CPBL1_GAMES);
+    expect(ratio).toBeCloseTo(MLB_GAMES / CPBL1_GAMES, 1);
+  });
+
+  /** 錨點水準的一季就是單項王的門檻——這條線把兩個系統釘在一起。 */
+  it('全壘打王的門檻就是「能力 75 的人打一整季」', () => {
+    const hr = titleOf('hr_king');
+    expect(hr.d).toBe(16);
+    const line = winningLine(hr, MLB, 0.5)!;
+    expect(line).toBeGreaterThan(55);
+    expect(line).toBeLessThan(70);
   });
 
   it('防禦率的門檻低於聯盟平均——越低越好', () => {

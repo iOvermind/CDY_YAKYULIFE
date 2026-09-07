@@ -330,16 +330,21 @@ function weightedShifted(spec: RecordSpec, ability: Abilities, par: number): num
   return sum - (spec.par_slope ?? 0) * (par - cfg.batting.reference_par);
 }
 
-/** 一格的能力佔比，夾在 `ratio_cap`，下限由 `floor` 決定。 */
+/**
+ * 一格的能力佔比，夾在 `ratio_cap`，下限由 `floor` 決定。
+ *
+ * 比值的定義是 `(加權平均能力 − par + 59) / 75`——**納入的能力都到 75 就是 1.0，
+ * 也就是打到錨點**。因此 `divisor` 必然是 `75 × 權重和`、`par_slope` 必然等於
+ * 權重和，兩者都不是自由參數（見 season.json 的 records._note）。
+ *
+ * `exponent` 作用在**取完下限、夾上限之前**的比值上，它是兩端釘死之後唯一還能
+ * 調的東西：把中段壓下去，而 1.0 那一點不動（1 的任何次方都是 1）。先夾再取次方
+ * 也會壓中段，但負的比值取小數次方是 NaN——下限得先擋掉。
+ */
 function abilityRatio(spec: RecordSpec, ability: Abilities, par: number): number {
-  const ratio = weightedShifted(spec, ability, par) / (spec.divisor ?? 1);
+  const raw = weightedShifted(spec, ability, par) / (spec.divisor ?? 1);
+  const ratio = Math.pow(Math.max(spec.floor ?? 0, raw), spec.exponent ?? 1);
   return Math.min(cfg.batting.ratio_cap, Math.max(spec.floor ?? 0, ratio));
-}
-
-/** 盜壘的啟動門檻：腳程低於 `gate_start` 一次都不跑，跨過 `gate_span` 之後滿檔。 */
-function gateRatio(spec: RecordSpec, ability: Abilities, par: number): number {
-  const adj = weightedShifted(spec, ability, par);
-  return clamp((adj - (spec.gate_start ?? 0)) / (spec.gate_span ?? 1), 0, 1);
 }
 
 /**
@@ -486,7 +491,22 @@ export function battingCore(
   const b = cfg.batting;
   const r = b.records;
 
-  const bb = anchored(r.bb.anchor, pa / (r.bb.per ?? 1), abilityRatio(r.bb, ability, par), noise(), jit(r.bb.jitter), pa);
+  /**
+   * 這一格的噪音。
+   *
+   * 傳進來的 `noise()` 已經是套用全域範圍之後的倍率，所以覆寫的做法是把它**換算
+   * 回 0–1 的位置**再套自己的範圍——這樣同一顆骰子在兩種範圍下落在同一個相對
+   * 位置，重播與門檻線的一致性才不會壞。
+   */
+  const spread = b.noise.max - b.noise.min;
+  const noiseOf = (spec: { readonly noise?: { readonly min: number; readonly max: number } }) => {
+    const n = noise();
+    if (spec.noise === undefined) return n;
+    const at = spread === 0 ? 0.5 : (n - b.noise.min) / spread;
+    return spec.noise.min + at * (spec.noise.max - spec.noise.min);
+  };
+
+  const bb = anchored(r.bb.anchor, pa / (r.bb.per ?? 1), abilityRatio(r.bb, ability, par), noiseOf(r.bb), jit(r.bb.jitter), pa);
   const ibb = Math.max(0, Math.min(pa - bb, Math.round(ibbOf(pa))));
 
   // 觸身球與犧牲打掛在打席上，不是打數——打數要扣掉它們才算得出來，掛在打數上
@@ -496,20 +516,20 @@ export function battingCore(
 
   const ab = Math.max(0, pa - bb - ibb - hbp - sac);
 
-  const hits = anchored(r.h.anchor, ab / (r.h.per ?? 1), abilityRatio(r.h, ability, par), noise(), jit(r.h.jitter), ab);
+  const hits = anchored(r.h.anchor, ab / (r.h.per ?? 1), abilityRatio(r.h, ability, par), noiseOf(r.h), jit(r.h.jitter), ab);
   // 全壘打夾在安打之內，長打再從剩下的安打裡切——三者相加因此不可能超過 H。
-  const hr = anchored(r.hr.anchor, ab / (r.hr.per ?? 1), abilityRatio(r.hr, ability, par), noise(), jit(r.hr.jitter), hits);
-  const triple = anchored(r.triple.anchor, ab / (r.triple.per ?? 1), abilityRatio(r.triple, ability, par), noise(), jit(r.triple.jitter), hits - hr);
-  const double = anchored(r.double.anchor, ab / (r.double.per ?? 1), abilityRatio(r.double, ability, par), noise(), jit(r.double.jitter), hits - hr - triple);
+  const hr = anchored(r.hr.anchor, ab / (r.hr.per ?? 1), abilityRatio(r.hr, ability, par), noiseOf(r.hr), jit(r.hr.jitter), hits);
+  const triple = anchored(r.triple.anchor, ab / (r.triple.per ?? 1), abilityRatio(r.triple, ability, par), noiseOf(r.triple), jit(r.triple.jitter), hits - hr);
+  const double = anchored(r.double.anchor, ab / (r.double.per ?? 1), abilityRatio(r.double, ability, par), noiseOf(r.double), jit(r.double.jitter), hits - hr - triple);
   const single = hits - hr - triple - double;
 
   // 三振的機會數是「出局的那些打數」——安打與三振加起來不可能超過打數。
   const outs = Math.max(0, ab - hits);
-  const so = anchored(r.so.anchor, outs / (r.so.per ?? 1), abilityRatio(r.so, ability, par), noise(), jit(r.so.jitter), outs);
+  const so = anchored(r.so.anchor, outs / (r.so.per ?? 1), abilityRatio(r.so, ability, par), noiseOf(r.so), jit(r.so.jitter), outs);
 
   // 盜壘的上限是「站上壘包而且還在跑壘」的次數：全壘打不算，他直接回本壘了。
   const onBase = hits + bb + ibb + hbp;
-  const sb = anchored(r.sb.anchor, pa / (r.sb.per ?? 1), gateRatio(r.sb, ability, par), noise(), jit(r.sb.jitter), Math.max(0, onBase - hr));
+  const sb = anchored(r.sb.anchor, pa / (r.sb.per ?? 1), abilityRatio(r.sb, ability, par), noiseOf(r.sb), jit(r.sb.jitter), Math.max(0, onBase - hr));
   const spdAdj = (ability['spd'] ?? 0) - (par - b.reference_par);
   const csRate = b.cs.base - b.cs.per_ability * Math.min(1, spdAdj / b.cs.divisor);
   const cs = Math.max(0, Math.min(sb, Math.round(sb * csRate * noise()) + jit(b.cs.jitter)));
@@ -659,12 +679,23 @@ export function pitcherRole(
   level: string,
   standards: LeagueStandards | null = null,
 ): PitcherRole {
+  return pitcherRoleAt(ability, leagueStandardOf(standards, level).par, cfg.pitching.role.starter_sta_min);
+}
+
+/**
+ * 同一套判定，但直接餵 par 與體力門檻。
+ *
+ * 養成期用得到：那邊沒有聯盟層級可查，par 掛在賽事上（`amateur.cups[stage].par`），
+ * 而體力門檻就是那個 par——學生球隊的先發輪值本來就是「撐得住這個級別的比賽」。
+ * 職業那邊的體力門檻則是一個固定值（`starter_sta_min`），不隨聯盟浮動：撐不了
+ * 一百五十局就是撐不了，跟他在幾軍無關。
+ */
+export function pitcherRoleAt(ability: Abilities, par: number, staminaBar: number): PitcherRole {
   const r = cfg.pitching.role;
-  const par = leagueStandardOf(standards, level).par;
 
   // 兩條路都比**原始能力**，不比帶著角色折扣的評價。折扣是身價、是升降與留隊那
   // 一側的判斷，拿它跟聯盟 par 比大小等於拿兩把不同的尺量同一件事。
-  if ((ability['sta'] ?? 0) >= r.starter_sta_min) {
+  if ((ability['sta'] ?? 0) >= staminaBar) {
     return pitcherStuff(ability, 'SP') >= par * r.starter_line ? 'SP' : 'LR';
   }
   // **牛棚內部用牛棚分**，不是投手評價：問的是「他適不適合關門」而不是「他有多好」
@@ -758,8 +789,13 @@ export function proPitchingLine(
   let starts = 0;
   let games = 0;
   if (role === 'SP') {
-    // **夾在輪值容量內**：一隊十三個投手只有五個輪值位置，抖動不該推破那件事。
-    starts = clampInt(Math.round(slots * share) + jit(app.jitter_starts), Math.ceil(slots));
+    // **夾在輪值容量再加抖動之內**：一隊五個輪值位置給出 32.4 個先發，但補休與
+    // 跳過第五號讓王牌多投幾場。夾死在容量本身的話，單季局數的紀錄（2000 年後
+    // 266 局）就永遠摸不到——那該是很難，不是不可能。
+    starts = clampInt(
+      Math.round(slots * share) + jit(app.jitter_starts),
+      Math.ceil(slots) + app.jitter_starts,
+    );
     games = starts;
   } else {
     // 長中繼偶爾遞補先發；純牛棚的三階一場都不先發。

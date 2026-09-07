@@ -11,6 +11,9 @@
 
 import { amateur, type AmateurStage } from '../data/index.ts';
 import type { Abilities } from './rating.ts';
+// season.ts 對這個檔案只有型別依賴（`import type`），編譯後會被抹掉，因此這條
+// 反向的實值 import 不會形成執行期的循環。定位的判定只該有一份。
+import { pitcherRoleAt, type PitcherRole } from './season.ts';
 import type { World } from './rng.ts';
 
 /** 一條率的設定：與對手同水準時是 base，每高一點加 per_point。 */
@@ -266,19 +269,18 @@ export function battingLine(
 }
 
 /**
- * 這個階段的先發體力門檻。
+ * 這個球員在這個階段的定位。**與職業同一套五個定位、同一條判定路徑**
+ * （`pitcherRoleAt`）：體力撐得住就走先發那條路，撐不住就整組落到牛棚，牛棚
+ * 內部再依球威由高到低比對。
  *
- * 國高中的球隊人數有限，體力撐得住的人自然被排進先發輪值。門檻隨階段提高
- * 是因為球賽變長、對手變強——同一個體力值在國中撐得完一場，在高中撐不完。
+ * par 與體力門檻都用該階段賽事的 par。這裡原本另外有一張 `starter_min_stamina`
+ * （26/38/44/48），但它跟 par（28/38/46/48）幾乎重疊——同一件事寫兩次，以後調
+ * par 還得記得回頭改另一張，遲早分岔。門檻隨階段提高的道理仍然成立，只是那個
+ * 道理本來就寫在 par 裡：球賽變長、對手變強。
  */
-export function starterStaminaBar(stage: AmateurStage): number {
-  const r = amateur.amateur_stats.pitching.role;
-  return r.starter_min_stamina[stage] ?? r.default_min_stamina;
-}
-
-/** 這個球員在這個階段是先發還是後援。 */
-export function amateurRole(stage: AmateurStage, ability: Abilities): 'SP' | 'RP' {
-  return (ability['sta'] ?? 0) >= starterStaminaBar(stage) ? 'SP' : 'RP';
+export function amateurRole(stage: AmateurStage, ability: Abilities): PitcherRole {
+  const par = amateur.cups[stage].par;
+  return pitcherRoleAt(ability, par, par);
 }
 
 /**
@@ -301,11 +303,20 @@ export function pitchingLine(
   const noise = () => cfg.noise.min + rng.next() * (cfg.noise.max - cfg.noise.min);
 
   const role = amateurRole(stage, ability);
+  const dec = cfg.decision;
   const ipPerGame = rateOf(cfg.innings_per_game, ability, par);
-  // 後援投手不是每場都上，上了也投不久。
-  const share = role === 'SP' ? 1 : cfg.role.reliever_innings_factor.value;
-  // 直接算出局數——那才是棒球的原子單位，而且加總是精確的整數運算。
-  const outs = Math.round(games * ipPerGame * share * 3);
+
+  // **先發不是場場先發。** 連續兩天的賽程沒有人能扛下球隊的每一場，五場的賽會
+  // 大約先發三場；而一場先發最多投 `max_innings_per_start` 局——學生賽事有投球
+  // 局數限制與隔日再戰的現實，職業那種完投不適用。這兩條沒有的話，一個體力
+  // 60 的高中生會在一週內先發五場、每場六局多，那是不存在的賽程。
+  const starts = role === 'SP' ? Math.max(1, Math.ceil(games * dec.starts_per_game.value)) : 0;
+  const appearances = role === 'SP' ? Math.min(games, starts) : games;
+  const outs =
+    role === 'SP'
+      ? Math.round(appearances * Math.min(ipPerGame, dec.max_innings_per_start.value) * 3)
+      : // 後援投手不是每場都上，上了也投不久。
+        Math.round(games * ipPerGame * cfg.role.reliever_innings_factor.value * 3);
   const ip = outs / 3;
 
   const k9 = Math.max(0, rateOf(cfg.k_per_nine, ability, par) + noise());
@@ -321,24 +332,33 @@ export function pitchingLine(
   const h9 = Math.max(0, rateOf(cfg.hits_per_nine, ability, par) + noise());
   const er = Math.round((ip * era) / 9);
 
-  // 單淘汰的勝敗：贏了幾場、輸了幾場全由名次決定，不擲骰。先發扛大部分的
-  // 勝敗，後援則把球隊的勝場轉換成救援成功。
-  const dec = cfg.decision;
+  // 單淘汰的勝敗：贏了幾場、輸了幾場全由名次決定，不擲骰。
+  //
+  // 先發的勝敗按**他先發了球隊的幾成場次**分配——先發場數現在是明確算出來的，
+  // 那個比例本身就是答案，不必再另給一個固定係數。牛棚則各拿各的：終結者換
+  // 救援成功、布局與中繼換中繼成功，長中繼兩樣都沒有——他上場多半是比分已經
+  // 拉開的時候。
   const wonGames = teamWins ?? 0;
   const lostGames = teamWins === null ? 0 : Math.max(0, games - teamWins);
-  const wins = role === 'SP' ? Math.round(wonGames * dec.starter_share.value) : 0;
-  const losses = role === 'SP' ? Math.round(lostGames * dec.starter_share.value) : 0;
-  const saves = role === 'RP' ? Math.round(wonGames * dec.reliever_save_share.value) : 0;
+  const startShare = games === 0 ? 0 : starts / games;
+  const wins = Math.round(wonGames * startShare);
+  const losses = Math.round(lostGames * startShare);
+  const saves = role === 'CP' ? Math.round(wonGames * dec.closer_save_share.value) : 0;
+  const holds =
+    role === 'SU'
+      ? Math.round(wonGames * dec.setup_hold_share.value)
+      : role === 'MR'
+        ? Math.round(wonGames * dec.middle_hold_share.value)
+        : 0;
 
   return {
-    games,
+    games: appearances,
     outs,
-    starts: role === 'SP' ? games : 0,
+    starts,
     wins,
     losses,
     saves,
-    // 養成期沒有中繼這個角色——單淘汰的比賽只有先發與救火。
-    holds: 0,
+    holds,
     hits: Math.round((ip * h9) / 9),
     runs: Math.round(er * cfg.runs_per_earned_run.value),
     er,

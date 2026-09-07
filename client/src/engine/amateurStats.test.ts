@@ -118,6 +118,61 @@ describe('pitchingLine', () => {
   it('局數與場次成正比', () => {
     expect(pit('a', 45, 18).outs).toBeGreaterThan(pit('a', 45, 6).outs);
   });
+
+  /**
+   * **先發不是場場先發。** 連續兩天的賽程沒有人扛得下球隊的每一場；而一場先發
+   * 最多投六局——學生賽事有投球局數限制與隔日再戰的現實，職業那種完投不適用。
+   * 這兩條沒有的話，一個高中生會在一週內先發五場、每場六局多。
+   */
+  describe('先發的場數與局數', () => {
+    const dec = amateur.amateur_stats.pitching.decision;
+    const ace = { ...flat(70), sta: 70 };
+
+    it('先發場數只佔球隊場次的一部分', () => {
+      const line = pitchingLine(new World('a'), 'HS', ace, 5);
+      expect(line.starts).toBe(Math.ceil(5 * dec.starts_per_game.value));
+      expect(line.starts).toBeLessThan(5);
+      // 出賽場數等於先發場數：沒先發的那幾場他不在場上。
+      expect(line.games).toBe(line.starts);
+    });
+
+    it('一場先發最多投設定的局數', () => {
+      for (const games of [1, 3, 5]) {
+        const line = pitchingLine(new World('a'), 'HS', ace, games);
+        const perStart = line.outs / 3 / line.starts;
+        expect(perStart).toBeLessThanOrEqual(dec.max_innings_per_start.value + 0.01);
+      }
+    });
+
+    it('至少先發一場——排得進輪值的人不會整個賽會沒上場', () => {
+      expect(pitchingLine(new World('a'), 'HS', ace, 1).starts).toBe(1);
+    });
+  });
+
+  /** 牛棚各拿各的：終結者換救援成功，布局與中繼換中繼成功，長中繼兩樣都沒有。 */
+  describe('牛棚的救援與中繼', () => {
+    /** 體力不足以先發，球威決定他落在牛棚的哪一階。 */
+    const relief = (stuff: number) => ({ ...flat(stuff), sta: 20 });
+    const line = (stuff: number) => pitchingLine(new World('a'), 'HS', relief(stuff), 5, 4);
+
+    it('終結者拿救援，不拿中繼', () => {
+      const cp = line(80);
+      expect(cp.starts).toBe(0);
+      expect(cp.saves).toBeGreaterThan(0);
+      expect(cp.holds).toBe(0);
+    });
+
+    it('球威不足的落到長中繼，救援與中繼都沒有', () => {
+      const lr = line(15);
+      expect(lr.saves).toBe(0);
+      expect(lr.holds).toBe(0);
+    });
+
+    it('後援不拿勝敗——勝敗跟著先發場數走', () => {
+      expect(line(80).wins).toBe(0);
+      expect(line(80).losses).toBe(0);
+    });
+  });
 });
 
 describe('playAmateurStats', () => {

@@ -40,6 +40,7 @@ import {
   addBatting,
   addPitching,
   fmtInnings,
+  amateurRole,
   playAmateurStats,
   type BattingLine,
   type PitchingLine,
@@ -87,11 +88,14 @@ import {
   type AchievementResult,
 } from './achievements.ts';
 import {
+  baselineAt,
   battingShares,
   fieldingReplacementWinPct,
   fieldingShares,
   lossPenalty,
   pitchingShares,
+  eraPlus,
+  opsPlus,
   proBaseline,
   sumShares,
   winPct,
@@ -138,6 +142,7 @@ import {
   tournamentOf,
   tournamentPar,
   tournamentScore,
+  winsMvp,
   unlocksAce,
   unlocksTaiwan,
   type Tournament,
@@ -282,8 +287,12 @@ export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Se
  *    新規則只掉半級——重播不會壞，但生涯會長成另一個樣子。
  * 4：守位系統走遍三個階段（ADR 0037）。升守位變成一個可回答的選項，養成期每年
  *    都可能插進一次——舊日誌的選項序號從那一刻起整串對不上。
+ * 5：養成期的投手定位改用職業那一套（SP／CP／SU／MR／LR），先發場數與單場局數
+ *    都加了上限。選項序號沒有變，但**同一份日誌會長出不同的成績**——先發場數
+ *    少了一半、牛棚多出中繼成功，獎項與里程碑跟著移動。重播不會壞，得到的卻是
+ *    另一段生涯，因此照樣進版。
  */
-export const ENGINE_VERSION = 4;
+export const ENGINE_VERSION = 5;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
@@ -368,7 +377,12 @@ export interface PlayerState {
   readonly position: string | null;
   /** 守位的中文名。 */
   readonly positionName: string | null;
-  /** 現在的投手定位（SP／CP／SU／MR／LR）。進職業之前沒有牛棚分工，為 null。 */
+  /**
+   * 現在的投手定位（SP／CP／SU／MR／LR）。
+   *
+   * **職業期是登錄值、養成期是現算值。** 兩者的來源不同是刻意的：職業有定位
+   * 會議，那是一個玩家答應過的登錄；養成期沒有，位置就是體力與球威當下的樣子。
+   */
   readonly pitcherRole: PitcherRole | null;
   /** 這一季走不走野手側。純投手為 false，他們的守位欄只是打席的落點。 */
   readonly playsField: boolean;
@@ -826,9 +840,13 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: this.#fieldPosition,
       positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),
-      // **已登錄的**定位，不是現算的。與守位同一個立場：它在定位會議上決定，
-      // 之後整季不變——現算會讓玩家拒絕過的升遷在畫面上偷偷生效。
-      pitcherRole: this.#pitcherRole,
+      // 職業期是**已登錄的**定位，不是現算的。與守位同一個立場：它在定位會議
+      // 上決定，之後整季不變——現算會讓玩家拒絕過的升遷在畫面上偷偷生效。
+      //
+      // 養成期沒有定位會議，因此是**現算的**：學生球隊的位置不是誰宣告的，是
+      // 體力與球威當下的樣子（見 amateurRole）。點下體力越過該階段的 par，
+      // 記分板上的標籤當場從牛棚跳進輪值——那個即時回饋正是玩家需要的資訊。
+      pitcherRole: this.#pro === null ? amateurRole(this.#stage, this.#ability) : this.#pitcherRole,
       playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
@@ -1160,11 +1178,11 @@ export class Game {
           {
             id: 'event:bold',
             label: '全力一搏',
-            note: `成功率 ${chances.bold}%｜幅度最大，受傷風險也最高`,
+            note: `成功率 ${pct(chances.bold)}%｜幅度最大，受傷風險也最高`,
             role: 'warn',
           },
-          { id: 'event:normal', label: '照常執行', note: `成功率 ${chances.normal}%`, role: 'main' },
-          { id: 'event:safe', label: '保守應對', note: `成功率 ${chances.safe}%｜幅度最小` },
+          { id: 'event:normal', label: '照常執行', note: `成功率 ${pct(chances.normal)}%`, role: 'main' },
+          { id: 'event:safe', label: '保守應對', note: `成功率 ${pct(chances.safe)}%｜幅度最小` },
         ],
       },
       (choice) => {
@@ -1216,7 +1234,7 @@ export class Game {
 
     if (outcome.injury > 0) {
       this.#injuryRisk += outcome.injury;
-      lines.push(`本季受傷機率 <span class="dn">+${outcome.injury}%</span>`);
+      lines.push(`本季受傷機率 <span class="dn">+${pct(outcome.injury)}%</span>`);
     }
 
     // 非能力的特殊效果目前只實作觸發特性；禁賽、聲望等要等對應系統做出來。
@@ -1308,6 +1326,8 @@ export class Game {
       school: this.#school,
       // 當下就存：守位會隨移防改變，引退時回頭問只會拿到最後一年的答案。
       position: this.#fieldPosition,
+      // 定位同理，而且它每年都會變——體力練上去就從牛棚走進輪值。
+      pitcherRole: line.pitching === null ? null : amateurRole(this.#stage, this.#ability),
       batting: line.batting,
       pitching: line.pitching,
     });
@@ -2044,6 +2064,12 @@ export class Game {
       ),
     );
 
+    // 相對聯盟平均的兩個指標。手機版沒有常駐的成績面板（只有這張卡），所以
+    // 對照聯盟平均這件事必須由卡片自己講；桌面的面板照舊也算一份。
+    const seasonBase = proBaseline(pro.level);
+    const relERA = line.pitching === null ? null : eraPlus(line.pitching, seasonBase);
+    const relOPS = line.batting === null ? null : opsPlus(line.batting, seasonBase);
+
     const parts: string[] = [];
     if (pro.tradedFrom !== null && stints.length === 2) {
       // 兩段各自的出賽量說明了大限落在哪裡。合計在下面照常列出——**逐年表要
@@ -2061,7 +2087,10 @@ export class Game {
           `${p.starts > 0 ? `・先發 ${p.starts}` : ''}・${fmtInnings(p.outs)} 局` +
           `・${p.wins} 勝 ${p.losses} 敗${p.saves > 0 ? ` ${p.saves} 救援` : ''}` +
           `${p.holds > 0 ? ` ${p.holds} 中繼` : ''}` +
-          `・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}`,
+          `・防禦率 <b class="hl">${p.era.toFixed(2)}</b>・奪三振 ${p.so}` +
+          // 絕對數字讀不出「這一季在這個聯盟算好還算壞」——3.80 在投手聯盟是
+          // 平庸、在打者聯盟是好投。相對值只在有值時附上（沒投滿就沒有）。
+          `${relERA === null ? '' : `・ERA+ ${relERA}`}`,
       );
     }
     if (line.batting !== null) {
@@ -2071,7 +2100,8 @@ export class Game {
           `・打擊率 <b class="hl">${fmtAvg(b.avg)}</b>／${fmtAvg(b.obp)}／${fmtAvg(b.slg)}` +
           `・${b.hr} 轟 ${b.rbi} 打點${b.sb > 0 ? `・盜壘 ${b.sb}` : ''}` +
           `${b.ibb > 0 ? `・故意四壞 ${b.ibb}` : ''}` +
-          `${def === null ? '' : `・守備 ${def > 0 ? '+' : ''}${def}`}`,
+          `${def === null ? '' : `・守備 ${def > 0 ? '+' : ''}${def}`}` +
+          `${relOPS === null ? '' : `・OPS+ ${relOPS}`}`,
       );
     }
 
@@ -2152,7 +2182,11 @@ export class Game {
     this.#seasonInjury = result.kind === 'none' ? null : result.kind;
 
     if (result.kind === 'none') {
-      this.flow.card('info', '健康回報', `本季平安出賽。<span class="sub">（受傷機率 ${chance}%）</span>`);
+      this.flow.card(
+        'info',
+        '健康回報',
+        `本季平安出賽。<span class="sub">（受傷機率 ${pct(chance)}%）</span>`,
+      );
       return;
     }
 
@@ -2301,7 +2335,7 @@ export class Game {
             {
               id: 'love:confess',
               label: '找個機會告白',
-              note: `成功率 ${chance}%｜${rank === null ? '今年沒有大賽成績' : `今年打到${rank}`}｜${desc}`,
+              note: `成功率 ${pct(chance)}%｜${rank === null ? '今年沒有大賽成績' : `今年打到${rank}`}｜${desc}`,
               role: 'main',
             },
             { id: 'love:wait', label: '再說吧，先專心打球' },
@@ -2672,7 +2706,7 @@ export class Game {
           {
             id: 'love:apologise',
             label: '道歉，求她再給一次機會',
-            note: `成功率 ${c.apology_success}%｜失敗要再扣能力並${married ? '離婚' : '分手'}`,
+            note: `成功率 ${pct(c.apology_success)}%｜失敗要再扣能力並${married ? '離婚' : '分手'}`,
             role: 'main',
           },
           { id: 'love:accept', label: married ? '簽字離婚' : '坦然分手', role: 'warn' },
@@ -2971,12 +3005,20 @@ export class Game {
     if (isPodium(result.rankIndex)) this.#intlPodiums++;
 
     const line = this.#accumulateNationalStats(result.rankIndex);
+    // MVP 現在要看成績，因此判定排在成績生成之後。骰子仍然在 playTournament
+    // 裡擲、擲同樣的次數——移動的是判定，不是抽取。
+    const mvp = winsMvp({
+      roll: result.mvpRoll,
+      rank: result.rank,
+      winPct: this.#intlWinPct(line),
+      traits: this.#traits,
+    });
     this.#intlSeasons.push({
       year: this.#year,
       age: this.#age,
       tournament: tournament.name,
       rank: result.rank,
-      mvp: result.mvp,
+      mvp,
       batting: line.batting,
       pitching: line.pitching,
     });
@@ -2992,11 +3034,11 @@ export class Game {
       this.#addHonor(joinName(intl.honor_prefix, tournament.name, result.rank));
     }
     let mvpLine = '';
-    if (result.mvp) {
+    if (mvp) {
       this.#addHonor(joinName(intl.honor_prefix, tournament.name, intl.mvp.suffix));
       mvpLine = `你被選為<b class="hl">賽會 ${intl.mvp.suffix}</b>！`;
     }
-    this.#intlScore += tournamentScore(result.rank, result.mvp);
+    this.#intlScore += tournamentScore(result.rank, mvp);
 
     this.flow.card(
       result.rankIndex <= 1 ? 'gold' : 'info',
@@ -3021,6 +3063,26 @@ export class Game {
         '永遠把國家榮耀放在比職涯更高的位子。台灣球迷心中永遠有一幅畫：你在球場上向全場比劃著胸口，那是你心中最榮耀的地方。',
       );
     }
+  }
+
+  /**
+   * 這一屆的勝率：**投打兩側的份額相加**再算。
+   *
+   * 二刀流是一個人，拆成兩個半個人去比會讓他兩邊都不夠看。基準線用賽會自己的
+   * par——MVP 問的是「這屆賽會裡誰最好」，那是一場比較，全場必須同一條線；跟著
+   * 誰的母聯盟走的話，語意就變成「某些人的 MVP 比較便宜」（同 ADR 0017 的立場）。
+   */
+  #intlWinPct(line: {
+    batting: BattingLine | null;
+    pitching: PitchingLine | null;
+  }): number | null {
+    if (line.batting === null && line.pitching === null) return null;
+    const base = baselineAt(tournamentPar());
+    const shares = sumShares(
+      line.batting === null ? { win: 0, loss: 0 } : battingShares(line.batting, base),
+      line.pitching === null ? { win: 0, loss: 0 } : pitchingShares(line.pitching, base),
+    );
+    return shares.win + shares.loss === 0 ? null : winPct(shares);
   }
 
   /**
@@ -5043,7 +5105,7 @@ export class Game {
    */
   #poolPriceOf(key: AbilityKey): number {
     const current = this.#ability[key] ?? 0;
-    const cost = abilityCost(current, this.#ceilingOf(key), growthCurve(this.isTwoWay));
+    const cost = abilityCost(current, this.#ceilingOf(key), growthCurve(this.isTwoWay, this.#age));
     return Math.max(1, cost - (this.#carry[key] ?? 0));
   }
 
@@ -5096,7 +5158,7 @@ export class Game {
     const dbgBefore = this.#ability[key] ?? 0;
     const dbgCarry = this.#carry[key] ?? 0;
     const dbgCeiling = this.#ceilingOf(key);
-    const dbgCurve = growthCurve(this.isTwoWay);
+    const dbgCurve = growthCurve(this.isTwoWay, this.#age);
     const dbgCost = abilityCost(dbgBefore, dbgCeiling, dbgCurve);
     this.#applyPoints(key, value, { silent: true });
     console.info(
@@ -5215,7 +5277,7 @@ export class Game {
       points,
       this.#ceilingOf(key),
       this.#carry[key] ?? 0,
-      growthCurve(this.isTwoWay),
+      growthCurve(this.isTwoWay, this.#age),
       this.#ceilingBonus[key] ?? 0,
     );
     this.#ability[key] = result.value;
@@ -5245,7 +5307,7 @@ export class Game {
       points,
       this.#ceilingOf(key),
       this.#carry[key] ?? 0,
-      growthCurve(this.isTwoWay),
+      growthCurve(this.isTwoWay, this.#age),
     );
     this.#ability[key] = result.value;
     this.#carry[key] = result.carry;
@@ -5267,7 +5329,7 @@ export class Game {
       this.#ability[key] ?? 0,
       this.#ceilingOf(key),
       carry,
-      growthCurve(this.isTwoWay),
+      growthCurve(this.isTwoWay, this.#age),
     );
     const head = `<span class="${points >= 0 ? 'up' : 'dn'}">${points > 0 ? '+' : ''}${points} 點</span>`;
 
@@ -5307,7 +5369,7 @@ export class Game {
       value,
       ceiling,
       carry,
-      growthCurve(this.isTwoWay),
+      growthCurve(this.isTwoWay, this.#age),
       this.#ceilingBonus[key] ?? 0,
     );
 
@@ -5346,6 +5408,17 @@ export class Game {
 /** 蓄力槽的短寫法：正的是存，負的是欠。 */
 function slotText(n: number): string {
   return n < 0 ? `欠 ${-n}` : `蓄力 ${n}`;
+}
+
+/**
+ * 機率一律顯示整數。
+ *
+ * `15.399999999999999%` 那條尾巴是浮點運算的雜訊，不是精度——受傷機率是十幾條
+ * 加減乘出來的，小數點後那十幾位沒有任何意義，只會讓一張資訊卡看起來像當機。
+ * 需要小數的地方（名人堂得票率）自己 `toFixed`，不走這裡。
+ */
+function pct(v: number): number {
+  return Math.round(v);
 }
 
 /** 打擊率的棒球慣例寫法：去掉個位數的 0，例如 .333。 */

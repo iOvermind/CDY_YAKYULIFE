@@ -63,7 +63,18 @@ export function proBaseline(level: string): Baseline {
  * 就是一個剛好卡在降級線上的球員。生涯評價分的零點定在那裡（ADR 0003）。
  */
 export function proBaselineAt(level: string, d: number): Baseline {
-  const line = proLineAt(d, 600, levelOf(level).par);
+  return baselineAt(levelOf(level).par, d, levelOf(level).name);
+}
+
+/**
+ * 直接指定 par 的基準線。
+ *
+ * 國際賽用得到：它沒有自己的聯盟層級，par 掛在賽會上（`amateur.json` 的
+ * `international.stats.par`），而成績本來就是拿那個 par 生成的。用母聯盟的 par
+ * 去量它，只有吃 par 的那一格（故意四壞／恐懼值）會偏，量不大但沒有理由留著。
+ */
+export function baselineAt(par: number, d = 0, label = ''): Baseline {
+  const line = proLineAt(d, 600, par);
   return build(
     line.pa,
     line.ab,
@@ -74,7 +85,7 @@ export function proBaselineAt(level: string, d: number): Baseline {
     line.triple,
     line.hr,
     eraAt(d),
-    levelOf(level).name,
+    label,
   );
 }
 

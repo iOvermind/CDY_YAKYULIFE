@@ -230,6 +230,27 @@ describe('summarizeCareer', () => {
     expect(s.bestTier).toBe(cfg.tier_thresholds.values.length);
   });
 
+  it('國際賽通算把每一屆加起來，而且不混進聯盟通算', () => {
+    const intl = [
+      { year: 2031, age: 25, tournament: '世界棒球經典賽', rank: '冠軍', mvp: false,
+        batting: bat({ games: 7, pa: 30, hits: 10, hr: 2 }), pitching: null },
+      { year: 2035, age: 29, tournament: '世界十二強', rank: '亞軍', mvp: true,
+        batting: bat({ games: 6, pa: 25, hits: 8, hr: 1 }), pitching: null },
+    ];
+    const s = summarizeCareer([season()], [], 0, [], 0, intl);
+    expect(s.internationalTotal.batting?.games).toBe(13);
+    expect(s.internationalTotal.batting?.hr).toBe(3);
+    expect(s.internationalTotal.pitching).toBeNull();
+    // 聯盟那一份只有那一個球季，國際賽沒有滲進去。
+    expect(s.topTotal.batting?.games).toBe(season().batting?.games);
+  });
+
+  it('沒打過國際賽就沒有通算', () => {
+    const s = summarizeCareer([season()], []);
+    expect(s.internationalTotal.batting).toBeNull();
+    expect(s.internationalTotal.pitching).toBeNull();
+  });
+
   /** 這是與 legacy 一致的關鍵決定。 */
   it('二軍成績不進評價分，但照樣通算顯示', () => {
     const withMinor = summarizeCareer(

@@ -13,6 +13,7 @@ import {
   tournamentInnings,
   tournamentOf,
   tournamentScore,
+  winsMvp,
   unlocksAce,
   unlocksTaiwan,
 } from './national.ts';
@@ -117,12 +118,48 @@ describe('一屆賽會', () => {
         const r = playTournament(world, { overall: 70, traits });
         if (isPodium(r.rankIndex)) {
           podium++;
-          if (r.mvp) mvp++;
+          if (winsMvp({ roll: r.mvpRoll, rank: r.rank, winPct: 0.5, traits })) mvp++;
         }
       }
       return podium === 0 ? 0 : mvp / podium;
     };
     expect(rate(new Set([cfg.mvp.clutch_trait]))).toBeGreaterThan(rate(none));
+  });
+
+  describe('MVP：名次開門、成績決定機率', () => {
+    const mvpRate = (rank: string, pct: number | null, traits = none) => {
+      let hit = 0;
+      const n = 4000;
+      for (let i = 0; i < n; i++) {
+        if (winsMvp({ roll: (i / n) * 100, rank, winPct: pct, traits })) hit++;
+      }
+      return hit / n;
+    };
+
+    it('打得越好機率越高', () => {
+      expect(mvpRate('冠軍', 0.75)).toBeGreaterThan(mvpRate('冠軍', 0.5));
+      expect(mvpRate('冠軍', 0.5)).toBeGreaterThan(mvpRate('冠軍', 0.315));
+    });
+
+    it('名次越高機率越高', () => {
+      expect(mvpRate('冠軍', 0.5)).toBeGreaterThan(mvpRate('亞軍', 0.5));
+      expect(mvpRate('亞軍', 0.5)).toBeGreaterThan(mvpRate('季軍', 0.5));
+      expect(mvpRate('季軍', 0.5)).toBeGreaterThan(mvpRate('預賽出局', 0.5));
+    });
+
+    /** 這正是這條規則被改掉的原因：勝率 .315 的人不該有三成機率抱走 MVP。 */
+    it('打得爛的冠軍隊球員機率被壓到一成以下', () => {
+      expect(mvpRate('冠軍', 0.315)).toBeLessThan(0.1);
+    });
+
+    it('沒有成績就沒有 MVP', () => {
+      expect(mvpRate('冠軍', null)).toBe(0);
+    });
+
+    it('機率夾在 100%——大場面倍率不會讓它破表', () => {
+      const clutch = new Set([cfg.mvp.clutch_trait]);
+      expect(mvpRate('冠軍', 1, clutch)).toBe(1);
+    });
   });
 
   // 抽取次數與名次無關，否則同一個種子會因為某一屆差一名而讓後面整串偏移。

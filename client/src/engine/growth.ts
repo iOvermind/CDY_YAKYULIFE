@@ -5,7 +5,7 @@
  * 本模組的所有抽取一律走 growth 子序列（見 ADR 0002 的歸屬規則）。
  */
 
-import { abilities, type AbilityKey, type GrowthCurve } from '../data/index.ts';
+import { abilities, season, type AbilityKey, type GrowthCurve } from '../data/index.ts';
 import type { World } from './rng.ts';
 
 /** 蓄力槽：每項能力未滿一級的點數存放處。 */
@@ -29,11 +29,36 @@ export interface TrainResult {
 export interface CostContext {
   readonly curve: GrowthCurve;
   readonly twoWay: boolean;
+  /**
+   * 目前年齡。決定年齡附加費（見 `agingSurcharge`）。
+   *
+   * 省略時附加費為零——養成期、以及只想問「這條曲線本身長怎樣」的地方都用得到。
+   */
+  readonly age?: number | undefined;
 }
 
 /** 取得成本情境。名稱沿用 growthCurve，呼叫端不必改。 */
-export function growthCurve(isTwoWay: boolean): CostContext {
-  return { curve: abilities.growth_cost.default, twoWay: isTwoWay };
+export function growthCurve(isTwoWay: boolean, age?: number): CostContext {
+  return { curve: abilities.growth_cost.default, twoWay: isTwoWay, age };
+}
+
+/**
+ * 年齡附加費：開始老化之後，每一級要多付幾點。
+ *
+ * **這是老化的第二條腿。** 衰退把練上去的東西吃回來，附加費則讓你再也追不回來
+ * ——只加重衰退做不到後者，那只是掉得快一點，練回來的價錢還是一樣，於是三十五
+ * 歲的球員仍然可以靠訓練骰把自己補回巔峰。
+ *
+ * 每四年 +1，**與能力段無關**：31–34 +1、35–38 +2、39–42 +3、43–46 +4。只對
+ * 能力 50 以上生效——50 以下本來就是 1 點一級，那是還沒開發的東西，年紀大了也
+ * 不該變貴。
+ */
+export function agingSurcharge(current: number, age: number | undefined): number {
+  const s = abilities.growth_cost.aging_surcharge;
+  if (age === undefined || current < s.from_ability) return 0;
+  const past = age - season.aging.peak_end;
+  if (past <= 0) return 0;
+  return Math.ceil(past / s.years_per_step) * s.per_step;
 }
 
 /**
@@ -56,10 +81,15 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
     }
   }
 
-  // 倍率可以被天賦（突破極限）拉成小數，乘完無條件進位——蓄力槽是整數，
-  // 寧可貴一點也不要出現半點。
+  // 年齡附加費加在倍率**之前**：附加費是「這一級本身變貴了」，天花板的倍率該
+  // 乘在變貴之後的價錢上。31 歲、能力 51 超出天花板因此是 (2+1)×3 = 9。
+  cost += agingSurcharge(current, ctx.age);
+
+  // 倍率可以被天賦（突破極限）拉成小數，乘完四捨五入——蓄力槽是整數，不能出現
+  // 半點。這裡曾經無條件進位，理由是「寧可貴一點也不要出現半點」；但進位讓每一
+  // 個小數倍率都變成一次額外加價，倍率 1.1 與 1.4 對成本 3 的能力是同一個價錢。
   const aboveCeiling = current >= ceiling;
-  if (aboveCeiling) cost = Math.ceil(cost * curve.above_ceiling_multiplier);
+  if (aboveCeiling) cost = Math.round(cost * curve.above_ceiling_multiplier);
 
   if (twoWay) {
     const d = abilities.growth_cost.two_way_discount;

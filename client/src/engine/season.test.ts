@@ -433,11 +433,17 @@ describe('proPitchingLine', () => {
   const pitch = (seed: string, ability: Abilities, ovr: number) =>
     proPitchingLine(new World(seed), ability, 'CPBL1', ovr);
 
-  it('先發場次不超過輪值容量', () => {
-    const max = CPBL1.games / cfg.pitching.appearances.rotation_divisor.value;
+  /**
+   * 上限是**輪值容量再加抖動**：五個輪值位置給出的先發數是容量，但補休與跳過
+   * 第五號讓王牌多投幾場。夾死在容量本身的話，單季局數的紀錄就永遠摸不到——
+   * 那該是很難，不是不可能。
+   */
+  it('先發場次不超過輪值容量加抖動', () => {
+    const app = cfg.pitching.appearances;
+    const max = Math.ceil(CPBL1.games / app.rotation_divisor.value) + app.jitter_starts;
     for (let i = 0; i < 200; i++) {
       const p = pitch(`s${i}`, with_(65, { sta: 70, ctl: 70 }), 65);
-      expect(p.starts).toBeLessThanOrEqual(Math.ceil(max));
+      expect(p.starts).toBeLessThanOrEqual(max);
     }
   });
 

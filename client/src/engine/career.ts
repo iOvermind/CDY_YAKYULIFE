@@ -142,6 +142,14 @@ export interface AmateurSeasonRecord {
    * 上，生涯表就該寫出來；純投手掛 DH——他在學生時代照樣進打擊區。
    */
   readonly position: string | null;
+  /**
+   * 這一季的投手定位（SP／CP／SU／MR／LR）。沒投球的人是 null。
+   *
+   * 養成期以前一律不寫，理由是「學生棒球沒有牛棚分工」——但那不對：學生球隊
+   * 一樣有王牌與救火的人，而定位本來就由體力與球威決定，不是職業才長出來的
+   * 東西。年表少了這一欄，一個高中就在關門的人看起來跟先發沒有兩樣。
+   */
+  readonly pitcherRole: PitcherRole | null;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
 }
@@ -228,6 +236,14 @@ export interface CareerSummary {
   readonly internationalScore: number;
   /** 職業期的國際賽逐屆紀錄。養成期的國際賽併在該年的養成列裡，不進這一份。 */
   readonly internationalSeasons: readonly InternationalRecord[];
+  /**
+   * 國際賽的通算。**與聯盟通算分開**：國際賽不屬於任何聯盟，混進去會污染階梯
+   * 成就與各聯盟的評價分（見 `internationalScore`）。
+   */
+  readonly internationalTotal: {
+    readonly batting: BattingLine | null;
+    readonly pitching: PitchingLine | null;
+  };
   /** 生涯代表聯盟。沒打過頂級聯盟時為 null。 */
   readonly representative: LeagueCareer | null;
   /** 生涯最佳分級。沒打過頂級聯盟時為最低帶。 */
@@ -354,6 +370,20 @@ function longestTeam(records: readonly SeasonRecord[]): string {
     }
   }
   return best;
+}
+
+/** 國際賽的通算。一屆一筆加起來，與 `totalLines` 同一個做法。 */
+function totalInternational(records: readonly InternationalRecord[]): {
+  batting: BattingLine | null;
+  pitching: PitchingLine | null;
+} {
+  let batting: BattingLine | null = null;
+  let pitching: PitchingLine | null = null;
+  for (const r of records) {
+    batting = addBatting(batting, r.batting);
+    pitching = addPitching(pitching, r.pitching);
+  }
+  return { batting, pitching };
 }
 
 function totalLines(records: readonly SeasonRecord[]): {
@@ -507,6 +537,7 @@ export function summarizeCareer(
     careerMilestones: careerMilestones.reached,
     internationalScore,
     internationalSeasons,
+    internationalTotal: totalInternational(internationalSeasons),
     representative,
     bestTier: representative?.tier ?? cfg.tier_thresholds.values.length,
   };

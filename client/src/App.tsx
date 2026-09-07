@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import './app.css';
+import { saveCareerCard, type CardRow, type CardTable, type CareerCard } from './careerImage.ts';
 import { AccountBar } from './Account.tsx';
 import { useAccount, type Account } from './useAccount.ts';
 import { httpProgress } from './api/http.ts';
@@ -40,11 +41,13 @@ import {
   eraPlus,
   opsPlus,
   pitchingShares,
+  baselineAt,
   proBaseline,
   winPct,
   type Baseline,
 } from './engine/metrics.ts';
 import { joinName } from './engine/naming.ts';
+import { tournamentPar } from './engine/national.ts';
 import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
 import { positionName, ROLE_NAMES } from './engine/season.ts';
@@ -484,107 +487,403 @@ function GameScreen({
   // 全寬按鈕會讓人以為是兩個不相干的選項。
   const controlOptions = (prompt?.options ?? []).filter((o) => ALLOC_CONTROLS.has(o.id));
 
-  return (
-    <div id="game">
-      <div id="col-left">
-        {state && (
-          <Board state={state} rating={game.rating} seed={game.setup.seed} />
-        )}
-        {state && (
-          <div id="panel-abilities">
-            <h4>能力</h4>
-            <AbilityPanel
-              state={state}
-              allocatable={allocatable}
-              repeatable={game.dice === null}
-              onChoose={onChoose}
-            />
-          </div>
-        )}
-      </div>
+  const pages = usePages(allocatable.size > 0, state !== null);
 
-      <div id="col-right">
-        {/* 生涯結束後整塊拿掉：狀態、生涯年表、榮譽都改由事件流末端的結算卡呈現。 */}
-        {state && game.summary === null && <StatsPanel state={state} />}
-        <EventLog entries={game.flow.log} state={state} summary={game.summary} />
-        <div id="panel-act">
-          {prompt !== null ? (
-            <>
-              {prompt.title !== undefined && <div className="title">{prompt.title}</div>}
-              {game.dice !== null && <DiceRow dice={game.dice} />}
-              {state !== null && state.pool > 0 && allocatable.size > 0 && game.dice === null && (
-                <div className="pool">大賽點數還有 {state.pool} 點（點一下能力 +1）</div>
-              )}
-              {allocatable.size > 0 && (
-                <div className="title" style={{ color: 'var(--accent)', letterSpacing: 0 }}>
-                  ← 點左側的能力列加點
-                </div>
-              )}
-              {otherOptions.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  className={`btn${o.role === 'main' ? ' main' : ''}${
-                    o.role === 'warn' ? ' warn' : ''
-                  }`}
-                  disabled={o.disabled === true}
-                  onClick={() => onChoose(o.id)}
-                >
-                  {o.label}
-                  {o.note !== undefined && <small>{o.note}</small>}
-                </button>
-              ))}
-              {controlOptions.length > 0 && (
-                <div className="row2">
-                  {controlOptions.map((o) => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      className={`btn${o.role === 'main' ? ' main' : ''}${
-                        o.role === 'warn' ? ' warn' : ''
-                      }`}
-                      disabled={o.disabled === true}
-                      onClick={() => onChoose(o.id)}
-                    >
-                      {o.label}
-                      {o.note !== undefined && <small>{o.note}</small>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="title">{game.summary === null ? '流程已到目前實作的盡頭' : '生涯結束'}</div>
-              <button type="button" className="btn main" onClick={onRestart}>
-                重新開局
-              </button>
-            </>
+  return (
+    <>
+      <div id="game" ref={pages.ref} onScroll={pages.onScroll}>
+        <div id="col-left">
+          {state && (
+            <Board state={state} rating={game.rating} seed={game.setup.seed} />
+          )}
+          {state && (
+            <div id="panel-abilities">
+              <h4>能力</h4>
+              <AbilityPanel
+                state={state}
+                allocatable={allocatable}
+                repeatable={game.dice === null}
+                onChoose={onChoose}
+              />
+            </div>
           )}
         </div>
+
+        <div id="col-right">
+          {/* 生涯結束後整塊拿掉：狀態、生涯年表、榮譽都改由事件流末端的結算卡呈現。 */}
+          {state && game.summary === null && <StatsPanel state={state} />}
+          <EventLog entries={game.flow.log} state={state} summary={game.summary} />
+          <div id="panel-act">
+            {prompt !== null ? (
+              <>
+                {prompt.title !== undefined && <div className="title">{prompt.title}</div>}
+                {game.dice !== null && <DiceRow dice={game.dice} />}
+                {state !== null && state.pool > 0 && allocatable.size > 0 && game.dice === null && (
+                  <div className="pool">大賽點數還有 {state.pool} 點（點一下能力 +1）</div>
+                )}
+                {allocatable.size > 0 && (
+                  // 不寫方向。桌面在左欄、手機在同一頁的上方，而手機還能滑到事件
+                  // 頁去——任何一個方向詞都會有講錯的時候，一份文案兩邊共用才不會。
+                  <div className="title" style={{ color: 'var(--accent)', letterSpacing: 0 }}>
+                    點能力列加點
+                  </div>
+                )}
+                {otherOptions.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    className={`btn${o.role === 'main' ? ' main' : ''}${
+                      o.role === 'warn' ? ' warn' : ''
+                    }`}
+                    disabled={o.disabled === true}
+                    onClick={() => {
+                      onChoose(o.id);
+                      pages.onAction();
+                    }}
+                  >
+                    {o.label}
+                    {o.note !== undefined && <small>{o.note}</small>}
+                  </button>
+                ))}
+                {controlOptions.length > 0 && (
+                  <div className="row2">
+                    {controlOptions.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        className={`btn${o.role === 'main' ? ' main' : ''}${
+                          o.role === 'warn' ? ' warn' : ''
+                        }`}
+                        disabled={o.disabled === true}
+                        onClick={() => {
+                          onChoose(o.id);
+                          pages.onAction();
+                        }}
+                      >
+                        {o.label}
+                        {o.note !== undefined && <small>{o.note}</small>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="title">{game.summary === null ? '流程已到目前實作的盡頭' : '生涯結束'}</div>
+                {game.summary !== null && <SaveCardButton game={game} />}
+                <button type="button" className="btn" onClick={onRestart}>
+                  重新開局
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      {state !== null && <PageNav page={pages.page} go={pages.go} />}
+    </>
+  );
+}
+
+/**
+ * 「下載生涯成績」。
+ *
+ * 圖是**按下去才畫的**，不預先產：一段長生涯的年表有兩張大表，畫一次要量上千次
+ * 文字寬度，而多數人按完「重新開局」就走了。
+ *
+ * 三種狀態要分得出來：畫圖那一兩秒按鈕要說自己在忙（否則玩家會連按），失敗要
+ * 講出原因（手機的分享面板可能被系統擋掉），成功則什麼都不必說——系統的分享
+ * 面板或瀏覽器的下載提示自己會出現。
+ */
+function SaveCardButton({ game }: { game: Game }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  return (
+    <button
+      type="button"
+      className="btn main"
+      disabled={busy}
+      onClick={() => {
+        const card = careerCardOf(game);
+        if (card === null) return;
+        setBusy(true);
+        setFailed(null);
+        saveCareerCard(card)
+          .catch((e: unknown) => {
+            console.warn('[card] 生涯成績圖沒有存成', e);
+            setFailed(e instanceof Error ? e.message : '存不下來');
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      {busy ? '產生中…' : '下載生涯成績'}
+      {failed !== null && <small>{failed}</small>}
+    </button>
+  );
+}
+
+/**
+ * 手機的兩頁：能力頁（`#col-left`）與事件頁（`#col-right`）。
+ *
+ * **走馬燈不是另外包一層做出來的，是 `#game` 自己在手機上變成橫向 snap 容器。**
+ * 這兩塊在桌面分屬左右欄，一個 DOM 生不出兩種父子關係；硬包一層就得改寫桌面的
+ * grid，而 grid 的列高會把 `#board` 與 `#panel-stats` 綁進同一列，桌面的版面
+ * 就跟著動了。改成讓 `#game` 換角色，所有手機的規則都關在 `@media` 裡，桌面那段
+ * CSS 一行都不用碰。
+ *
+ * 記分板與動作區在手機上是 `position:fixed`，橫向捲動時才不會跟著滑走；它們的
+ * 高度會隨合約、年薪、特性數量與選項數量變動，因此量出來餵給 CSS 變數，版面
+ * 用它算出中間那條帶子的上下界。
+ *
+ * 自動切頁**只在轉折的那一刻切一次**：需要加點時滑到能力頁，加完滑回事件頁。
+ * 加點的過程中（還剩幾點沒分配）不再干預——玩家滑去事件頁看卡片是他的選擇，
+ * 每次提問都把他拉回來等於沒收了那個選擇。
+ */
+function usePages(needsAbility: boolean, started: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  // 同一件事的兩份：`page` 給畫面（頁點要跟著亮），`at` 給事件處理器（在
+  // 回呼裡讀 state 會讀到閉包當時的那一份）。
+  const [page, setPage] = useState(1);
+  const at = useRef(1);
+
+  /** 手指是不是還壓在螢幕上。 */
+  const touching = useRef(false);
+  /** 排隊中的自動切頁：目標頁、已經等了多久。 */
+  const pending = useRef<{ to: number; waited: number } | null>(null);
+  const timers = useRef<{ flush?: number; settle?: number }>({});
+
+  /** 立刻滑到第 i 頁。 */
+  const go = (i: number) => {
+    const el = ref.current;
+    // 桌面沒有橫向捲動空間，這裡就什麼也不做——不必另外判斷斷點。
+    if (el === null || el.scrollWidth <= el.clientWidth) return;
+    at.current = i;
+    setPage(i);
+    el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+    settle(i, 0);
+  };
+
+  /**
+   * 自動切頁的請求。**兩件事都在這裡等：先等 `after` 毫秒，再等手指放開。**
+   *
+   * - 等 `after`：滑去能力頁之前停半秒，讓玩家先讀完剛跳出來的卡片。不停的話
+   *   畫面會在他讀之前就換掉，變成點完能力才知道發生了什麼事。
+   * - 等放手：能力列有長按連發（`useHold`，按住每 90ms +1），點數點完的那一刻
+   *   手指多半還壓著，而瀏覽器一偵測到觸控就會取消進行中的 smooth scroll，
+   *   畫面會停在兩頁中間。
+   *
+   * 等放手**有上限**：`pointerup` 不保證送得到（元件被換掉、系統攔截手勢），
+   * 無限等的話那一筆待辦就永遠不會兌現——那正是「偶發不會自動滑回事件」的
+   * 樣子。等滿上限就直接滑，寧可打斷一次觸控也不要卡在錯的頁。
+   */
+  const request = (to: number, after: number) => {
+    window.clearTimeout(timers.current.flush);
+    pending.current = { to, waited: 0 };
+    timers.current.flush = window.setTimeout(flush, after);
+  };
+
+  const flush = () => {
+    const job = pending.current;
+    if (job === undefined || job === null) return;
+    if (touching.current && job.waited < HOLD_WAIT_MAX) {
+      job.waited += HOLD_WAIT_STEP;
+      timers.current.flush = window.setTimeout(flush, HOLD_WAIT_STEP);
+      return;
+    }
+    pending.current = null;
+    go(job.to);
+  };
+
+  /**
+   * 收尾：滑完之後如果卡在兩頁中間，直接對齊過去。
+   *
+   * 用瞬移不用 smooth——會走到這裡就是因為 smooth 被打斷過，再滑一次可能再被
+   * 打斷一次。**只在「卡在中間」時才動**：已經停在另一頁是玩家自己滑過去的，
+   * 那是他的選擇，不該把他拉回來。
+   */
+  const settle = (i: number, waited: number) => {
+    window.clearTimeout(timers.current.settle);
+    timers.current.settle = window.setTimeout(() => {
+      const el = ref.current;
+      if (el === null) return;
+      // 手指還在，這一刻的位置還不是最終位置——再等一輪，同樣有上限。
+      if (touching.current && waited < HOLD_WAIT_MAX) {
+        settle(i, waited + SETTLE_DELAY);
+        return;
+      }
+      const w = el.clientWidth;
+      if (w === 0) return;
+      const off = el.scrollLeft % w;
+      if (off > 2 && off < w - 2) el.scrollLeft = i * w;
+    }, SETTLE_DELAY);
+  };
+
+  // 手指的狀態掛在 window 上（捕獲階段），因為按著的可能是能力列、也可能是
+  // 動作區的按鈕，兩邊都不該各自回報一次。
+  useEffect(() => {
+    const down = () => {
+      touching.current = true;
+    };
+    const up = () => {
+      touching.current = false;
+    };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+    return () => {
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      window.clearTimeout(timers.current.flush);
+      window.clearTimeout(timers.current.settle);
+    };
+  }, []);
+
+  // 記分板與動作區的高度。兩者都是 fixed，中間那條帶子要靠它們算出上下界。
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const watched = [el.querySelector('#board'), el.querySelector('#panel-act')].filter(
+      (n): n is Element => n !== null,
+    );
+    const sync = () => {
+      const root = document.documentElement.style;
+      for (const n of watched) {
+        const h = `${n.getBoundingClientRect().height}px`;
+        root.setProperty(n.id === 'board' ? '--board-h' : '--act-h', h);
+      }
+    };
+    const observer = new ResizeObserver(sync);
+    for (const n of watched) observer.observe(n);
+    sync();
+    return () => observer.disconnect();
+  }, [started]);
+
+  // 起始頁：預設事件頁——故事線是常態，能力頁是被叫出來的那一頁。但**開局第一
+  // 個提問就是配點的時候要直接停在能力頁**：自動切頁只認「由不需要變成需要」
+  // 那個轉折，開局就已經需要的話那個轉折不存在，停在事件頁會沒有人把他帶過去。
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null || el.scrollWidth <= el.clientWidth) return;
+    if (!first.current) return;
+    first.current = false;
+    at.current = needsAbility ? 0 : 1;
+    setPage(at.current);
+    el.scrollLeft = at.current * el.clientWidth;
+  }, [started, needsAbility]);
+
+  const wanted = useRef(needsAbility);
+  useEffect(() => {
+    if (wanted.current === needsAbility) return;
+    wanted.current = needsAbility;
+    request(needsAbility ? 0 : 1, needsAbility ? READ_FIRST : 0);
+  }, [needsAbility]);
+
+  /**
+   * 玩家按了動作區的按鈕。
+   *
+   * **每按一次就重新確認一遍該待在哪一頁。** 光靠上面那個「由需要變成不需要」
+   * 的轉折不夠：轉折只認得到變化，認不出「本來就不需要、但畫面停在能力頁」
+   * 這種已經歪掉的狀態，而那個狀態只要漏掉一次事件就會出現，然後一直錯下去。
+   * 按鈕是流程往前走的唯一入口，在這裡對一次帳最省事。
+   *
+   * 對帳延到下一次 render：按下去的當下 `needsAbility` 還是**這一步之前**的
+   * 值，拿它判斷的話，通往加點的那一步會先往事件頁滑一次再滑回來。
+   */
+  const recheck = useRef(false);
+  const onAction = () => {
+    recheck.current = true;
+  };
+  useEffect(() => {
+    if (!recheck.current) return;
+    recheck.current = false;
+    if (!needsAbility) request(1, 0);
+  });
+
+  const onScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.clientWidth === 0) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    at.current = i;
+    setPage((p) => (p === i ? p : i));
+  };
+
+  // 轉螢幕之後把當前頁重新對齊。頁寬等於視窗寬，寬度一變舊的 scrollLeft 就落在
+  // 兩頁中間；各家瀏覽器對「版面改變後要不要重新吸附」的處理並不一致，自己對
+  // 一次最省事。
+  useEffect(() => {
+    const onResize = () => {
+      const el = ref.current;
+      if (el === null || el.scrollWidth <= el.clientWidth) return;
+      el.scrollLeft = at.current * el.clientWidth;
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return { ref, page, go, onAction, onScroll };
+}
+
+/** 滑去能力頁之前先停這麼久，讓玩家讀完剛跳出來的卡片。 */
+const READ_FIRST = 1000;
+/** 等手指放開的輪詢間隔與總上限。 */
+const HOLD_WAIT_STEP = 100;
+const HOLD_WAIT_MAX = 1200;
+/** 滑完之後多久檢查一次有沒有卡在兩頁中間。 */
+const SETTLE_DELAY = 400;
+
+/**
+ * 手機的換頁提示：左右半透明箭頭 ＋ 兩顆頁點。
+ *
+ * 掛在 `#game` 外面而不是裡面——`#game` 在手機上的直接子元素就是那兩頁，多一個
+ * 就多一頁。整塊是 fixed，蓋在中間那條帶子上，只有箭頭與頁點自己收事件。
+ */
+function PageNav({ page, go }: { page: number; go: (i: number) => void }) {
+  return (
+    <div id="pagenav">
+      <button
+        type="button"
+        className="pagearrow left"
+        aria-label="看能力"
+        hidden={page === 0}
+        onClick={() => go(0)}
+      >
+        ‹
+      </button>
+      <button
+        type="button"
+        className="pagearrow right"
+        aria-label="看事件"
+        hidden={page === 1}
+        onClick={() => go(1)}
+      >
+        ›
+      </button>
+      <div className="pagedots" aria-hidden="true">
+        <i className={page === 0 ? 'on' : ''} />
+        <i className={page === 1 ? 'on' : ''} />
       </div>
     </div>
   );
 }
 
 /**
- * 事件紀錄。新卡片出現時自動捲到底。
+ * 事件流。**新內容出現時一律捲到底，不管玩家有沒有自己往上捲。**
  *
- * 只在使用者原本就貼著底部時才自動捲——如果他正往回翻舊紀錄，把畫面拉走是
- * 很煩人的事。門檻抓 40px，容許一點捲動慣性造成的誤差。
- */
-/**
- * 事件流。新內容出現時自動捲到底，除非玩家自己往上捲去看舊的。
+ * 這裡曾經維護一個「玩家是不是貼著底部」的旗標，只在貼底時才自動捲。那個設計
+ * 在這個介面裡是錯的：事件流是**當下正在發生的事**，新卡片就是提問本身，停在
+ * 半空中的畫面等於把提問藏起來。而且旗標本身很難維護正確——版面一動，瀏覽器
+ * 送出的捲動事件與玩家自己的捲動長得一模一樣，只要漏擋一次就會卡住不再自動捲，
+ * 那正是「有時候沒捲到底」的來源。旗標拿掉，那一整類 bug 也跟著消失。
  *
- * 三件事必須一起做，少一件就會出現「有時候沒捲到底」：
+ * 兩件事仍必須一起做：
  *
  * 1. **useLayoutEffect 而不是 useEffect**——要在瀏覽器繪製之前捲，否則會先
  *    閃一下舊位置。
- * 2. **監看容器與內容的尺寸變化**。這一欄是彈性版面：下方的動作區在選項出現
- *    或消失時會變高變矮，容器的可視高度跟著變，而那**不會觸發捲動事件**——
- *    只靠 onScroll 維護「是否貼底」就會漏掉這一種，畫面於是停在半空中。
- * 3. **捲到 scrollHeight − clientHeight**，不是 scrollHeight。瀏覽器雖然會
- *    夾住，但明確寫出來才不會在計算貼底距離時差一個 clientHeight。
+ * 2. **監看容器與內容的尺寸變化**。光在 entries 變動時捲一次不夠：卡片的高度
+ *    要等字體與換行定案才算得出來，那發生在這一次 effect 之後，捲到的會是舊
+ *    高度。動作區長出選項把事件流壓矮也是同一類——那不會觸發捲動事件。
  */
 function EventLog({
   entries,
@@ -597,38 +896,12 @@ function EventLog({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const stuckToBottom = useRef(true);
-  /**
-   * 版面變動引發的捲動事件要略過。
-   *
-   * **這是「事件卡有時不會捲到底」的真正原因。** 抽到事件卡時下方動作區長出
-   * 三個選項，事件流被壓矮——瀏覽器會為此送出一個捲動事件，而那一瞬間
-   * `scrollHeight − scrollTop − clientHeight` 因為 clientHeight 剛變小而超過
-   * 門檻，「貼底」旗標於是被關掉，接下來的 pin() 就什麼都不做了。
-   *
-   * 旗標只該由**玩家自己的捲動**改變，不該由版面改變。
-   */
-  const ignoreScroll = useRef(false);
 
-  /**
-   * 開一個「接下來的捲動事件都不算數」的窗口，到下一幀為止。
-   *
-   * **必須是窗口，不能是用完就清的一次性旗標。** 版面一縮，瀏覽器會先把
-   * scrollTop 夾回合法範圍（第一個事件），我們接著又指定新的 scrollTop
-   * （第二個事件）——一次性旗標只擋得住第一個，第二個就被當成「玩家自己往上
-   * 捲了」，貼底旗標於是被關掉。這就是「有時候」不捲的那個有時候。
-   */
-  const muteScroll = () => {
-    ignoreScroll.current = true;
-    requestAnimationFrame(() => {
-      ignoreScroll.current = false;
-    });
-  };
-
+  // 捲到 scrollHeight − clientHeight，不是 scrollHeight。瀏覽器雖然會夾住，
+  // 但明確寫出來才不會有人以為這裡差了一個 clientHeight。
   const pin = () => {
     const el = ref.current;
-    if (el === null || !stuckToBottom.current) return;
-    muteScroll();
+    if (el === null) return;
     el.scrollTop = el.scrollHeight - el.clientHeight;
   };
 
@@ -638,26 +911,14 @@ function EventLog({
     const el = ref.current;
     const inner = innerRef.current;
     if (el === null || inner === null) return;
-    const observer = new ResizeObserver(() => {
-      muteScroll();
-      pin();
-    });
+    const observer = new ResizeObserver(pin);
     observer.observe(el);
     observer.observe(inner);
     return () => observer.disconnect();
   }, []);
 
   return (
-    <div
-      id="panel-log"
-      ref={ref}
-      onScroll={(e) => {
-        // 窗口內一律不理，也不清掉窗口——一次尺寸變動可能連送好幾個事件。
-        if (ignoreScroll.current) return;
-        const el = e.currentTarget;
-        stuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-      }}
-    >
+    <div id="panel-log" ref={ref}>
       <div ref={innerRef}>
         <LogView entries={entries} state={state} summary={summary} />
       </div>
@@ -688,13 +949,19 @@ function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } 
   );
 }
 
-/** 最近一季的成績與狀態。只在生涯進行中出現。 */
+/**
+ * 最近一季的成績與狀態。只在生涯進行中出現，而且**只有桌面看得到**。
+ *
+ * 手機把整塊收掉（見 app.css 的手機段）：成績由每季結算的事件卡負責，狀態則
+ * 由記分板底下那一份接手（`#bd-traits`）。**兩邊是同一個 `TraitList`**，差的
+ * 只是掛在哪裡與帶不帶小標——桌面的狀態接在成績表下面（它們是同一段時間的
+ * 側寫），手機沒有成績表可接，就釘在球員資料下面。
+ */
 function StatsPanel({ state }: { state: PlayerState }) {
   return (
     <div id="panel-stats">
-      {/* 面板不帶自己的標題：底下兩塊各自有 `<h4>`（最近一季／狀態），再加一個
-          面板級標題就是兩個同級標題連在一起、中間沒有內容。右欄因此是兩個平級
-          區塊。 */}
+      {/* 面板不帶自己的標題：底下那塊自己有 `<h4>`（最近一季），再加一個面板級
+          標題就是兩個同級標題連在一起、中間沒有內容。 */}
       {/* 這裡不再放方格。
 
           年份、年齡、綜合、可分配點左側記分板都有；年薪、合約、生涯收入已經併
@@ -719,21 +986,29 @@ function StatsPanel({ state }: { state: PlayerState }) {
   );
 }
 
+/** 榮譽榜的一組：小標 ＋ 幾個標籤。 */
+export interface HonorGroup {
+  readonly caption: string;
+  readonly items: readonly string[];
+}
+
 /**
- * 榮譽榜。**只在生涯結束後出現，而且含養成期。**
+ * 榮譽的分組。**只有這一份**——畫面上的榮譽卡與下載的生涯成績圖共用它，各算
+ * 各的遲早會分岔成兩種「榮譽」。
  *
- * 生涯進行中，左側記分板的「榮譽 N」那盞燈就夠了——那時玩家關心的是「我拿過
- * 幾項」，攤開一整面清單只會把版面吃掉。結算之後相反：那串東西就是他的生涯
- * 軌跡，該攤開來看。
- *
- * 三塊分開排，因為來源不同：
+ * 四組分開排，因為來源不同：
  *
  * - **職業獎項**冠上聯盟名並列出年份——「中職年度MVP」與「日職年度MVP」是
  *   兩件事，拆開才看得出一個旅外球員在哪裡拿的獎。
- * - **里程碑**是累積出來的，不是誰投票給你的，用不同的框線區隔。
+ * - **里程碑**是累積出來的，不是誰投票給你的。
  * - **養成期與國際賽**的榮譽沒有結構化紀錄，只有字串，因此照原樣列。
+ * - **人生**不是獎項，但它是這個人的生涯的一部分——一個拿過五座 MVP 卻離了
+ *   三次婚的人，與一個拿五座 MVP 且孩子坐滿看台的人，不是同一個故事。
+ *
+ * 空的組不回傳。標籤的樣式四組一致：每一組上面本來就寫著自己的小標，用形狀
+ * 再編碼一次只是要求讀的人先學會那套編碼（見 app.css 的 .tag）。
  */
-function HonorBoard({
+function honorGroups({
   awards,
   honors,
   summary,
@@ -741,11 +1016,9 @@ function HonorBoard({
 }: {
   awards: readonly AwardRecord[];
   honors: readonly string[];
-  summary: CareerSummary | null;
+  summary: CareerSummary;
   love: PlayerState['love'];
-}) {
-  if (summary === null) return null;
-
+}): HonorGroup[] {
   const milestones = [
     // 聯盟名與數字之間要留空白——「中職1000 安打」的中職與 1000 會黏成一團。
     ...summary.leagues.flatMap((l) => l.milestones.map((m) => `${l.orgName} ${m}`)),
@@ -768,22 +1041,38 @@ function HonorBoard({
   const proLabels = new Set(shown.map((a) => a.label));
   const rest = sortHonors(honors.filter((h) => !proLabels.has(h)));
 
-  if (shown.length === 0 && milestones.length === 0 && rest.length === 0) return null;
-
-  // 四種不同的東西，各給一行小標。標籤的形狀（虛線／點線／顏色）本來就在分類，
-  // 但那要先看得懂編碼才讀得出來；標題是直接寫出來的那一份。空的組不出現。
-  const groups = [
+  return [
     {
       caption: '獎項',
-      tone: 'tag',
       items: shown.map((a) => `${a.label}（${[...a.years].sort((x, y) => x - y).join('、')}）`),
     },
-    { caption: '里程碑', tone: 'tag milestone', items: milestones },
-    { caption: '業餘與國際賽', tone: 'tag amateur', items: rest },
-    // 【人生】不是獎項，但它是這個人的生涯的一部分——一個拿過五座 MVP 卻離了
-    // 三次婚的人，與一個拿五座 MVP 且孩子坐滿看台的人，不是同一個故事。
-    { caption: '人生', tone: 'tag life', items: lifeTags(love) },
+    { caption: '里程碑', items: milestones },
+    { caption: '業餘與國際賽', items: rest },
+    { caption: '人生', items: lifeTags(love) },
   ].filter((g) => g.items.length > 0);
+}
+
+/**
+ * 榮譽榜。**只在生涯結束後出現，而且含養成期。**
+ *
+ * 生涯進行中，左側記分板的「榮譽 N」那盞燈就夠了——那時玩家關心的是「我拿過
+ * 幾項」，攤開一整面清單只會把版面吃掉。結算之後相反：那串東西就是他的生涯
+ * 軌跡，該攤開來看。
+ */
+function HonorBoard({
+  awards,
+  honors,
+  summary,
+  love,
+}: {
+  awards: readonly AwardRecord[];
+  honors: readonly string[];
+  summary: CareerSummary | null;
+  love: PlayerState['love'];
+}) {
+  if (summary === null) return null;
+  const groups = honorGroups({ awards, honors, summary, love });
+  if (groups.length === 0) return null;
 
   return (
     <div id="panel-honors">
@@ -793,7 +1082,7 @@ function HonorBoard({
           <div className="fin-caption">{g.caption}</div>
           <div className="tag-row">
             {g.items.map((t) => (
-              <span className={g.tone} key={t}>
+              <span className="tag" key={t}>
                 {t}
               </span>
             ))}
@@ -807,34 +1096,33 @@ function HonorBoard({
 function TraitList({
   traits: owned,
   names,
+  heading = true,
 }: {
   traits: ReadonlySet<string>;
   names: ReadonlyMap<string, string>;
+  /** 記分板裡不帶標題：它接在 SEED 那排下面，那一帶本來就沒有小標。 */
+  heading?: boolean;
 }) {
   // 點開的那一個。一次只有一個：說明行固定在段落下方，多開就再也分不出哪行在
   // 講哪個標籤（標籤會換行，順序對不上），單開才不必在說明裡重複一次名稱。
   const [picked, setPicked] = useState<string | null>(null);
-  const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
-  // 名稱以取得當下解析的為準；沒有動態名稱的就用資料檔的固定名。這裡曾經
-  // 把 name 為 null 的整個濾掉，於是三個動態命名的特性拿得到卻永遠看不到。
-  const shown = order
-    .filter((id) => owned.has(id))
-    .map((id) => traitOf(id))
-    .filter((t): t is NonNullable<typeof t> => t !== undefined)
-    .map((t) => ({ ...t, label: names.get(t.id) ?? t.name ?? t.id }));
+  const shown = shownTraits(owned, names);
   // 從當下的清單找，而不是記住點下去的那段文字：特性可以在生涯中途消失（受傷
   // 洗掉、負向被覆蓋），留著舊說明會變成一行沒有標籤對應的孤兒。
   const note = shown.find((t) => t.id === picked)?.effect_text ?? null;
 
   return (
     <>
-      {/* 間距交給 CSS：在右欄它接在成績表下面要空一段，在結算卡裡它是卡片的
-          第一行，帶著 12px 會多出一截頭。 */}
-      <h4 className="tl-head">狀態</h4>
+      {/* 間距交給 CSS：在結算卡裡它是卡片的第一行，帶著 12px 會多出一截頭。 */}
+      {heading && <h4 className="tl-head">狀態</h4>}
       {shown.length === 0 ? (
-        <p className="stat-pending" style={{ marginTop: 8 }}>
-          還沒有任何特性。
-        </p>
+        // 記分板裡不留這一行：一開局什麼特性都沒有，一句「還沒有任何特性」會
+        // 常駐在版面上好幾年，而它沒有任何資訊。結算卡裡才需要交代空的情況。
+        heading ? (
+          <p className="stat-pending" style={{ marginTop: 8 }}>
+            還沒有任何特性。
+          </p>
+        ) : null
       ) : (
         <>
           <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
@@ -853,9 +1141,9 @@ function TraitList({
               </span>
             ))}
           </p>
-          {/* 說明不做浮層：這塊在 #panel-stats 裡，那是個 overflow-y:auto 的捲動
-              容器，浮層要嘛被裁掉、要嘛得改用 fixed 自己算座標並在捲動時重算。
-              就地展開沒有這些問題，而 effect_text 最長也才 39 字。 */}
+          {/* 說明不做浮層：這塊所在的位置（記分板、結算卡）都在會捲動或會被裁切
+              的容器裡，浮層要嘛被裁掉、要嘛得改用 fixed 自己算座標並在捲動時
+              重算。就地展開沒有這些問題，而 effect_text 最長也才 39 字。 */}
           <p className={`tag-note${note === null ? ' hint' : ''}`}>
             {note ?? '點特性看說明'}
           </p>
@@ -863,6 +1151,27 @@ function TraitList({
       )}
     </>
   );
+}
+
+/**
+ * 目前帶著的特性，依資料檔的順序（正向在前、負向在後）。
+ *
+ * 名稱以取得當下解析的為準；沒有動態名稱的就用資料檔的固定名。這裡曾經把
+ * `name` 為 null 的整個濾掉，於是三個動態命名的特性拿得到卻永遠看不到。
+ *
+ * 抽成函式是因為畫面上的狀態列與下載的生涯成績圖都要用它——兩邊各寫一份的話，
+ * 圖上的特性遲早會跟畫面上的對不起來。
+ */
+function shownTraits(
+  owned: ReadonlySet<string>,
+  names: ReadonlyMap<string, string>,
+): { id: string; label: string; tone: string | undefined; effect_text: string }[] {
+  const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
+  return order
+    .filter((id) => owned.has(id))
+    .map((id) => traitOf(id))
+    .filter((t): t is NonNullable<typeof t> => t !== undefined)
+    .map((t) => ({ ...t, label: names.get(t.id) ?? t.name ?? t.id }));
 }
 
 /** 負向特性的標籤配色。取自 traits.json 的 tag_styles.negative。 */
@@ -1035,7 +1344,21 @@ function StatHeadCells<T>({ columns }: { columns: readonly StatColumn<T>[] }) {
  * 與生涯年表分開是刻意的：年表回答「他哪一年打得怎麼樣」，通算回答「他這輩子
  * 累積了什麼」。兩者的閱讀方式不同，混在同一張表會兩邊都難讀。
  */
-function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[] }) {
+function TotalsTable({
+  title,
+  rows,
+  leadHead = '聯盟',
+  countHead = '季',
+  countTitle = '出賽季數',
+}: {
+  title: string;
+  rows: readonly TotalRow[];
+  /** 第一欄的欄名。國際賽那張是「賽事」，不是聯盟。 */
+  leadHead?: string;
+  /** 第二欄的欄名與說明。國際賽算的是屆數。 */
+  countHead?: string;
+  countTitle?: string;
+}) {
   const batting = rows.filter((r) => r.batting !== null);
   const pitching = rows.filter((r) => r.pitching !== null);
   if (batting.length === 0 && pitching.length === 0) return null;
@@ -1049,8 +1372,8 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
           <table className="fin">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>聯盟</th>
-                <th title="出賽季數">季</th>
+                <th style={{ textAlign: 'left' }}>{leadHead}</th>
+                <th title={countTitle}>{countHead}</th>
                 <StatHeadCells columns={BATTING_COLUMNS} />
                 <th title="守備分">DEF</th>
               </tr>
@@ -1074,8 +1397,8 @@ function TotalsTable({ title, rows }: { title: string; rows: readonly TotalRow[]
           <table className="fin">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>聯盟</th>
-                <th title="出賽季數">季</th>
+                <th style={{ textAlign: 'left' }}>{leadHead}</th>
+                <th title={countTitle}>{countHead}</th>
                 <StatHeadCells columns={PITCHING_COLUMNS} />
               </tr>
             </thead>
@@ -1114,9 +1437,10 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
   const pitching = rows.filter((r) => r.pitching !== null);
   if (batting.length === 0 && pitching.length === 0) return null;
 
-  // 基準線挑代表聯盟——國際賽沒有自己的聯盟可挑，而成績本來就是拿他當時所在
-  // 的層級換算出來的。沒有職業紀錄時退回中職一軍，與通算表同一個慣例。
-  const base = proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1');
+  // 基準線用**賽會自己的 par**，不是他母聯盟的。成績本來就是拿那個 par 生成的
+  // （見 game.ts 的 #accumulateNationalStats），量它也該用同一把。差別只落在吃
+  // par 的那一格（故意四壞／恐懼值），量不大，但沒有理由留著一把對不上的尺。
+  const base = baselineAt(tournamentPar());
   const head = (
     <>
       <th title="年度">年</th>
@@ -1182,8 +1506,31 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
           </table>
         </div>
       )}
+      {/* 國際賽通算。與頂級聯盟通算同一個角色，但**永遠是自己一張**——國際賽不
+          屬於任何聯盟，加進聯盟那張表會讓通算多出幾場不存在的聯盟出賽。 */}
+      <TotalsTable
+        title="國際賽通算"
+        rows={[intlTotalRow(summary)]}
+        leadHead="賽事"
+        countHead="屆"
+        countTitle="出賽屆數"
+      />
     </>
   );
+}
+
+/** 國際賽通算的那一列。屆數算的是出賽的賽會數，不是年數——同一年可能有兩屆。 */
+function intlTotalRow(summary: CareerSummary): TotalRow {
+  return {
+    label: '國際賽',
+    seasons: summary.internationalSeasons.length,
+    batting: summary.internationalTotal.batting,
+    pitching: summary.internationalTotal.pitching,
+    defenseRuns: 0,
+    // 國際賽沒有自己的聯盟可挑，成績本來就是拿他當時所在的層級換算出來的，
+    // 因此借代表聯盟那把尺——與上面逐屆那兩張表同一個基準。
+    base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
+  };
 }
 /**
  * 生涯年表。
@@ -1293,6 +1640,218 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
   );
 }
 
+/**
+ * 生涯成績圖的內容。
+ *
+ * **這裡只組內容，不畫圖**（畫的部分在 careerImage.ts）。每一格都走畫面上同一
+ * 批函式與同一份欄位定義——圖與畫面各算一份的話，玩家遲早會拿圖來質疑畫面，
+ * 而那時他是對的。
+ *
+ * 圖的順序不照畫面：球員卡、狀態、引退之日、生涯年表、榮譽。畫面上引退之日
+ * 是事件流裡的一張卡，排在年表之前；圖是要傳出去給人看的東西，先講他是誰、
+ * 再講那一天發生了什麼事，最後才攤開數字。
+ */
+export function careerCardOf(game: Game): CareerCard | null {
+  const state = game.state;
+  const summary = game.summary;
+  if (state === null || summary === null) return null;
+
+  const cells = <T,>(cols: readonly StatColumn<T>[], v: T, base: Baseline): string[] =>
+    cols.map((c) => String(c.value(v, base)));
+
+  const rows = careerRows(summary);
+  const batting = rows.filter((r) => r.batting !== null);
+  const pitching = rows.filter((r) => r.pitching !== null);
+  const totals = leagueTotals(summary);
+  const intlBase = baselineAt(tournamentPar());
+
+  // 季中轉隊的那一年會有兩列。年與齡只寫在第一列——同一年重覆印一次年份，讀起來
+  // 像兩個球季，而球隊那一欄已經說清楚這是同一年的後半段了（與畫面上同一個規則）。
+  const lead = (r: CareerRow, cont: boolean): string[] => [
+    cont ? '' : String(r.year),
+    cont ? '' : String(r.age),
+    r.note === null ? r.team : `${r.team}・${r.note}`,
+  ];
+  const tint = (r: CareerRow): CardRow['tint'] =>
+    r.injured === null ? null : r.injured === 'minor' ? 'minor' : 'major';
+
+  const tables: CardTable[] = [];
+  if (batting.length > 0) {
+    tables.push({
+      title: '生涯年表',
+      caption: '野手',
+      head: ['年', '齡', '球隊', '守位', ...BATTING_COLUMNS.map((c) => c.key), 'DEF'],
+      lefts: [2],
+      rows: batting.map((r, i) => ({
+        tint: tint(r),
+        cells: [
+          ...lead(r, batting[i - 1]?.year === r.year),
+          r.position ?? '—',
+          ...cells(BATTING_COLUMNS, r.batting!, r.base),
+          r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
+        ],
+      })),
+    });
+  }
+  if (pitching.length > 0) {
+    tables.push({
+      title: '生涯年表',
+      caption: '投手',
+      head: ['年', '齡', '球隊', '定位', ...PITCHING_COLUMNS.map((c) => c.key)],
+      lefts: [2],
+      rows: pitching.map((r, i) => ({
+        tint: tint(r),
+        cells: [
+          ...lead(r, pitching[i - 1]?.year === r.year),
+          r.pitcherRole ?? '—',
+          ...cells(PITCHING_COLUMNS, r.pitching!, r.base),
+        ],
+      })),
+    });
+  }
+
+  const totalTable = (
+    title: string,
+    picked: readonly TotalRow[],
+    side: 'batting' | 'pitching',
+  ): CardTable | null => {
+    const only = picked.filter((r) => r[side] !== null);
+    if (only.length === 0) return null;
+    return {
+      title,
+      caption: side === 'batting' ? '野手' : '投手',
+      head:
+        side === 'batting'
+          ? ['聯盟', '季', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
+          : ['聯盟', '季', ...PITCHING_COLUMNS.map((c) => c.key)],
+      lefts: [0],
+      rows: only.map((r) => ({
+        tint: null,
+        cells:
+          side === 'batting'
+            ? [
+                r.label,
+                String(r.seasons),
+                ...cells(BATTING_COLUMNS, r.batting!, r.base),
+                r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
+              ]
+            : [r.label, String(r.seasons), ...cells(PITCHING_COLUMNS, r.pitching!, r.base)],
+      })),
+    };
+  };
+
+  const top = summary.leagues.length > 1 ? [topTotalRow(summary)] : [];
+  for (const t of [
+    totalTable('各聯盟通算', totals, 'batting'),
+    totalTable('各聯盟通算', totals, 'pitching'),
+    ...(top.length > 0
+      ? [totalTable('頂級聯盟通算', top, 'batting'), totalTable('頂級聯盟通算', top, 'pitching')]
+      : []),
+  ]) {
+    if (t !== null) tables.push(t);
+  }
+
+  for (const side of ['batting', 'pitching'] as const) {
+    const only = summary.internationalSeasons.filter((r) => r[side] !== null);
+    if (only.length === 0) continue;
+    tables.push({
+      title: '國際賽',
+      caption: side === 'batting' ? '野手' : '投手',
+      head: [
+        '年',
+        '齡',
+        '賽事',
+        '名次',
+        ...(side === 'batting' ? BATTING_COLUMNS : PITCHING_COLUMNS).map((c) => c.key),
+      ],
+      lefts: [2, 3],
+      rows: only.map((r) => ({
+        tint: null,
+        cells: [
+          String(r.year),
+          String(r.age),
+          r.tournament,
+          `${r.rank}${r.mvp ? '・MVP' : ''}`,
+          ...(side === 'batting'
+            ? cells(BATTING_COLUMNS, r.batting!, intlBase)
+            : cells(PITCHING_COLUMNS, r.pitching!, intlBase)),
+        ],
+      })),
+    });
+  }
+
+  if (summary.internationalSeasons.length > 0) {
+    const row = intlTotalRow(summary);
+    for (const side of ['batting', 'pitching'] as const) {
+      if (row[side] === null) continue;
+      tables.push({
+        title: '國際賽通算',
+        caption: side === 'batting' ? '野手' : '投手',
+        head:
+          side === 'batting'
+            ? ['賽事', '屆', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
+            : ['賽事', '屆', ...PITCHING_COLUMNS.map((c) => c.key)],
+        lefts: [0],
+        rows: [
+          {
+            tint: null,
+            cells:
+              side === 'batting'
+                ? [row.label, String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base), '0']
+                : [row.label, String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base)],
+          },
+        ],
+      });
+    }
+  }
+
+  // 掛靴的地方：引退之後球團關係已經結束，因此讀 retiredFrom 而不是 pro
+  // （見 PlayerState.retiredFrom，記分板也是讀這一份）。
+  const at = state.retiredFrom;
+  return {
+    name: state.origin.name,
+    role: roleLabelOf(state),
+    hands: `投${hand(state.origin.throws)}打${hand(state.origin.bats)}`,
+    age: state.age,
+    year: state.year,
+    seed: game.setup.seed,
+    team: at?.team ?? state.pro?.team ?? '',
+    league: at?.levelName ?? state.pro?.levelName ?? '',
+    traits: shownTraits(state.traits, state.traitNames).map((t) => ({
+      label: t.label,
+      bad: t.tone === 'bad',
+    })),
+    retire: retireText(game.flow.log),
+    tables,
+    honors: honorGroups({
+      awards: state.awards,
+      honors: state.honors,
+      summary,
+      love: state.love,
+    }),
+  };
+}
+
+/**
+ * 引退之日那張卡的內文。
+ *
+ * 從事件流裡撈，不跟引擎再要一份——那段文字是抽出來的場景（依代表聯盟與生涯
+ * 分級選用），重算一次可能抽到另一則，圖上寫的就不是他那天讀到的那一段了。
+ * 卡片內文是 HTML，這裡要還原成純文字。
+ */
+function retireText(log: readonly LogEntry[]): string | null {
+  const hit = [...log].reverse().find((e) => e.kind === 'card' && e.title === '引退之日');
+  if (hit === undefined || hit.kind !== 'card') return null;
+  return hit.body
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 /** 養成期與職業合成一份年表，依年度排序。 */
 function careerRows(summary: CareerSummary): readonly CareerRow[] {
   const amateurRows: CareerRow[] = summary.amateurSeasons.map((a, i) => ({
@@ -1303,8 +1862,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     // 學制不寫——校名已經說了那是國中還是高中。
     note: null,
     position: a.position,
-    // 養成期沒有牛棚分工。
-    pitcherRole: null,
+    pitcherRole: a.pitcherRole,
     batting: a.batting,
     pitching: a.pitching,
     injured: null,
@@ -1445,6 +2003,20 @@ function StatLines({
 
 }
 
+/**
+ * 姓名旁邊那個守位／定位標籤。記分板與生涯成績圖共用。
+ *
+ * 寫英文代碼（P＋DH），不寫「投手＋指定打擊」——姓名那一行還要擠慣用手，中文
+ * 全稱會把它撐到換行。純投手只寫定位：先發、終結、布局、中繼、長中繼是五種
+ * 不同的球員，一個沒有資訊量的 P 說不出他是哪一種。
+ */
+function roleLabelOf(state: PlayerState): string {
+  const pitcherRole = state.pitcherRole ?? 'P';
+  if (!state.playsField) return pitcherRole;
+  if (state.traits.has('two_way')) return `${pitcherRole}＋${state.position ?? 'DH'}`;
+  return state.position ?? 'DH';
+}
+
 function Board({
   state,
   rating,
@@ -1487,12 +2059,7 @@ function Board({
   // 投手寫**定位**而不是一個沒有資訊量的 P——先發、終結、布局、中繼、長中繼是
   // 五種不同的球員，跟守位一樣每季重新判定。還沒進職業之前沒有牛棚分工，那時
   // 就是 P。
-  const pitcherRole = state.pitcherRole ?? 'P';
-  const roleLabel = !state.playsField
-    ? pitcherRole
-    : state.traits.has('two_way')
-      ? `${pitcherRole}＋${state.position ?? 'DH'}`
-      : (state.position ?? 'DH');
+  const roleLabel = roleLabelOf(state);
   return (
     <div id="board">
       <h4 className="board-title">球員</h4>
@@ -1577,6 +2144,14 @@ function Board({
             榮譽 {state.honors.length}
           </span>
         )}
+      </div>
+      {/* 特性接在 SEED 那排下面。**這一份只有手機看得到**（桌面由右欄的成績
+          面板負責，見 app.css）：手機把成績面板整塊收掉，狀態得有地方去，而
+          記分板是釘在畫面頂端、兩頁都看得到的那一塊。
+          同一個 `TraitList`，只是不帶「狀態」小標——這一帶（年薪、SEED、榮譽）
+          本來就沒有小標。 */}
+      <div id="bd-traits">
+        <TraitList traits={state.traits} names={state.traitNames} heading={false} />
       </div>
     </div>
   );
@@ -1777,8 +2352,8 @@ function AbilityRow({
   // 與舊版一致的表達方式：蓄力／這一級所需點數，例如 0/2。成本 1 點時不顯示。
   // 欠點另外標一個「欠」字：分母跟著換成退一級退回來的錢，只寫負號會讀成
   // 「存了 -1 點」。
-  const gauge = carryGauge(current, ceiling, carry, growthCurve(state.traits.has('two_way')));
-  const cost = abilityCost(current, ceiling, growthCurve(state.traits.has('two_way')));
+  const gauge = carryGauge(current, ceiling, carry, growthCurve(state.traits.has('two_way'), state.age));
+  const cost = abilityCost(current, ceiling, growthCurve(state.traits.has('two_way'), state.age));
 
   // 量表刻度固定 20–80，**任何情況都不伸縮**。尾端會跟著上限提升而變長的話，
   // 同一條能力在事件前後長度不同、十幾條之間也互相對不齊，玩家沒辦法一眼橫著

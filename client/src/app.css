@@ -95,6 +95,21 @@ a{color:var(--info)}
   font-weight:700;color:var(--accent);letter-spacing:.08em}
 #bd-money span{color:var(--dim);font-weight:500}
 #lamps{display:flex;gap:14px;justify-content:center;margin-top:7px}
+/* 記分板裡的特性列。**只有手機用得到**——桌面的狀態仍然接在右欄的成績表下面
+   （那是它原本的位置：成績與狀態是同一段時間的兩種側寫）。手機把整塊成績面板
+   收掉，狀態得有地方去，而記分板是釘在畫面頂端、兩頁都看得到的那一塊。
+
+   兩邊是同一個 TraitList 元件，因此內容不可能分岔；分岔的只有掛在哪裡。
+
+   與記分板其餘的附註帶同一種對齊（置中），標籤多了就自然換行——它會把記分板
+   撐高，而記分板是 fixed 的，高度由 ResizeObserver 量給 --board-h，中間那條
+   帶子跟著縮，不會被蓋住。 */
+#bd-traits{display:none;margin-top:8px}
+#bd-traits p{text-align:center}
+#bd-traits .tag-note{min-height:0}
+/* 一個特性都還沒有的時候整塊不存在（TraitList 在記分板裡不印「還沒有任何
+   特性」），連 margin 都不要留。 */
+#bd-traits:empty{display:none}
 .lamp{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--dim);letter-spacing:.12em}
 .lamp i{width:9px;height:9px;border-radius:50%;background:var(--panel2);border:1px solid var(--edge);display:inline-block}
 .lamp.on{color:var(--text);font-weight:700} .lamp.on i{background:var(--accent);box-shadow:var(--glow);border-color:var(--accent)}
@@ -191,10 +206,10 @@ table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.
 #act.collapsed{display:none!important}
 .btn{display:block;width:100%;background:var(--panel2);border:1px solid var(--edge);color:var(--text);
   font-family:var(--sans);font-size:15px;font-weight:700;border-radius:var(--r);padding:11px 14px;margin-top:8px;
-  cursor:pointer;text-align:left;transition:.15s}
+  cursor:pointer;text-align:center;transition:.15s}
 .btn:active{transform:scale(.98)} .btn:hover{border-color:var(--accent)}
 .btn small{display:block;font-weight:400;font-size:12px;color:var(--dim);margin-top:2px}
-.btn.main{background:var(--btnbg);border-color:var(--btnedge);color:var(--btntx);text-align:center}
+.btn.main{background:var(--btnbg);border-color:var(--btnedge);color:var(--btntx)}
 .btn.main small{color:inherit;opacity:.8}
 .btn.warn{border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
 /* 並排的一組動作鈕。選擇器不掛在 #act 底下——動作區的實際 id 是 panel-act。
@@ -465,13 +480,11 @@ body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content
 .fin-caption{font-family:var(--head);font-size:11px;letter-spacing:.16em;
   color:var(--dim);margin-bottom:2px}
 #panel-career .sub{color:var(--dim);font-size:11px}
-/* 里程碑與獎項同屬成就，但來源不同：一個是累積出來的，一個是投票投出來的。
-   底色區隔開，玩家掃一眼就分得出來。 */
-.tag.milestone{border-style:dashed;opacity:.85}
-/* 養成期與國際賽的榮譽：沒有結構化紀錄，也沒有年份，再淡一階區隔開。 */
-.tag.amateur{opacity:.7}
-/* 【人生】：婚姻與孩子不是獎項，但它是這段生涯的一部分。 */
-.tag.life{border-style:dotted;opacity:.8}
+/* 榮譽榜的四組標籤（獎項／里程碑／業餘與國際賽／人生）**長得一模一樣**。
+   這裡曾經用虛線、點線與不同的透明度區分來源，但每一組上面本來就寫著自己的
+   小標——同一件事編碼兩次，而且形狀那一份還要先看得懂才讀得出來。淡掉的那兩
+   組更糟：透明度在版面上的意思是「比較不重要」，可是一面國際賽的金牌並不比
+   一座打點王次要。 */
 /* 榮譽榜只在生涯結束後出現，接在生涯年表後面，同樣是事件流末端的結算卡。
    外框與標題由 .card 負責。 */
 #panel-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
@@ -513,12 +526,62 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
     border-left:1px solid var(--edge);border-right:1px solid var(--edge)}
   #col-left,#col-right{height:100vh;height:100dvh;overflow:hidden}
 }
+/* 手機：中間是「能力頁 ‖ 事件頁」的橫向走馬燈。
+
+   **走馬燈不另外包一層，是 #game 自己換角色。** 那兩頁在桌面分屬左右欄，一個
+   DOM 生不出兩種父子關係；硬包一層就得改寫桌面的 grid，而 grid 的列高會把
+   #board 與 #panel-stats 綁進同一列（列高取兩者的大者），能力欄的起點就跟著
+   成績表的高度跑——桌面的版面於是動了。改成讓 #game 在這個斷點下變成橫向 snap
+   容器，兩欄各佔一頁，**上面那段桌面 CSS 一行都不必碰**。
+
+   記分板與動作區改 fixed：它們分別在兩頁裡面，留在流裡會跟著頁一起滑走。代價
+   是中間那條帶子的上下界要靠 JS 量出來的 --board-h / --act-h（記分板的高度隨
+   合約、年薪、特性數量變動，動作區隨選項數量變動，兩個都不是常數）。 */
 @media(max-width:920px){
-  #col-left{border-right:none;border-bottom:1px solid var(--edge)}
-  #panel-abilities{max-height:46vh}
-  #panel-log{max-height:60vh}
-  /* 單欄堆疊時右欄沒有確定高度，百分比解不出來，改用視窗高度。 */
-  #panel-stats{max-height:50vh}
+  #game{flex-direction:row;height:100dvh;
+    overflow-x:auto;overflow-y:hidden;
+    scroll-snap-type:x mandatory;overscroll-behavior-x:contain;
+    padding-top:var(--board-h,0px);padding-bottom:var(--act-h,0px);
+    /* 捲軸自己是多餘的：頁點已經在講「一共兩頁、現在在哪一頁」。 */
+    scrollbar-width:none}
+  #game::-webkit-scrollbar{display:none}
+  #col-left,#col-right{flex:0 0 100%;height:100%;min-width:0;border-right:none;
+    scroll-snap-align:start;scroll-snap-stop:always}
+  #board,#panel-act{position:fixed;left:0;right:0;z-index:30}
+  #board{top:0}
+  #panel-act{bottom:0}
+  /* 成績表在生涯進行中不出現：每季結算的事件卡已經印過同一份數字（含 OPS+／
+     ERA+），面板是講第二次，而它佔掉的正是手機最貴的那一屏。整塊一起收掉，
+     裡面的狀態改由記分板底下那一份接手。 */
+  #panel-stats{display:none}
+  #bd-traits{display:block}
+  /* SEED 與榮譽在手機上收掉。SEED 是一串生涯中途不會變的字，榮譽數在結算卡上
+     攤得更開——兩盞燈佔掉的是記分板下方一整行，而記分板是 fixed 的，那一行
+     直接從中間那條帶子的高度扣。開局畫面與下載的生涯成績圖上都還印著 SEED。 */
+  #lamps{display:none}
+  #pagenav{display:block}
+}
+
+/* ---------- 換頁提示：左右半透明箭頭 ＋ 兩顆頁點 ---------- */
+/* 預設不存在——它是手機專屬的東西，桌面兩欄同時看得到，沒有頁可換。 */
+#pagenav{display:none}
+@media(max-width:920px){
+  /* 蓋在中間那條帶子上，本身不收事件（否則整條帶子都點不到），只有箭頭與
+     頁點自己收。 */
+  #pagenav{position:fixed;left:0;right:0;top:var(--board-h,0px);bottom:var(--act-h,0px);
+    z-index:29;pointer-events:none}
+  .pagearrow{position:absolute;top:50%;transform:translateY(-50%);pointer-events:auto;
+    width:26px;height:56px;padding:0;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--edge);background:color-mix(in srgb,var(--panel) 55%,transparent);
+    color:var(--dim);font-size:20px;line-height:1;cursor:pointer}
+  /* [hidden] 擋不住 display:flex，UA 的樣式權重比類別低——箭頭在到底的那一側
+     要自己寫一條才收得起來。 */
+  .pagearrow[hidden]{display:none}
+  .pagearrow.left{left:0;border-left:none;border-radius:0 var(--r) var(--r) 0}
+  .pagearrow.right{right:0;border-right:none;border-radius:var(--r) 0 0 var(--r)}
+  .pagedots{position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center;gap:6px}
+  .pagedots i{width:5px;height:5px;border-radius:50%;background:var(--edge)}
+  .pagedots i.on{background:var(--accent);box-shadow:var(--glow)}
 }
 
 /* ---------- 桌面三欄(>920px) ---------- */

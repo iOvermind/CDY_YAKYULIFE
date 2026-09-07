@@ -89,7 +89,12 @@ export interface TournamentResult {
   readonly rankIndex: number;
   readonly rank: string;
   readonly points: number;
-  readonly mvp: boolean;
+  /**
+   * MVP 的骰子擲出來的數字（0–100）。**這裡不判定 MVP**——判定要看那一屆的
+   * 成績，而成績要等這個函式回傳之後才生得出來。骰子仍然在原地擲、擲同樣的
+   * 次數，只是把數字交出去，由 `winsMvp()` 在成績算完之後比。
+   */
+  readonly mvpRoll: number;
   readonly injuryNextSeason: number;
 }
 
@@ -100,7 +105,7 @@ export interface TournamentResult {
  * 國際賽與個人成績的差別。
  *
  * **抽取次數與結果無關**：不管名次如何，MVP 的骰子都要擲，否則同一個種子會因為
- * 某一屆差一名而讓後面所有判定整串偏移。
+ * 某一屆差一名而讓後面所有判定整串偏移。骰子擲完就交出去，判定在 `winsMvp()`。
  */
 export function playTournament(
   world: World,
@@ -124,18 +129,52 @@ export function playTournament(
   const base = cfg.points[index] ?? 0;
   const points = ace ? Math.max(base, cfg.intlace_effect.min_points) : base;
 
-  // MVP 的骰子一律擲，與名次無關。
+  // MVP 的骰子一律擲，與名次無關。判定不在這裡——見 winsMvp()。
   const mvpRoll = rng.next() * 100;
-  const clutch = options.traits.has(cfg.mvp.clutch_trait) ? cfg.mvp.clutch_multiplier : 1;
-  const mvpChance = (cfg.mvp.by_rank[rank] ?? 0) * clutch;
 
   return {
     rankIndex: index,
     rank,
     points,
-    mvp: mvpRoll < mvpChance,
+    mvpRoll,
     injuryNextSeason: ace ? cfg.intlace_effect.injury_next_season : cfg.injury_next_season,
   };
+}
+
+/**
+ * 這一屆拿不拿得到賽會 MVP。
+ *
+ * ```
+ * 機率 = 名次基礎 × 勝率²  × 大場面倍率      ，夾在 100%
+ * ```
+ *
+ * **名次開門、成績決定機率。** 舊規則只擲一顆骰子，機率完全由中華隊的名次決定
+ * ——冠軍 30%、亞軍 8%，一眼都不看你打得怎麼樣。於是勝率 .315 的人照樣拿 MVP，
+ * 而那正是玩家最不能接受的一種獎：他知道自己打得爛。
+ *
+ * 乘的是**勝率的平方**而不是勝率本身：勝率天生落在 0~1，平方之後仍然落在 0~1，
+ * 不必再夾一次上限，也不會有「打太好導致機率破表」要另外處理；而平方讓平庸與
+ * 頂尖之間拉開得夠明顯——.500 只剩四分之一，.750 還有一半以上。
+ *
+ * 勝率取那一屆**投打兩側的份額相加**再算。二刀流是一個人，拆成兩個半個人去比
+ * 會讓他兩邊都不夠看。
+ *
+ * 名次基礎給到第四名以下也留了一點（`by_rank` 的其他），因為賽會 MVP 偶爾真的
+ * 落在沒進四強的隊伍上；乘上平方之後那是 1% 出頭的事。
+ */
+export function winsMvp(options: {
+  readonly roll: number;
+  readonly rank: string;
+  /** 那一屆的勝率（投打份額相加後的 winPct）。沒有成績時傳 null，一律不給。 */
+  readonly winPct: number | null;
+  readonly traits: ReadonlySet<string>;
+}): boolean {
+  if (options.winPct === null) return false;
+  const base = cfg.mvp.by_rank[options.rank] ?? cfg.mvp.by_rank['其他'] ?? 0;
+  const clutch = options.traits.has(cfg.mvp.clutch_trait) ? cfg.mvp.clutch_multiplier : 1;
+  const performance = Math.max(0, Math.min(1, options.winPct)) ** 2;
+  const chance = Math.min(100, base * performance * clutch);
+  return options.roll < chance;
 }
 
 /** 這個名次值不值得記進榮譽榜。前三名才記。 */
