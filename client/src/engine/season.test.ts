@@ -827,3 +827,52 @@ describe('後援：機會 × 成功率', () => {
     expect(converted / n).toBeLessThan(56);
   });
 });
+
+describe('三壘打的曲線', () => {
+  const at = (spd: number) => {
+    let total = 0;
+    const n = 300;
+    for (let i = 0; i < n; i++) {
+      const l = proBattingLine(
+        new World(`3b-${spd}-${i}`),
+        with_(60, { spd, sta: 75 }),
+        'CF',
+        'MLB',
+        60,
+        null,
+      );
+      total += l.triple;
+    }
+    return total / n;
+  };
+
+  /**
+   * 三壘打不是「比較快就多一點」，是快到某個程度才跑得出來的東西。曲線在中段
+   * 太平的話，「跑得中上」就開始吐出可觀的三壘打——現實裡那一段幾乎沒有。
+   */
+  it('中段跑得中上的人拿不到多少——腳程 70 還在個位數的低段', () => {
+    expect(at(70)).toBeLessThan(3);
+  });
+
+  it('頂端仍然明顯——腳程 80 是腳程 70 的五倍以上', () => {
+    expect(at(80)).toBeGreaterThan(at(70) * 5);
+  });
+
+  it('一路遞增，沒有任何一段反轉', () => {
+    const curve = [55, 60, 65, 70, 75, 80].map(at);
+    for (let i = 1; i < curve.length; i++) {
+      expect(curve[i]!).toBeGreaterThanOrEqual(curve[i - 1]!);
+    }
+  });
+
+  /**
+   * 底數要 ≥ 1 才吃得到 ratio_cap，換算成腳程約 82.5——一般天花板 80 到不了。
+   * 單季紀錄因此是留給被事件推過上限的極端腳程的。
+   */
+  it('一般天花板碰不到錨點，紀錄要靠推過上限的腳程', () => {
+    const t = cfg.batting.records.triple;
+    const baseAt = (spd: number) => (60 * 1 + 60 * 1 + spd * 4) / (t.divisor ?? 1);
+    expect(baseAt(80)).toBeLessThan(1);
+    expect(baseAt(85)).toBeGreaterThan(1);
+  });
+});
