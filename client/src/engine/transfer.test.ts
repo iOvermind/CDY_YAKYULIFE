@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { amateur, leagues } from '../data/index.ts';
 import { pathOf } from './pro.ts';
 import { World } from './rng.ts';
+import { initLeague } from './teams.ts';
+import { teams as teamsData } from '../data/index.ts';
 import {
   amateurOverseasOffers,
   canRefuseDemotion,
   canRequestPosting,
+  domesticFaOffers,
   fallbackOffers,
   hasOverseasFreeAgency,
   landingLevel,
@@ -484,4 +487,65 @@ describe('慣用手的順風', () => {
     const min = leagues.levels[bottom]!.min;
     expect(landingLevel('CPBL', min - 30, null, 0, 'recruit', 'switch')).toBeNull();
   });
+});
+
+describe('自由球員的國內市場', () => {
+  const faCtx = (d: number, seed: string) => {
+    const world = new World(seed);
+    return {
+      world,
+      ctx: {
+        org: 'CPBL',
+        level: 'CPBL1',
+        currentTeam: teamsData.leagues['CPBL']![0]!.name,
+        overall: 50,
+        d,
+        standards: null,
+        tier: 'none' as const,
+        table: initLeague(world, 'CPBL'),
+      },
+    };
+  };
+
+  it('打得好就有同聯盟的球隊上門——這是 FA 市場的主體', () => {
+    let withOffers = 0;
+    for (let i = 0; i < 20; i++) {
+      const { world, ctx } = faCtx(6, `fa-strong-${i}`);
+      if (domesticFaOffers(world, ctx).length > 0) withOffers++;
+    }
+    expect(withOffers).toBe(20);
+  });
+
+  it('d 值高的人拿到的報價比中庸的人多', () => {
+    const count = (d: number, tag: string) => {
+      let total = 0;
+      for (let i = 0; i < 40; i++) {
+        const { world, ctx } = faCtx(d, `fa-${tag}-${i}`);
+        total += domesticFaOffers(world, ctx).length;
+      }
+      return total;
+    };
+    expect(count(6, 'star')).toBeGreaterThan(count(-3, 'weak'));
+  });
+
+  it('不會開自己現在這一隊，也不會重複開同一隊', () => {
+    for (let i = 0; i < 30; i++) {
+      const { world, ctx } = faCtx(6, `fa-dup-${i}`);
+      const offers = domesticFaOffers(world, ctx);
+      const names = offers.map((o) => o.team);
+      expect(names).not.toContain(ctx.currentTeam);
+      expect(new Set(names).size).toBe(names.length);
+    }
+  });
+
+  it('層級與體系都不變——同聯盟換隊不是轉會', () => {
+    const { world, ctx } = faCtx(6, 'fa-level');
+    for (const offer of domesticFaOffers(world, ctx)) {
+      expect(offer.org).toBe('CPBL');
+      expect(offer.level).toBe('CPBL1');
+      expect(offer.homecoming).toBe(false);
+      expect(offer.table).toBe(ctx.table);
+    }
+  });
+
 });

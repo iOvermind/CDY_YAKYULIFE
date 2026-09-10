@@ -1581,6 +1581,106 @@ describe('合約', () => {
     throw new Error('三十局都沒有出現球員自己談的續約');
   });
 
+  /**
+   * 合約到期跳出去，桌上不能只有海外球團——同聯盟的對手才是 FA 市場的主體。
+   */
+  it('測試自由市場時，同聯盟的其他球隊也會來搶', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = started({ seed: `ct-fam-${i}` });
+      let guard = 0;
+      let k = 0;
+      let sawDomestic = false;
+      while (game.flow.prompt !== null && guard++ < 6000) {
+        const prompt = game.flow.prompt;
+        const options = prompt.options;
+        const level = game.state?.pro?.levelName ?? '';
+        const team = game.state?.pro?.team ?? '';
+        if (prompt.title?.startsWith('自由市場報價一覽') === true) {
+          // 同聯盟的報價：層級與現在同一層，而且不是自己現在這一隊。
+          sawDomestic =
+            sawDomestic ||
+            options.some(
+              (o) =>
+                o.id.startsWith('market:') &&
+                o.id !== 'market:stay' &&
+                o.label.includes(`（${level}）`) &&
+                !o.label.includes(team),
+            );
+        }
+        const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+        const pick =
+          options.find((o) => o.id === 'fa:market') ??
+          options.find((o) => o.id === 'term:long') ??
+          options.find((o) => o.id === 'term:short') ??
+          options.find((o) => o.id === 'retire:stay') ??
+          rot
+            .map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true))
+            .find((o) => o !== undefined) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
+        if (pick === undefined) break;
+        if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+        game.choose(pick.id);
+      }
+      if (sawDomestic) return;
+    }
+    throw new Error('四十局都沒有在自由市場上看到同聯盟的報價');
+  });
+
+  /** 同聯盟換隊只換球衣：層級、體系與服務年資的帳都不重來。 */
+  it('簽給同聯盟的別隊不算轉會，層級不變', () => {
+    for (let i = 0; i < 40; i++) {
+      const game = started({ seed: `ct-within-${i}` });
+      let guard = 0;
+      let k = 0;
+      let before: { level: string; team: string } | null = null;
+      let after: { level: string; team: string } | null = null;
+      while (game.flow.prompt !== null && guard++ < 6000) {
+        const prompt = game.flow.prompt;
+        const options = prompt.options;
+        const pro = game.state?.pro;
+        let domestic: { id: string } | undefined;
+        if (prompt.title?.startsWith('自由市場報價一覽') === true && pro != null) {
+          domestic = options.find(
+            (o) =>
+              o.id.startsWith('market:') &&
+              o.id !== 'market:stay' &&
+              o.label.includes(`（${pro.levelName}）`) &&
+              !o.label.includes(pro.team),
+          );
+          if (domestic !== undefined && before === null) {
+            before = { level: pro.level, team: pro.team };
+          }
+        }
+        const rot = [...DURABLE.slice(k % DURABLE.length), ...DURABLE];
+        const pick =
+          domestic ??
+          options.find((o) => o.id === 'fa:market') ??
+          options.find((o) => o.id === 'term:long') ??
+          options.find((o) => o.id === 'term:short') ??
+          options.find((o) => o.id === 'retire:stay') ??
+          rot
+            .map((key) => options.find((o) => o.id === `alloc:${key}` && o.disabled !== true))
+            .find((o) => o !== undefined) ??
+          options.find((o) => o.id === 'draft:accept') ??
+          options.find((o) => o.disabled !== true && o.id !== 'alloc:undo');
+        if (pick === undefined) break;
+        if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') k++;
+        game.choose(pick.id);
+        const now = game.state?.pro;
+        if (before !== null && after === null && now != null && now.team !== before.team) {
+          after = { level: now.level, team: now.team };
+        }
+      }
+      if (before === null || after === null) continue;
+      expect(after.level).toBe(before.level);
+      expect(after.team).not.toBe(before.team);
+      expect(cards(game).some((c) => c.title === '轉隊')).toBe(true);
+      return;
+    }
+    throw new Error('四十局都沒有簽到同聯盟的別隊');
+  });
+
   it('母隊會在合約剩一年時提前來談延長', () => {
     for (let i = 0; i < 30; i++) {
       const game = playWithContracts(`ct-ext-${i}`);

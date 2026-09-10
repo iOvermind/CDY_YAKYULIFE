@@ -15,6 +15,7 @@
 
 import { amateur } from '../data/index.ts';
 import { personalStandardOf, type LeagueStandards } from './league.ts';
+import { pythagoreanWinPct } from './metrics.ts';
 import type { HandednessTier } from './handedness.ts';
 import type { World } from './rng.ts';
 
@@ -263,4 +264,21 @@ export function tournamentInnings(): {
 /** 國際賽的水準。一屆賽會的對手是各國的一線球員。 */
 export function tournamentPar(): number {
   return cfg.stats.par;
+}
+
+/**
+ * 代表隊在這一屆賽會裡的預期勝率。
+ *
+ * 勝敗由成績推導之後，投手的成績需要一個「他的球隊有多強」——而國際賽沒有球隊
+ * 戰力表可查。**用那一屆你自己這一隊的名次去推是循環論證**：名次是結果，拿結果
+ * 去算勝投等於先知道答案再算過程。
+ *
+ * 改成由兩個水準相撞：**母國頂級聯盟當年的浮動 par**（代表隊就是從那裡挑人的）
+ * 對上**賽會自己的 par**，走引擎現有的畢氏公式。中職 par 44 對賽會 52 推出 .417
+ * ——台灣隊是個有機會咬人的弱隊，而且中職的 par 逐年浮動，代表隊的強弱會跟著
+ * 世代走，不是一個寫死的數字。
+ */
+export function nationalTeamWinPct(homeParNow: number): number {
+  const par = tournamentPar();
+  return par <= 0 ? 0.5 : pythagoreanWinPct(homeParNow / par);
 }

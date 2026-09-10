@@ -6,6 +6,7 @@ import {
   evaluateMovement,
   pathOf,
   proDiceCount,
+  refusalReleaseChance,
   shouldRetire,
 } from './pro.ts';
 import type { Abilities } from './rating.ts';
@@ -416,5 +417,38 @@ describe('慣用手的順風', () => {
       });
     expect(at('none').movement).toBe('release');
     expect(at('switch').movement).not.toBe('release');
+  });
+});
+
+describe('拒絕下放之後的釋出', () => {
+  const pressureAt = (shortfall: number): number => {
+    const c = cfg.movement.demote.chance;
+    return Math.max(c.min, Math.min(c.max, c.base + shortfall * c.per_point));
+  };
+
+  /** 使用者回報的病灶：拒絕下放幾乎必定被釋出。 */
+  it('沒有任何一段是必定被釋出的', () => {
+    for (let shortfall = 1; shortfall <= 8; shortfall++) {
+      expect(refusalReleaseChance(pressureAt(shortfall))).toBeLessThan(85);
+    }
+  });
+
+  it('也沒有任何一段是免費的——落差再小也賭得輸', () => {
+    for (let shortfall = 1; shortfall <= 8; shortfall++) {
+      expect(refusalReleaseChance(pressureAt(shortfall))).toBeGreaterThan(0);
+    }
+  });
+
+  it('跟不上得越多越留不住', () => {
+    expect(refusalReleaseChance(pressureAt(3))).toBeGreaterThan(
+      refusalReleaseChance(pressureAt(1)),
+    );
+  });
+
+  it('比直接沿用下放壓力寬鬆——同一件事不收兩次費', () => {
+    for (let shortfall = 1; shortfall <= 5; shortfall++) {
+      const p = pressureAt(shortfall);
+      expect(refusalReleaseChance(p)).toBeLessThan(p);
+    }
   });
 });

@@ -31,6 +31,7 @@ import {
   traits as traitsData,
 } from '../src/data/index.ts';
 import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
+import { eraAt } from '../src/engine/season.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
 import type { CareerSummary } from '../src/engine/career.ts';
 
@@ -127,9 +128,12 @@ describe('聯盟基準環境', () => {
    */
   it('打線產出的分數與聯盟平均防禦率對得起來', () => {
     const runsPerGame = base.runsCreatedPerPa * seasonCfg.advanced.shares.team_pa_per_game;
-    // 失分裡有一段是非自責的（野手掉的球），兩個錨點的比值就是那個係數。
+    // 失分裡有一段是非自責的（野手掉的球）。自責分改由事件推導之後，那個係數
+    // 不再是兩個錨點的比值，要從聯盟平均投手實際投出來的量算：一段基準局數裡
+    // 的自責分由 eraAt(0) 給，非自責那一段仍是自己的錨點。
     const rec = seasonCfg.pitching.records;
-    const runsPerEarnedRun = (rec.er.anchor + rec.unearned.anchor) / rec.er.anchor;
+    const earnedPerSpan = (eraAt(0) * rec.unearned.per) / 9;
+    const runsPerEarnedRun = (earnedPerSpan + rec.unearned.anchor) / earnedPerSpan;
     const impliedEra = runsPerGame / runsPerEarnedRun;
     expect(Math.abs(impliedEra - base.era)).toBeLessThan(0.5);
   });

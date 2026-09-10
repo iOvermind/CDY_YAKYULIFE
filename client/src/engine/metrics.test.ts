@@ -38,7 +38,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 
 const pit = (over: Partial<PitchingLine> = {}): PitchingLine => ({
   games: 25, starts: 25, wins: 10, losses: 8, saves: 0, holds: 0, outs: 450, hits: 145,
-  runs: 70, er: 65, bb: 45, so: 120, hr: 16, era: 3.9,
+  double: 32, triple: 3, runs: 70, er: 65, bb: 45, hbp: 6, so: 120, hr: 16, era: 3.9,
   ...over,
 });
 

@@ -1058,6 +1058,23 @@ export interface TransferData {
     readonly min_raise: number;
   };
   readonly fallback: { readonly max_offers: number };
+  /** 自由球員的國內市場：同體系其他球隊有幾支上門，看 d 值。 */
+  readonly free_agency: {
+    readonly suitors: {
+      /** 由高到低取第一個符合的。`chance` 是「今年有沒有人問」的百分比，省略即必定成立。 */
+      readonly tiers: readonly {
+        readonly min_d: number;
+        readonly chance?: number;
+        readonly min: number;
+        readonly max: number;
+      }[];
+      readonly default: {
+        readonly chance?: number;
+        readonly min: number;
+        readonly max: number;
+      };
+    };
+  };
   readonly orgs: Readonly<Record<string, TransferOrg>>;
 }
 
@@ -1086,6 +1103,14 @@ export interface LeaguesData {
   readonly top_league_names: Readonly<Record<string, string>>;
   readonly org_names: Readonly<Record<string, string>>;
   readonly minor_label: string;
+}
+
+/** 後援的機會：球隊勝場乘上一個隨球隊強弱下降的比例。 */
+export interface OpportunitySpec {
+  readonly base: number;
+  readonly per_team_win_pct: number;
+  readonly min: number;
+  readonly max: number;
 }
 
 export interface SeasonData {
@@ -1214,27 +1239,69 @@ export interface SeasonData {
     readonly innings: Readonly<Record<'SP' | 'CP' | 'SU' | 'MR' | 'LR', InningsSpec>> & {
       readonly jitter: number;
     };
+    /**
+     * 勝敗、救援與中繼。**全部由成績推導，沒有一格直接看能力。**
+     *
+     * 先發走兩段式賠率（勝場一段、敗投從沒贏的場次裡再切一段），後援走
+     * 「機會 × 成功率」。見 season.json 的說明與 ADR。
+     */
     readonly decision: {
-      readonly win_anchor: number;
-      /** 勝敗與救援自己的能力係數。par 球員必須落在「勝敗各半」。 */
-      readonly skill: { readonly base: number; readonly per_point: number } & Range;
-      readonly loss_anchor: number;
-      readonly relief_decision_anchor: number;
-      readonly save_anchor: number;
-      readonly hold_anchor: number;
-      readonly per_start: number;
-      readonly per_relief: number;
-      readonly loss_base: number;
-      readonly loss_floor: number;
+      readonly starter: {
+        readonly win_constant: number;
+        readonly win_exponent: number;
+        readonly loss_constant: number;
+        readonly loss_exponent: number;
+        readonly jitter: number;
+      };
       readonly team_win_reference: number;
+      readonly team_win_clamp: Range;
+      /** ERA+ 的比值進賠率式之前的夾制。防禦率 0.00 會讓比值無限大。 */
+      readonly era_ratio_clamp: Range;
+      readonly relief: {
+        /** 機會 = 球隊勝場 × 比例，而比例隨球隊變強而下降。 */
+        readonly save_opportunity: OpportunitySpec;
+        readonly hold_opportunity: OpportunitySpec;
+        readonly conversion: {
+          readonly anchor: number;
+          readonly exponent: number;
+          readonly jitter: number;
+        };
+        readonly blown_to_loss: { readonly value: number };
+        readonly vulture_win: { readonly per_game: number; readonly jitter: number };
+      };
       readonly save_coefficient: Readonly<Record<string, number>>;
       readonly hold_coefficient: Readonly<Record<string, number>>;
-      readonly jitter_decision: number;
-      readonly jitter_relief: number;
     };
     readonly records: {
       readonly hits: SlopeSpec;
-      readonly er: SlopeSpec;
+      /**
+       * 自責分不再自己一條錨點式——改由被打出來的事件推導，`scale` 是「得分
+       * 創造估出來的分」折成「投手該負責的那一份」的係數。
+       */
+      readonly er: {
+        readonly scale: number;
+        readonly cap_per_inning: number;
+        readonly jitter: number;
+      };
+      /** 被打的長打怎麼從被安打裡切。安打總數不動，只切比例。 */
+      readonly extra_base: {
+        readonly triple_share: number;
+        readonly double_share: number;
+        readonly stuff_slope: number;
+        readonly jitter_triple: number;
+        readonly jitter_double: number;
+      };
+      /** 觸身球。比照四壞看控球，量小得多。 */
+      readonly hbp: {
+        readonly floor_anchor: number;
+        readonly range_anchor: number;
+        readonly per: number;
+        readonly ability: string;
+        readonly reference: number;
+        readonly span: number;
+        readonly cap_per_inning: number;
+        readonly jitter: number;
+      };
       readonly unearned: { readonly anchor: number; readonly per: number; readonly jitter: number };
       readonly bb: {
         readonly floor_anchor: number;
@@ -1279,6 +1346,8 @@ export interface SeasonData {
     readonly demote: {
       readonly margin: number;
       readonly chance: { readonly base: number; readonly per_point: number } & Range;
+      /** 拒絕下放後的釋出：先把倖存率乘上這個倍數再擲。 */
+      readonly refuse_survival_multiplier: { readonly value: number };
     };
     readonly release: { readonly grace_years: number; readonly margin: number };
   };

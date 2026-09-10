@@ -9,7 +9,7 @@
  * 抽取一律走 season 子序列（見 ADR 0002 的歸屬規則）。
  */
 
-import { leagues, positions, season as cfg, type RecordSpec } from '../data/index.ts';
+import { ALL_ABILITIES, leagues, positions, season as cfg, type RecordSpec } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
 import { bullpenScore, pitcherStuff, type Abilities } from './rating.ts';
@@ -724,17 +724,151 @@ function pitcherRatio(value: number, par: number, floor = 0): number {
   return Math.min(p.ratio_cap, Math.max(floor, adj / p.ability_divisor));
 }
 
+/** 被打出來的一組事件。自責分由它推導，勝敗再由自責分推導。 */
+interface AllowedEvents {
+  readonly hits: number;
+  readonly hr: number;
+  readonly triple: number;
+  readonly double: number;
+  readonly bb: number;
+  readonly hbp: number;
+  readonly so: number;
+}
+
+/**
+ * 一段局數裡被打出來的事件。
+ *
+ * **抽取由呼叫端注入**：`proPitchingLine` 傳真正的亂數，`eraAt` 傳「沒有波動」
+ * 的常數函式。兩者因此走同一組公式——聯盟平均防禦率必須就是這組公式在 d=0
+ * 時真正產生的數字，各寫一份遲早會分岔。
+ */
+function allowedEvents(
+  ability: Abilities,
+  par: number,
+  ip: number,
+  skill: number,
+  noise: () => number,
+  jit: (n: number) => number,
+): AllowedEvents {
+  const p = cfg.pitching;
+  const rec = p.records;
+  const volume = (per: number): number => ip / per;
+
+  const hits = clampInt(
+    Math.round(rec.hits.anchor * volume(rec.hits.per) * Math.max(rec.hits.floor, rec.hits.base - rec.hits.slope * skill) * noise()) +
+      jit(rec.hits.jitter),
+    Math.round(ip * rec.hits.cap_per_inning),
+  );
+
+  // 被全壘打看的是**投不好的地方**：控球、縱向與球速離基準差多少。
+  let deficit = 0;
+  for (const [key, w] of Object.entries(rec.hr.deficit_weights)) {
+    deficit += (rec.hr.reference - (ability[key] ?? 0)) * w;
+  }
+  for (const [key, w] of Object.entries(rec.hr.plus_weights)) deficit += (ability[key] ?? 0) * w;
+  deficit -= rec.hr.par_slope * (par - p.reference_par);
+  const gopher = clamp(deficit / rec.hr.divisor, 0, 1);
+  const hr = clampInt(
+    Math.round((rec.hr.floor_anchor + rec.hr.range_anchor * gopher) * volume(rec.hr.per) * noise()) +
+      jit(rec.hr.jitter),
+    // 全壘打是安打的一種。
+    hits,
+  );
+
+  // 長打**從安打總數裡切**，不另外生成——安打總數是已經校準過的，讓新欄位去
+  // 動它等於把那份校準推翻。球威輕微壓低長打比例：投得好的人被打到的多半是
+  // 軟弱的一壘安，但那個效果很小，長打率本來就很難由投手控制。
+  const xb = rec.extra_base;
+  const nonHr = Math.max(0, hits - hr);
+  const compress = Math.max(0, 1 - (skill - 1) * xb.stuff_slope);
+  const triple = clampInt(
+    Math.round(nonHr * xb.triple_share * compress * noise()) + jit(xb.jitter_triple),
+    nonHr,
+  );
+  const double = clampInt(
+    Math.round(nonHr * xb.double_share * compress * noise()) + jit(xb.jitter_double),
+    nonHr - triple,
+  );
+
+  const ctlAdj = (ability['ctl'] ?? 0) - (par - p.reference_par);
+  const wildness = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
+  const bb = clampInt(
+    Math.round((rec.bb.floor_anchor + rec.bb.range_anchor * wildness) * volume(rec.bb.per) * noise()) +
+      jit(rec.bb.jitter),
+    Math.round(ip * rec.bb.cap_per_inning),
+  );
+
+  // 觸身球與四壞同源——都是控球掉出去的球，只是量小得多。
+  const hbpAdj = (ability[rec.hbp.ability] ?? 0) - (par - p.reference_par);
+  const wild2 = clamp((rec.hbp.reference - hbpAdj) / rec.hbp.span, 0, 1);
+  const hbp = clampInt(
+    Math.round((rec.hbp.floor_anchor + rec.hbp.range_anchor * wild2) * volume(rec.hbp.per) * noise()) +
+      jit(rec.hbp.jitter),
+    Math.round(ip * rec.hbp.cap_per_inning),
+  );
+
+  let arsenal = 0;
+  for (const [key, w] of Object.entries(rec.so.weights)) arsenal += (ability[key] ?? 0) * w;
+  arsenal -= rec.so.par_slope * (par - p.reference_par);
+  // **三次方**：會投的人才三振得到人，普通球種再多也只是被打。
+  const stuff = Math.pow(clamp(arsenal / rec.so.divisor, 0, 1), rec.so.exponent);
+  const so = clampInt(
+    Math.round((rec.so.floor_anchor + rec.so.range_anchor * stuff) * volume(rec.so.per) * noise()) +
+      jit(rec.so.jitter),
+    Math.round(ip * rec.so.cap_per_inning),
+  );
+
+  return { hits, hr, triple, double, bb, hbp, so };
+}
+
+/**
+ * 自責分：**由被打出來的事件推導**，不是自己一條式子。
+ *
+ * 用的是打者側同一條 Bill James 得分創造——`(上壘 × 壘打數) ÷ (被打數 + 保送
+ * + 觸身)`，其中被打數就是出局數加被安打。投手被打得很少，自責分就會跟著少；
+ * 舊的錨點式做不到這件事，被安打與自責分各算各的，彼此不相干。
+ *
+ * `scale` 把「這些事件會生出多少分」折成「投手該負責的那一份」：殘壘、雙殺、
+ * 換投之後由接手負責的跑者，都讓實際自責分低於估計值。
+ */
+function earnedRunsFrom(e: AllowedEvents, outs: number): number {
+  const single = e.hits - e.double - e.triple - e.hr;
+  const totalBases = single + e.double * 2 + e.triple * 3 + e.hr * 4;
+  const onBase = e.hits + e.bb + e.hbp;
+  const atBats = outs + e.hits;
+  const denominator = atBats + e.bb + e.hbp;
+  if (denominator === 0) return 0;
+  return ((onBase * totalBases) / denominator) * cfg.pitching.records.er.scale;
+}
+
+/**
+ * 所有能力都等於同一個值的投手。`eraAt` 的受試者。
+ *
+ * 「能力比聯盟平均高 d 點」這句話在事件模型裡沒有唯一解——被安打看球威、四壞
+ * 看控球、被全壘打看縱向與球速，各項可以長得完全不同。取**每一項都相同**的那
+ * 一個，是這句話唯一不偏袒任何一種投手的讀法。
+ */
+function uniformAbility(value: number): Abilities {
+  const out: Record<string, number> = {};
+  for (const key of ALL_ABILITIES) out[key] = value;
+  return out;
+}
+
 /**
  * 能力比聯盟平均高 `d` 點的投手，防禦率是多少。
  *
- * 基準線（ERA+ 的分母）與門檻線要的都是這個數字。**與 `proPitchingLine` 走同一組
- * 設定**：自責分的錨點乘上「投得越好越少」那條係數，換算成每九局。兩邊各寫一份的
- * 話，「聯盟平均防禦率」會跟真正產生出來的成績對不起來。
+ * 基準線（ERA+ 的分母）與門檻線要的都是這個數字。**與 `proPitchingLine` 走同一
+ * 組公式**：同一個受試者、同一組事件、同一條自責分式子，只是把波動與抖動關掉。
+ * 自責分改由事件推導之後，這個分母也必須跟著改——否則 ERA+ 100 會不再是聯盟
+ * 平均，而勝敗正是踩在 ERA+ 上面的。
  */
 export function eraAt(d: number, par = cfg.pitching.reference_par): number {
-  const er = cfg.pitching.records.er;
-  const skill = pitcherRatio(par + d, par);
-  return (er.anchor * Math.max(er.floor, er.base - er.slope * skill) * 9) / er.per;
+  const ip = cfg.pitching.records.hits.per;
+  const outs = Math.round(ip * 3);
+  const ability = uniformAbility(par + d);
+  const skill = pitcherRatio(pitcherStuff(ability, 'SP'), par);
+  const events = allowedEvents(ability, par, ip, skill, () => 1, () => 0);
+  return (earnedRunsFrom(events, outs) * 9) / ip;
 }
 
 /**
@@ -859,102 +993,100 @@ export function proPitchingLine(
   );
   const ip = outs / 3;
 
-  // ── 勝敗、救援、中繼
-  const dec = p.decision;
-  // 勝敗與救援用自己的除數：par 球員必須落在「勝敗各半」，共用 ability_divisor
-  // 會讓能力剛好等於聯盟平均的先發投出 .680 的勝率。
-  const decSkill = clamp(
-    dec.skill.base + (rating - par) * dec.skill.per_point,
-    dec.skill.min,
-    dec.skill.max,
-  );
-  const teamFactor = (teamWinRate ?? dec.team_win_reference) / dec.team_win_reference;
-  const loseFactor = (1 - (teamWinRate ?? dec.team_win_reference)) / dec.team_win_reference;
-  const startShareOf = starts / dec.per_start;
-  const reliefShareOf = relief / dec.per_relief;
+  // ── 被打出來的事件（自責分要用它，因此排在勝敗之前）
+  //
+  // **順序在這一版換過**：舊版是局數 → 勝敗 → 被安打 → 自責分，因為勝敗只看
+  // 能力，不需要成績。現在勝敗踩在 ERA+ 上，自責分就必須先算出來。抽取順序
+  // 因此改變，舊的重播日誌重組不出同一段生涯——引擎版本號已經跳過。
+  const events = allowedEvents(ability, par, ip, skill, noise, jit);
+  const { hits, hr, triple, double, bb, hbp, so } = events;
 
-  const wins = clampInt(
-    Math.round(
-      (dec.win_anchor * startShareOf + dec.relief_decision_anchor * reliefShareOf) *
-        decSkill *
-        noise() *
-        teamFactor,
-    ) + jit(dec.jitter_decision),
-    games,
-  );
-  const losses = clampInt(
-    Math.round(
-      (dec.loss_anchor * startShareOf + dec.relief_decision_anchor * reliefShareOf) *
-        Math.max(dec.loss_floor, dec.loss_base - decSkill) *
-        noise() *
-        loseFactor,
-    ) + jit(dec.jitter_decision),
-    games - wins,
-  );
-  const left = games - starts - wins - losses;
-  const saves = clampInt(
-    Math.round(
-      dec.save_anchor * reliefShareOf * (dec.save_coefficient[role] ?? 0) * decSkill * noise() * teamFactor,
-    ) + jit(dec.jitter_relief),
-    left,
-  );
-  const holds = clampInt(
-    Math.round(
-      dec.hold_anchor * reliefShareOf * (dec.hold_coefficient[role] ?? 0) * decSkill * noise() * teamFactor,
-    ) + jit(dec.jitter_relief),
-    left - saves,
-  );
-
-  // ── 被安打、自責分、失分、四壞、三振、被全壘打
   const rec = p.records;
-  const volume = (per: number): number => ip / per;
-
-  const hits = clampInt(
-    Math.round(rec.hits.anchor * volume(rec.hits.per) * Math.max(rec.hits.floor, rec.hits.base - rec.hits.slope * skill) * noise()) +
-      jit(rec.hits.jitter),
-    Math.round(ip * rec.hits.cap_per_inning),
-  );
   const er = clampInt(
-    Math.round(rec.er.anchor * volume(rec.er.per) * Math.max(rec.er.floor, rec.er.base - rec.er.slope * skill) * noise()) +
-      jit(rec.er.jitter),
+    Math.round(earnedRunsFrom(events, outs) * noise()) + jit(rec.er.jitter),
     Math.round(ip * rec.er.cap_per_inning),
   );
   // 非自責的失分與能力無關——那是野手掉的球。
-  const runs = er + Math.max(0, Math.round(rec.unearned.anchor * volume(rec.unearned.per) * noise()) + jit(rec.unearned.jitter));
+  const runs =
+    er + Math.max(0, Math.round(rec.unearned.anchor * (ip / rec.unearned.per) * noise()) + jit(rec.unearned.jitter));
+  const era = ip === 0 ? 0 : (er * 9) / ip;
 
-  const ctlAdj = (ability['ctl'] ?? 0) - (par - p.reference_par);
-  const wildness = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
-  const bb = clampInt(
-    Math.round((rec.bb.floor_anchor + rec.bb.range_anchor * wildness) * volume(rec.bb.per) * noise()) +
-      jit(rec.bb.jitter),
-    Math.round(ip * rec.bb.cap_per_inning),
+  // ── 勝敗、救援、中繼
+  //
+  // **全部由成績推導，沒有一格直接看能力。** 一名投手的勝敗是「他讓對手得幾分」
+  // 與「他的球隊得幾分」相撞的結果；能力只透過成績間接進來，因此投得好卻在爛隊
+  // 的人，該吞的敗還是要吞。
+  const dec = p.decision;
+  const teamWp = clamp(
+    teamWinRate ?? dec.team_win_reference,
+    dec.team_win_clamp.min,
+    dec.team_win_clamp.max,
+  );
+  const teamOdds = teamWp / (1 - teamWp);
+  // ERA+ 的比值，1.0 是聯盟平均。防禦率 0.00 在短局數的後援身上真的會發生，
+  // 因此兩端都夾住——賠率在 0 與無限大處會炸開。
+  const ratio = clamp(
+    era === 0 ? dec.era_ratio_clamp.max : eraAt(0, par) / era,
+    dec.era_ratio_clamp.min,
+    dec.era_ratio_clamp.max,
   );
 
-  let arsenal = 0;
-  for (const [key, w] of Object.entries(rec.so.weights)) arsenal += (ability[key] ?? 0) * w;
-  arsenal -= rec.so.par_slope * (par - p.reference_par);
-  // **三次方**：會投的人才三振得到人，普通球種再多也只是被打。
-  const stuff = Math.pow(clamp(arsenal / rec.so.divisor, 0, 1), rec.so.exponent);
-  const so = clampInt(
-    Math.round((rec.so.floor_anchor + rec.so.range_anchor * stuff) * volume(rec.so.per) * noise()) +
-      jit(rec.so.jitter),
-    Math.round(ip * rec.so.cap_per_inning),
+  const st = dec.starter;
+  // 第一段：從先發場次裡切出勝場。
+  const oddsW = teamOdds * st.win_constant * Math.pow(ratio, st.win_exponent);
+  const pW = oddsW / (1 + oddsW);
+  let wins = clampInt(Math.round(starts * pW * noise()) + jit(st.jitter), starts);
+  // 第二段：從**沒贏的先發場次**裡切出敗投，兩個因子都鏡射。剩下的是無關勝敗
+  // ——它不必另外指定，決定率因此是導出的而不是設定的。
+  const remaining = Math.max(0, starts - wins);
+  const oddsL = (1 / teamOdds) * st.loss_constant * Math.pow(1 / ratio, st.loss_exponent);
+  const pL = oddsL / (1 + oddsL);
+  let losses = clampInt(Math.round(remaining * pL * noise()) + jit(st.jitter), remaining);
+
+  // ── 後援：機會 × 成功率
+  //
+  // **機會是球隊給的，成功率是自己的。** 一支爛隊的鐵門終結者機會很少，一支
+  // 強隊的爛終結者機會很多但守不住——兩件事分開之後，救援數才有得對帳。
+  const rel = dec.relief;
+  // **球季有多長由這一次模擬的長度決定，不是層級的場數。** 國際賽直接指定上了
+  // 幾場（一屆四到八場），拿聯盟的 162 去算球隊勝場，會讓一個打四場的後援投手
+  // 拿到五十次救援機會——上限雖然夾得住，夾出來的仍然是「每次上場都關門成功」。
+  const seasonGames = appearances === undefined ? info.games : appearances;
+  const teamWins = seasonGames * teamWp;
+  const shareOf = (spec: { base: number; per_team_win_pct: number; min: number; max: number }): number =>
+    clamp(spec.base - spec.per_team_win_pct * (teamWp - dec.team_win_reference), spec.min, spec.max);
+  // 成功率的指數很小，99% 的情形自己就落在 0.70 到 0.95 之間——那正是真實的
+  // 窄帶，因此不設硬上下限。
+  const conversion = rel.conversion.anchor * Math.pow(ratio, rel.conversion.exponent);
+
+  // **機會不按出賽比例縮。** 終結者一年只上場六十場卻拿得到五十次救援機會——
+  // 他上場的那六十場就是球隊需要關門的那幾場，不是全季的一個抽樣。要擋的是
+  // 「沒上場卻拿到機會」，而那由下面的上限擋掉就夠了。
+  const saveOpps = teamWins * shareOf(rel.save_opportunity) * (dec.save_coefficient[role] ?? 0);
+  const saves = clampInt(
+    Math.round(saveOpps * conversion * noise()) + jit(rel.conversion.jitter),
+    Math.min(Math.round(saveOpps), relief),
+  );
+  const holdOpps = teamWins * shareOf(rel.hold_opportunity) * (dec.hold_coefficient[role] ?? 0);
+  const holds = clampInt(
+    Math.round(holdOpps * conversion * noise()) + jit(rel.conversion.jitter),
+    Math.min(Math.round(holdOpps), relief - saves),
   );
 
-  // 被全壘打看的是**投不好的地方**：控球、縱向與球速離基準差多少。
-  let deficit = 0;
-  for (const [key, w] of Object.entries(rec.hr.deficit_weights)) {
-    deficit += (rec.hr.reference - (ability[key] ?? 0)) * w;
-  }
-  for (const [key, w] of Object.entries(rec.hr.plus_weights)) deficit += (ability[key] ?? 0) * w;
-  deficit -= rec.hr.par_slope * (par - p.reference_par);
-  const gopher = clamp(deficit / rec.hr.divisor, 0, 1);
-  const hr = clampInt(
-    Math.round((rec.hr.floor_anchor + rec.hr.range_anchor * gopher) * volume(rec.hr.per) * noise()) +
-      jit(rec.hr.jitter),
-    // 全壘打是安打的一種。
-    hits,
+  // 搞砸的機會有一部分變成敗投——不是全部，接手的人可能再掉分，球隊也可能打
+  // 回來。撿勝與投得好不好幾乎無關，只與上場次數和球隊會不會逆轉有關。
+  const blown = Math.max(0, saveOpps - saves) + Math.max(0, holdOpps - holds);
+  const reliefLosses = Math.max(0, Math.round(blown * rel.blown_to_loss.value * noise()));
+  const reliefWins = Math.max(
+    0,
+    Math.round(relief * rel.vulture_win.per_game * (teamWp / dec.team_win_reference) * noise()) +
+      jit(rel.vulture_win.jitter),
   );
+
+  // 三者共用同一個出賽數，因此依序夾住：先發那一段已經夾在先發場次內，後援
+  // 這一段再夾掉剩下的出賽。
+  wins = Math.min(games, wins + reliefWins);
+  losses = Math.min(games - wins, losses + reliefLosses);
 
   return {
     role,
@@ -962,14 +1094,17 @@ export function proPitchingLine(
     starts,
     outs,
     hits,
+    double,
+    triple,
     runs,
     er,
     bb,
+    hbp,
     so,
     hr,
     // 防禦率是**導出**的，不再自己生成一個再反推自責分——兩個數字各生各的，遲早
     // 會對不起來。
-    era: ip === 0 ? 0 : (er * 9) / ip,
+    era,
     wins,
     losses,
     saves,

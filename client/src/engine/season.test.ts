@@ -12,6 +12,7 @@ import {
   playSeason,
   proBattingLine,
   proPitchingLine,
+  eraAt,
   staminaFactor,
   fullSeasonSta,
   trustFactor,
@@ -671,5 +672,158 @@ describe('playSeason', () => {
       return t / 100;
     };
     expect(avg('CPBL2')).toBeGreaterThan(avg('CPBL1'));
+  });
+});
+
+describe('投手的自責分由事件推導', () => {
+  const line = (seed: string, v: number, over: Record<string, number> = {}, twr = 0.5) =>
+    proPitchingLine(new World(seed), with_(v, over), 'MLB', v, null, { teamWinRate: twr });
+
+  it('被打得少，自責分就跟著少——舊的錯點式做不到這件事', () => {
+    let harder = 0;
+    for (let i = 0; i < 60; i++) {
+      const weak = line(`er-w-${i}`, 58);
+      const strong = line(`er-s-${i}`, 72);
+      if (weak.outs === 0 || strong.outs === 0) continue;
+      // 每九局的被安打與每九局的自責分要同向。
+      const wH = (weak.hits * 27) / weak.outs;
+      const sH = (strong.hits * 27) / strong.outs;
+      if (wH > sH && weak.era > strong.era) harder++;
+    }
+    expect(harder).toBeGreaterThan(40);
+  });
+
+  it('長打是從被安打裡切出來的，不會多生一支', () => {
+    for (let i = 0; i < 60; i++) {
+      const l = line(`xb-${i}`, 62 + (i % 12));
+      expect(l.double + l.triple + l.hr).toBeLessThanOrEqual(l.hits);
+      expect(l.double).toBeGreaterThanOrEqual(0);
+      expect(l.triple).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('控球差的人四壞多，觸身球也多——兩者同源', () => {
+    const wild = line('hbp-wild', 62, { ctl: 35 });
+    const sharp = line('hbp-sharp', 62, { ctl: 78 });
+    expect(wild.bb / Math.max(1, wild.outs)).toBeGreaterThan(sharp.bb / Math.max(1, sharp.outs));
+    expect(wild.hbp / Math.max(1, wild.outs)).toBeGreaterThan(sharp.hbp / Math.max(1, sharp.outs));
+  });
+
+  /**
+   * ERA+ 的分母必須就是這組公式在 d=0 時真正產生的數字。分母若自己一條式子，
+   * ERA+ 100 就不再是聯盟平均——而勝敗正是踩在 ERA+ 上面的。
+   */
+  it('eraAt(0) 與模型真正產生的聯盟平均對得上', () => {
+    let total = 0;
+    let n = 0;
+    const par = leagues.levels['MLB']!.par;
+    for (let i = 0; i < 200; i++) {
+      const l = proPitchingLine(new World(`avg-${i}`), flat(par), 'MLB', par, null, {
+        teamWinRate: 0.5,
+        role: 'SP',
+      });
+      if (l.outs < 300) continue;
+      total += l.era;
+      n++;
+    }
+    expect(n).toBeGreaterThan(20);
+    expect(Math.abs(total / n - eraAt(0, par))).toBeLessThan(0.6);
+  });
+});
+
+describe('投手的勝敗由成績與球隊推導', () => {
+  const line = (seed: string, v: number, twr: number) =>
+    proPitchingLine(new World(seed), flat(v), 'MLB', v, null, { teamWinRate: twr, role: 'SP' });
+
+  const totals = (v: number, twr: number, tag: string) => {
+    let w = 0, l = 0, n = 0, maxW = 0, unbeaten = 0;
+    for (let i = 0; i < 250; i++) {
+      const p = line(`wl-${tag}-${i}`, v, twr);
+      if (p.starts < 20) continue;
+      w += p.wins; l += p.losses; n++;
+      if (p.wins > maxW) maxW = p.wins;
+      if (p.losses === 0 && p.wins >= 10) unbeaten++;
+    }
+    return { w: w / n, l: l / n, n, maxW, unbeaten };
+  };
+
+  it('同一個投手，強隊的勝投明顯多於弱隊', () => {
+    const good = totals(68, 0.65, 'good');
+    const bad = totals(68, 0.35, 'bad');
+    expect(good.w).toBeGreaterThan(bad.w + 5);
+    expect(bad.l).toBeGreaterThan(good.l + 5);
+  });
+
+  /** 使用者回報的病灶：爛隊也打得出 32 勝 0 敗。 */
+  it('爛隊打不出誇張的勝投，也不會零敗', () => {
+    const bad = totals(75, 0.3, 'elite-bad');
+    expect(bad.maxW).toBeLessThan(23);
+    expect(bad.unbeaten).toBe(0);
+  });
+
+  it('聯盟平均的投手在五成隊接近勝敗各半', () => {
+    const par = leagues.levels['MLB']!.par;
+    const even = totals(par, 0.5, 'even');
+    expect(Math.abs(even.w - even.l)).toBeLessThan(3);
+  });
+
+  it('勝敗加起來不會超過出賽數', () => {
+    for (let i = 0; i < 120; i++) {
+      const p = line(`cap-${i}`, 60 + (i % 18), 0.3 + (i % 8) * 0.05);
+      expect(p.wins + p.losses).toBeLessThanOrEqual(p.games);
+    }
+  });
+});
+
+describe('後援：機會 × 成功率', () => {
+  const closer = (seed: string, v: number, twr: number) =>
+    proPitchingLine(new World(seed), with_(v, { sta: 20 }), 'MLB', v, null, {
+      teamWinRate: twr,
+      role: 'CP',
+    });
+
+  it('強隊的終結者救援機會多——機會是球隊給的', () => {
+    const avg = (twr: number, tag: string) => {
+      let t = 0;
+      for (let i = 0; i < 120; i++) t += closer(`sv-${tag}-${i}`, 66, twr).saves;
+      return t / 120;
+    };
+    expect(avg(0.65, 'good')).toBeGreaterThan(avg(0.35, 'bad') + 5);
+  });
+
+  it('救援成功數不會超過後援出賽數', () => {
+    for (let i = 0; i < 80; i++) {
+      const p = closer(`svcap-${i}`, 60 + (i % 15), 0.35 + (i % 6) * 0.06);
+      expect(p.saves + p.holds).toBeLessThanOrEqual(p.games - p.starts);
+    }
+  });
+
+  /** 一屆賽會只有幾場球，球隊勝場要照那個長度算，不是照聯盟的一百六十二場。 */
+  it('國際賽那種短賽程不會讓終結者每場都關門成功', () => {
+    let total = 0;
+    for (let i = 0; i < 60; i++) {
+      const p = proPitchingLine(new World(`intl-${i}`), with_(70, { sta: 20 }), 'MLB', 70, null, {
+        teamWinRate: 0.42,
+        role: 'CP',
+        appearances: 5,
+      });
+      total += p.saves;
+    }
+    expect(total / 60).toBeLessThan(3);
+  });
+
+  it('救援成功率擠在窄帶裡——再強的終結者也會被打爆幾次', () => {
+    let converted = 0;
+    let n = 0;
+    for (let i = 0; i < 120; i++) {
+      const p = closer(`rate-${i}`, 74, 0.55);
+      if (p.saves === 0) continue;
+      converted += p.saves;
+      n++;
+    }
+    // 一支 .550 的球隊約 89 勝、約 55 次救援機會，成功率 0.70-0.95 因此落在
+    // 38 到 52 之間。真實的單季紀錄是 62，靠的是球隊贏更多而不是成功率破表。
+    expect(converted / n).toBeGreaterThan(30);
+    expect(converted / n).toBeLessThan(56);
   });
 });

@@ -9,6 +9,7 @@ import {
   isPodium,
   lockYearsLeft,
   playTournament,
+  nationalTeamWinPct,
   tournamentGames,
   tournamentInnings,
   tournamentOf,
@@ -228,5 +229,21 @@ describe('一屆賽會的場次', () => {
     const i = tournamentInnings();
     expect(i.perStart).toBeLessThan(i.capPerStart);
     expect(i.perRelief).toBeLessThan(i.capPerRelief);
+  });
+});
+
+describe('代表隊的預期勝率', () => {
+  it('中職水準越高，代表隊在國際賽越強', () => {
+    expect(nationalTeamWinPct(48)).toBeGreaterThan(nationalTeamWinPct(40));
+  });
+
+  /** 賽會的對手是各國一線球員，母國聯盟的 par 低於它，代表隊因此是弱隊。 */
+  it('中職的 par 低於賽會水準，因此勝率低於五成', () => {
+    expect(nationalTeamWinPct(44)).toBeLessThan(0.5);
+    expect(nationalTeamWinPct(44)).toBeGreaterThan(0.3);
+  });
+
+  it('水準相同就是五成——那是畢氏公式的定義', () => {
+    expect(nationalTeamWinPct(amateur.international.stats.par)).toBeCloseTo(0.5, 5);
   });
 });

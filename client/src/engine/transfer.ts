@@ -504,6 +504,87 @@ function keepHomeOrg(
   return [...head.slice(0, limit - 1), home];
 }
 
+/** 上下文：自由球員在**自己這個體系**裡的市場。 */
+export interface DomesticFaContext {
+  readonly org: string;
+  /** 目前的層級。同體系的報價一律開在這一層——FA 只在頂級聯盟發生。 */
+  readonly level: string;
+  readonly currentTeam: string;
+  readonly overall: number;
+  /** 相對聯盟的水準（綜合能力 − 聯盟 par）。有幾支球隊上門看它。 */
+  readonly d: number;
+  readonly standards: LeagueStandards | null;
+  readonly tier: HandednessTier;
+  /**
+   * 該體系當季的戰力表。
+   *
+   * **由呼叫端傳進來，不在這裡重抽。** 人還待在這個聯盟裡，格局已經是既成
+   * 事實——重抽等於讓同一年的同一個聯盟在報價單上與記分板上長成兩個樣子。
+   */
+  readonly table: LeagueTable;
+}
+
+/** 今年有幾支同體系的球隊上門。由高到低取第一個符合的 d 值級距。 */
+function suitorSpec(d: number) {
+  for (const tier of cfg.free_agency.suitors.tiers) {
+    if (d >= tier.min_d) return tier;
+  }
+  return cfg.free_agency.suitors.default;
+}
+
+/**
+ * 自由球員的國內市場：**同體系的其他球隊**。
+ *
+ * 合約到期卻只有海外球團打電話來，那不叫自由球員，那叫被迫出走。同聯盟的
+ * 競爭對手本來就是 FA 市場的主體——他們看了你三年，最清楚你打得怎麼樣，也
+ * 最不必賭。
+ *
+ * 與跨體系那一半（`fallbackOffers`）的差別在**問的問題不同**：跨體系問「哪裡
+ * 收得下你」，要過落地門檻；同體系問「誰想要你」，門檻你早就過了——人就在
+ * 那一層打球。因此這裡唯一的旋鈕是**有幾支球隊上門**，而它看 d 值。
+ *
+ * 落地層級不動、體系不動，因此簽下去**不算換體系**：服務年資與掌控期的帳都
+ * 照舊，只有球衣換了。
+ */
+export function domesticFaOffers(
+  world: World,
+  ctx: DomesticFaContext,
+): readonly TransferOffer[] {
+  const rng = world.stream('career');
+  const spec = suitorSpec(ctx.d);
+
+  // 抽取一律先做，與結果無關——少抽一次會讓後面所有判定整串偏移。
+  const asked = rng.chance(spec.chance ?? 100);
+  const count = rng.int(spec.min, spec.max);
+  if (!asked) return [];
+
+  const pool = (teamsData.leagues[ctx.org] ?? [])
+    .map((t) => t.name)
+    .filter((name) => name !== ctx.currentTeam);
+  if (pool.length === 0) return [];
+
+  const picked = rng.shuffle(pool).slice(0, Math.min(count, pool.length));
+  const bar = personalStandardOf(ctx.standards, ctx.level, ctx.tier).min;
+  const levelName = leagues.levels[ctx.level]?.name ?? ctx.level;
+
+  return picked.map((team) => {
+    const odds = championshipOdds(ctx.table, team);
+    return {
+      org: ctx.org,
+      orgName: orgLabel(ctx.org),
+      level: ctx.level,
+      levelName,
+      team,
+      bonus: signingBonus(ctx.org, ctx.overall - bar, odds),
+      // 沒離開過就沒有回來這回事——同體系內換隊永遠不是落葉歸根。
+      homecoming: false,
+      odds,
+      years: contractLength(odds),
+      table: ctx.table,
+    };
+  });
+}
+
 /**
  * 入札的目的地。這個體系沒有入札制度時回傳 null。
  *

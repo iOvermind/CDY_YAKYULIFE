@@ -432,10 +432,26 @@ export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElem
 }
 
 /**
+ * 這是不是一台行動裝置。
+ *
+ * **不能拿「瀏覽器支不支援分享」當判準。** Windows 的 Chrome 與 Edge 兩者都支援
+ * Web Share，於是桌機按下存檔會跳出系統的分享面板而不是下載對話框——那裡沒有
+ * 「存到下載資料夾」這件事，使用者得先挑一個 App 才逃得出去。
+ *
+ * 改問裝置本身：先看瀏覽器自報的行動裝置旗標（Chromium 系有），沒有就退回粗指標
+ * （觸控螢幕沒有滑鼠那種像素級的精準度）。兩者都不成立就是桌機。
+ */
+function isMobileDevice(): boolean {
+  const mobile = (navigator as { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile;
+  if (typeof mobile === 'boolean') return mobile;
+  return window.matchMedia?.('(pointer: coarse)').matches === true;
+}
+
+/**
  * 存下來。
  *
  * 手機優先走系統的分享面板——那裡才有「儲存影像」，而 `<a download>` 在 iOS
- * 上多半只是把圖開在同一個分頁裡。沒有分享能力的環境（桌面瀏覽器）就下載。
+ * 上多半只是把圖開在同一個分頁裡。桌機一律下載。
  */
 export async function saveCareerCard(card: CareerCard): Promise<void> {
   const canvas = await renderCareerCard(card);
@@ -444,7 +460,7 @@ export async function saveCareerCard(card: CareerCard): Promise<void> {
 
   const name = `${card.name}-${card.year}-生涯成績.png`;
   const file = new File([blob], name, { type: 'image/png' });
-  if (navigator.canShare?.({ files: [file] }) === true) {
+  if (isMobileDevice() && navigator.canShare?.({ files: [file] }) === true) {
     try {
       await navigator.share({ files: [file] });
       return;

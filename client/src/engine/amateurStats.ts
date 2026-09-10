@@ -103,14 +103,31 @@ export interface PitchingLine {
   readonly outs: number;
   /** 被安打。 */
   readonly hits: number;
+  /** 被二壘打。養成期不模擬，一律 0。 */
+  readonly double: number;
+  /** 被三壘打。養成期不模擬，一律 0。 */
+  readonly triple: number;
   /** 失分。 */
   readonly runs: number;
   readonly er: number;
   readonly bb: number;
+  /** 觸身球。養成期不模擬，一律 0。 */
+  readonly hbp: number;
   readonly so: number;
   /** 被全壘打。養成期不模擬，一律 0。 */
   readonly hr: number;
   readonly era: number;
+}
+
+/**
+ * 被打出來的壘打數。自責分由它推導。
+ *
+ * 與 `slugging()` 的算法相同，只是主語換成投手——**投打兩側用同一把尺**是
+ * 自責分改由事件推導的前提，各寫一份遲早會分岔。
+ */
+export function totalBasesAllowed(line: PitchingLine): number {
+  const single = line.hits - line.double - line.triple - line.hr;
+  return single + line.double * 2 + line.triple * 3 + line.hr * 4;
 }
 
 /** 長打率：壘打數除以打數。 */
@@ -360,11 +377,15 @@ export function pitchingLine(
     saves,
     holds,
     hits: Math.round((ip * h9) / 9),
+    // 養成期不模擬長打與觸身球——一年只有幾場球，切出來的數字全是抖動。
+    double: 0,
+    triple: 0,
     runs: Math.round(er * cfg.runs_per_earned_run.value),
     er,
     // 養成期不模擬被全壘打。
     hr: 0,
     bb: Math.round((ip * bb9) / 9),
+    hbp: 0,
     so: Math.round((ip * k9) / 9),
     era,
   };
@@ -449,10 +470,13 @@ export function addPitching(a: PitchingLine | null, b: PitchingLine | null): Pit
     saves: a.saves + b.saves,
     holds: a.holds + b.holds,
     hits: a.hits + b.hits,
+    double: a.double + b.double,
+    triple: a.triple + b.triple,
     hr: a.hr + b.hr,
     runs: a.runs + b.runs,
     er,
     bb: a.bb + b.bb,
+    hbp: a.hbp + b.hbp,
     so: a.so + b.so,
     era: ip === 0 ? 0 : (er * 9) / ip,
   };

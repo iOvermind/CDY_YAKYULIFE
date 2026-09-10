@@ -140,6 +140,7 @@ import {
   tournamentGames,
   tournamentInnings,
   tournamentOf,
+  nationalTeamWinPct,
   tournamentPar,
   tournamentScore,
   winsMvp,
@@ -174,6 +175,7 @@ import {
   evaluateMovement,
   pathOf,
   proDiceCount,
+  refusalReleaseChance,
   shouldRetire,
 } from './pro.ts';
 import { fmtMoney, postingFee, salaryFor } from './salary.ts';
@@ -181,6 +183,7 @@ import {
   amateurOverseasOffers,
   canRequestPosting,
   canRefuseDemotion,
+  domesticFaOffers,
   fallbackOffers,
   importPremium,
   orgLabel,
@@ -291,8 +294,12 @@ export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Se
  *    都加了上限。選項序號沒有變，但**同一份日誌會長出不同的成績**——先發場數
  *    少了一半、牛棚多出中繼成功，獎項與里程碑跟著移動。重播不會壞，得到的卻是
  *    另一段生涯，因此照樣進版。
+ * 6：投手成績改由事件推導。自責分不再是自己一條錨點式，改由被打出來的安打、長打、
+ *    四壞與觸身球算出來；勝敗不再看能力，改由 ERA+ 與球隊勝率相撞。**抽取順序因此
+ *    真的變了**——舊版是局數 → 勝敗 → 被安打 → 自責分，新版必須先有自責分才問得了
+ *    勝敗。同一份日誌不只長出不同的成績，連後面每一次擲骰都整串偏移。
  */
-export const ENGINE_VERSION = 5;
+export const ENGINE_VERSION = 6;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
@@ -3124,7 +3131,17 @@ export class Game {
         level,
         overall,
         this.#standards,
-        { appearances: games, par, innings: tournamentInnings() },
+        {
+          appearances: games,
+          par,
+          innings: tournamentInnings(),
+          // 勝敗要知道「他的球隊有多強」，而國際賽沒有戰力表。拿這一屆的名次
+          // 去推是循環論證——名次是結果。改由母國頂級聯盟當年的浮動 par 對上
+          // 賽會的 par 推導，見 nationalTeamWinPct。
+          teamWinRate: nationalTeamWinPct(
+            leagueStandardOf(this.#standards, homeBenchmarkLevel()).par,
+          ),
+        },
       );
       this.#intlPitching = addPitching(this.#intlPitching, line);
       tourneyPitching = line;
@@ -3775,9 +3792,28 @@ export class Game {
     // FA 問的是「誰想要你」，因此不列比現在更差的舞台。真的沒有人開價，
     // 那才叫市場冷。
     //
-    // 海外 FA 併在同一份報價單裡：**熬滿年資之後不必再求誰放你走**，那條路
-    // 與國內市場一起攤在桌上，玩家自己選。
+    // 三份名單攤在同一張桌上，順序是**先自家聯盟、再跨體系**：
+    //
+    // - **同體系的其他球隊**是這個市場的主體。合約到期卻只有海外球團打電話
+    //   來，那不叫自由球員，那叫被迫出走。
+    // - **海外 FA**：熬滿年資之後不必再求誰放你走。
+    // - **跨體系尋路**：借用尋路的名單，但這條路是球團在挑人。
+    const table = this.#league;
+    const domestic =
+      table === null
+        ? []
+        : domesticFaOffers(this.world, {
+            org: levelOf(pro.level).org,
+            level: pro.level,
+            currentTeam: pro.team,
+            overall: this.rating?.overall ?? 0,
+            d: this.#lastD,
+            standards: this.#standards,
+            tier: this.#handednessTier,
+            table,
+          });
     const offers = [
+      ...domestic,
       ...overseasFaOffers(this.world, {
         ...this.#overseasContext,
         serviceYears: pro.serviceYears,
@@ -3829,13 +3865,16 @@ export class Game {
       return;
     }
 
-    const overseas = postingTarget(levelOf(pro.level).org);
+    const currentOrg = levelOf(pro.level).org;
+    const overseas = postingTarget(currentOrg);
     const options: Option[] = [
       ...offers.map((o, i) => ({
         id: `market:${i}`,
         label: `${o.orgName}　${o.team}（${o.levelName}）`,
         note:
-          Game.#terms(o) +
+          // 同體系的報價不寫年限——球衣換了，長短約仍然是坐下來談的，與母隊
+          // 續約走同一張桌子。跨體系那一邊的年限由開價的球隊決定。
+          (o.org === currentOrg ? Game.#domesticTerms(o) : Game.#terms(o)) +
           (o.org === overseas ? `｜海外 FA・不需母隊同意` : '') +
           (o.homecoming ? '｜落葉歸根' : ''),
       })),
@@ -3852,7 +3891,42 @@ export class Game {
         });
         return;
       }
+      if (picked.org === currentOrg) {
+        this.#signWithinOrg(picked, next);
+        return;
+      }
       this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
+      next();
+    });
+  }
+
+  /**
+   * 在同一個體系裡換一件球衣。
+   *
+   * **不是轉會。** 層級沒變、聯盟沒變、外籍身分沒變，因此服務年資與掌控期的帳
+   * 一律不歸零——那是體系對你的帳，不是某一支球隊的。`#moveTo` 把這些全部重來
+   * 是因為它處理的是換體系；同體系換隊只動球衣、簽約金與那張新合約。
+   *
+   * 長短約走與母隊續約同一張桌子（`#askTerms`）：條件由玩家自己的成績與年齡
+   * 決定，不是新東家單方面開的。
+   */
+  #signWithinOrg(offer: TransferOffer, next: () => void): void {
+    const pro = this.#pro;
+    if (pro === null) return;
+
+    const from = pro.team;
+    this.#earnings += offer.bonus;
+    pro.team = offer.team;
+
+    this.#askTerms(`${offer.team} · 選擇合約類型`, (years, mult) => {
+      pro.contract = { years, mult, extensionOffered: false };
+      this.flow.card(
+        'gold',
+        '轉隊',
+        `離開 <b class="hl">${esc(from)}</b>，與 <b class="hl">${esc(offer.team)}</b> 簽下 ` +
+          `<b class="hl">${years} 年</b>約（年薪係數 ×${mult.toFixed(2)}）。` +
+          `簽約金 <b class="hl">${fmtMoney(offer.bonus)}</b>。`,
+      );
       next();
     });
   }
@@ -4104,6 +4178,16 @@ export class Game {
     );
   }
 
+  /**
+   * 同體系報價的條件摘要。
+   *
+   * 少了年限那一欄——同聯盟換隊的長短約由 `#askTerms` 談，報價單上寫死一個
+   * 數字會與接下來問的東西打架。
+   */
+  static #domesticTerms(o: TransferOffer): string {
+    return `簽約金 ${fmtMoney(o.bonus)}｜長短約另談｜球隊奪冠 ${Math.round(o.odds * 100)}%`;
+  }
+
   /** 入札與海外 FA 共用的上下文。 */
   get #overseasContext() {
     const pro = this.#pro;
@@ -4348,9 +4432,14 @@ export class Game {
   /**
    * 行使拒絕下放的權利。
    *
-   * 拒絕不是白拿的：球團不能送你去二軍，但可以不要你。**釋出機率就是下放判定
-   * 那一個機率**——球團越想把你送下去，你越留不住。跟不上得越多，這個選項越
-   * 像是逼球團在「忍受你」與「放掉你」之間選一個，而現實裡他們常選後者。
+   * 拒絕不是白拿的：球團不能送你去二軍，但可以不要你。跟不上得越多，這個選項
+   * 越像是逼球團在「忍受你」與「放掉你」之間選一個。
+   *
+   * **釋出機率沿用下放壓力，但先把倖存的那一半放大。** 直接拿同一個數字再擲一
+   * 次是對同一件事收兩次費：球團想不想送你下去，前一擲已經問過了，而提問會出現
+   * 就代表那一擲中了——玩家面對的壓力因此天生偏高（落差 3 分以上是 87-90%），
+   * 拒絕下放於是不是賭注而是死刑判決書。放大倖存率之後，落差 1 分是 18% 釋出、
+   * 落差 4 分以上仍有 80%：沒有任何一段是免費的，但賭得贏。
    */
   #refuseDemotion(next: () => void): void {
     const pro = this.#pro;
@@ -4362,7 +4451,7 @@ export class Game {
     this.#demotedTo = null;
     this.#demotedFrom = null;
 
-    if (this.world.stream('career').chance(this.#demotePressure)) {
+    if (this.world.stream('career').chance(refusalReleaseChance(this.#demotePressure))) {
       // 被 DFA。與一般戰力外走同一條路：球團主動終止付全額，再問別的體系。
       this.flow.card(
         'bad',
