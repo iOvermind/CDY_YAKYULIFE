@@ -1474,21 +1474,18 @@ export interface SeasonData {
     readonly drift: {
       readonly yearly: Range;
       readonly mean_reversion: number;
+      /** 絕對的外框。實際界線與奪冠機率反解出來的線取交集。 */
       readonly clamp: Range;
-      /** 同一年全聯盟的平均勝率。封閉聯盟裡每一勝都是別人的一敗。 */
+      /** 反解時「其他球隊」的水準，也就是聯盟的中庸值。 */
       readonly target_mean: number;
-      /** 平移與夾子來回的次數。 */
-      readonly recenter_rounds: number;
     };
     readonly player_effect: { readonly per_point: number } & Range;
     readonly championship: {
       readonly exponent: number;
-      /** 上限 = 隊數^−cap_exponent。0.5 等於「最多是平均的 √隊數 倍」。 */
+      /** 機率上限 = 隊數^−cap_exponent。0.5 等於「最多是平均的 √隊數 倍」。 */
       readonly cap_exponent: number;
-      /** 下限 = 隊數^−floor_exponent。 */
+      /** 機率下限 = 隊數^−floor_exponent。 */
       readonly floor_exponent: number;
-      /** 夾與縮放來回的次數。 */
-      readonly renormalise_rounds: number;
     };
   };
   readonly pro_dice: {

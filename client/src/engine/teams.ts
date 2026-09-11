@@ -42,6 +42,38 @@ export function teamNick(name: string): string {
 }
 
 /**
+ * 這個聯盟的勝率界線。
+ *
+ * **上下限定在奪冠機率上，但夾在勝率上。** 想要的是「一支球隊最多能比平均強幾
+ * 倍」，而那是機率的語言；可是夾機率會把「全聯盟加起來是 1」弄壞，得再縮放回去，
+ * 縮放又讓極端值溢出一點。改成反解：算出「達到那個機率需要多高的勝率」，然後夾
+ * 勝率。機率因此完全不必夾——它天生落在界線內，總和天生是 1。
+ *
+ * 反解的是其他隊都在 .500 的情形：
+ *
+ * ```
+ * c = w⁴ / (w⁴ + (N−1) × .5⁴)   →   w = .5 × [c(N−1) / (1−c)]^(1/4)
+ * ```
+ *
+ * 代上限 `1/√N` 與下限 `1/N^1.75` 得到的線，在小聯盟比 `drift.clamp` 緊、在大聯盟
+ * 比它寬（三十隊的上限反解出 .798，那是一年 129 勝——不是棒球）。因此**取兩道線
+ * 的交集**：推導線只在它比現況緊的時候生效。
+ */
+export function winRateBounds(teams: number): { readonly min: number; readonly max: number } {
+  const d = cfg.team_strength.drift;
+  const c = cfg.team_strength.championship;
+  if (teams <= 1) return d.clamp;
+
+  const at = (odds: number): number =>
+    d.target_mean * Math.pow((odds * (teams - 1)) / (1 - odds), 1 / c.exponent);
+
+  return {
+    min: Math.max(d.clamp.min, at(Math.pow(teams, -c.floor_exponent))),
+    max: Math.min(d.clamp.max, at(Math.pow(teams, -c.cap_exponent))),
+  };
+}
+
+/**
  * 開局：為一個聯盟的每支球隊抽出基準勝率。
  *
  * 基準抽一次就固定成為該隊的「體質」。沒有這個錨，幾年之後所有球隊都會回歸
@@ -54,17 +86,11 @@ export function initLeague(world: World, org: string): LeagueTable {
   const list = teamsData.leagues[org];
   if (list === undefined) throw new Error(`未知的聯盟：${org}`);
 
-  const { min, max } = cfg.team_strength.initial;
-  const drawn = new Map<string, number>();
-  for (const team of list) drawn.set(team.name, min + rng.next() * (max - min));
-
-  // **體質的平均也必須是 .500。** 抽出來的那幾個數字平均不會剛好落在中間，而
-  // 開局那一年就是用體質當勝率——不平移的話，第一季就會出現「全聯盟一起變強」
-  // 的年份，而那沒有對手。平移之後每一年都由 advanceLeague 維持。
   const table = new Map<string, TeamSeason>();
-  // 平移之後仍然要落在開局的區間裡，那個區間是「體質有多好」的定義。
-  for (const [name, baseline] of recenter(drawn, cfg.team_strength.initial)) {
-    table.set(name, { name, baseline, winRate: baseline });
+  const { min, max } = cfg.team_strength.initial;
+  for (const team of list) {
+    const baseline = min + rng.next() * (max - min);
+    table.set(team.name, { name: team.name, baseline, winRate: baseline });
   }
   return table;
 }
@@ -86,49 +112,27 @@ export function advanceLeague(
   const next = new Map<string, TeamSeason>();
 
   // 走訪順序即插入順序，Map 保證穩定——不排序，因為那會改變抽取順序。
-  const raw = new Map<string, number>();
+  //
+  // **夾子只管單一球隊，不管全聯盟的平均。** 曾經加過一道「同一年的平均勝率平移
+  // 回 .500」的守衛，理由是封閉聯盟裡每一勝都是別人的一敗。它被拿掉了：那道平移
+  // 讓玩家的貢獻變成零和的（自己多贏就從對手身上扣），於是他自己的奪冠率反而被
+  // 推高，而模型要表達的只是「這支球隊今年強不強」。
+  //
+  // 界線由奪冠機率的上下限反解（見 winRateBounds）：六隊聯盟夾在 .345 到 .681，
+  // 三十隊聯盟沿用 .300 到 .700。
+  const bounds = winRateBounds(table.size);
   for (const [name, team] of table) {
     const pulled = team.winRate + (team.baseline - team.winRate) * d.mean_reversion;
     const noise = d.yearly.min + rng.next() * (d.yearly.max - d.yearly.min);
     let rate = pulled + noise;
     if (name === options.playerTeam) rate += options.playerEffect ?? 0;
-    raw.set(name, rate);
-  }
-
-  for (const [name, rate] of recenter(raw)) {
-    next.set(name, { name, baseline: table.get(name)?.baseline ?? rate, winRate: rate });
+    next.set(name, {
+      name,
+      baseline: team.baseline,
+      winRate: Math.max(bounds.min, Math.min(bounds.max, rate)),
+    });
   }
   return next;
-}
-
-/**
- * 把一整個聯盟的勝率移回平均 .500。
- *
- * **封閉聯盟裡每一勝都是別人的一敗**，所以同一年全聯盟的平均勝率必然是 .500。
- * 各隊獨立抽完再各自夾住並不保證這件事：實測量到過中職單年全聯盟平均 .405 與
- * .580、澳職 .387 與 .613——那等於某些年份整個聯盟一起變強，而那沒有對手。
- *
- * 做法是平移而不是縮放：**平移只改強弱的絕對位置，縮放會改變差距**，而差距正是
- * 體質與波動要表達的東西。平移之後可能有人越界，夾完再平移一次，來回幾輪就收斂
- * （每一輪的越界量都比上一輪小）。極端情形下夾子贏——寧可留一點偏差，也不要為了
- * 湊平均把某支球隊推出 [.300, .700]。
- */
-function recenter(
-  rates: ReadonlyMap<string, number>,
-  bounds: { readonly min: number; readonly max: number } = cfg.team_strength.drift.clamp,
-): Map<string, number> {
-  const d = cfg.team_strength.drift;
-  const out = new Map(rates);
-  for (let round = 0; round < d.recenter_rounds; round++) {
-    let sum = 0;
-    for (const v of out.values()) sum += v;
-    const shift = d.target_mean - sum / out.size;
-    if (Math.abs(shift) < 1e-9) break;
-    for (const [name, v] of out) {
-      out.set(name, Math.max(bounds.min, Math.min(bounds.max, v + shift)));
-    }
-  }
-  return out;
 }
 
 /**
@@ -155,40 +159,21 @@ export function championshipOdds(table: LeagueTable, team: string): number {
 /**
  * 全聯盟的奪冠機率，**加起來是 1**。
  *
- * 三步：勝率取次方算佔比 → 夾在該聯盟的上下限 → 照比例縮放回 1。
+ * 勝率取次方之後的佔比，沒有夾子也沒有縮放——**上下限已經在勝率那一側處理掉了**
+ * （見 {@link winRateBounds}）。夾機率的舊做法要再縮放回 1，而縮放會讓極端值溢出
+ * 一點；夾勝率沒有這個問題，因為佔比的分母就是全聯盟。
  *
- * **上下限是隊數的函數，不是絕對值。** 「一支球隊最多能比平均強幾倍」在六隊聯盟
- * 與三十隊聯盟不是同一件事：上限取 `1/√隊數`（澳職 50%、中職 40.8%、大聯盟
- * 18.3%），下限取 `1/隊數^1.75`（澳職 8.8%、中職 4.4%、大聯盟 0.26%）。舊的絕對
- * 值 1% 與 55% 是反過來的——1% 只咬得到大聯盟（把墊底的球隊從 0.33% 抬到 1%，
- * 總和因此變成 1.0029），55% 則除了澳職以外一次都咬不到。
- *
- * 夾完要縮放回 1，否則夾子會把總和弄壞，而**那個總和就是「每年有一支球隊奪冠」
- * 這件事**。縮放之後可能又有人越界，夾與縮放來回幾輪即收斂。
+ * 平均值因此永遠是隊數的倒數：六隊的中職 16.7%、三十隊的大聯盟 3.3%。
  */
 export function championshipOddsOf(table: LeagueTable): ReadonlyMap<string, number> {
   const c = cfg.team_strength.championship;
   const out = new Map<string, number>();
-  const n = table.size;
-  if (n === 0) return out;
+  if (table.size === 0) return out;
 
   let total = 0;
   for (const t of table.values()) total += Math.pow(t.winRate, c.exponent);
   if (total === 0) return out;
   for (const [name, t] of table) out.set(name, Math.pow(t.winRate, c.exponent) / total);
-
-  const cap = Math.pow(n, -c.cap_exponent);
-  const floor = Math.pow(n, -c.floor_exponent);
-  for (let round = 0; round < c.renormalise_rounds; round++) {
-    let sum = 0;
-    for (const [name, v] of out) {
-      const clamped = Math.max(floor, Math.min(cap, v));
-      out.set(name, clamped);
-      sum += clamped;
-    }
-    if (Math.abs(sum - 1) < 1e-9) break;
-    for (const [name, v] of out) out.set(name, v / sum);
-  }
   return out;
 }
 

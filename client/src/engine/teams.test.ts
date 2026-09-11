@@ -8,6 +8,7 @@ import {
   initLeague,
   pickChampion,
   playerEffect,
+  winRateBounds,
   type LeagueTable,
 } from './teams.ts';
 import { World } from './rng.ts';
@@ -108,25 +109,15 @@ describe('advanceLeague', () => {
     expect(bestSum / years).toBeGreaterThan(worstSum / years);
   });
 
-  /**
-   * **玩家的貢獻是零和的。** 他讓自己的球隊多贏，那些勝場只能從別人身上拿——
-   * 平均勝率每年都是 .500，所以貢獻加上去之後平移會把全聯盟一起壓回來，其他
-   * 球隊各讓出 `貢獻 ÷ 隊數`。他自己淨賺 `貢獻 × (1 − 1/隊數)`。
-   */
-  it('玩家的貢獻是零和的——自己多贏就是別人少贏', () => {
+  it('玩家的貢獻只加在自己的球隊上', () => {
     const before = init('a');
     const team = CPBL[0]!.name;
-    const effect = 0.05;
-    const withPlayer = step('b', before, { playerTeam: team, playerEffect: effect });
+    const withPlayer = step('b', before, { playerTeam: team, playerEffect: 0.05 });
     const without = step('b', before);
-
-    const gain = (withPlayer.get(team)?.winRate ?? 0) - (without.get(team)?.winRate ?? 0);
-    expect(gain).toBeCloseTo(effect * (1 - 1 / CPBL.length), 6);
-
+    expect(withPlayer.get(team)?.winRate).toBeGreaterThan(without.get(team)?.winRate ?? 0);
+    // 其他球隊完全不受影響——夾子不管全聯盟的平均。
     for (const other of CPBL.slice(1)) {
-      const delta =
-        (withPlayer.get(other.name)?.winRate ?? 0) - (without.get(other.name)?.winRate ?? 0);
-      expect(delta).toBeCloseTo(-effect / CPBL.length, 6);
+      expect(withPlayer.get(other.name)?.winRate).toBe(without.get(other.name)?.winRate);
     }
   });
 
@@ -167,8 +158,8 @@ describe('championshipOdds', () => {
       table = advanceLeague(new World(`sum-y${y}`), table);
       let total = 0;
       for (const t of table.values()) total += championshipOdds(table, t.name);
-      // 夾完照比例縮放回 1，所以這裡要的是等於，不是「大致」。
-      expect(total).toBeCloseTo(1, 6);
+      // 機率不被加工，所以總和是精確的 1，不是「大致」。
+      expect(total).toBeCloseTo(1, 9);
     }
   });
 
@@ -188,46 +179,58 @@ describe('championshipOdds', () => {
   });
 
   /**
-   * 上下限是隊數的函數：上限 `1/隊數^0.5`、下限 `1/隊數^1.75`。縮放回 1 之後仍
-   * 然可能有極小的越界（夾與縮放來回收斂），所以留一點容差。
+   * **上下限定在機率上，卻夾在勝率上**（見 winRateBounds）。因此機率本身完全不
+   * 被加工：它就是勝率四次方的佔比，總和精確是 1。
+   *
+   * 名目上的機率界線只在「其他球隊是中庸的」時候成立。一個巨人配五支墊底的年份，
+   * 那支巨人真的會超過名目上限——那是四次方的性質，不是夾子沒做事。實測超過上限
+   * 的比例：澳職 2.7%、中職 0.5%、日職以上幾乎沒有。
    */
-  it('機率不會超出該聯盟的上下限', () => {
-    const c = cfg.team_strength.championship;
+  it('勝率夾在該聯盟的界線內', () => {
+    const bounds = winRateBounds(CPBL.length);
     let table = init('a');
-    const cap = Math.pow(table.size, -c.cap_exponent);
-    const floor = Math.pow(table.size, -c.floor_exponent);
     for (let y = 0; y < 30; y++) {
       table = advanceLeague(new World(`y${y}`), table);
       for (const t of table.values()) {
-        const odds = championshipOdds(table, t.name);
-        expect(odds).toBeGreaterThanOrEqual(floor * 0.999);
-        expect(odds).toBeLessThanOrEqual(cap * 1.001);
+        expect(t.winRate).toBeGreaterThanOrEqual(bounds.min);
+        expect(t.winRate).toBeLessThanOrEqual(bounds.max);
       }
     }
+  });
+
+  /**
+   * 界線由奪冠機率的上下限反解：其他隊都在中庸值時，機率剛好落在那條線上。
+   */
+  it('勝率界線反解得回機率的上下限', () => {
+    const c = cfg.team_strength.championship;
+    const d = cfg.team_strength.drift;
+    for (const n of [4, 6, 10, 12, 20, 30]) {
+      const bounds = winRateBounds(n);
+      const oddsAt = (w: number): number =>
+        Math.pow(w, c.exponent) /
+        (Math.pow(w, c.exponent) + (n - 1) * Math.pow(d.target_mean, c.exponent));
+      // 只有沒被絕對外框截掉的那一側對得回去。
+      if (bounds.max < d.clamp.max) {
+        expect(oddsAt(bounds.max)).toBeCloseTo(Math.pow(n, -c.cap_exponent), 6);
+      }
+      if (bounds.min > d.clamp.min) {
+        expect(oddsAt(bounds.min)).toBeCloseTo(Math.pow(n, -c.floor_exponent), 6);
+      }
+    }
+  });
+
+  it('六隊聯盟的界線比三十隊緊——大聯盟沿用絕對外框', () => {
+    const small = winRateBounds(6);
+    const big = winRateBounds(30);
+    expect(small.max).toBeLessThan(big.max);
+    expect(small.min).toBeGreaterThan(big.min);
+    expect(big.max).toBe(cfg.team_strength.drift.clamp.max);
+    expect(big.min).toBe(cfg.team_strength.drift.clamp.min);
   });
 
   it('平均奪冠率就是隊數的倒數', () => {
     const table = init('a');
     expect(averageChampionshipOdds(table)).toBeCloseTo(1 / table.size);
-  });
-
-  /**
-   * 每一年的全聯盟平均勝率必然是 .500——封閉聯盟裡每一勝都是別人的一敗。
-   */
-  it('每一年的全聯盟平均勝率是 .500', () => {
-    let table = init('a');
-    {
-      // 開局那一年也算——它用體質當勝率，體質的平均同樣必須是 .500。
-      const rates = [...table.values()].map((t) => t.winRate);
-      const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
-      expect(mean).toBeCloseTo(cfg.team_strength.drift.target_mean, 6);
-    }
-    for (let y = 0; y < 30; y++) {
-      table = advanceLeague(new World(`mean-y${y}`), table);
-      const rates = [...table.values()].map((t) => t.winRate);
-      const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
-      expect(mean).toBeCloseTo(cfg.team_strength.drift.target_mean, 6);
-    }
   });
 
   describe('pickChampion', () => {
