@@ -432,26 +432,29 @@ export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElem
 }
 
 /**
- * 這是不是一台行動裝置。
+ * 這是不是一台 iOS 裝置（含 iPadOS）。
  *
- * **不能拿「瀏覽器支不支援分享」當判準。** Windows 的 Chrome 與 Edge 兩者都支援
- * Web Share，於是桌機按下存檔會跳出系統的分享面板而不是下載對話框——那裡沒有
- * 「存到下載資料夾」這件事，使用者得先挑一個 App 才逃得出去。
+ * **判準問的是「有沒有別的辦法存檔」，不是「支不支援分享」也不是「是不是行動
+ * 裝置」。** 前者把 Windows 的 Chrome 與 Edge 都當成手機，後者靠 `userAgentData`
+ * 與粗指標猜裝置，而桌機的回報並不齊：非 Chromium 系沒有那個旗標，觸控螢幕的
+ * 筆電又吃到粗指標，於是桌機照樣跳出系統的分享面板——那裡沒有「存到下載資料
+ * 夾」這件事。改成白名單：只有 iOS 的 `<a download>` 真的不管用（多半只是把圖
+ * 開在同一個分頁裡），其餘平台一律下載得動（見 ADR 0044）。
  *
- * 改問裝置本身：先看瀏覽器自報的行動裝置旗標（Chromium 系有），沒有就退回粗指標
- * （觸控螢幕沒有滑鼠那種像素級的精準度）。兩者都不成立就是桌機。
+ * iPadOS 的標準模式會把自己報成 Macintosh，所以 Mac 還要再問觸控點數：真的 Mac
+ * 是 0，iPad 不是。
  */
-function isMobileDevice(): boolean {
-  const mobile = (navigator as { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile;
-  if (typeof mobile === 'boolean') return mobile;
-  return window.matchMedia?.('(pointer: coarse)').matches === true;
+function isIosDevice(): boolean {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) return true;
+  return ua.includes('Macintosh') && navigator.maxTouchPoints > 1;
 }
 
 /**
  * 存下來。
  *
- * 手機優先走系統的分享面板——那裡才有「儲存影像」，而 `<a download>` 在 iOS
- * 上多半只是把圖開在同一個分頁裡。桌機一律下載。
+ * iOS 優先走系統的分享面板——那裡才有「儲存影像」，而 `<a download>` 在那上面
+ * 多半只是把圖開在同一個分頁裡。其餘平台一律下載，桌機與 Android 都算。
  */
 export async function saveCareerCard(card: CareerCard): Promise<void> {
   const canvas = await renderCareerCard(card);
@@ -460,7 +463,7 @@ export async function saveCareerCard(card: CareerCard): Promise<void> {
 
   const name = `${card.name}-${card.year}-生涯成績.png`;
   const file = new File([blob], name, { type: 'image/png' });
-  if (isMobileDevice() && navigator.canShare?.({ files: [file] }) === true) {
+  if (isIosDevice() && navigator.canShare?.({ files: [file] }) === true) {
     try {
       await navigator.share({ files: [file] });
       return;
