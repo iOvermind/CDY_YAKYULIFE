@@ -1165,7 +1165,7 @@ export interface SeasonData {
       readonly exponent: number;
       readonly noise: Range;
     };
-    /** 能力平移的基準聯盟（大聯盟 par 59）。 */
+    /** 能力平移的基準聯盟（大聯盟 par 62）。 */
     readonly reference_par: number;
     /** 能力佔比的上限。留 5% 給打破紀錄的怪物。 */
     readonly ratio_cap: number;
