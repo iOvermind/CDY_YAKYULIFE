@@ -16,7 +16,7 @@
  * 本模組是純函式，不抽亂數。名人堂票選要擲骰，因此在 `hall.ts`。
  */
 
-import { achievements, hallOfFame as cfg, leagues } from '../data/index.ts';
+import { achievements, awards as awardsCfg, hallOfFame as cfg, leagues } from '../data/index.ts';
 import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { ladderTop, rungName } from './achievements.ts';
 import type { PitcherRole } from './season.ts';
@@ -232,6 +232,14 @@ export interface CareerSummary {
   readonly totalScore: number;
   /** 生涯里程碑（跨聯盟通算），只進總評價分。 */
   readonly careerMilestones: readonly string[];
+  /**
+   * 養成期的盃賽冠軍貢獻的總評價分。
+   *
+   * **與國際賽同一個桶：只進總分，不屬於任何職業聯盟。** 從前它加在每一個聯盟
+   * 的榮譽分上——一個高中拿過三座盃的人，中職、日職、大聯盟三本帳各自都多了那
+   * 三座的分，同一件事被算了三次。
+   */
+  readonly amateurTitlePoints: number;
   /** 國際賽貢獻的總評價分。與生涯里程碑同一個桶，不進任何單一聯盟。 */
   readonly internationalScore: number;
   /** 職業期的國際賽逐屆紀錄。養成期的國際賽併在該年的養成列裡，不進這一份。 */
@@ -429,7 +437,7 @@ function seasonCount(list: readonly SeasonRecord[]): number {
 export function summarizeCareer(
   records: readonly SeasonRecord[],
   awards: readonly AwardRecord[],
-  championships = 0,
+  amateurTitles = 0,
   amateurSeasons: readonly AmateurSeasonRecord[] = [],
   internationalScore = 0,
   internationalSeasons: readonly InternationalRecord[] = [],
@@ -458,10 +466,10 @@ export function summarizeCareer(
     const shares = sumShares(sharesByPart.batting, sharesByPart.pitching, sharesByPart.fielding);
     const sharePoints = list.reduce((sum, r) => sum + seasonPoints(r), 0);
 
+    // 總冠軍就在 awards 裡（code 為 championship），因此它跟其他獎項一樣自動
+    // 落在拿下它的那個聯盟。養成期的盃賽不在這裡——見 `amateurTitlePoints`。
     const own = awards.filter((a) => a.org === org);
-    const awardTotal =
-      own.reduce((sum, a) => sum + awardPoints(a.code), 0) +
-      championships * cfg.award_points.championship.points;
+    const awardTotal = own.reduce((sum, a) => sum + awardPoints(a.code), 0);
 
     const milestones = evaluateMilestones('league', lines.batting, lines.pitching);
 
@@ -519,9 +527,14 @@ export function summarizeCareer(
   // 國際賽與生涯里程碑同一個桶：**它不屬於任何聯盟**，因此不進任何單一聯盟的
   // 評價分，只進總分。一個帶中華隊拿下經典賽冠軍的人，歷史地位就是跟沒入選過
   // 的人不一樣。
+  // 養成期的盃賽冠軍與職業總冠軍同一個價錢，差別只在歸屬：那幾座盃不屬於任何
+  // 職業聯盟，因此跟國際賽一樣只進總分。
+  const amateurTitlePoints = amateurTitles * awardPoints(awardsCfg.championship.code);
+
   const totalScore =
     leagueCareers.reduce((sum, l) => sum + l.sharePoints + l.awardPoints, 0) +
     careerMilestones.points +
+    amateurTitlePoints +
     internationalScore;
 
   const representative = pickRepresentative(leagueCareers, records);
@@ -535,6 +548,7 @@ export function summarizeCareer(
     minorTotal: totalLines(minorRecords),
     totalScore,
     careerMilestones: careerMilestones.reached,
+    amateurTitlePoints,
     internationalScore,
     internationalSeasons,
     internationalTotal: totalInternational(internationalSeasons),

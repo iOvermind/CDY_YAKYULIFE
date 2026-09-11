@@ -379,3 +379,35 @@ describe('每座聯盟的頂級層級', () => {
     expect(checked).toBe(6);
   });
 });
+
+describe('總冠軍的歸屬', () => {
+  /**
+   * 總冠軍是 awards 裡的一筆紀錄（code 為 championship），因此它跟其他獎項走同
+   * 一條路：自動落在拿下它的那個聯盟，不必另外傳一個次數進來。
+   */
+  it('冠軍的點數加在拿下它的那個聯盟', () => {
+    const plain = summarizeCareer([season()], []);
+    const champ = summarizeCareer([season()], [award('championship')]);
+    const gain = awardPoints('championship');
+    expect(gain).toBeGreaterThan(0);
+    expect(champ.leagues[0]!.awardPoints - plain.leagues[0]!.awardPoints).toBeCloseTo(gain);
+  });
+
+  it('在別的聯盟拿的冠軍不會加到這個聯盟', () => {
+    const plain = summarizeCareer([season()], []);
+    const elsewhere = summarizeCareer([season()], [award('championship', 'NPB')]);
+    expect(elsewhere.leagues[0]!.awardPoints).toBeCloseTo(plain.leagues[0]!.awardPoints);
+  });
+
+  /**
+   * 養成期的盃賽冠軍與國際賽同一個桶：只進總分。從前它加在**每一個**聯盟的榮譽
+   * 分上，一個高中拿過三座盃的人，中職與日職兩本帳各自都多了那三座的分。
+   */
+  it('養成期的盃賽只進總分，不進任何聯盟', () => {
+    const none = summarizeCareer([season()], [], 0);
+    const two = summarizeCareer([season()], [], 2);
+    expect(two.leagues[0]!.awardPoints).toBeCloseTo(none.leagues[0]!.awardPoints);
+    expect(two.amateurTitlePoints).toBeCloseTo(2 * awardPoints('championship'));
+    expect(two.totalScore - none.totalScore).toBeCloseTo(two.amateurTitlePoints);
+  });
+});

@@ -20,7 +20,7 @@ import type { HandednessTier } from './handedness.ts';
 import { pathOf } from './pro.ts';
 import type { World } from './rng.ts';
 import { salaryFor } from './salary.ts';
-import { championshipOdds, initLeague, type LeagueTable } from './teams.ts';
+import { averageChampionshipOdds, championshipOdds, initLeague, type LeagueTable } from './teams.ts';
 
 const cfg = leagues.transfer;
 
@@ -237,12 +237,28 @@ function worthMoving(
   return projected >= ctx.salary * cfg.scouting.min_raise;
 }
 
+/**
+ * 一支球隊的處境：它的奪冠機率，以及**它所在聯盟的平均**。
+ *
+ * 兩個數字要一起帶。條件看的是「這支球隊比聯盟裡一般的球隊更接近冠軍嗎」，而
+ * 那個「一般」是隊數的倒數——拿一個寫死的常數去比，六隊的中職會變成每一支都
+ * 在爭冠、三十隊的大聯盟會變成每一支都在重建。
+ */
+interface Contention {
+  readonly odds: number;
+  readonly reference: number;
+}
+
+function contentionOf(table: LeagueTable, team: string): Contention {
+  return { odds: championshipOdds(table, team), reference: averageChampionshipOdds(table) };
+}
+
 /** 簽約金：體系的基礎金額加上 d 值的加給，再乘上球隊處境的倍率。 */
-function signingBonus(org: string, d: number, odds: number): number {
+function signingBonus(org: string, d: number, at: Contention): number {
   const spec = orgConfig(org)?.signing_bonus;
   if (spec === undefined) return 0;
   const base = spec.base + Math.max(0, d) * spec.per_d;
-  return Math.round(base * contentionBonusMult(odds));
+  return Math.round(base * contentionBonusMult(at));
 }
 
 /**
@@ -251,9 +267,9 @@ function signingBonus(org: string, d: number, odds: number): number {
  * **爭冠的球隊願意砸錢**——他們的窗口就這一兩年，一個補進來的即戰力值多少
  * 錢是用「今年能不能拿下來」算的，不是用市場行情算的。
  */
-function contentionBonusMult(odds: number): number {
+function contentionBonusMult(at: Contention): number {
   const c = cfg.contention;
-  const raw = 1 + (odds - c.reference_odds) * c.bonus.per_odds;
+  const raw = 1 + (at.odds - at.reference) * c.bonus.per_odds;
   return clamp(raw, c.bonus.min, c.bonus.max);
 }
 
@@ -264,11 +280,11 @@ function contentionBonusMult(odds: number): number {
  * 球隊給不起大錢，卻敢給年限——他們賭的是三年後你還在，而那時候他們正好起來。
  * 於是「錢多」與「約長」變成兩個要取捨的東西，而不是同一件事的兩種說法。
  */
-function contractLength(odds: number): number {
+function contractLength(at: Contention): number {
   const c = cfg.contention;
   const base = season.contract.rookie_contract.years;
   const delta = clamp(
-    Math.round((c.reference_odds - odds) * c.years.per_odds),
+    Math.round((at.reference - at.odds) * c.years.per_odds),
     c.years.min,
     c.years.max,
   );
@@ -364,17 +380,18 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
       const team = pickTeam(world, org, null);
       if (team === null || used.has(team)) continue;
       used.add(team);
-      const odds = championshipOdds(table, team);
+      const at = contentionOf(table, team);
+    const odds = at.odds;
       out.push({
         org,
         orgName: orgLabel(org),
         level,
         levelName: leagues.levels[level]?.name ?? level,
         team,
-        bonus: signingBonus(org, overBar, odds),
+        bonus: signingBonus(org, overBar, at),
         homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
         odds,
-        years: contractLength(odds),
+        years: contractLength(at),
         table,
       });
     }
@@ -451,7 +468,8 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
     const table = tableFor(world, org, tables);
     const team = pickTeam(world, org, null);
     if (team === null) continue;
-    const odds = championshipOdds(table, team);
+    const at = contentionOf(table, team);
+    const odds = at.odds;
 
     out.push({
       org,
@@ -462,11 +480,11 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
       bonus: signingBonus(
         org,
         ctx.overall - topLandingBar(org, ctx.standards, served, approach, ctx.tier),
-        odds,
+        at,
       ),
       homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
       odds,
-      years: contractLength(odds),
+      years: contractLength(at),
       table,
     });
   }
@@ -568,18 +586,19 @@ export function domesticFaOffers(
   const levelName = leagues.levels[ctx.level]?.name ?? ctx.level;
 
   return picked.map((team) => {
-    const odds = championshipOdds(ctx.table, team);
+    const at = contentionOf(ctx.table, team);
+    const odds = at.odds;
     return {
       org: ctx.org,
       orgName: orgLabel(ctx.org),
       level: ctx.level,
       levelName,
       team,
-      bonus: signingBonus(ctx.org, ctx.overall - bar, odds),
+      bonus: signingBonus(ctx.org, ctx.overall - bar, at),
       // 沒離開過就沒有回來這回事——同體系內換隊永遠不是落葉歸根。
       homecoming: false,
       odds,
-      years: contractLength(odds),
+      years: contractLength(at),
       table: ctx.table,
     };
   });
@@ -678,17 +697,18 @@ function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOf
     const team = pickTeam(world, target, null);
     if (team === null || used.has(team)) continue;
     used.add(team);
-    const odds = championshipOdds(table, team);
+    const at = contentionOf(table, team);
+    const odds = at.odds;
     bids.push({
       org: target,
       orgName: orgLabel(target),
       level,
       levelName: leagues.levels[level]?.name ?? level,
       team,
-      bonus: signingBonus(target, overBar, odds),
+      bonus: signingBonus(target, overBar, at),
       homecoming: homecomingTo(ctx.playedOrgs, ctx.org, target),
       odds,
-      years: contractLength(odds),
+      years: contractLength(at),
       table,
     });
   }
@@ -764,17 +784,18 @@ export function amateurOverseasOffers(
       if (team === null || used.has(team)) continue;
       used.add(team);
       // 育成合約也吃球隊處境：正在爭冠的球團補起未來也捨得花錢。
-      const odds = championshipOdds(table, team);
+      const at = contentionOf(table, team);
+    const odds = at.odds;
       out.push({
         org: path.org,
         orgName: orgLabel(path.org),
         level,
         levelName: leagues.levels[level]?.name ?? level,
         team,
-        bonus: Math.round(base * contentionBonusMult(odds)),
+        bonus: Math.round(base * contentionBonusMult(at)),
         homecoming: false,
         odds,
-        years: contractLength(odds),
+        years: contractLength(at),
         table,
         label: path.label,
         note: path.note,

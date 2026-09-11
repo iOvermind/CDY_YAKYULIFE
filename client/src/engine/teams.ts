@@ -125,6 +125,18 @@ export function championshipOdds(table: LeagueTable, team: string): number {
   return Math.max(c.min, Math.min(c.max, odds));
 }
 
+/**
+ * 這個聯盟的平均奪冠機率。
+ *
+ * 所有球隊的機率加起來是 `scale`，因此平均值就是 `scale ÷ 隊數`——**它是隊數的
+ * 倒數，不是一個可以寫死的常數**。六隊的中職是 16.7%、三十隊的大聯盟是 3.3%，
+ * 「這支球隊比一般球隊更接近冠軍嗎」這個問題因此只能拿同一個聯盟的平均去問。
+ */
+export function averageChampionshipOdds(table: LeagueTable): number {
+  const c = cfg.team_strength.championship;
+  return table.size === 0 ? 0 : c.scale / table.size;
+}
+
 /** 勝率的顯示字串，例如 .543。 */
 export function fmtWinRate(rate: number): string {
   return rate.toFixed(3).replace(/^0/, '');

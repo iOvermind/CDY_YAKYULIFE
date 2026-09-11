@@ -567,6 +567,8 @@ export interface AwardsData {
   readonly pitcher_of_year: LeaderAward;
   /** 年度最佳打者。與最佳投手對稱——漢克阿倫獎掛在這裡。 */
   readonly batter_of_year: LeaderAward;
+  /** 所屬球隊的總冠軍。判定在 season.json，這裡只有代碼與名字。 */
+  readonly championship: { readonly code: string; readonly name: string };
   /** 聯盟獨有的獎項名稱。鍵是體系代碼，值是獎項代碼到名稱的對照。 */
   readonly aliases: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /**
@@ -1035,7 +1037,6 @@ export interface TransferData {
   readonly import_premium: { readonly value: number };
   /** 球隊的處境如何改變它開出的條件：爭冠的砸錢但給短約，重建的相反。 */
   readonly contention: {
-    readonly reference_odds: number;
     readonly bonus: { readonly per_odds: number; readonly min: number; readonly max: number };
     readonly years: { readonly per_odds: number; readonly min: number; readonly max: number };
   };

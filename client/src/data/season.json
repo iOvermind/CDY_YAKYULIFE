@@ -822,7 +822,6 @@
     },
     "refuse": {
       "_note": "否決交易的代價：接下來幾年的奪冠機率打折，下一張合約的係數也打折（見 multiplier.trade_refuse_penalty）。忠誠是一種選擇，而選擇有成本。",
-      "_pending_note": "職業聯盟的奪冠判定尚未實作，championship_factor 目前無處可接；合約那一半已經生效。",
       "years": 2,
       "championship_factor": 0.75
     },

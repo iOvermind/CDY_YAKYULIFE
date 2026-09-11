@@ -12,6 +12,7 @@ import {
   abilities,
   ALL_ABILITIES,
   amateur,
+  awards as awardsCfg,
   flavor,
   hallOfFame,
   leagues,
@@ -2123,6 +2124,7 @@ export class Game {
       this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
     }
     this.#annualAwards(line.batting, line.pitching);
+    this.#championship();
   }
 
   /**
@@ -3490,6 +3492,62 @@ export class Game {
   }
 
   /**
+   * 所屬球隊的總冠軍。
+   *
+   * 機率由全聯盟的勝率推導（`championshipOdds`），那條式子與轉隊決策看到的是
+   * 同一個數字——畫面上寫著「奪冠機率 18%」，年底就該用那 18% 去擲。
+   *
+   * 三件事是刻意的：
+   *
+   * **只有頂級聯盟有冠軍。** 二軍與小聯盟的冠軍不是別人會記得的事，記了只會讓
+   * 榮譽欄長出一排沒有份量的東西。
+   *
+   * **一季只擲一次，對球季結束時所屬的那一隊。** 季中轉隊的人不會因為待過兩支
+   * 球隊就有兩次機會——現實裡冠軍戒指也是給最後那支隊的人。
+   *
+   * **傷缺整季照樣算。** 冠軍是球隊的事，而他是那支球隊的人（同 `championshipDice`
+   * 對傷缺球季的處理）。
+   *
+   * 否決過交易的人這幾年機率打折（`trade.refuse.championship_factor`）：球團的
+   * 重建計畫被打亂了，而那件事有代價。這是那個折扣第一個真正的使用者。
+   *
+   * 不給訓練骰——國內奪冠的回報是評價分與榮譽，見 `abilities.json` 的
+   * `championship_bonus._scope_note`。見 ADR 0045。
+   */
+  #championship(): void {
+    const pro = this.#pro;
+    const table = this.#league;
+    if (pro === null || table === null) return;
+    const info = levelOf(pro.level);
+    if (info.top === undefined) return;
+
+    const factor =
+      this.#tradeRefuseYears > 0 ? seasonCfg.trade.refuse.championship_factor : 1;
+    const odds = championshipOdds(table, pro.team) * factor;
+    if (!this.world.stream('career').chance(odds * 100)) return;
+
+    const orgName = leagues.top_league_names[info.org] ?? info.org;
+    this.#awards.push({
+      year: this.#year,
+      org: info.org,
+      level: pro.level,
+      code: 'championship',
+      name: awardsCfg.championship.name,
+      // 冠軍不分投打。
+      side: 'both',
+    });
+    // 與年度獎項同一個做法：名稱也寫進去重的榮譽清單，讓生涯中的「榮譽 N」那盞
+    // 燈亮起來；次數要看結構化紀錄。
+    this.#addHonor(joinName(orgName, awardsCfg.championship.name));
+    this.flow.card(
+      'gold',
+      awardsCfg.championship.name,
+      `<b class="hl">${esc(pro.team)}</b> 拿下${esc(orgName)}${awardsCfg.championship.name}。` +
+        `<br><span class="sub">冠軍是九個人的事，但你在場上。</span>`,
+    );
+  }
+
+  /**
    * 職業年度結束：老化 → 升降級 → 引退判定。
    *
    * 順序不能換。老化先跑，因為升降級看的是**這一季結束後**的能力——球團決定的
@@ -4658,6 +4716,7 @@ export class Game {
     const summary = summarizeCareer(
       this.#seasons,
       this.#awards,
+      // 養成期的盃賽冠軍。職業的總冠軍不走這裡——它是 awards 裡的一筆紀錄。
       this.#counts.domesticTitles,
       this.#amateurSeasons,
       this.#intlScore,
@@ -4766,13 +4825,15 @@ export class Game {
     const extras: string[] = [];
     const milestonePoints = summary.totalScore
       - summary.leagues.reduce((sum, l) => sum + l.sharePoints + l.awardPoints, 0)
+      - summary.amateurTitlePoints
       - summary.internationalScore;
     if (milestonePoints > 0.05) extras.push(`生涯里程碑 ${milestonePoints.toFixed(1)}`);
+    if (summary.amateurTitlePoints > 0) extras.push(`養成期冠軍 ${summary.amateurTitlePoints.toFixed(0)}`);
     if (summary.internationalScore > 0) extras.push(`國際賽 ${summary.internationalScore.toFixed(0)}`);
     rows.push(
       `<b class="hl">總評價分 ${summary.totalScore.toFixed(1)}</b>` +
         (extras.length > 0
-          ? `<br><span class="sub">各聯盟合計＋${extras.join('＋')}——這兩項不屬於任何聯盟，只進總分。</span>`
+          ? `<br><span class="sub">各聯盟合計＋${extras.join('＋')}——這些不屬於任何聯盟，只進總分。</span>`
           : ''),
     );
 

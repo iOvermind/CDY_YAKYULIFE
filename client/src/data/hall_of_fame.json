@@ -44,12 +44,10 @@
       "save_king": 3,
       "gold_glove": 3,
       "defense_king": 2,
-      "all_star": 0.5
+      "all_star": 0.5,
+      "championship": 2
     },
-    "championship": {
-      "_note": "所屬球隊奪冠。冠軍是九個人的事，因此給得比個人獎項輕。",
-      "points": 2
-    },
+    "_championship_note": "所屬球隊奪冠（by_code 的 championship）。冠軍是九個人的事，因此給得比個人獎項輕——在明星賽之上、單項王之下。養成期的盃賽冠軍用同一個價錢：冠軍就是冠軍，差別在它只進總評價分，不屬於任何職業聯盟。",
     "default": 0
   },
 
