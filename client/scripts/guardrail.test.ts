@@ -222,6 +222,23 @@ describe('總冠軍', () => {
     expect(share).toBeLessThan(1);
   });
 
+  /**
+   * 冠軍是**從全聯盟抽一支**，所以每個職業球季都恰好有一個冠軍——別隊奪冠也是
+   * 一件看得到的事。二軍與小聯盟的球季也照樣有卡（母隊的冠軍），只是不算榮譽。
+   */
+  it('每個職業球季恰好一張冠軍卡', () => {
+    const name = awardsCfg.championship.name;
+    for (const g of games) {
+      const cards = g.flow.log.filter(
+        (e) => e.kind === 'card' && (e as { title?: string }).title === name,
+      ).length;
+      // **比的是年份而不是紀錄筆數。** 季中轉隊的那一年有兩筆逐年紀錄，但冠軍
+      // 只有一個——那正是「一季只認季末那支隊」。
+      const years = new Set(g.summary?.seasons.map((r) => r.year) ?? []).size;
+      expect(cards).toBe(years);
+    }
+  });
+
   it('每個頂級聯盟球季的奪冠率落在隊數倒數的量級', () => {
     const seasons = games.reduce(
       (sum, g) => sum + (g.summary?.seasons.filter((r) => r.top !== null).length ?? 0),

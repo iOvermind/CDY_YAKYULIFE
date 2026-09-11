@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { season as cfg, teams as teamsData } from '../data/index.ts';
 import {
   advanceLeague,
+  averageChampionshipOdds,
   championshipOdds,
   fmtWinRate,
   initLeague,
+  pickChampion,
   playerEffect,
   type LeagueTable,
 } from './teams.ts';
@@ -106,15 +108,25 @@ describe('advanceLeague', () => {
     expect(bestSum / years).toBeGreaterThan(worstSum / years);
   });
 
-  it('玩家的貢獻只加在自己的球隊上', () => {
+  /**
+   * **玩家的貢獻是零和的。** 他讓自己的球隊多贏，那些勝場只能從別人身上拿——
+   * 平均勝率每年都是 .500，所以貢獻加上去之後平移會把全聯盟一起壓回來，其他
+   * 球隊各讓出 `貢獻 ÷ 隊數`。他自己淨賺 `貢獻 × (1 − 1/隊數)`。
+   */
+  it('玩家的貢獻是零和的——自己多贏就是別人少贏', () => {
     const before = init('a');
     const team = CPBL[0]!.name;
-    const withPlayer = step('b', before, { playerTeam: team, playerEffect: 0.05 });
+    const effect = 0.05;
+    const withPlayer = step('b', before, { playerTeam: team, playerEffect: effect });
     const without = step('b', before);
-    expect(withPlayer.get(team)?.winRate).toBeGreaterThan(without.get(team)?.winRate ?? 0);
-    // 其他球隊完全不受影響
+
+    const gain = (withPlayer.get(team)?.winRate ?? 0) - (without.get(team)?.winRate ?? 0);
+    expect(gain).toBeCloseTo(effect * (1 - 1 / CPBL.length), 6);
+
     for (const other of CPBL.slice(1)) {
-      expect(withPlayer.get(other.name)?.winRate).toBe(without.get(other.name)?.winRate);
+      const delta =
+        (withPlayer.get(other.name)?.winRate ?? 0) - (without.get(other.name)?.winRate ?? 0);
+      expect(delta).toBeCloseTo(-effect / CPBL.length, 6);
     }
   });
 
@@ -149,12 +161,15 @@ describe('championshipOdds', () => {
     );
   });
 
-  it('全聯盟的機率加起來大致是 1——沒有球隊被憑空多算', () => {
-    const table = init('a');
-    let total = 0;
-    for (const t of table.values()) total += championshipOdds(table, t.name);
-    expect(total).toBeGreaterThan(0.9);
-    expect(total).toBeLessThan(1.1);
+  it('全聯盟的機率加起來就是 1——每年恰好有一支球隊奪冠', () => {
+    let table = init('a');
+    for (let y = 0; y < 30; y++) {
+      table = advanceLeague(new World(`sum-y${y}`), table);
+      let total = 0;
+      for (const t of table.values()) total += championshipOdds(table, t.name);
+      // 夾完照比例縮放回 1，所以這裡要的是等於，不是「大致」。
+      expect(total).toBeCloseTo(1, 6);
+    }
   });
 
   it('強隊的優勢被放大——不是勝率的線性換算', () => {
@@ -172,16 +187,79 @@ describe('championshipOdds', () => {
     expect(championshipOdds(init('a'), '不存在的球隊')).toBe(0);
   });
 
-  it('機率不會超出上下限', () => {
+  /**
+   * 上下限是隊數的函數：上限 `1/隊數^0.5`、下限 `1/隊數^1.75`。縮放回 1 之後仍
+   * 然可能有極小的越界（夾與縮放來回收斂），所以留一點容差。
+   */
+  it('機率不會超出該聯盟的上下限', () => {
+    const c = cfg.team_strength.championship;
     let table = init('a');
+    const cap = Math.pow(table.size, -c.cap_exponent);
+    const floor = Math.pow(table.size, -c.floor_exponent);
     for (let y = 0; y < 30; y++) {
       table = advanceLeague(new World(`y${y}`), table);
       for (const t of table.values()) {
         const odds = championshipOdds(table, t.name);
-        expect(odds).toBeGreaterThanOrEqual(cfg.team_strength.championship.min);
-        expect(odds).toBeLessThanOrEqual(cfg.team_strength.championship.max);
+        expect(odds).toBeGreaterThanOrEqual(floor * 0.999);
+        expect(odds).toBeLessThanOrEqual(cap * 1.001);
       }
     }
+  });
+
+  it('平均奪冠率就是隊數的倒數', () => {
+    const table = init('a');
+    expect(averageChampionshipOdds(table)).toBeCloseTo(1 / table.size);
+  });
+
+  /**
+   * 每一年的全聯盟平均勝率必然是 .500——封閉聯盟裡每一勝都是別人的一敗。
+   */
+  it('每一年的全聯盟平均勝率是 .500', () => {
+    let table = init('a');
+    {
+      // 開局那一年也算——它用體質當勝率，體質的平均同樣必須是 .500。
+      const rates = [...table.values()].map((t) => t.winRate);
+      const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+      expect(mean).toBeCloseTo(cfg.team_strength.drift.target_mean, 6);
+    }
+    for (let y = 0; y < 30; y++) {
+      table = advanceLeague(new World(`mean-y${y}`), table);
+      const rates = [...table.values()].map((t) => t.winRate);
+      const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+      expect(mean).toBeCloseTo(cfg.team_strength.drift.target_mean, 6);
+    }
+  });
+
+  describe('pickChampion', () => {
+    it('抽出來的一定是聯盟裡的球隊', () => {
+      const table = init('a');
+      for (let i = 0; i < 50; i++) {
+        const champ = pickChampion(new World(`champ-${i}`), table);
+        expect(champ).not.toBeNull();
+        expect(table.has(champ!)).toBe(true);
+      }
+    });
+
+    it('抽出來的分布貼著奪冠機率——強隊真的比較常拿', () => {
+      const table = init('a');
+      const odds = [...table.values()].map((t) => ({
+        name: t.name,
+        p: championshipOdds(table, t.name),
+      }));
+      const counts = new Map<string, number>();
+      const n = 4000;
+      for (let i = 0; i < n; i++) {
+        const champ = pickChampion(new World(`dist-${i}`), table)!;
+        counts.set(champ, (counts.get(champ) ?? 0) + 1);
+      }
+      for (const { name, p } of odds) {
+        expect((counts.get(name) ?? 0) / n).toBeCloseTo(p, 1);
+      }
+    });
+
+    it('空聯盟沒有冠軍', () => {
+      expect(pickChampion(new World('empty'), new Map())).toBeNull();
+    });
   });
 });
 

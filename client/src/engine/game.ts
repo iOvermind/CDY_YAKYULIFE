@@ -221,6 +221,7 @@ import {
   advanceLeague,
   championshipOdds,
   initLeague,
+  pickChampion,
   playerEffect,
   teamNick,
   type LeagueTable,
@@ -3492,24 +3493,27 @@ export class Game {
   }
 
   /**
-   * 所屬球隊的總冠軍。
+   * 今年誰奪冠。
    *
-   * 機率由全聯盟的勝率推導（`championshipOdds`），那條式子與轉隊決策看到的是
-   * 同一個數字——畫面上寫著「奪冠機率 18%」，年底就該用那 18% 去擲。
+   * **從全聯盟按機率抽一支，不是對自己那支隊擲一次。** 兩者的期望值一樣，但抽
+   * 一支保證每年恰好有一個冠軍，於是「別隊奪冠」也是看得到的事——那才是一個有
+   * 別人的聯盟。機率就是畫面上那個數字（`championshipOdds`），夾在該聯盟的上下
+   * 限之後照比例縮放回 1。
    *
-   * 三件事是刻意的：
+   * 冠軍歸自己時的三件事是刻意的：
    *
-   * **只有頂級聯盟有冠軍。** 二軍與小聯盟的冠軍不是別人會記得的事，記了只會讓
-   * 榮譽欄長出一排沒有份量的東西。
+   * **只有頂級聯盟的冠軍算榮譽。** 二軍與小聯盟沿用母隊的隊名，所以在 2A 的人
+   * 也會看到母隊奪冠的消息——但那一年他不在一軍，戒指不是他的。
    *
-   * **一季只擲一次，對球季結束時所屬的那一隊。** 季中轉隊的人不會因為待過兩支
-   * 球隊就有兩次機會——現實裡冠軍戒指也是給最後那支隊的人。
+   * **一季只認一支球隊：球季結束時所屬的那一支。** 季中被交易的人不會因為待過
+   * 兩支球隊就有兩次機會。現實裡冠軍戒指也是給最後那支隊的人。
    *
-   * **傷缺整季照樣算。** 冠軍是球隊的事，而他是那支球隊的人（同 `championshipDice`
-   * 對傷缺球季的處理）。
+   * **傷缺整季照樣算。** 冠軍是球隊的事，而他是那支球隊的人（同
+   * `championshipDice` 對傷缺球季的處理）。
    *
-   * 否決過交易的人這幾年機率打折（`trade.refuse.championship_factor`）：球團的
-   * 重建計畫被打亂了，而那件事有代價。這是那個折扣第一個真正的使用者。
+   * 否決過交易的人機率打折（`trade.refuse.championship_factor`）：球團的重建計畫
+   * 被打亂了，而那件事有代價。折扣用「重抽一次、命中才換成別隊」實作，因為機率
+   * 表本身是全聯盟共用的——不能為了一個人把別隊的機率改掉。
    *
    * 不給訓練骰——國內奪冠的回報是評價分與榮譽，見 `abilities.json` 的
    * `championship_bonus._scope_note`。見 ADR 0045。
@@ -3518,31 +3522,53 @@ export class Game {
     const pro = this.#pro;
     const table = this.#league;
     if (pro === null || table === null) return;
+
+    const champion = pickChampion(this.world, table);
+    if (champion === null) return;
+
     const info = levelOf(pro.level);
-    if (info.top === undefined) return;
-
-    const factor =
-      this.#tradeRefuseYears > 0 ? seasonCfg.trade.refuse.championship_factor : 1;
-    const odds = championshipOdds(table, pro.team) * factor;
-    if (!this.world.stream('career').chance(odds * 100)) return;
-
     const orgName = leagues.top_league_names[info.org] ?? info.org;
+    const name = awardsCfg.championship.name;
+
+    // 抽取次數不能隨結果變動，所以這一擲一律先做（ADR 0002）。
+    const refused = this.#tradeRefuseYears > 0;
+    const stolen = this.world
+      .stream('career')
+      .chance((1 - seasonCfg.trade.refuse.championship_factor) * 100);
+
+    const mine = champion === pro.team && !(refused && stolen);
+    if (!mine) {
+      const who = champion === pro.team ? `${pro.team}（但那一年你不在陣中）` : champion;
+      this.flow.card('info', name, `<b class="hl">${esc(who)}</b> 拿下${esc(orgName)}${name}。`);
+      return;
+    }
+
+    if (info.top === undefined) {
+      this.flow.card(
+        'info',
+        name,
+        `母隊 <b class="hl">${esc(pro.team)}</b> 拿下${esc(orgName)}${name}。` +
+          `<br><span class="sub">你在${esc(info.name)}，這一枚戒指不是你的。</span>`,
+      );
+      return;
+    }
+
     this.#awards.push({
       year: this.#year,
       org: info.org,
       level: pro.level,
-      code: 'championship',
-      name: awardsCfg.championship.name,
+      code: awardsCfg.championship.code,
+      name,
       // 冠軍不分投打。
       side: 'both',
     });
     // 與年度獎項同一個做法：名稱也寫進去重的榮譽清單，讓生涯中的「榮譽 N」那盞
     // 燈亮起來；次數要看結構化紀錄。
-    this.#addHonor(joinName(orgName, awardsCfg.championship.name));
+    this.#addHonor(joinName(orgName, name));
     this.flow.card(
       'gold',
-      awardsCfg.championship.name,
-      `<b class="hl">${esc(pro.team)}</b> 拿下${esc(orgName)}${awardsCfg.championship.name}。` +
+      name,
+      `<b class="hl">${esc(pro.team)}</b> 拿下${esc(orgName)}${name}。` +
         `<br><span class="sub">冠軍是九個人的事，但你在場上。</span>`,
     );
   }

@@ -458,7 +458,6 @@ export interface HallOfFameData {
   };
   readonly award_points: {
     readonly by_code: Readonly<Record<string, number>>;
-    readonly championship: { readonly points: number };
     readonly default: number;
   };
   readonly tier_floors: {
@@ -1476,12 +1475,21 @@ export interface SeasonData {
       readonly yearly: Range;
       readonly mean_reversion: number;
       readonly clamp: Range;
+      /** 同一年全聯盟的平均勝率。封閉聯盟裡每一勝都是別人的一敗。 */
+      readonly target_mean: number;
+      /** 平移與夾子來回的次數。 */
+      readonly recenter_rounds: number;
     };
     readonly player_effect: { readonly per_point: number } & Range;
     readonly championship: {
       readonly exponent: number;
-      readonly scale: number;
-    } & Range;
+      /** 上限 = 隊數^−cap_exponent。0.5 等於「最多是平均的 √隊數 倍」。 */
+      readonly cap_exponent: number;
+      /** 下限 = 隊數^−floor_exponent。 */
+      readonly floor_exponent: number;
+      /** 夾與縮放來回的次數。 */
+      readonly renormalise_rounds: number;
+    };
   };
   readonly pro_dice: {
     readonly count_weights: Readonly<Record<string, number>>;
