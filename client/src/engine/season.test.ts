@@ -876,3 +876,42 @@ describe('三壘打的曲線', () => {
     expect(baseAt(85)).toBeGreaterThan(1);
   });
 });
+
+describe('全壘打的曲線', () => {
+  const at = (v: number) => {
+    let total = 0;
+    const n = 200;
+    for (let i = 0; i < n; i++) {
+      const l = proBattingLine(
+        new World(`hr-${v}-${i}`),
+        with_(v, { sta: 75 }),
+        '1B',
+        'MLB',
+        v,
+        null,
+      );
+      total += l.hr;
+    }
+    return total / n;
+  };
+
+  /**
+   * 中段吐得比想像的多一點，次方從 5.97 拉到 6.47 把它壓下來。頂端不動——底數在
+   * 能力 75 剛好是 1，次方咬不動它。
+   */
+  it('中段壓得住——能力 65 不到 30 支、70 不到 45 支', () => {
+    expect(at(65)).toBeLessThan(30);
+    expect(at(70)).toBeLessThan(45);
+  });
+
+  it('能力 75 仍然打得到錨點', () => {
+    expect(at(75)).toBeGreaterThan(55);
+  });
+
+  it('一路遞增，沒有任何一段反轉', () => {
+    const curve = [55, 60, 65, 70, 75].map(at);
+    for (let i = 1; i < curve.length; i++) {
+      expect(curve[i]!).toBeGreaterThanOrEqual(curve[i - 1]!);
+    }
+  });
+});
