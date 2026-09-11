@@ -1202,6 +1202,7 @@ export interface SeasonData {
       readonly hr_weight: number;
       readonly weights: Readonly<Record<string, number>>;
       readonly speed_divisor: number;
+      readonly speed_exponent: number;
       readonly jitter: number;
     };
     readonly noise: Range;

@@ -333,7 +333,7 @@ function weightedShifted(spec: RecordSpec, ability: Abilities, par: number): num
 /**
  * 一格的能力佔比，夾在 `ratio_cap`，下限由 `floor` 決定。
  *
- * 比值的定義是 `(加權平均能力 − par + 59) / 80`——**納入的能力都到 80 就是 1.0，
+ * 比值的定義是 `(加權平均能力 − par + 62) / 80`——**納入的能力都到 80 就是 1.0，
  * 也就是打到錨點**。因此 `divisor` 必然是 `80 × 權重和`、`par_slope` 必然等於
  * 權重和，兩者都不是自由參數（見 season.json 的 records._note）。
  *
@@ -547,7 +547,13 @@ export function battingCore(
   // 全壘打以外的每一次上壘都要靠腳程回本壘，所以先加權再整組乘上腳程係數；
   // 全壘打不乘——他自己走回來。
   const nw = b.runs.weights;
-  const legs = Math.min(b.ratio_cap, spdAdj / b.runs.speed_divisor);
+  // 腿係數也是一條比值，因此吃同一個次方。兩端釘死：腳程 80 仍然是 1.0（1 的任何
+  // 次方都是 1），聯盟平均那一點接回聯盟往上搬 3 之前的值，中段跟著壓下去。負的
+  // 比值取小數次方是 NaN，所以先擋掉。
+  const legs = Math.min(
+    b.ratio_cap,
+    Math.pow(Math.max(0, spdAdj) / b.runs.speed_divisor, b.runs.speed_exponent ?? 1),
+  );
   const runsRaw =
     hr * b.runs.hr_weight +
     (triple * (nw['triple'] ?? 0) +
@@ -794,6 +800,8 @@ function allowedEvents(
   // **次方小於 1，曲線是凹的。** 控球的缺口才剛出現就已經看得到保送，往後每差一
   // 分只再多一點——現實裡的保送率就是這個形狀，中間水準的投手離「幾乎不保送」比
   // 線性式子想像的遠得多。兩端釘死：缺口 0 仍然是地板，缺口滿檔仍然是上限。
+  // span 在聯盟平均搬到 62 時跟著縮：缺口 0 那一端本來就釘住，把 span 乘 18/21
+  // 就讓聯盟平均那一端接回原本的缺口 .35。觸身球走同一條路。
   const ctlGap = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
   const wildness = Math.pow(ctlGap, rec.bb.exponent ?? 1);
   const bb = clampInt(
