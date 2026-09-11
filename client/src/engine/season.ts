@@ -791,7 +791,11 @@ function allowedEvents(
   );
 
   const ctlAdj = (ability['ctl'] ?? 0) - (par - p.reference_par);
-  const wildness = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
+  // **次方小於 1，曲線是凹的。** 控球的缺口才剛出現就已經看得到保送，往後每差一
+  // 分只再多一點——現實裡的保送率就是這個形狀，中間水準的投手離「幾乎不保送」比
+  // 線性式子想像的遠得多。兩端釘死：缺口 0 仍然是地板，缺口滿檔仍然是上限。
+  const ctlGap = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
+  const wildness = Math.pow(ctlGap, rec.bb.exponent ?? 1);
   const bb = clampInt(
     Math.round((rec.bb.floor_anchor + rec.bb.range_anchor * wildness) * volume(rec.bb.per) * noise()) +
       jit(rec.bb.jitter),

@@ -915,3 +915,46 @@ describe('全壘打的曲線', () => {
     }
   });
 });
+
+describe('投手四壞的曲線', () => {
+  const at = (ctl: number, level: string) => {
+    let bb = 0;
+    let outs = 0;
+    const n = 200;
+    for (let i = 0; i < n; i++) {
+      const l = proPitchingLine(
+        new World(`pbb-${level}-${ctl}-${i}`),
+        with_(65, { ctl, sta: 70 }),
+        level,
+        65,
+      );
+      bb += l.bb;
+      outs += l.outs;
+    }
+    return (bb * 9) / (outs / 3);
+  };
+
+  /**
+   * 次方小於 1，曲線是凹的：控球的缺口才剛出現就已經看得到保送。線性式子把中間
+   * 水準的投手畫得太乾淨——大聯盟 par 的先發只有 2.2 BB/9，而現實約 3.2。
+   */
+  it('大聯盟平均水準的先發落在現實的保送帶', () => {
+    expect(at(59, 'MLB')).toBeGreaterThan(2.7);
+    expect(at(59, 'MLB')).toBeLessThan(3.5);
+  });
+
+  it('控球越好保送越少，沒有任何一段反轉', () => {
+    const curve = [45, 50, 55, 59, 65, 70].map((c) => at(c, 'MLB'));
+    for (let i = 1; i < curve.length; i++) {
+      expect(curve[i]!).toBeLessThanOrEqual(curve[i - 1]!);
+    }
+  });
+
+  /**
+   * 次方咬不動兩端。缺口 0 仍然是地板，所以控球 75 以上的人這次完全沒有變。
+   */
+  it('控球 75 以上仍然踩在地板上', () => {
+    expect(at(75, 'MLB')).toBeLessThan(1);
+    expect(at(80, 'MLB')).toBeLessThan(1);
+  });
+});

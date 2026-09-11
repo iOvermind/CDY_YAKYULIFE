@@ -1310,6 +1310,8 @@ export interface SeasonData {
         readonly ability: string;
         readonly reference: number;
         readonly span: number;
+        /** 控球缺口的彎度。小於 1 是凹的——缺口才剛出現就已經看得到保送。 */
+        readonly exponent: number;
         readonly cap_per_inning: number;
         readonly jitter: number;
       };
