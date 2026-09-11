@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { careerCardOf } from './App.tsx';
 import { Game, type GameSetup } from './engine/game.ts';
+import { HARNESS_POSITIONS, playCareer } from '../scripts/harness.ts';
 
 const setup: GameSetup = {
   seed: 'card-seed',
@@ -56,6 +57,28 @@ describe('生涯成績圖的內容', () => {
     expect(card?.hands).toBe('投右打左');
     expect(card?.age).toBeGreaterThan(18);
     expect(card?.seed).toBe('card-0');
+  });
+
+  it('生涯評價與生涯收入抄進圖裡，分行與小字的層級都留著', () => {
+    let checked = 0;
+    for (let i = 0; i < 5; i++) {
+      // **要用護欄那套玩家。** 「一律挑第一個選項」的人跑不到頂級聯盟，而評價分
+      // 那張卡只在有頂級聯盟成績時出現，於是這一條會永遠空轉。
+      const card = careerCardOf(playCareer(`card-${i}`, HARNESS_POSITIONS[i % HARNESS_POSITIONS.length]!));
+      // 沒打進職業的人沒有評價分那張卡，收入那張跟著沒有。
+      if (card === null || card.score.length === 0) continue;
+      checked++;
+      // 總評價分那一行一定在，而且是主行不是小字。
+      expect(card.score.some((l) => !l.dim && l.text.includes('總評價分'))).toBe(true);
+      // 小字那幾行是卡片裡的層級，壓掉就看不出主從。
+      expect(card.score.some((l) => l.dim)).toBe(true);
+      for (const line of card.score) expect(line.text).not.toMatch(/[<>]/);
+
+      expect(card.earnings.length).toBeGreaterThan(0);
+      expect(card.earnings.some((l) => !l.dim && l.text.includes('合計'))).toBe(true);
+      for (const line of card.earnings) expect(line.text).not.toMatch(/[<>]/);
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 
   it('引退之日的敘述抄進圖裡，而且不帶 HTML', () => {

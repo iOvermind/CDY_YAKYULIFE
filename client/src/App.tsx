@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import './app.css';
-import { saveCareerCard, type CardRow, type CardTable, type CareerCard } from './careerImage.ts';
+import { saveCareerCard, type CardLine, type CardRow, type CardTable, type CareerCard } from './careerImage.ts';
 import { AccountBar } from './Account.tsx';
 import { useAccount, type Account } from './useAccount.ts';
 import { httpProgress } from './api/http.ts';
@@ -1822,6 +1822,8 @@ export function careerCardOf(game: Game): CareerCard | null {
       bad: t.tone === 'bad',
     })),
     retire: retireText(game.flow.log),
+    score: cardLines(game.flow.log, '生涯評價'),
+    earnings: cardLines(game.flow.log, '生涯收入'),
     tables,
     honors: honorGroups({
       awards: state.awards,
@@ -1840,16 +1842,46 @@ export function careerCardOf(game: Game): CareerCard | null {
  * 卡片內文是 HTML，這裡要還原成純文字。
  */
 function retireText(log: readonly LogEntry[]): string | null {
-  const hit = [...log].reverse().find((e) => e.kind === 'card' && e.title === '引退之日');
-  if (hit === undefined || hit.kind !== 'card') return null;
-  return hit.body
-    .replace(/<br\s*\/?>/gi, '\n')
+  const body = cardBody(log, '引退之日');
+  return body === null ? null : plain(body.replace(/<br\s*\/?>/gi, '\n'));
+}
+
+/** 事件流裡最後一張指定標題的卡，還沒去 HTML。 */
+function cardBody(log: readonly LogEntry[], title: string): string | null {
+  const hit = [...log].reverse().find((e) => e.kind === 'card' && e.title === title);
+  return hit === undefined || hit.kind !== 'card' ? null : hit.body;
+}
+
+/** 卡片內文還原成純文字。 */
+function plain(html: string): string {
+  return html
     .replace(/<[^>]+>/g, '')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&');
+}
+
+/**
+ * 一張卡的內文，逐行拆成圖上要畫的東西。
+ *
+ * **跟引退之日同一條路：從事件流撈，不跟引擎再要一份。** 圖上寫的就是他結算時
+ * 讀到的那幾行，兩邊不可能對不起來；生涯收入也因此不必為了畫圖而多接一條管線。
+ *
+ * 分行沿用卡片自己的 `<br>`，`<span class="sub">` 那幾行標成小字——那是卡片裡
+ * 的層級，不是排版的裝飾。
+ */
+function cardLines(log: readonly LogEntry[], title: string): CardLine[] {
+  const body = cardBody(log, title);
+  if (body === null) return [];
+  const out: CardLine[] = [];
+  for (const raw of body.split(/<br\s*\/?>/i)) {
+    const text = plain(raw).trim();
+    if (text === '') continue;
+    out.push({ text, dim: /class="sub"/i.test(raw) });
+  }
+  return out;
 }
 
 /** 養成期與職業合成一份年表，依年度排序。 */

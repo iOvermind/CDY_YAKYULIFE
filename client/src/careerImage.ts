@@ -30,6 +30,17 @@ export interface CardTable {
   readonly lefts: readonly number[];
 }
 
+/**
+ * 卡片內文的一行。
+ *
+ * `dim` 對應原本的 `<span class="sub">`：那些是註解與拆解，畫成同一種字級會讓
+ * 「勝利份額」看起來跟評價分一樣重要。
+ */
+export interface CardLine {
+  readonly text: string;
+  readonly dim: boolean;
+}
+
 export interface CareerCard {
   readonly name: string;
   /** 守位或投手定位，例如 `SS`、`SP`、`SP＋DH`。 */
@@ -45,6 +56,15 @@ export interface CareerCard {
   readonly traits: readonly { readonly label: string; readonly bad: boolean }[];
   /** 引退之日那張卡的內文（已經去掉 HTML）。 */
   readonly retire: string | null;
+  /**
+   * 生涯評價那張卡的內文，逐行拆好。
+   *
+   * **分行要留著。** 那張卡是一個聯盟一行、底下掛一行小字的結構，壓成一整段之
+   * 後多聯盟的人讀起來會黏成一團，而小字與主行的層級也跟著消失。
+   */
+  readonly score: readonly CardLine[];
+  /** 生涯收入那張卡的內文，同樣逐行。 */
+  readonly earnings: readonly CardLine[];
   readonly tables: readonly CardTable[];
   readonly honors: readonly { readonly caption: string; readonly items: readonly string[] }[];
 }
@@ -185,6 +205,33 @@ function tags(
 }
 
 /** 段落標題。畫面上的 h4 前面有一顆小方塊，這裡照做。 */
+/**
+ * 一段逐行的卡片內文。小字那幾行縮一級並轉灰，行距跟著縮。
+ *
+ * 回傳佔掉的高度——版面是一路往下累加的，每個區塊只回報自己有多高。
+ */
+function body(ctx: Ctx, lines: readonly CardLine[], x: number, y: number, width: number): number {
+  const { c, p } = ctx;
+  let dy = 0;
+  for (const line of lines) {
+    const size = line.dim ? 12 : 14;
+    const step = line.dim ? 20 : 26;
+    // 斷行要在設好字體之後量，不然量的是上一段的字。
+    c.font = font(p, size, 'sans');
+    const rows = wrap(c, line.text, width);
+    if (!ctx.dry) {
+      c.fillStyle = line.dim ? p.dim : p.text;
+      c.textAlign = 'left';
+      c.textBaseline = 'middle';
+      rows.forEach((row, i) => {
+        c.fillText(row, x, y + dy + i * step + step / 2);
+      });
+    }
+    dy += rows.length * step;
+  }
+  return dy;
+}
+
 function heading(ctx: Ctx, text: string, x: number, y: number): number {
   const { c, p } = ctx;
   if (!ctx.dry) {
@@ -344,6 +391,18 @@ function layout(ctx: Ctx, card: CareerCard, width: number): number {
       });
     }
     y += lines.length * 26 + GAP;
+  }
+
+  // ── 生涯評價。引退之日是那一天的敘事，這兩節是那一生的帳——順序照結算畫面。
+  if (card.score.length > 0) {
+    y += heading(ctx, '生涯評價', PAD, y);
+    y += body(ctx, card.score, PAD, y, inner) + GAP;
+  }
+
+  // ── 生涯收入
+  if (card.earnings.length > 0) {
+    y += heading(ctx, '生涯收入', PAD, y);
+    y += body(ctx, card.earnings, PAD, y, inner) + GAP;
   }
 
   // ── 成績表

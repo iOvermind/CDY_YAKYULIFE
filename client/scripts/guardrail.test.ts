@@ -33,66 +33,15 @@ import {
 import { baselineOps, proBaseline } from '../src/engine/metrics.ts';
 import { eraAt } from '../src/engine/season.ts';
 import { Game, type GameSetup } from '../src/engine/game.ts';
+import { HARNESS_POSITIONS, playCareer } from './harness.ts';
 import type { CareerSummary } from '../src/engine/career.ts';
-
-/**
- * 與校準腳本的 balanced 策略一致——護欄與校準必須看同一種玩家。
- *
- * **必須依起始守位分兩份**。自從養成期依起始守位鎖側（見 ADR 0009）之後，P 起點
- * 的玩家只加得動 `sta`，其餘五項全被擋下、點數等於丟掉。在鎖側之前這個破洞是靜
- * 悄悄的：P 起點照樣把點加進 con/rng/pow/fld，畢業時野手側較高，`lockedSide` 判
- * 成野手——也就是說這套取樣**從來沒產生過投手**，校準報表上「投手 目標 35%／實際
- * 0.0%」就是這麼來的。鎖側只是把靜靜地變成野手，換成明顯地跑不到職業。
- */
-const BALANCED_FIELDER = ['sta', 'con', 'rng', 'pow', 'fld', 'eye'];
-const BALANCED_PITCHER = ['sta', 'vel', 'ctl', 'swp', 'drp'];
 
 const RUNS = 120;
 
-function runCareer(seed: string, startPosition: GameSetup['startPosition']): CareerSummary | null {
-  const game = new Game({ seed, name: '護欄', startPosition, throws: 'R', bats: 'R' }).start();
-  let guard = 0;
-  let cursor = 0;
-  const balanced = startPosition === 'P' ? BALANCED_PITCHER : BALANCED_FIELDER;
-  while (game.flow.prompt !== null && guard++ < 8000) {
-    const options = game.flow.prompt.options;
-    const rotated = [...balanced.slice(cursor % balanced.length), ...balanced];
-    // 與校準腳本的策略必須一致——護欄與校準要看同一種玩家。
-    const pick =
-      // **身體開口的那一年就掛靴**——與校準腳本同一條規則。這裡原本漏了它，於是
-      // 代理一路硬撐到年齡上限，生涯長度中位數 27 個球季。生涯評價分是累積 Win
-      // Shares，打三十年當然進名人堂：名人堂帶因此虛胖成 16.7%，補上這條之後是
-      // 8.3%，與校準報表的 8.1% 對得上。護欄與校準必須看同一種玩家。
-      (options.some((o) => o.id === 'retire:push')
-        ? options.find((o) => o.id === 'retire:quit')
-        : undefined) ??
-      options.find((o) => o.id === 'retire:stay') ??
-      options.find((o) => o.id === 'transfer:stay') ??
-      options.find((o) => o.id === 'term:long') ??
-      options.find((o) => o.id === 'term:short') ??
-      options.find((o) => o.id === 'fa:stay') ??
-      options.find((o) => o.id === 'fa:crawl') ??
-      options.find((o) => o.id === 'demote:accept') ??
-      // **升守位一律接受**——寫成明示的策略而不是讓它從最後的 fallback 掉下去。
-      // 那條 fallback 會挑第一個可選項，剛好也是 accept，但那是巧合不是決定：
-      // 選項順序一改，護欄與校準的玩家就會安靜地換一種人（ADR 0009 記過同樣的坑）。
-      options.find((o) => o.id === 'position:accept') ??
-      options.find((o) => o.id === 'fallback:0') ??
-      rotated
-        .map((k) => options.find((o) => o.id === `alloc:${k}` && o.disabled !== true))
-        .find((o) => o !== undefined) ??
-      options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
-      options.find((o) => o.id === 'draft:accept') ??
-      options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
-      undefined;
-    if (pick === undefined) break;
-    if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;
-    game.choose(pick.id);
-  }
-  return game.summary;
-}
+const runCareer = (seed: string, startPosition: GameSetup['startPosition']): CareerSummary | null =>
+  playCareer(seed, startPosition).summary;
 
-const POSITIONS = ['SS', 'CF', 'C', '1B', 'P'] as const;
+const POSITIONS = HARNESS_POSITIONS;
 
 const summaries = Array.from({ length: RUNS }, (_, i) =>
   runCareer(`guard-${i}`, POSITIONS[i % POSITIONS.length]!),
@@ -247,6 +196,42 @@ describe('平衡護欄', () => {
     const threshold = hallOfFame.settlement_traits.grinder.provisional_sum;
     expect(threshold).toBeGreaterThan(sums[0]!);
     expect(threshold).toBeLessThan(sums.at(-1)!);
+  });
+});
+
+/**
+ * 總冠軍的取得率。
+ *
+ * **它是隊數的倒數，不是一個獨立的旋鈕**：全聯盟的奪冠機率加起來是 1，所以六隊
+ * 的中職平均 16.7%。護欄取樣的人幾乎都留在國內，因此這裡量到的是中職的數字——
+ * 一段十幾年的生涯拿兩三次冠軍是對的，區間鬆到只抓「每個人都拿」或「沒有人拿」
+ * 那種等級的崩壞。
+ */
+describe('總冠軍', () => {
+  const games = Array.from({ length: 40 }, (_, i) =>
+    playCareer(`champ-${i}`, POSITIONS[i % POSITIONS.length]!),
+  ).filter((g) => (g.summary?.leagues.length ?? 0) > 0);
+
+  const titlesOf = (g: (typeof games)[number]): number =>
+    (g.state?.awards ?? []).filter((a) => a.code === awardsCfg.championship.code).length;
+
+  it('打過頂級聯盟的人有一部分拿過，但不是全部', () => {
+    expect(games.length).toBeGreaterThan(10);
+    const share = games.filter((g) => titlesOf(g) > 0).length / games.length;
+    expect(share).toBeGreaterThan(0.3);
+    expect(share).toBeLessThan(1);
+  });
+
+  it('每個頂級聯盟球季的奪冠率落在隊數倒數的量級', () => {
+    const seasons = games.reduce(
+      (sum, g) => sum + (g.summary?.seasons.filter((r) => r.top !== null).length ?? 0),
+      0,
+    );
+    const titles = games.reduce((sum, g) => sum + titlesOf(g), 0);
+    expect(seasons).toBeGreaterThan(100);
+    // 中職是六隊（16.7%），日職與大聯盟拉低平均，上緣留給夾子與強隊的集中。
+    expect(titles / seasons).toBeGreaterThan(0.05);
+    expect(titles / seasons).toBeLessThan(0.3);
   });
 });
 
