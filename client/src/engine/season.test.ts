@@ -849,13 +849,29 @@ describe('三壘打的曲線', () => {
   /**
    * 三壘打不是「比較快就多一點」，是快到某個程度才跑得出來的東西。曲線在中段
    * 太平的話，「跑得中上」就開始吐出可觀的三壘打——現實裡那一段幾乎沒有。
+   *
+   * **這一格的次方由這個形狀決定，不由 par 決定**：par 水準的人一年只有 0.1 支，
+   * 拿那個點當基準沒有意義（見 season.json 的 _exponent_note）。
    */
   it('中段跑得中上的人拿不到多少——腳程 70 還在個位數的低段', () => {
     expect(at(70)).toBeLessThan(3);
   });
 
-  it('頂端仍然明顯——腳程 80 是腳程 70 的五倍以上', () => {
-    expect(at(80)).toBeGreaterThan(at(70) * 5);
+  /**
+   * **比的是比值而不是支數。** 錨點搬到 80 之後，「腳程 80、其他 60」這種專才離
+   * 錨點遠了一截，兩端的支數都掉進抖動（±3）的量級——量到的比會被抖動在零那一
+   * 側的地板壓平，而那不是曲線的形狀。
+   */
+  it('頂端仍然明顯——腳程 80 的比值是腳程 70 的五倍以上', () => {
+    const t = cfg.batting.records.triple;
+    const baseAt = (spd: number) => (60 * 1 + 60 * 1 + spd * 4) / (t.divisor ?? 1);
+    const ratio = Math.pow(baseAt(80) / baseAt(70), t.exponent ?? 1);
+    expect(ratio).toBeGreaterThan(5);
+  });
+
+  it('頂端的支數看得見，中段幾乎沒有', () => {
+    expect(at(80)).toBeGreaterThan(3);
+    expect(at(70)).toBeLessThan(2);
   });
 
   it('一路遞增，沒有任何一段反轉', () => {
@@ -866,14 +882,14 @@ describe('三壘打的曲線', () => {
   });
 
   /**
-   * 底數要 ≥ 1 才吃得到 ratio_cap，換算成腳程約 82.5——一般天花板 80 到不了。
+   * 底數要 ≥ 1 才吃得到 ratio_cap，換算成腳程 90——一般天花板 80 到不了。
    * 單季紀錄因此是留給被事件推過上限的極端腳程的。
    */
   it('一般天花板碰不到錨點，紀錄要靠推過上限的腳程', () => {
     const t = cfg.batting.records.triple;
     const baseAt = (spd: number) => (60 * 1 + 60 * 1 + spd * 4) / (t.divisor ?? 1);
-    expect(baseAt(80)).toBeLessThan(1);
-    expect(baseAt(85)).toBeGreaterThan(1);
+    expect(baseAt(85)).toBeLessThan(1);
+    expect(baseAt(95)).toBeGreaterThan(1);
   });
 });
 
@@ -904,8 +920,8 @@ describe('全壘打的曲線', () => {
     expect(at(70)).toBeLessThan(45);
   });
 
-  it('能力 75 仍然打得到錨點', () => {
-    expect(at(75)).toBeGreaterThan(55);
+  it('能力 80 打得到錨點', () => {
+    expect(at(80)).toBeGreaterThan(55);
   });
 
   it('一路遞增，沒有任何一段反轉', () => {
@@ -953,8 +969,8 @@ describe('投手四壞的曲線', () => {
   /**
    * 次方咬不動兩端。缺口 0 仍然是地板，所以控球 75 以上的人這次完全沒有變。
    */
-  it('控球 75 以上仍然踩在地板上', () => {
-    expect(at(75, 'MLB')).toBeLessThan(1);
+  it('控球 80 以上仍然踩在地板上', () => {
     expect(at(80, 'MLB')).toBeLessThan(1);
+    expect(at(85, 'MLB')).toBeLessThan(1);
   });
 });

@@ -333,8 +333,8 @@ function weightedShifted(spec: RecordSpec, ability: Abilities, par: number): num
 /**
  * 一格的能力佔比，夾在 `ratio_cap`，下限由 `floor` 決定。
  *
- * 比值的定義是 `(加權平均能力 − par + 59) / 75`——**納入的能力都到 75 就是 1.0，
- * 也就是打到錨點**。因此 `divisor` 必然是 `75 × 權重和`、`par_slope` 必然等於
+ * 比值的定義是 `(加權平均能力 − par + 59) / 80`——**納入的能力都到 80 就是 1.0，
+ * 也就是打到錨點**。因此 `divisor` 必然是 `80 × 權重和`、`par_slope` 必然等於
  * 權重和，兩者都不是自由參數（見 season.json 的 records._note）。
  *
  * `exponent` 作用在**取完下限、夾上限之前**的比值上，它是兩端釘死之後唯一還能
@@ -802,9 +802,12 @@ function allowedEvents(
     Math.round(ip * rec.bb.cap_per_inning),
   );
 
-  // 觸身球與四壞同源——都是控球掉出去的球，只是量小得多。
+  // 觸身球與四壞同源——都是控球掉出去的球，只是量小得多，因此走同一條式子：
+  // 控球的缺口取次方。兩者的次方不同（四壞 0.71、觸身 1.18）是因為它們各自
+  // 要接回自己原本在 par 的量，見 season.json 的 _exponent_note。
   const hbpAdj = (ability[rec.hbp.ability] ?? 0) - (par - p.reference_par);
-  const wild2 = clamp((rec.hbp.reference - hbpAdj) / rec.hbp.span, 0, 1);
+  const hbpGap = clamp((rec.hbp.reference - hbpAdj) / rec.hbp.span, 0, 1);
+  const wild2 = Math.pow(hbpGap, rec.hbp.exponent ?? 1);
   const hbp = clampInt(
     Math.round((rec.hbp.floor_anchor + rec.hbp.range_anchor * wild2) * volume(rec.hbp.per) * noise()) +
       jit(rec.hbp.jitter),
@@ -979,7 +982,13 @@ export function proPitchingLine(
 
   // ── 局數
   const relief = games - starts;
-  const staminaRatio = pitcherRatio(ability['sta'] ?? 0, par, stamina.floor);
+  // **體力係數也吃一個次方。** 局數的錨點（先發 260 局）定在「體力 80」上，而那條
+  // 線一搬，par 水準的投手就會少投 6% ——那不是這次要改的東西。次方把 par 那一點
+  // 接回原值，兩端仍然釘死：體力 80 是 1.0，底下是 stamina.floor。
+  const staminaRatio = Math.pow(
+    pitcherRatio(ability['sta'] ?? 0, par, stamina.floor),
+    p.innings.exponent ?? 1,
+  );
   const ipRaw =
     (inningsOverride === undefined
       ? stamina.start_anchor * (starts / stamina.per_start) +

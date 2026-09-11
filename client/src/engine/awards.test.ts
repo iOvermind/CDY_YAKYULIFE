@@ -118,9 +118,10 @@ describe('winningLine', () => {
   });
 
   /** 錨點水準的一季就是單項王的門檻——這條線把兩個系統釘在一起。 */
-  it('全壘打王的門檻就是「能力 75 的人打一整季」', () => {
+  it('全壘打王的門檻就是「能力 80 的人打一整季」', () => {
     const hr = titleOf('hr_king');
-    expect(hr.d).toBe(16);
+    // 成績錨點的定義：能力 80 打一整季剛好打到錨點，d = 80 − 59。
+    expect(hr.d).toBe(21);
     const line = winningLine(hr, MLB, 0.5)!;
     expect(line).toBeGreaterThan(55);
     expect(line).toBeLessThan(70);
@@ -195,9 +196,17 @@ describe('年度最佳投手', () => {
   const a = cfg.pitcher_of_year;
   const lineAt = (roll: number) => winningLine(a, CPBL, roll)!;
 
+  /**
+   * 對照組的先發不必是「必定拿到」：門檻線現在是**能力 80 那個人**的成績，而他
+   * 的防禦率比舊制的能力 75 低了約 0.3（被安打那一格的斜率在錨點搬家時重解，頂端
+   * 因此變陡）。比線低 0.5 已經不足以把機率推到 1。這一條要說的是牛棚拿不到，先發
+   * 那一半只需要「幾乎一定拿到」。
+   */
   it('限先發——牛棚拿不到', () => {
     const era = lineAt(0) - 0.5;
-    expect(rate({ pitching: pit({ era, outs: 600 }), role: 'SP', batting: null }, 'pitcher_of_year')).toBe(1);
+    expect(
+      rate({ pitching: pit({ era, outs: 600 }), role: 'SP', batting: null }, 'pitcher_of_year'),
+    ).toBeGreaterThan(0.9);
     for (const role of ['CP', 'SU', 'MR', 'LR'] as const) {
       expect(
         rate({ pitching: pit({ role, era, outs: 600 }), role, batting: null }, 'pitcher_of_year'),

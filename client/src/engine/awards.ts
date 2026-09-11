@@ -161,7 +161,7 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
   const { level } = at;
   const swing = 1 + (roll * 2 - 1) * award.band;
   const games = at.leagueGames;
-  // 門檻線的球員是**能力 75 的那個人**（d = 16），也就是成績錨點的定義。
+  // 門檻線的球員是**能力 80 的那個人**（d = 21），也就是成績錨點的定義。
   // 這取代了對手池推導（ADR 0017）：對手池算的是「聯盟最強的那個人」，在大聯盟
   // 推出 d +22.5——那個人每一項能力都 81.5，現實中不存在，而且他已經超過錨點線，
   // 於是門檻每年都貼著紀錄。錨點線是一個講得出來的人；極值不是。

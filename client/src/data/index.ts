@@ -1238,6 +1238,8 @@ export interface SeasonData {
     };
     readonly innings: Readonly<Record<'SP' | 'CP' | 'SU' | 'MR' | 'LR', InningsSpec>> & {
       readonly jitter: number;
+      /** 體力係數的彎度。局數的錨點定在體力 80。 */
+      readonly exponent: number;
     };
     /**
      * 勝敗、救援與中繼。**全部由成績推導，沒有一格直接看能力。**
@@ -1293,6 +1295,8 @@ export interface SeasonData {
       };
       /** 觸身球。比照四壞看控球，量小得多。 */
       readonly hbp: {
+        /** 控球缺口的彎度，與四壞同一條式子。 */
+        readonly exponent: number;
         readonly floor_anchor: number;
         readonly range_anchor: number;
         readonly per: number;
