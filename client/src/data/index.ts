@@ -1474,18 +1474,13 @@ export interface SeasonData {
     readonly drift: {
       readonly yearly: Range;
       readonly mean_reversion: number;
-      /** 絕對的外框。實際界線與奪冠機率反解出來的線取交集。 */
+      /** 單一球隊勝率的硬邊。不隨隊數浮動。 */
       readonly clamp: Range;
-      /** 反解時「其他球隊」的水準，也就是聯盟的中庸值。 */
-      readonly target_mean: number;
     };
     readonly player_effect: { readonly per_point: number } & Range;
     readonly championship: {
+      /** 勝率的次方。機率沒有上下限——它是勝率的結果。 */
       readonly exponent: number;
-      /** 機率上限 = 隊數^−cap_exponent。0.5 等於「最多是平均的 √隊數 倍」。 */
-      readonly cap_exponent: number;
-      /** 機率下限 = 隊數^−floor_exponent。 */
-      readonly floor_exponent: number;
     };
   };
   readonly pro_dice: {
