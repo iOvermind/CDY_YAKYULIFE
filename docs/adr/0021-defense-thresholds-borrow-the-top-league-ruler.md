@@ -62,3 +62,7 @@
   1B／2B／3B／SS、外野手散在 LF／CF／RF，而不是全部塞進 DH。門檻最高的 SS 與
   CF 在 13 歲那年守得住的仍是少數，那是對的——六年的成長曲線本來就要靠
   `assignPosition()` 一年一年往上提。
+
+## 後續
+
+[ADR 0048](0048-the-glove-is-scored-like-every-other-cell.md) 之後，借尺的是**判定用的平均線**（`positionAverageLine`），顯示用的守備分仍然只在頂級聯盟有值（`localPositionAverageLine`）。兩把尺的分工一字未改：判定「守不守得動」用全運動的標準，判定「守得好不好」跟同一層的人比。養成階段一樣自成一把尺。
