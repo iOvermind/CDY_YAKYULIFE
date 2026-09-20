@@ -120,8 +120,8 @@ describe('winningLine', () => {
   /** 錨點水準的一季就是單項王的門檻——這條線把兩個系統釘在一起。 */
   it('全壘打王的門檻就是「能力 80 的人打一整季」', () => {
     const hr = titleOf('hr_king');
-    // 成績錨點的定義：能力 80 打一整季剛好打到錨點，d = 80 − 59。
-    expect(hr.d).toBe(21);
+    // 成績錨點的定義：能力 80 打一整季剛好打到錨點，d = 80 − 61。
+    expect(hr.d).toBe(19);
     const line = winningLine(hr, MLB, 0.5)!;
     expect(line).toBeGreaterThan(55);
     expect(line).toBeLessThan(70);

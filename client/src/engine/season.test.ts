@@ -224,7 +224,7 @@ describe('plateAppearances', () => {
 });
 
 describe('intentionalWalks', () => {
-  const MLB_PAR = 59;
+  const MLB_PAR = 61;
 
   it('一般球員不會被敬遠', () => {
     expect(intentionalWalks(new World('a'), flat(50), 600, MLB_PAR)).toBe(0);

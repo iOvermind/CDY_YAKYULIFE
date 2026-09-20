@@ -77,7 +77,11 @@ describe('天梯的資料列', () => {
       if (minorSeasons === 0) continue;
       const career = ladderRows(summary).find((r) => r.scope === CAREER_SCOPE);
       // 季數只數頂級聯盟：二軍那幾年既不加成績也不加門檻。
-      expect(career?.seasons).toBe(summary.seasons.filter((s) => s.top !== null).length);
+      // **數的是年份而不是列數**——季中被交易的那一年有兩列，年資只算一年。
+      const topYears = new Set(
+        summary.seasons.filter((s) => s.top !== null).map((s) => s.year),
+      );
+      expect(career?.seasons).toBe(topYears.size);
       return;
     }
     throw new Error('四十局都沒有人在二軍待過');
