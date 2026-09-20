@@ -20,10 +20,11 @@ import { leagues, positions, type Hand } from '../data/index.ts';
 import { personalStandardOf, type LeagueStandards } from './league.ts';
 import { standardDiscount, type HandednessTier } from './handedness.ts';
 import {
-  baseThreshold,
   blockedByHand,
+  defenseMark,
   defenseScore,
-  localBaseThreshold,
+  localPositionAverageLine,
+  positionAverageLine,
   type Abilities,
 } from './rating.ts';
 
@@ -49,29 +50,29 @@ export interface PositionResult {
 }
 
 /**
- * 守這個守位需要的門檻。
+ * 判定去留時用的平均線：該守位的平均，減掉球團願意給的折讓。
  *
- * 只有頂級聯盟設門檻——二軍與小聯盟不挑守位，能上場就讓你上。年輕球員吃潛力
- * 紅利，門檻略降：球團願意為一個 22 歲的游擊手多等兩年。
+ * 只有頂級聯盟與養成階段量得出來——二軍與小聯盟借該體系頂級聯盟的尺（ADR 0021），
+ * 三個階段因此共用同一份登錄守位與同一套要求。回傳 null 表示這個層級量不出來，
+ * 那就不挑守位。
  *
- * 基準線由 `baseThreshold` 依該層級 par 推導，不再逐聯盟手填（ADR 0010）。
- *
- * 回傳 null 表示這個層級不設限（非頂級聯盟，或這個守位不在光譜上）。
+ * **折讓只作用在這條線上，不動顯示的守備分。** 球團願意為一個 22 歲的游擊手多等
+ * 兩年，那是去留的事；他今年守得好不好是另一本帳，不該因為他年輕就變好看。
  */
-export function requiredScore(
+export function judgingAverage(
   position: string,
   level: string,
   age: number,
   tier: HandednessTier = 'none',
 ): number | null {
-  const base = baseThreshold(position, level);
+  const base = positionAverageLine(position, level);
   if (base === null) return null;
   // 守位是關卡，整條尺按慣用手折扣平移——見 CONTEXT.md「個人尺 / 聯盟真尺」。
-  // 年齡的折讓是加在折後的門檻上：那是「他還年輕」，跟他慣用哪隻手無關。
+  // 年齡的折讓是加在折後的線上：那是「他還年輕」，跟他慣用哪隻手無關。
   return base * (1 - standardDiscount(tier)) + youthAdjust(age);
 }
 
-/** 年齡對門檻的折扣，取第一個符合的區間。 */
+/** 年齡對判定線的折讓，取第一個符合的區間。 */
 function youthAdjust(age: number): number {
   for (const tier of positions.youth_adjust.tiers) {
     if (age <= tier.max_age) return tier.adjust;
@@ -80,22 +81,22 @@ function youthAdjust(age: number): number {
 }
 
 /**
- * 這個守位在這個層級的**平均**守備水準，也就是守備分的比較基準。
+ * 這個守位在這個層級的**平均**守備水準，也就是守備分的零點。
  *
- * 定義為「守得住的門檻再加一段」——門檻是守得動的最低標準，實際佔著位置的人
- * 平均會高過它一些。
+ * 由 `defense_offsets` 直接定義：平均線 = 該層級 par + 守位位移。這張表曾經是
+ * 「守得動的最低門檻」、平均線另外由一個 margin 推導，兩段在門檻不再是判準之後
+ * 合一了（ADR 0048）。
  *
- * 基準必須是同守位的平均，不能用聯盟的一般 par：守備分是 fld／cat／arm 的
- * 加權，各守位的量級本來就不同。用聯盟 par 時，勉強守得住游擊的人拿 +6、
- * 勉強守得住一壘的人拿 −8，但這兩個人本質上是同一件事，都該是 0。
+ * 基準必須是同守位的平均，不能用聯盟的一般 par：守備分是各守位自己那三項能力的
+ * 加權，量級本來就不同。用聯盟 par 時，勉強守得住游擊的人拿 +6、勉強守得住一壘的
+ * 人拿 −8，但這兩個人本質上是同一件事。
  *
- * **不套年齡折扣**：折扣是給資格判定用的，同守位的平均水準不會因為某個球員
- * 年輕就下降。
+ * **不套折讓**：折讓是給去留判定用的，同守位的平均水準不會因為某個球員年輕就下降。
  *
- * 平均線跟著聯盟一起浮動——聯盟整體變強，該守位的平均守備也會變強。用當年
- * par 與基準 par 的差額平移，不必為每個守位另外設一組浮動。
+ * 平均線跟著聯盟一起浮動——聯盟整體變強，該守位的平均守備也會變強。用當年 par 與
+ * 基準 par 的差額平移，不必為每個守位另外設一組浮動。
  *
- * 回傳 null 表示這個層級不設門檻（非頂級聯盟），因此也沒有平均線可比。
+ * 回傳 null 表示這個層級沒有自己的平均線（非頂級聯盟），因此年表上不顯示守備分。
  */
 export function positionAverage(
   position: string,
@@ -103,18 +104,26 @@ export function positionAverage(
   standards: LeagueStandards | null = null,
   tier: HandednessTier = 'none',
 ): number | null {
-  const base = localBaseThreshold(position, level);
+  const base = localPositionAverageLine(position, level);
   if (base === null) return null;
   // 守位是關卡，吃個人尺：左投左打被要求的守備水準跟著他自己的那把尺下移。
   const drift = personalStandardOf(standards, level, tier).par - (leagues.levels[level]?.par ?? 0);
-  return base + positions.defense_average.margin + drift;
+  return base + drift;
 }
 
 /**
- * 守不守得動這個守位。門檻不存在時視為守得動——非頂級聯盟不挑。
+ * 守不守得動這個守位：**守備分還沒跌破降守位那條線**。量不出平均線的層級視為
+ * 守得動——那些層級不挑守位。
  *
- * 捕手沒有另一套基準線。「蹲捕的容忍度高」已經由門檻數字本身表達——捕手的
- * 門檻低於游擊，那就是容忍度。
+ * 判準從「守備分 ≥ 硬門檻」換成 DEF ≥ `demotion_line`（ADR 0048）。差別不只是
+ * 換一把尺：舊門檻等於 DEF −7，新的線在 −10，因此一個打擊出色而守備平庸的游擊
+ * 可以提著負的守備分繼續站在那裡，而不是被一條硬線掃到三壘。
+ *
+ * 吃的是**不乘出賽比重、不加抖動**的純值。擲骰決定守哪裡會讓玩家練了守備卻看不
+ * 到效果；而乘上出賽比重的話，傷缺半季的爛守備反而會因為 DEF 貼近 0 保住位置。
+ *
+ * 捕手沒有另一套基準線。「蹲捕的容忍度高」已經由平均線本身表達——捕手的平均線
+ * 低於游擊，那就是容忍度。
  */
 export function canPlay(
   ability: Abilities,
@@ -124,8 +133,9 @@ export function canPlay(
   tier: HandednessTier = 'none',
 ): boolean {
   if (position === DH) return true;
-  const required = requiredScore(position, level, age, tier);
-  return required === null || defenseScore(ability, position) >= required;
+  const line = judgingAverage(position, level, age, tier);
+  if (line === null) return true;
+  return defenseMark(defenseScore(ability, position), line) >= positions.defense_score.demotion_line;
 }
 
 /** 這個守位屬於哪一條移防光譜。捕手自成一路。 */
@@ -258,21 +268,21 @@ export function defenseResponsibility(position: string, gamesShare: number): num
 }
 
 /**
- * 這一季的守備分。
+ * 這一季的守備分（DEF），給年表與記分板看的那一份。
  *
- * `DEF = (守備分 − 該守位當年平均) × 守位責任占比 × scale × 出賽比重`
- *
- * 這是 Bill James 的 Win Shares 守備段：份額先依守位切開（責任占比），品質
- * 比較則在**守位內部**進行（相對同守位平均）。兩件事分工明確——守位價值由
- * 份額大小承擔，守得好不好由守位內的比較承擔。
- *
- * 因此捕手守備分超出捕手平均 8 分，乘上占比 24；一壘手同樣超出 8 分，只乘 3。
- * 蹲捕的重量在數據上真的看得出來。
+ * 形狀與成績那一側的每一格一致：`錨點 × 比值^次方 × 出賽比重 + 抖動`，比值由
+ * `defenseMark` 算好（見 rating.ts）。**所有守位的錨點都是 +25**，依守位縮的是
+ * 「拿到 +25 需要多少能力」——游擊要 80，捕手 76，一壘 64。守位之間的價值差不在
+ * 這個數字裡，它在勝利份額的責任占比上（ADR 0048）。
  *
  * 指定打擊不產生守備分——他不守備。
  *
- * 可以是負的：守得比同守位平均差就是負貢獻。**逐年的數據該誠實**——一個 −8
- * 的球季就是 −8。結算時換算成勝利份額與敗戰份額，見 ADR 0003。
+ * 可以是負的：守得比同守位平均差就是負貢獻。**逐年的數據該誠實**——一個 −8 的
+ * 球季就是 −8。結算時換算成勝利份額與敗戰份額，見 ADR 0003。
+ *
+ * **抖動只在這裡。** 去留判定走 `canPlay`，吃的是沒有抖動、沒有出賽比重的純值：
+ * 擲骰決定守哪裡會讓玩家練了守備卻看不到效果。`jitter` 沒傳就不抖，年表因此可以
+ * 在任何時候重算。
  */
 export function defenseRuns(options: {
   readonly ability: Abilities;
@@ -281,17 +291,16 @@ export function defenseRuns(options: {
   readonly standards: LeagueStandards | null;
   /** 出賽比重：實際出賽數除以聯盟場次。 */
   readonly gamesShare: number;
+  /** ±n 的整數抖動來源。不傳就是沒有抖動。 */
+  readonly jitter?: (n: number) => number;
 }): number {
   if (options.position === DH) return 0;
-  const responsibility = defenseResponsibility(options.position, options.gamesShare);
-  if (responsibility === 0) return 0;
 
   const average = positionAverage(options.position, options.level, options.standards);
   if (average === null) return 0;
 
-  const raw =
-    (defenseScore(options.ability, options.position) - average) *
-    responsibility *
-    positions.defense_score_scale.scale;
-  return Math.round(raw);
+  const mark = defenseMark(defenseScore(options.ability, options.position), average);
+  const d = positions.defense_score;
+  const jitter = options.jitter?.(d.jitter) ?? 0;
+  return Math.round(mark * options.gamesShare) + jitter;
 }

@@ -8,7 +8,7 @@
  * 這裡不抽任何亂數，全部是純函數。
  */
 
-import { amateur, season as cfg } from '../data/index.ts';
+import { amateur, season as cfg, positions } from '../data/index.ts';
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
 import {
@@ -378,27 +378,37 @@ export function pitchingShares(
 /**
  * 守備的雙帳。
  *
- * 勝率由**守備分相對該守位平均**決定，不是相對聯盟的一般水準——各守位的守備分
- * 量級本來就不同，用同一條線比會讓門檻高的守位天生虛胖。守位之間的價值差則由
- * 責任額承擔。
+ * 勝率由**守備分（DEF）**決定：`比值 = 1 + DEF / 錨點`。站在同守位平均線上 DEF 是
+ * 0、比值 1、勝率 .500；錨點 +25 的比值是 2，勝率 .800；降守位那條線 −10 的比值
+ * 0.6，勝率 .265。比的是守位內部的品質，守位之間的價值差由責任額承擔。
+ *
+ * 以前這裡吃的是 `守備分 ÷ 該守位平均`，那條比值的幅度太窄——從勉強守得住到能力
+ * 全滿，整條區間只有 1.4 個勝利份額，而同一段距離在打擊那一側大約是 7 份。練守備
+ * 因此幾乎沒有回報（ADR 0048）。
+ *
+ * 吃的是**不乘出賽比重**的 DEF：出賽時間已經在責任額裡，乘兩次等於平方。
  */
 export function fieldingShares(options: {
-  readonly defenseScore: number;
-  readonly positionAverage: number;
+  /** 守備分的純值，見 rating.ts 的 defenseMark。不含出賽比重與抖動。 */
+  readonly defenseMark: number;
   readonly positionShare: number;
   readonly leagueGames: number;
   readonly gamesShare: number;
   readonly teamWinRate?: number | null;
 }): Shares {
-  if (options.positionAverage <= 0 || options.positionShare <= 0) return { win: 0, loss: 0 };
+  if (options.positionShare <= 0) return { win: 0, loss: 0 };
   const responsibility = fieldingResponsibilityShares(options);
   return splitShares(
     responsibility,
-    teamAdjustedWinPct(
-      pythagoreanWinPct(options.defenseScore / options.positionAverage),
-      options.teamWinRate ?? null,
-    ),
+    teamAdjustedWinPct(fieldingWinPctOf(options.defenseMark), options.teamWinRate ?? null),
   );
+}
+
+/** DEF 換成守備勝率。比值觸底為 0（DEF = −錨點），那時整本帳都是敗戰份額。 */
+export function fieldingWinPctOf(mark: number): number {
+  const anchor = positions.defense_score.anchor;
+  if (anchor <= 0) return 0.5;
+  return pythagoreanWinPct(Math.max(0, 1 + mark / anchor));
 }
 
 /**
@@ -449,15 +459,15 @@ export function lossPenalty(
 /**
  * 守備側替代水準的勝率。
  *
- * 守備的替代水準是**守得動這個位置的最低標準**，也就是該守位的門檻；平均線
- * 則是門檻加上 margin。兩者的比值就是替代水準球員的相對表現。
+ * 守備的替代水準是**再低就守不住這個位置的那條線**，也就是 DEF 跌到
+ * `demotion_line`（−10）的人，勝率 .265。
  *
- * 與打擊、投球用的是同一個概念——「剛好還留得住的人」——只是那條線在守備上
- * 由守位門檻定義，而不是由聯盟的 min 定義。
+ * 與打擊、投球用的是同一個概念——「剛好還留得住的人」——只是那條線在守備上由
+ * 降守位的門檻定義，而不是由聯盟的 min 定義。它不吃守位也不吃層級：DEF 本來就是
+ * 守位內部的相對量，每個守位的那條線都在同一個數字上（ADR 0048）。
  */
-export function fieldingReplacementWinPct(threshold: number, average: number): number {
-  if (average <= 0) return 0.5;
-  return pythagoreanWinPct(threshold / average);
+export function fieldingReplacementWinPct(): number {
+  return fieldingWinPctOf(positions.defense_score.demotion_line);
 }
 
 /** 把幾筆雙帳加總。 */

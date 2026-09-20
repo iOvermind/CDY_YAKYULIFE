@@ -63,7 +63,6 @@ import {
   fieldingResponsibility,
   positionAverage,
   positionLabel,
-  requiredScore,
   DH,
   type PositionResult,
 } from './defense.ts';
@@ -228,6 +227,7 @@ import {
 } from './teams.ts';
 import {
   benchmarkLevelOf,
+  defenseMark,
   defenseScore,
   homeBenchmarkLevel,
   isSideVisible,
@@ -2052,6 +2052,8 @@ export class Game {
         level: pro.level,
         standards: this.#standards,
         gamesShare: line.batting.games / levelOf(pro.level).games,
+        // 抖動走 season 那條流——它與成績同一個球季結算，共用一條序列。
+        jitter: (n) => this.world.stream('season').int(-n, n),
       });
       this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
       this.#seasonDefenseRuns = def;
@@ -3372,20 +3374,16 @@ export class Game {
     const fieldPosition = info.top === undefined ? null : this.#position;
     if (fieldPosition !== null && fieldPosition !== DH && batting !== null) {
       const average = positionAverage(fieldPosition, pro.level, this.#standards);
-      const threshold = requiredScore(fieldPosition, pro.level, this.#age, this.#handednessTier);
       if (average !== null) {
         fielding = fieldingShares({
-          defenseScore: defenseScore(this.#ability, fieldPosition),
-          positionAverage: average,
+          defenseMark: defenseMark(defenseScore(this.#ability, fieldPosition), average),
           positionShare: fieldingResponsibility(fieldPosition),
           leagueGames: info.games,
           gamesShare: batting.games / info.games,
           teamWinRate,
         });
-        if (threshold !== null) {
-          const p0 = fieldingReplacementWinPct(threshold, average);
-          fieldingK = p0 >= 1 ? 0 : p0 / (1 - p0);
-        }
+        const p0 = fieldingReplacementWinPct();
+        fieldingK = p0 >= 1 ? 0 : p0 / (1 - p0);
       }
     }
 
@@ -3449,8 +3447,7 @@ export class Game {
       if (average !== null) {
         fieldingWinPct = winPct(
           fieldingShares({
-            defenseScore: defenseScore(this.#ability, fieldPosition),
-            positionAverage: average,
+            defenseMark: defenseMark(defenseScore(this.#ability, fieldPosition), average),
             positionShare: fieldingResponsibility(fieldPosition),
             leagueGames: info.games,
             gamesShare: batting.games / info.games,

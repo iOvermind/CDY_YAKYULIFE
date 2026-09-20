@@ -282,7 +282,11 @@ function amateurPar(stage: string): number | null {
 }
 
 /**
- * 守這個守位的門檻基準線：該層級的 par 加上守位位移。**不含年齡折扣**。
+ * 這個守位在這個層級的**平均守備水準**：該層級的 par 加上守位位移。**不含折讓**。
+ *
+ * 守備分的零點就釘在這條線上（見 ADR 0048）。它曾經叫 `baseThreshold`，表達的是
+ * 「守得動的最低門檻」，平均線再由它加一段推導；門檻不再是去留判準之後，那兩段
+ * 合一了——位移直接定義平均線。
  *
  * par 從哪裡來分兩條路：養成階段（JHS／HS）用 `amateur.cups[stage].par`，職業
  * 層級先過 `benchmarkLevelOf` 拿該體系**頂級聯盟**的 par。因此二軍與小聯盟拿到
@@ -296,7 +300,7 @@ function amateurPar(stage: string): number | null {
  * 定義在 rating.ts 而非 defense.ts，是因為 defense.ts 依賴本模組，反向 import
  * 會成環——與檔首 TWO_WAY_TRAIT 的處理同一個理由。
  */
-export function baseThreshold(position: string, level: string): number | null {
+export function positionAverageLine(position: string, level: string): number | null {
   const offset = positions.defense_offsets[position];
   if (offset === undefined) return null;
   const stagePar = amateurPar(level);
@@ -309,13 +313,13 @@ export function baseThreshold(position: string, level: string): number | null {
 }
 
 /**
- * 同一條門檻線，但**不借尺**：只有自己設門檻的層級（頂級聯盟）才有值。
+ * 同一條平均線，但**不借尺**：只有自己設得出平均的層級（頂級聯盟）才有值。
  *
- * 守備分的比較基準用它，不用 `baseThreshold`。判定「守不守得動」該用全運動
- * 的標準（所以借尺），但「守得好不好」必須跟同一層的人比——拿一軍的平均去
+ * 顯示用的守備分拿它當零點，不用 `positionAverageLine`。判定「守不守得動」該用
+ * 全運動的標準（所以借尺），但「守得好不好」必須跟同一層的人比——拿一軍的平均去
  * 量二軍球員，會讓整個二軍的守備份額變成一片負數。
  */
-export function localBaseThreshold(position: string, level: string): number | null {
+export function localPositionAverageLine(position: string, level: string): number | null {
   const offset = positions.defense_offsets[position];
   if (offset === undefined) return null;
   const info = leagues.levels[level];
@@ -341,22 +345,46 @@ export function blockedByHand(throws: Hand | null | undefined, position: string)
   return abilities.handedness.left_throw_blocked_positions.positions.includes(position as never);
 }
 
+/**
+ * 守備分（DEF）。
+ *
+ * `DEF = anchor × sign(x) × |x / span|^exponent`，x 是守備分減該守位當年的平均線。
+ * 兩端釘死：站在平均線上是 0，高出 `span`（10 分能力）剛好是錨點 +25。中段由次方
+ * 壓下去，而次方是由「守得住的最低標準落在 −7」反解出來的。
+ *
+ * **可以是負的**，而且負的那一半形狀對稱——守得比同守位平均差就是負貢獻，這一本
+ * 帳該誠實。夾在 `[−anchor, anchor × cap_ratio]`：上夾留 5% 給上限事件推過 80 的
+ * 怪物，下夾是勝率比值 `1 + DEF / anchor` 的觸底點。
+ *
+ * 純函式：不抽亂數、不吃出賽比重。顯示用的那一份在 `defenseRuns` 裡才乘出賽比重、
+ * 才加抖動——「今年還守不守得住」不能擲骰。
+ */
+export function defenseMark(score: number, averageLine: number): number {
+  const d = positions.defense_score;
+  const x = (score - averageLine) / d.span;
+  const raw = d.anchor * Math.sign(x) * Math.pow(Math.abs(x), d.exponent);
+  return Math.max(-d.anchor, Math.min(d.anchor * d.cap_ratio, raw));
+}
+
 export function fieldingPosition(
   ability: Abilities,
   level: string,
   throws?: Hand | null,
 ): string {
-  // 內野與外野的光譜合起來掃，取「守得動的最高階守位」——門檻越高的守位越
-  // 難守，也越有價值。掃不到任何一個就落到 DH。
+  // 內野與外野的光譜合起來掃，取「守得動的最高階守位」——平均線越高的守位越
+  // 難守，也越有價值。守得動的定義是 DEF 還沒跌破降守位那條線。掃不到任何一個
+  // 就落到 DH。
   const candidates = [...positions.scan_order.IF, ...positions.scan_order.OF, 'C'];
-  let best: { position: string; required: number } | null = null;
+  let best: { position: string; line: number } | null = null;
 
   for (const position of candidates) {
     if (blockedByHand(throws, position)) continue;
-    const required = baseThreshold(position, level);
-    if (required === null) continue;
-    if (defenseScore(ability, position) < required) continue;
-    if (best === null || required > best.required) best = { position, required };
+    const line = positionAverageLine(position, level);
+    if (line === null) continue;
+    if (defenseMark(defenseScore(ability, position), line) < positions.defense_score.demotion_line) {
+      continue;
+    }
+    if (best === null || line > best.line) best = { position, line };
   }
   return best?.position ?? positions.scan_order.fallback;
 }

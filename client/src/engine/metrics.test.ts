@@ -8,6 +8,7 @@ import {
   battingShares,
   eraPlus,
   fieldingReplacementWinPct,
+  fieldingWinPctOf,
   fieldingShares,
   lossPenalty,
   opsPlus,
@@ -24,6 +25,7 @@ import {
   teamAdjustedWinPct,
   winPct,
 } from './metrics.ts';
+import { defenseMark } from './rating.ts';
 import { World } from './rng.ts';
 import { eraAt } from './season.ts';
 
@@ -247,8 +249,7 @@ describe('雙帳制', () => {
 describe('守備的雙帳', () => {
   const field = (score: number, share: number) =>
     fieldingShares({
-      defenseScore: score,
-      positionAverage: 54,
+      defenseMark: defenseMark(score, 54),
       positionShare: share,
       leagueGames: 120,
       gamesShare: 1,
@@ -328,8 +329,9 @@ describe('替代水準與 k', () => {
     expect(widest.k).toBeLessThan(narrowest.k);
   });
 
-  it('守備的替代水準是守位門檻，低於守位平均', () => {
-    expect(fieldingReplacementWinPct(50, 54)).toBeLessThan(0.5);
+  it('守備的替代水準是降守位那條線，低於守位平均', () => {
+    expect(fieldingReplacementWinPct()).toBeLessThan(0.5);
+    expect(fieldingReplacementWinPct()).toBeCloseTo(fieldingWinPctOf(-10), 10);
   });
 });
 
@@ -396,8 +398,7 @@ describe('球隊戰績的耦合', () => {
   it('接進守備的雙帳', () => {
     const field = (teamWinRate: number) =>
       fieldingShares({
-        defenseScore: 58,
-        positionAverage: 54,
+        defenseMark: defenseMark(58, 54),
         positionShare: 18,
         leagueGames: 120,
         gamesShare: 1,

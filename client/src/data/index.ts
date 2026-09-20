@@ -606,15 +606,28 @@ export interface PositionsData {
   readonly positions: Readonly<Record<string, string>>;
   /** 各守位的能力權重。資格判定與守備分共用同一組，見該檔的 _deviation。 */
   readonly ability_weights: Readonly<Record<string, Readonly<Record<AbilityKey, number>>>>;
-  /** 守位門檻相對於該層級 par 的位移。門檻 = par + 位移，只在頂級聯盟生效。 */
+  /** 該守位平均守備水準相對該層級 par 的位移。平均線 = par + 位移。 */
   readonly defense_offsets: Readonly<Record<string, number>>;
-  /** 年輕球員的門檻折扣，依年齡取第一個符合的區間。 */
+  /** 年輕球員的折讓，作用在判定用的平均線上，依年齡取第一個符合的區間。 */
   readonly youth_adjust: {
     readonly tiers: readonly { readonly max_age: number; readonly adjust: number }[];
     readonly default: number;
   };
-  /** 該守位的平均守備水準：門檻加上 margin。守備分的比較基準。 */
-  readonly defense_average: { readonly margin: number };
+  /** 守備分的形狀參數。 */
+  readonly defense_score: {
+    /** 三項守備能力都到「平均線 + span」時的守備分。 */
+    readonly anchor: number;
+    /** 從平均線走到錨點要幾分能力。 */
+    readonly span: number;
+    /** 曲線的彎度，由降守位那條線反解。 */
+    readonly exponent: number;
+    /** 上夾＝錨點的幾倍。與成績那一側的 ratio_cap 同一個語意。 */
+    readonly cap_ratio: number;
+    /** 顯示用的整數抖動，±jitter。 */
+    readonly jitter: number;
+    /** 低於這條線就往下一個守位移。 */
+    readonly demotion_line: number;
+  };
   /** 薪資議價力。與守備價值是兩個不同的量——捕手的年薪不是一壘手的八倍。 */
   readonly salary_multiplier: Readonly<Record<string, number>>;
   /**
@@ -622,7 +635,6 @@ export interface PositionsData {
    * 次序，三者共用這一份。DH 不在表內。
    */
   readonly fielding_responsibility: Readonly<Record<string, number>>;
-  readonly defense_score_scale: { readonly scale: number };
   /**
    * 移防掃描順序。IF／OF 是各自的守位光譜，fallback 是掃不到時的保底。
    * 型別分開寫，呼叫端才不必為了取一個字串去做 union 收窄。

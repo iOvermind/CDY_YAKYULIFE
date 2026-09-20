@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilities, ALL_ABILITIES, amateur, positions } from '../data/index.ts';
 import {
-  baseThreshold,
+  positionAverageLine,
   battingRating,
   defenseScore,
   fieldingPosition,
@@ -293,9 +293,9 @@ describe('fieldingPosition', () => {
   it('取的是守得動的最高階守位，不是守備分最高的守位', () => {
     // 門檻越高的守位越難守也越有價值——這是 scan_order 的定義
     const pos = fieldingPosition(flat(80), LEVEL);
-    const required = baseThreshold(pos, LEVEL) ?? 0;
+    const required = positionAverageLine(pos, LEVEL) ?? 0;
     for (const other of [...positions.scan_order.IF, ...positions.scan_order.OF]) {
-      const otherReq = baseThreshold(other, LEVEL) ?? 0;
+      const otherReq = positionAverageLine(other, LEVEL) ?? 0;
       if (otherReq <= required) continue;
       // 更高階的守位一定是守不動才沒被選
       expect(defenseScore(flat(80), other)).toBeLessThan(otherReq);
@@ -304,7 +304,7 @@ describe('fieldingPosition', () => {
 
   it('守備能力越好，守得動的守位越高階', () => {
     const req = (v: number) =>
-      baseThreshold(fieldingPosition(flat(v), LEVEL), LEVEL) ?? 0;
+      positionAverageLine(fieldingPosition(flat(v), LEVEL), LEVEL) ?? 0;
     expect(req(80)).toBeGreaterThan(req(45));
   });
 
@@ -312,15 +312,15 @@ describe('fieldingPosition', () => {
     const mid = flat(52);
     const cpbl = fieldingPosition(mid, 'CPBL1');
     const mlb = fieldingPosition(mid, 'MLB');
-    const rank = (p: string) => baseThreshold(p, 'CPBL1') ?? 0;
+    const rank = (p: string) => positionAverageLine(p, 'CPBL1') ?? 0;
     expect(rank(mlb)).toBeLessThanOrEqual(rank(cpbl));
   });
 
   it('養成階段用該學制自己的 par，不是職業的尺（ADR 0021 修正）', () => {
     // 國中的游擊要跟國中的游擊比。借中職一軍的尺會讓整個養成期只剩 DH。
-    expect(baseThreshold('SS', 'JHS')).toBe(amateur.cups.JHS.par + 5);
-    expect(baseThreshold('SS', 'HS')).toBe(amateur.cups.HS.par + 5);
-    expect(baseThreshold('SS', 'JHS')!).toBeLessThan(baseThreshold('SS', 'CPBL1')!);
+    expect(positionAverageLine('SS', 'JHS')).toBe(amateur.cups.JHS.par + positions.defense_offsets['SS']!);
+    expect(positionAverageLine('SS', 'HS')).toBe(amateur.cups.HS.par + positions.defense_offsets['SS']!);
+    expect(positionAverageLine('SS', 'JHS')!).toBeLessThan(positionAverageLine('SS', 'CPBL1')!);
   });
 
   it('養成階段的中間值守得動內野，不會被擠成 DH', () => {

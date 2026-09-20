@@ -8,11 +8,11 @@ import {
   fieldingResponsibility,
   positionAverage,
   positionLabel,
-  requiredScore,
+  judgingAverage,
   DH,
 } from './defense.ts';
 import { advanceStandards, initStandards, leagueStandardOf } from './league.ts';
-import { baseThreshold, defenseScore, type Abilities } from './rating.ts';
+import { defenseMark, defenseScore, positionAverageLine, type Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
 /** 全部能力都是同一個值的球員，再覆寫指定幾項。 */
@@ -26,24 +26,24 @@ function player(base: number, overrides: Record<string, number> = {}): Abilities
 const glove = (rng: number, fld: number, arm: number, cat = 20) =>
   player(20, { rng, fld, arm, cat });
 
-describe('requiredScore', () => {
-  it('年輕球員的門檻比較低——球團願意為潛力多等兩年', () => {
-    const young = requiredScore('SS', 'CPBL1', 22)!;
-    const old = requiredScore('SS', 'CPBL1', 30)!;
+describe('judgingAverage', () => {
+  it('年輕球員的判定線比較低——球團願意為潛力多等兩年', () => {
+    const young = judgingAverage('SS', 'CPBL1', 22)!;
+    const old = judgingAverage('SS', 'CPBL1', 30)!;
     expect(young).toBeLessThan(old);
   });
 
-  it('二軍借同體系頂級聯盟的尺——門檻與一軍同一把（ADR 0021）', () => {
-    expect(requiredScore('SS', 'CPBL2', 25)).toBe(requiredScore('SS', 'CPBL1', 25));
+  it('二軍借同體系頂級聯盟的尺——線與一軍同一把（ADR 0021）', () => {
+    expect(judgingAverage('SS', 'CPBL2', 25)).toBe(judgingAverage('SS', 'CPBL1', 25));
   });
 
-  it('沒有頂級聯盟可借的層級才真的沒有門檻', () => {
-    expect(requiredScore('SS', '', 25)).toBeNull();
+  it('沒有頂級聯盟可借的層級才真的不挑守位', () => {
+    expect(judgingAverage('SS', '', 25)).toBeNull();
   });
 
-  it('越難守的守位門檻越高', () => {
-    const ss = requiredScore('SS', 'CPBL1', 30)!;
-    const first = requiredScore('1B', 'CPBL1', 30)!;
+  it('越難守的守位平均線越高', () => {
+    const ss = judgingAverage('SS', 'CPBL1', 30)!;
+    const first = judgingAverage('1B', 'CPBL1', 30)!;
     expect(ss).toBeGreaterThan(first);
   });
 });
@@ -53,7 +53,7 @@ describe('canPlay', () => {
     expect(canPlay(glove(20, 20, 20), 'SS', 'CPBL2', 28)).toBe(false);
   });
 
-  it('一軍守不動游擊的人，被門檻擋下來', () => {
+  it('一軍守不動游擊的人，被降守位那條線擋下來', () => {
     expect(canPlay(glove(20, 20, 20), 'SS', 'CPBL1', 28)).toBe(false);
   });
 
@@ -61,32 +61,37 @@ describe('canPlay', () => {
     expect(canPlay(glove(20, 20, 20), DH, 'CPBL1', 28)).toBe(true);
   });
 
-  it('捕手與其他守位共用同一張門檻表，沒有平行機制', () => {
-    const bar = baseThreshold('C', 'CPBL1')!;
+  it('捕手與其他守位共用同一張平均線表，沒有平行機制', () => {
+    const bar = positionAverageLine('C', 'CPBL1')!;
     const good = player(20, { fld: bar, cat: bar, arm: bar });
     expect(defenseScore(good, 'C')).toBeCloseTo(bar, 6);
     expect(canPlay(good, 'C', 'CPBL1', 30)).toBe(true);
-    const bad = player(20, { fld: bar - 6, cat: bar - 6, arm: bar - 6 });
+    const bad = player(20, { fld: bar - 12, cat: bar - 12, arm: bar - 12 });
     expect(canPlay(bad, 'C', 'CPBL1', 30)).toBe(false);
   });
 
-  it('捕手的門檻低於游擊——「蹲捕容忍度高」由門檻數字本身表達', () => {
-    expect(requiredScore('C', 'CPBL1', 30)!).toBeLessThan(requiredScore('SS', 'CPBL1', 30)!);
+  it('捕手的平均線低於游擊——「蹲捕容忍度高」由平均線本身表達', () => {
+    expect(judgingAverage('C', 'CPBL1', 30)!).toBeLessThan(judgingAverage('SS', 'CPBL1', 30)!);
+  });
+
+  it('守備平庸的游擊守得住——負的守備分不等於站不住', () => {
+    const average = positionAverageLine('SS', 'CPBL1')!;
+    const mediocre = player(20, { rng: average - 5, fld: average - 5, arm: average - 5 });
+    expect(defenseMark(defenseScore(mediocre, 'SS'), average)).toBeLessThan(0);
+    expect(canPlay(mediocre, 'SS', 'CPBL1', 30)).toBe(true);
   });
 });
 
 describe('positionAverage', () => {
-  it('平均線高於門檻——實際佔著位置的人比最低標準好一些', () => {
+  it('與借尺那一條同源——頂級聯盟量出同一個數字', () => {
     for (const pos of ['C', 'SS', '2B', '3B', 'CF', 'RF', 'LF', '1B']) {
-      const avg = positionAverage(pos, 'CPBL1')!;
-      expect(avg).toBeGreaterThan(baseThreshold(pos, 'CPBL1')!);
+      expect(positionAverage(pos, 'CPBL1')!).toBe(positionAverageLine(pos, 'CPBL1')!);
     }
   });
 
-  it('不套年齡折扣——同守位的平均不會因為某個人年輕就下降', () => {
-    // requiredScore 吃年齡，positionAverage 不吃；兩者的差在年輕時才會拉開
+  it('不套年齡折讓——同守位的平均不會因為某個人年輕就下降', () => {
     expect(positionAverage('SS', 'CPBL1')).toBe(positionAverage('SS', 'CPBL1'));
-    expect(requiredScore('SS', 'CPBL1', 22)!).toBeLessThan(requiredScore('SS', 'CPBL1', 32)!);
+    expect(judgingAverage('SS', 'CPBL1', 22)!).toBeLessThan(judgingAverage('SS', 'CPBL1', 32)!);
   });
 
   it('跟著聯盟水準一起浮動', () => {
@@ -184,7 +189,7 @@ describe('assignPosition', () => {
   });
 
   it('捕手蹲得住就不必掃別的光譜', () => {
-    const bar = baseThreshold('C', 'CPBL1')!;
+    const bar = positionAverageLine('C', 'CPBL1')!;
     const r = assignPosition({
       ...base,
       ability: player(20, { fld: bar + 5, cat: bar + 5, arm: bar + 5 }),
@@ -206,7 +211,7 @@ describe('assignPosition', () => {
   });
 
   it('離開本壘板的捕手，接捕練回來可以重披護具', () => {
-    const bar = baseThreshold('C', 'CPBL1')!;
+    const bar = positionAverageLine('C', 'CPBL1')!;
     const r = assignPosition({
       ...base,
       ability: player(20, { fld: bar + 10, cat: bar + 10, arm: bar + 10 }),
@@ -278,7 +283,7 @@ describe('fieldingResponsibility', () => {
 
   it('右外野的責任略高於左外野——邊線與長傳本壘的臂力責任更重', () => {
     expect(fieldingResponsibility('RF')).toBeGreaterThan(fieldingResponsibility('LF'));
-    expect(requiredScore('RF', 'CPBL1', 30)!).toBeGreaterThan(requiredScore('LF', 'CPBL1', 30)!);
+    expect(judgingAverage('RF', 'CPBL1', 30)!).toBeGreaterThan(judgingAverage('LF', 'CPBL1', 30)!);
   });
 
   it('指定打擊的責任是 0——不守備的人既無貢獻也無過失', () => {
@@ -358,20 +363,28 @@ describe('defenseRuns', () => {
     }
   });
 
-  it('同樣超出自己守位平均的幅度，捕手的貢獻遠大於一壘手', () => {
+  it('同樣超出自己守位平均的幅度，每個守位拿到的守備分一樣', () => {
     const over = 10;
     const value = (pos: string) => {
       const ability = player(positionAverage(pos, 'CPBL1')! + over);
       return defenseRuns({ ability, position: pos, level: 'CPBL1', standards, gamesShare: 1 });
     };
-    expect(value('C')).toBeGreaterThan(value('SS'));
-    expect(value('SS')).toBeGreaterThan(value('2B'));
-    expect(value('2B')).toBeGreaterThan(value('LF'));
-    expect(value('LF')).toBeGreaterThan(value('1B'));
+    // 守位價值不在這個數字裡，它在勝利份額的責任占比上（ADR 0048）。
+    for (const pos of ['SS', '2B', 'LF', '1B']) {
+      expect(value(pos)).toBe(value('C'));
+    }
   });
 
-  it('守位平均越高的位置越難超出，但超出之後的回報也越大', () => {
-    const ability = glove(70, 70, 70);
+  it('守位價值改由責任占比承擔——同樣的守備分，捕手的份額遠大於一壘手', () => {
+    expect(defenseResponsibility('C', 1)).toBeGreaterThan(defenseResponsibility('SS', 1));
+    expect(defenseResponsibility('SS', 1)).toBeGreaterThan(defenseResponsibility('2B', 1));
+    expect(defenseResponsibility('2B', 1)).toBeGreaterThan(defenseResponsibility('LF', 1));
+    expect(defenseResponsibility('LF', 1)).toBeGreaterThan(defenseResponsibility('1B', 1));
+  });
+
+  it('守位平均越高的位置越難超出——同一組能力在一壘拿到的守備分比在游擊高', () => {
+    // 70/70/70 在兩個守位都頂到夾子，量不出差別；60 才落在曲線上。
+    const ability = glove(60, 60, 60);
     const ss = defenseRuns({ ability, position: 'SS', level: 'CPBL1', standards, gamesShare: 1 });
     const first = defenseRuns({
       ability,
@@ -380,7 +393,7 @@ describe('defenseRuns', () => {
       standards,
       gamesShare: 1,
     });
-    expect(ss).toBeGreaterThan(first);
+    expect(first).toBeGreaterThan(ss);
   });
 
   it('出賽越少，守備分越少', () => {
