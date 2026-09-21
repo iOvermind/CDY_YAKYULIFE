@@ -162,6 +162,26 @@ describe('守位的榜', () => {
     }
   });
 
+  it('份額是投打守三本帳相加——二刀流的同一季不會被拆成兩份', () => {
+    const { summary, at } = withPositions();
+    for (const row of at) {
+      const position = row.scope.slice(POSITION_PREFIX.length);
+      const played = summary.seasons.filter(
+        (r) => r.top !== null && (r.position === position || r.pitcherRole === position),
+      );
+      let win = 0;
+      let loss = 0;
+      for (const r of played) {
+        for (const part of ['batting', 'pitching', 'fielding'] as const) {
+          win += r.shares[part].win;
+          loss += r.shares[part].loss;
+        }
+      }
+      expect(row.winShares, position).toBeCloseTo(win, 10);
+      expect(row.lossShares, position).toBeCloseTo(loss, 10);
+    }
+  });
+
   it('生涯累計不會超過跨聯盟通算——它是其中一部分', () => {
     const { rows, at } = withPositions();
     const career = rows.find((r) => r.scope === CAREER_SCOPE);

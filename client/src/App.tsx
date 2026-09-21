@@ -43,8 +43,10 @@ import {
   pitchingShares,
   baselineAt,
   proBaseline,
+  sumShares,
   winPct,
   type Baseline,
+  type Shares,
 } from './engine/metrics.ts';
 import { joinName } from './engine/naming.ts';
 import { tournamentPar } from './engine/national.ts';
@@ -979,6 +981,7 @@ function StatsPanel({ state }: { state: PlayerState }) {
         batting={state.seasonBatting}
         pitching={state.seasonPitching}
         base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
+        shares={state.seasonShares}
         defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
       />
       <TraitList traits={state.traits} names={state.traitNames} />
@@ -1188,7 +1191,13 @@ const BAD_TAG = { background: '#2a0f0f', borderColor: '#c0392b', color: '#ff8b7a
 interface StatColumn<T> {
   readonly key: string;
   readonly title: string;
-  readonly value: (line: T, base: Baseline) => string | number;
+  /**
+   * `shares` 是**整個球員**那一季的雙帳（打擊＋投球＋守備三本帳相加）。
+   *
+   * 份額不分投打，所以它不能從單側那條成績列算出來：二刀流的同一季，打擊表與
+   * 投球表看到的必須是同一個數字。沒有那份資料時（養成期）才退回單側自算。
+   */
+  readonly value: (line: T, base: Baseline, shares: Shares | null) => string | number;
 }
 
 /** 相對聯盟平均的指標統一這樣顯示：沒有樣本就畫破折號，不畫 0。 */
@@ -1214,9 +1223,9 @@ const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'SLG', title: '長打率', value: (b) => fmtAvg(b.slg) },
   { key: 'OPS', title: '整體攻擊指數', value: (b) => fmtAvg(ops(b)) },
   { key: 'OPS+', title: '相對聯盟平均的攻擊表現（100 為聯盟平均）', value: (b, base) => rel(opsPlus(b, base)) },
-  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (b, base) => battingShares(b, base).win.toFixed(1) },
-  { key: 'LS', title: '敗戰份額：佔用了出場機會卻沒換回勝利的部分', value: (b, base) => battingShares(b, base).loss.toFixed(1) },
-  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base) => fmtAvg(winPct(battingShares(b, base))) },
+  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（投打守三本帳相加）', value: (b, base, shares) => (shares ?? battingShares(b, base)).win.toFixed(1) },
+  { key: 'LS', title: '敗戰份額：佔用了出場機會卻沒換回勝利的部分（投打守三本帳相加）', value: (b, base, shares) => (shares ?? battingShares(b, base)).loss.toFixed(1) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base, shares) => fmtAvg(winPct(shares ?? battingShares(b, base))) },
 ];
 
 const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
@@ -1237,9 +1246,9 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'K/9', title: '每九局奪三振', value: (p) => kPerNine(p).toFixed(1) },
   { key: 'BB/9', title: '每九局四壞', value: (p) => bbPerNine(p).toFixed(1) },
   { key: 'ERA+', title: '相對聯盟平均的防禦率（100 為聯盟平均）', value: (p, base) => rel(eraPlus(p, base)) },
-  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (p, base) => pitchingShares(p, base).win.toFixed(1) },
-  { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分', value: (p, base) => pitchingShares(p, base).loss.toFixed(1) },
-  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base) => fmtAvg(winPct(pitchingShares(p, base))) },
+  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（投打守三本帳相加）', value: (p, base, shares) => (shares ?? pitchingShares(p, base)).win.toFixed(1) },
+  { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分（投打守三本帳相加）', value: (p, base, shares) => (shares ?? pitchingShares(p, base)).loss.toFixed(1) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base, shares) => fmtAvg(winPct(shares ?? pitchingShares(p, base))) },
 ];
 
 /** 一列通算成績。第一欄是列名（聯盟或「通算」），其餘欄位與生涯年表一致。 */
@@ -1249,6 +1258,8 @@ interface TotalRow {
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
   readonly defenseRuns: number;
+  /** 整季的雙帳：投打守三本帳相加。養成期沒有這份資料，一律 null。 */
+  readonly shares: Shares | null;
   readonly base: Baseline;
 }
 
@@ -1298,6 +1309,8 @@ interface CareerRow {
   /** 這一年帶著什麼傷。養成期不追蹤傷病，一律 null。 */
   readonly injured: SeasonRecord['injured'];
   readonly defenseRuns: number;
+  /** 整季的雙帳：投打守三本帳相加。養成期沒有這份資料，一律 null。 */
+  readonly shares: Shares | null;
   readonly base: Baseline;
 }
 
@@ -1312,15 +1325,17 @@ function StatCells<T>({
   columns,
   line,
   base,
+  shares,
 }: {
   columns: readonly StatColumn<T>[];
   line: T;
   base: Baseline;
+  shares: Shares | null;
 }) {
   return (
     <>
       {columns.map((c) => (
-        <td key={c.key}>{c.value(line, base)}</td>
+        <td key={c.key}>{c.value(line, base, shares)}</td>
       ))}
     </>
   );
@@ -1383,7 +1398,7 @@ function TotalsTable({
                 <tr key={r.label}>
                   <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
                   <td>{r.seasons}</td>
-                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} />
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} shares={r.shares} />
                   <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
                 </tr>
               ))}
@@ -1407,7 +1422,7 @@ function TotalsTable({
                 <tr key={r.label}>
                   <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
                   <td>{r.seasons}</td>
-                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} shares={r.shares} />
                 </tr>
               ))}
             </tbody>
@@ -1478,7 +1493,7 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
               {batting.map((r) => (
                 <tr key={`intl-b-${r.year}-${r.tournament}`}>
                   {lead(r)}
-                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} />
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} shares={null} />
                 </tr>
               ))}
             </tbody>
@@ -1499,7 +1514,7 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
               {pitching.map((r) => (
                 <tr key={`intl-p-${r.year}-${r.tournament}`}>
                   {lead(r)}
-                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} />
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} shares={null} />
                 </tr>
               ))}
             </tbody>
@@ -1527,6 +1542,8 @@ function intlTotalRow(summary: CareerSummary): TotalRow {
     batting: summary.internationalTotal.batting,
     pitching: summary.internationalTotal.pitching,
     defenseRuns: 0,
+    // 國際賽的份額不進評價分，年表上那幾欄退回單側自算。
+    shares: null,
     // 國際賽沒有自己的聯盟可挑，成績本來就是拿他當時所在的層級換算出來的，
     // 因此借代表聯盟那把尺——與上面逐屆那兩張表同一個基準。
     base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
@@ -1594,7 +1611,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
                   <td title={r.position === null ? undefined : positionName(r.position)}>
                     {r.position ?? '—'}
                   </td>
-                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} />
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} shares={r.shares} />
                   <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
                 </tr>
               ))}
@@ -1623,7 +1640,7 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
                   <td title={r.pitcherRole === null ? undefined : ROLE_NAMES[r.pitcherRole]}>
                     {r.pitcherRole ?? '—'}
                   </td>
-                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} />
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} shares={r.shares} />
                 </tr>
               ))}
             </tbody>
@@ -1656,8 +1673,12 @@ export function careerCardOf(game: Game): CareerCard | null {
   const summary = game.summary;
   if (state === null || summary === null) return null;
 
-  const cells = <T,>(cols: readonly StatColumn<T>[], v: T, base: Baseline): string[] =>
-    cols.map((c) => String(c.value(v, base)));
+  const cells = <T,>(
+    cols: readonly StatColumn<T>[],
+    v: T,
+    base: Baseline,
+    shares: Shares | null,
+  ): string[] => cols.map((c) => String(c.value(v, base, shares)));
 
   const rows = careerRows(summary);
   const batting = rows.filter((r) => r.batting !== null);
@@ -1687,7 +1708,7 @@ export function careerCardOf(game: Game): CareerCard | null {
         cells: [
           ...lead(r, batting[i - 1]?.year === r.year),
           r.position ?? '—',
-          ...cells(BATTING_COLUMNS, r.batting!, r.base),
+          ...cells(BATTING_COLUMNS, r.batting!, r.base, r.shares),
           r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
         ],
       })),
@@ -1704,7 +1725,7 @@ export function careerCardOf(game: Game): CareerCard | null {
         cells: [
           ...lead(r, pitching[i - 1]?.year === r.year),
           r.pitcherRole ?? '—',
-          ...cells(PITCHING_COLUMNS, r.pitching!, r.base),
+          ...cells(PITCHING_COLUMNS, r.pitching!, r.base, r.shares),
         ],
       })),
     });
@@ -1732,10 +1753,10 @@ export function careerCardOf(game: Game): CareerCard | null {
             ? [
                 r.label,
                 String(r.seasons),
-                ...cells(BATTING_COLUMNS, r.batting!, r.base),
+                ...cells(BATTING_COLUMNS, r.batting!, r.base, r.shares),
                 r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
               ]
-            : [r.label, String(r.seasons), ...cells(PITCHING_COLUMNS, r.pitching!, r.base)],
+            : [r.label, String(r.seasons), ...cells(PITCHING_COLUMNS, r.pitching!, r.base, r.shares)],
       })),
     };
   };
@@ -1773,8 +1794,8 @@ export function careerCardOf(game: Game): CareerCard | null {
           r.tournament,
           `${r.rank}${r.mvp ? '・MVP' : ''}`,
           ...(side === 'batting'
-            ? cells(BATTING_COLUMNS, r.batting!, intlBase)
-            : cells(PITCHING_COLUMNS, r.pitching!, intlBase)),
+            ? cells(BATTING_COLUMNS, r.batting!, intlBase, null)
+            : cells(PITCHING_COLUMNS, r.pitching!, intlBase, null)),
         ],
       })),
     });
@@ -1797,8 +1818,8 @@ export function careerCardOf(game: Game): CareerCard | null {
             tint: null,
             cells:
               side === 'batting'
-                ? [row.label, String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base), '0']
-                : [row.label, String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base)],
+                ? [row.label, String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base, row.shares), '0']
+                : [row.label, String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base, row.shares)],
           },
         ],
       });
@@ -1899,6 +1920,8 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     pitching: a.pitching,
     injured: null,
     defenseRuns: 0,
+    // 養成期不記份額——那一段不進評價分，也沒有守備與球隊戰績可以算。
+    shares: null,
     base: amateurBaseline(),
   }));
 
@@ -1916,6 +1939,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     pitching: s.pitching,
     injured: s.injured,
     defenseRuns: s.defenseRuns,
+    shares: sumShares(s.shares.batting, s.shares.pitching, s.shares.fielding),
     base: proBaseline(s.level),
   }));
 
@@ -1930,6 +1954,7 @@ function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
     batting: l.batting,
     pitching: l.pitching,
     defenseRuns: l.defenseRuns,
+    shares: l.shares,
     // 用結算給的頂級層級，**不要拿 org 拼字串**：墨聯的層級就叫 LMB、澳職叫
     // ABL、美職的頂級是 MLB，拼出來的 LMB1 不存在，讀它會直接拋錯——整個
     // 結算畫面因此變成一片空白。
@@ -1945,6 +1970,7 @@ function topTotalRow(summary: CareerSummary): TotalRow {
     batting: summary.topTotal.batting,
     pitching: summary.topTotal.pitching,
     defenseRuns: summary.leagues.reduce((n, l) => n + l.defenseRuns, 0),
+    shares: sumShares(...summary.leagues.map((l) => l.shares)),
     // 通算橫跨數個聯盟，基準線只能挑一個——取評價分最高的那座，那是這段生涯
     // 的代表舞台。沒有職業紀錄時退回中職一軍。
     base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
@@ -1956,6 +1982,7 @@ function StatLines({
   batting,
   pitching,
   base,
+  shares = null,
   defenseRuns,
 }: {
   label: string | null;
@@ -1963,6 +1990,8 @@ function StatLines({
   pitching: PitchingLine | null;
   /** 聯盟平均。ERA+／OPS+／WS 都要跟它比。 */
   base: Baseline;
+  /** 整季的雙帳：投打守三本帳相加。沒有就退回單側自算。 */
+  shares?: Shares | null;
   /** 這一季的守備分。守備沒有別的欄位，因此掛在野手那張表的最後一欄。 */
   defenseRuns?: number | null;
 }) {
@@ -1996,7 +2025,7 @@ function StatLines({
             <tbody>
               <tr>
                 {PITCHING_COLUMNS.map((c) => (
-                  <td key={c.key}>{c.value(pitching, base)}</td>
+                  <td key={c.key}>{c.value(pitching, base, shares)}</td>
                 ))}
               </tr>
             </tbody>
@@ -2020,7 +2049,7 @@ function StatLines({
             <tbody>
               <tr>
                 {BATTING_COLUMNS.map((c) => (
-                  <td key={c.key}>{c.value(batting, base)}</td>
+                  <td key={c.key}>{c.value(batting, base, shares)}</td>
                 ))}
                 {defenseRuns != null && (
                   <td>{defenseRuns > 0 ? `+${defenseRuns}` : defenseRuns}</td>

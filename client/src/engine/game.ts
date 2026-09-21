@@ -404,6 +404,8 @@ export interface PlayerState {
   readonly seasonPitching: PitchingLine | null;
   /** 這一季的守備分。守備沒有別的欄位，因此它掛在野手那張表上。 */
   readonly seasonDefenseRuns: number;
+  /** 這一季的雙帳：投打守三本帳相加。還沒結算過就是 null。 */
+  readonly seasonShares: Shares | null;
   /**
    * 各階段的累計成績。
    *
@@ -564,6 +566,7 @@ export class Game {
   #seasonPitching: PitchingLine | null = null;
   /** 這一季的守備分。與 #defenseRuns 的層級累計值不同，最近一季那張表看它。 */
   #seasonDefenseRuns = 0;
+  #seasonShares: Shares | null = null;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
   /**
@@ -864,6 +867,7 @@ export class Game {
       playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
+      seasonShares: this.#seasonShares,
       seasonPitching: this.#seasonPitching,
       statsByStage: this.#statsByStage,
       pro: this.#proState,
@@ -1329,6 +1333,7 @@ export class Game {
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#seasonDefenseRuns = 0;
+    this.#seasonShares = null;
     // 當季暫時能力用完就歸零——它只屬於這一年。
     this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
@@ -2042,6 +2047,7 @@ export class Game {
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
     this.#seasonDefenseRuns = 0;
+    this.#seasonShares = null;
     // 當季暫時能力用完就歸零——它只屬於這一年。
     this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
@@ -3434,6 +3440,14 @@ export class Game {
       top: info.top ?? null,
       seasonFactor: this.#seasonFactor,
     });
+
+    // 記分板的「最近一季」要的是同一份數字。**份額不分投打**，二刀流的打擊表與
+    // 投球表看到的必須是同一個值，所以這裡就把三本帳加起來。
+    const last = this.#seasons.at(-1);
+    this.#seasonShares =
+      last === undefined
+        ? null
+        : sumShares(last.shares.batting, last.shares.pitching, last.shares.fielding);
   }
 
   /**
