@@ -236,10 +236,20 @@ describe('intentionalWalks', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('速度是扣分項——沒有教練會敬遠快腿', () => {
+  it('腳程不進恐懼值——三圍全滿的打者，跑得快也一樣被閃', () => {
+    // 腳程曾經是扣分項（「敬遠快腿等於免費送他上二壘」）。方向站得住，量級站不住：
+    // 權重收到 0.04 之後它最多只扣 3.2 分，卻還在分母裡佔著一份。
     const slow = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 20 }), 600, MLB_PAR);
     const fast = intentionalWalks(new World('a'), with_(50, { pow: 80, con: 80, eye: 80, spd: 80 }), 600, MLB_PAR);
-    expect(fast).toBeLessThan(slow);
+    expect(fast).toBe(slow);
+  });
+
+  it('除數是 80 × 權重和——三圍全滿剛好是錨點', () => {
+    const ibb = cfg.batting.intentional_walk;
+    const weights = Object.values(ibb.abilities).reduce((a, b) => a + b, 0);
+    expect(ibb.divisor).toBe(80 * weights);
+    expect(ibb.peak.dom).toBe(1);
+    expect(dominanceAt(80, MLB_PAR)).toBeCloseTo(ibb.peak.dom, 10);
   });
 
   it('三圍全滿的慢腳重砲每 600 打席敬遠約 100 次', () => {
@@ -281,14 +291,6 @@ describe('intentionalWalks', () => {
         Math.round(cap * noiseMax) + 1,
       );
     }
-  });
-
-  it('腳程差 30 分不該讓敬遠數差掉三分之一', () => {
-    // 腳程的權重是 −0.125（曾經是 −0.25）。三圍 80、腳程 50 的頂級打者（OPS 約
-    // 1.42）現實裡就是拿 120 次的那一個人，舊權重下他只有 83 次。
-    const fast = with_(50, { pow: 80, con: 80, eye: 80, spd: 50 });
-    const ibb = intentionalWalks(new World('a'), fast, 600, MLB_PAR);
-    expect(ibb).toBeGreaterThan(cfg.batting.intentional_walk.peak.walks * 0.7);
   });
 
   it('三圍只高一點的慢腳打者不該被敬遠', () => {

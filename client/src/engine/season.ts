@@ -350,8 +350,12 @@ function abilityRatio(spec: RecordSpec, ability: Abilities, par: number): number
 /**
  * 故意四壞：指數型恐懼值。
  *
- * `Dom = (pow + con + eye - spd/4) / 180`，只有 Dom > 1 的極端打者才會被敬遠。
- * 速度是扣分項——敬遠快腿等於免費送他上二壘，沒有教練會這麼做。
+ * `Dom = (pow + con + eye) / 240`，也就是三圍相對 80 的比值——與成績每一格
+ * 「納入的能力都到 80 就是 1.0」同一套語意。只有過了門檻的打者才會被敬遠。
+ *
+ * **腳程不在裡面。** 它曾經是扣分項，理由是「敬遠快腿等於免費送他上二壘」；
+ * 那個方向站得住，量級站不住——而真要面對一個三圍全滿的打者，沒有教練會因為
+ * 他跑得快就敢對決。
  */
 export function intentionalWalks(
   world: World,
