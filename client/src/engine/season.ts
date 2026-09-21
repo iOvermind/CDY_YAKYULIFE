@@ -399,9 +399,9 @@ export function dominanceAt(overall: number, par: number): number {
 /**
  * 給定恐懼值與打席數的故意四壞數。
  *
- * 門檻是寫死的 1.0，且因為 Dom 只吃 d，全聯盟共用同一條觸發線 d > +6.5
- * （見 {@link dominanceOf}）。門檻之上不封頂：能力被上限事件推過 80 的怪物
- * 會超過錨點的 120，紀錄本來就該被打破。
+ * 因為 Dom 只吃 d，全聯盟共用同一條觸發線（見 {@link dominanceOf}）。門檻之上
+ * 夾在 `ratio_cap`，與成績的每一格同一個夾子——紀錄仍然打得破，靠的是那 5% 加上
+ * 噪音的 15%。
  *
  * `noise` 是延後求值的 0–1 抽取；**只有真的會被敬遠時才會抽**。這個順序不能
  * 改——提早抽會讓每一個 Dom 不到門檻的普通打者都多消耗一次亂數，同一顆種子
@@ -413,7 +413,18 @@ export function intentionalWalksFrom(dom: number, pa: number, noise: () => numbe
 
   // 從門檻起算，不是過線就滿額：Dom 在門檻處是 1.0，直接取冪會讓第一支敬遠
   // 就是三十幾支。改成量門檻到頂峰之間走了多遠，過線從 0 長上去。
-  const reach = (dom - ibb.threshold) / (ibb.peak.dom - ibb.threshold);
+  //
+  // **夾在 ratio_cap，與成績的每一格同一個夾子。** 峰值的 Dom 是用「三圍 80、
+  // 腳程 20 **在大聯盟**」定義的，而同一個絕對能力在弱聯盟的 d 大得多——日職的
+  // 能力 80 是 Dom 1.414、中職是 1.562，遠在峰值之外。不夾的話 `reach^1.6` 在
+  // 上面長得比線性快，中職的能力 80 一季會被敬遠三百多次。
+  //
+  // 這裡曾經刻意不封頂，理由是「上限事件把能力推過 80 的怪物該打破紀錄」。那句話
+  // 只想到能力，沒想到換個聯盟更便宜。紀錄仍然打得破：夾子留 5%，噪音再給 15%。
+  const reach = Math.min(
+    cfg.batting.ratio_cap,
+    (dom - ibb.threshold) / (ibb.peak.dom - ibb.threshold),
+  );
   const season = ibb.peak.walks * Math.pow(reach, ibb.exponent);
 
   const n = ibb.noise.min + noise() * (ibb.noise.max - ibb.noise.min);

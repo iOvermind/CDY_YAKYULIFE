@@ -270,6 +270,19 @@ describe('intentionalWalks', () => {
     ).toBeLessThan(120 / 4);
   });
 
+  it('比值夾在 ratio_cap——弱聯盟的能力 80 不會被敬遠三百次', () => {
+    // 峰值的 Dom 是用「三圍 80、腳程 20 在大聯盟」定義的，而同一個絕對能力在
+    // 中職的 d 大得多，Dom 遠在峰值之外。不夾的話 reach^1.6 會跑掉。
+    const slugger = with_(50, { pow: 80, con: 80, eye: 80, spd: 20 });
+    const cap = cfg.batting.intentional_walk.peak.walks * cfg.batting.ratio_cap;
+    const noiseMax = cfg.batting.intentional_walk.noise.max;
+    for (const par of [46, 52, 55, 61]) {
+      expect(intentionalWalks(new World('a'), slugger, 600, par)).toBeLessThanOrEqual(
+        Math.round(cap * noiseMax) + 1,
+      );
+    }
+  });
+
   it('腳程差 30 分不該讓敬遠數差掉三分之一', () => {
     // 腳程的權重是 −0.125（曾經是 −0.25）。三圍 80、腳程 50 的頂級打者（OPS 約
     // 1.42）現實裡就是拿 120 次的那一個人，舊權重下他只有 83 次。
