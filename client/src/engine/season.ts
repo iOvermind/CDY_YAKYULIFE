@@ -922,7 +922,10 @@ export function proPitchingLine(
   const role = roleOverride ?? pitcherRole(ability, level, standards);
   // **成績看的是實力，不是身價。** 評價低不代表成績差——角色折扣是責任額的折價，
   // 折過的數字拿去算防禦率，會讓終結者的自責分比 par 先發還多。
-  const rating = pitcherStuff(ability, isStarterRole(role) ? 'SP' : 'RP');
+  //
+  // **長中繼兩套式子都算過取高的。** 他既可能是撐局數的先發備胎，也可能是多投
+  // 一局的牛棚手，沒有理由只准他用其中一把尺（ADR 0005）。
+  const rating = pitcherStuff(ability, role === 'LR' ? null : isStarterRole(role) ? 'SP' : 'RP');
   // 投得好不好那條係數，勝敗、被安打、自責分與救援都吃它。
   const skill = pitcherRatio(rating, par);
   const stamina = p.innings[role];

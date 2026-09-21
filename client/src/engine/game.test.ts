@@ -533,7 +533,7 @@ describe('職業階段的狀態', () => {
     // 升級卡片寫「升上中職一軍」。先前這條找的是「下放二軍」——那個字串從來
     // 沒出現過，於是二十顆種子全部 continue，測試空轉了一場也沒斷言到。
     let checked = 0;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 120; i++) {
       const game = playToEnd(started({ seed: `split-${i}` }));
       const log = JSON.stringify(game.flow.log);
       if (!log.includes('送回') || !log.includes('升上中職一軍')) continue;
@@ -1756,7 +1756,7 @@ describe('合約', () => {
     // 剛好約滿或有人來挖），因此 `both` 一併斷言：樣本掃不到就等於沒測到。
     const LATER = ['fa:', 'term:', 'market:', 'transfer:', 'posting:', 'demote:'];
     let both = 0;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 150; i++) {
       const game = new Game({
         seed: `ro-${i}`,
         name: '順序',
@@ -1781,9 +1781,12 @@ describe('合約', () => {
         if (ids.some((id) => LATER.some((p) => id.startsWith(p)))) seq.push('L');
         byYear.set(year, seq);
         // 一律選「再拚一年」：真的退了就看不到後面幾年的順序。
+        // **配點要配好。** 點數全丟給 alloc:confirm 的球員一輩子在二軍，合約與
+        // 挖角的問句幾乎不會出現（實測四百段生涯只有八個年份有），這條測試就變成
+        // 抽獎。配進真的影響評價的能力，站得上一軍的人才談得到約。
         const pick =
           prompt.options.find((o) => o.id === 'retire:stay' && o.disabled !== true)?.id ??
-          defaultPick(game);
+          defaultPick(game, EFFECTIVE);
         if (pick === undefined) break;
         game.choose(pick);
       }
@@ -2122,7 +2125,7 @@ describe('下放與換體系', () => {
    */
   it('升級卡片報實際的層級，不是一律寫「升上一軍」', () => {
     let seen = 0;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 200; i++) {
       const game = playToEnd(started({ seed: `promote-${i}` }));
       for (const entry of game.flow.log) {
         if (entry.kind !== 'card') continue;

@@ -250,11 +250,27 @@ describe('intentionalWalks', () => {
     expect(ibb).toBeLessThan(120 * 1.15 + 1);
   });
 
+  it('比聯盟好一截還不夠——均衡打者要到 d+12 才踩得到線', () => {
+    // 觸發線訂在「均衡打者 d+12」。d+11 仍然是 0，而那正是舊門檻（d+4.5）太低
+    // 的地方：三圍只比聯盟平均高幾分的慢腳打者就拿得到敬遠。
+    expect(intentionalWalksFrom(dominanceAt(MLB_PAR + 11, MLB_PAR), 600, () => 0.5)).toBe(0);
+    expect(intentionalWalksFrom(dominanceAt(MLB_PAR + 12, MLB_PAR), 600, () => 0.5)).toBe(0);
+  });
+
   it('過門檻是從 0 長上去，不是一過線就滿額', () => {
     // 舊版直接把 Dom 取冪，門檻上一格就跳到三十幾支。剛構到線的打者該是個位數。
-    const edge = intentionalWalksFrom(dominanceAt(66, MLB_PAR), 600, () => 0.5);
+    const edge = intentionalWalksFrom(dominanceAt(MLB_PAR + 13, MLB_PAR), 600, () => 0.5);
+    expect(edge).toBeGreaterThan(0);
     expect(edge).toBeLessThan(5);
-    expect(intentionalWalksFrom(dominanceAt(69, MLB_PAR), 600, () => 0.5)).toBeLessThan(15);
+    expect(
+      intentionalWalksFrom(dominanceAt(MLB_PAR + 15, MLB_PAR), 600, () => 0.5),
+    ).toBeLessThan(15);
+  });
+
+  it('三圍只高一點的慢腳打者不該被敬遠', () => {
+    // OPS 約 .77 的 64/64/64、腳程 20——舊門檻下他一季拿得到五次敬遠。
+    const slow = with_(50, { pow: 64, con: 64, eye: 64, spd: 20 });
+    expect(intentionalWalks(new World('a'), slow, 600, MLB_PAR)).toBe(0);
   });
 
   it('打席少的球季敬遠等比變少', () => {
@@ -862,11 +878,16 @@ describe('三壘打的曲線', () => {
    * 錨點遠了一截，兩端的支數都掉進抖動（±3）的量級——量到的比會被抖動在零那一
    * 側的地板壓平，而那不是曲線的形狀。
    */
-  it('頂端仍然明顯——腳程 80 的比值是腳程 70 的五倍以上', () => {
+  /**
+   * **護欄從五倍放寬到四點五倍。** 五倍是當初反解次方 17.5 的那條式子；次方收到
+   * 16.5 換產量之後它必然破（4.82）。真正在守中段的是上面那條絕對量——腳程 70
+   * 一年拿不到三支——這一條只是別讓曲線塌成一條斜線。
+   */
+  it('頂端仍然明顯——腳程 80 的比值是腳程 70 的四倍半以上', () => {
     const t = cfg.batting.records.triple;
     const baseAt = (spd: number) => (60 * 1 + 60 * 1 + spd * 4) / (t.divisor ?? 1);
     const ratio = Math.pow(baseAt(80) / baseAt(70), t.exponent ?? 1);
-    expect(ratio).toBeGreaterThan(5);
+    expect(ratio).toBeGreaterThan(4.5);
   });
 
   it('頂端的支數看得見，中段幾乎沒有', () => {

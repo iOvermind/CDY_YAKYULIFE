@@ -71,10 +71,14 @@ export type PitcherRole = 'SP' | 'RP';
  * 投手側評價：**依角色走兩套權重**，與野手依守位走不同的守備權重同構。
  * 見 ADR 0005。
  *
- * 球速與四項變化球合為「武器庫」一起排序，取前 n 名套第 n 組權重，四組全算過
- * 取最高分——球種數不該是離散的門檻判定（ADR 0005），一個只有一顆決勝球的
- * 火球男該落在兩格那組，而不是被三顆爛球稀釋。控球固定採計，不參與排序：
- * 那是每個投手都要的基本功，不是可以拿去交換的選項。
+ * 每一式是「核心那幾項的平均 × 權重 + 其餘變化球的平均 × 權重」，核心永遠含
+ * 球速與控球，變化球由高到低取前 n 顆。先發四式（一到四顆）、後援兩式（一到
+ * 兩顆），**全算過取最高分**——球種數不該是離散的門檻判定（ADR 0005），一個
+ * 只有一顆決勝球的火球男該落在一球那一式，而不是被三顆爛球稀釋。
+ *
+ * 球速與控球固定採計、不參與排序：那是每個投手都要的基本功，不是可以拿去交換
+ * 的選項。兩個權重相加為 1，因此全能力 80 的投手在每一式都算出 80——式子之間
+ * 比的是型態，不是量級。
  *
  * 體力不進評價。野手側完全不看它，而它已經在出賽場數、投球局數與受傷機率上
  * 結算過了——評價再算一次，同一個數字在投打兩條路上的價值就會天差地遠。
@@ -108,17 +112,28 @@ export function pitcherRating(ability: Abilities, role: PitcherRole | null = nul
  * 唯一的差別留在球種加權上（後援靠的球種比較少，見 ADR 0005），那是實力的一部分，
  * 不是折價。
  */
-export function pitcherStuff(ability: Abilities, role: PitcherRole): number {
+export function pitcherStuff(ability: Abilities, role: PitcherRole | null = null): number {
+  if (role === null) {
+    return Math.max(pitcherStuff(ability, 'SP'), pitcherStuff(ability, 'RP'));
+  }
   const cfg = abilities.overall.pitcher;
-  const w = cfg.roles[role];
-  if (w === undefined) return 0;
+  const formulas = cfg.formulas[role];
+  if (formulas === undefined || formulas.length === 0) return 0;
 
-  const arsenal = Math.max(
-    ...cfg.arsenal_weights.map((weights) =>
-      weightedSum(topValues(ability, ['vel', ...cfg.pitches], weights.length), weights),
-    ),
+  // 變化球由高到低排一次就夠，每一式再從這條序列切。
+  const pitches = topValues(ability, cfg.pitches, cfg.pitches.length);
+  const basics = (ability['vel'] ?? 0) + (ability['ctl'] ?? 0);
+
+  return Math.max(
+    ...formulas.map((f) => {
+      const core = pitches.slice(0, f.top);
+      const rest = pitches.slice(f.top);
+      const coreAvg = (basics + core.reduce((a, b) => a + b, 0)) / (2 + f.top);
+      // 沒有剩的球時尾巴那一項是 0，而 rest 權重本來就是 0——不必特別防。
+      const restAvg = rest.length === 0 ? 0 : rest.reduce((a, b) => a + b, 0) / rest.length;
+      return coreAvg * f.core + restAvg * f.rest;
+    }),
   );
-  return arsenal * w.arsenal_share + (ability['ctl'] ?? 0) * w.control_weight;
 }
 
 

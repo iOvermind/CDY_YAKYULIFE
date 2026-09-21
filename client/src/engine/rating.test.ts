@@ -10,6 +10,7 @@ import {
   rate,
   ratingPosition,
   twoWayPositionBonus,
+  type Abilities,
 } from './rating.ts';
 
 const build = (base: number, over: Record<string, number> = {}) => ({
@@ -49,10 +50,19 @@ describe('pitcherRating', () => {
     expect(pitcherRating(ace)).toBeGreaterThan(pitcherRating(spread));
   });
 
-  it('武器庫是平均水準，不是件數——同水準的第四顆球不加分', () => {
+  it('每一式的權重都自洽——全能力 80 的投手在六條式子上都是 80', () => {
+    const max = build(80);
+    expect(pitcherRating(max, 'SP')).toBeCloseTo(80, 10);
+    expect(pitcherRating(max, 'RP') + (abilities.overall.pitcher.roles['RP']?.discount ?? 0))
+      .toBeCloseTo(80, 10);
+  });
+
+  it('先發的深度有回報——同水準的第四顆球會加分', () => {
     const two = build(30, { vel: 70, swp: 70 });
     const four = build(30, { vel: 70, swp: 70, drp: 70, chg: 70 });
-    expect(pitcherRating(four)).toBe(pitcherRating(two));
+    // 先發要把打線輪三次，球種齊是真的值錢；後援那兩式只看得到前兩顆，因此
+    // 同一組能力在牛棚那把尺上拉不開這麼多。
+    expect(pitcherRating(four, 'SP')).toBeGreaterThan(pitcherRating(two, 'SP'));
   });
 
   it('點數固定時，攤薄反而扣分——三顆 60 的人多練一顆變成四顆 55', () => {
@@ -61,11 +71,17 @@ describe('pitcherRating', () => {
     expect(pitcherRating(deep)).toBeGreaterThan(pitcherRating(wide));
   });
 
-  it('上限低的人靠多練球種補回來——五顆 62 追平兩顆 70', () => {
+  it('上限低的人靠多練球種補回來——五顆 62 勝過兩顆 70', () => {
     const capped = build(30, { vel: 62, swp: 62, drp: 62, chg: 62, gim: 62 });
     const gifted = build(30, { vel: 70, swp: 70 });
-    expect(pitcherRating(capped)).toBeLessThan(pitcherRating(gifted));
-    expect(pitcherRating(capped)).toBeGreaterThan(pitcherRating(build(30, { vel: 70 })));
+    // 這是新式子刻意翻過來的一件事：球種齊但球速控球普通的技巧派，靠「全部採計」
+    // 那一式拿到最高分，而那是他唯一能被表達出來的方式。
+    expect(pitcherRating(capped, 'SP')).toBeGreaterThan(pitcherRating(gifted, 'SP'));
+    // 反過來，一顆決勝球的火球男在牛棚那把尺上比較吃香。
+    const flame = build(30, { vel: 85, swp: 85 });
+    const deep = build(30, { vel: 62, swp: 62, drp: 62, chg: 62, gim: 62 });
+    const gap = (a: Abilities) => pitcherRating(a, 'RP') - pitcherRating(a, 'SP');
+    expect(gap(flame)).toBeGreaterThan(gap(deep));
   });
 
   it('練出更好的一顆球一定加分', () => {
@@ -85,7 +101,7 @@ describe('pitcherRating', () => {
     expect(pitcherRating(rested)).toBe(pitcherRating(build(40, { sta: 20 })));
   });
 
-  it('依角色走兩套權重：牛棚那套武器庫佔比更高、控球佔比更低', () => {
+  it('依角色走兩套式子：牛棚那套只看前兩顆，控球的份量相對小', () => {
     const stuff = build(30, { vel: 85, swp: 85, ctl: 40 });
     const command = build(30, { vel: 55, swp: 55, ctl: 90 });
     // 折扣是角色的成本，比的是折扣以外的權重分配。
