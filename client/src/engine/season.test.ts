@@ -242,12 +242,14 @@ describe('intentionalWalks', () => {
     expect(fast).toBeLessThan(slow);
   });
 
-  it('三圍全滿的慢腳重砲一季敬遠約 120 次——現實裡的單季最高', () => {
+  it('三圍全滿的慢腳重砲每 600 打席敬遠約 100 次', () => {
     const bonds = with_(50, { pow: 80, con: 80, eye: 80, spd: 20 });
-    // 雜訊是 ±15%，錨點 120 落在區間中央。
+    // 雜訊是 ±15%，錨點落在區間中央。錨點的單位是「每 600 打席」，而滿季的
+    // 大聯盟打者站得到七百多次，季總量因此高於這個數字。
+    const anchor = cfg.batting.intentional_walk.peak.walks;
     const ibb = intentionalWalks(new World('a'), bonds, 600, MLB_PAR);
-    expect(ibb).toBeGreaterThan(120 * 0.85 - 1);
-    expect(ibb).toBeLessThan(120 * 1.15 + 1);
+    expect(ibb).toBeGreaterThan(anchor * 0.85 - 1);
+    expect(ibb).toBeLessThan(anchor * 1.15 + 1);
   });
 
   it('比聯盟好一截還不夠——均衡打者要到 d+12 才踩得到線', () => {
@@ -273,7 +275,7 @@ describe('intentionalWalks', () => {
     // 1.42）現實裡就是拿 120 次的那一個人，舊權重下他只有 83 次。
     const fast = with_(50, { pow: 80, con: 80, eye: 80, spd: 50 });
     const ibb = intentionalWalks(new World('a'), fast, 600, MLB_PAR);
-    expect(ibb).toBeGreaterThan(120 * 0.7);
+    expect(ibb).toBeGreaterThan(cfg.batting.intentional_walk.peak.walks * 0.7);
   });
 
   it('三圍只高一點的慢腳打者不該被敬遠', () => {

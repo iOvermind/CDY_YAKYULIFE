@@ -2470,7 +2470,16 @@ export class Game {
         next();
         return;
       }
-      this.#affairOrFlavour(() => this.#proposalAsk(next));
+      // **被抓到之後那一年就結束了。** 外遇那一段可能以分手收場，而求婚接在它
+      // 後面——沒有這道檢查的話，同一年會出現「劈腿曝光、她提分手」然後立刻
+      // 「要不要求婚」，對著一個已經走了的人跪下去。與上面風波那一段同一個守衛。
+      this.#affairOrFlavour(() => {
+        if (this.#love.status !== 'dating') {
+          next();
+          return;
+        }
+        this.#proposalAsk(next);
+      });
     });
   }
 
