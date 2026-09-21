@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { love as cfg } from '../data/index.ts';
 import {
   afterBreakup,
+  alimony,
   breakupChance,
   cadenceChance,
   canPropose,
@@ -19,6 +20,7 @@ import {
   pickPartner,
   rehabChance,
   rewardMultiplier,
+  totalKids,
   turmoilChance,
   type LoveState,
 } from './love.ts';
@@ -318,5 +320,60 @@ describe('啦啦隊殺手', () => {
     // `kids` 只在婚後的生產分支累加，所以 kids > 0 蘊含 divorces > 0（婚姻結束時）
     // 或者根本還在婚姻中（那就不會走到分手判定）。這條在 game.ts 側由呼叫點保證。
     expect(earnsConfidante(after({ datedTimes: threshold, kids: 2, divorces: 1 }))).toBe(false);
+  });
+});
+
+describe('三人行', () => {
+  const two = (over: Partial<LoveState> = {}) =>
+    state({ status: 'married', partner: '何雨蓁', partner2: '蔡宜庭', open: 'harem', ...over });
+
+  it('縮頭烏龜那段關係不會再有風波——最壞的事已經發生過了', () => {
+    const cuckold = state({ status: 'married', partner: '何雨蓁', open: 'cuckold', cracks: 5 });
+    expect(turmoilChance(cuckold)).toBe(0);
+  });
+
+  it('兩位對象的風波先取平均，再加倍', () => {
+    // 何雨蓁 steady（0.5）、蔡宜庭 restless（1.5），平均 1.0，再乘 2。
+    const solo = turmoilChance(state({ status: 'married', partner: '何雨蓁' }));
+    expect(turmoilChance(two())).toBeCloseTo(solo * 2 * 2, 6);
+  });
+
+  it('抽到兩個安定的人仍然比較平靜——只是平靜不到兩個人的程度', () => {
+    const steady = two({ partner2: '溫語彤' });
+    expect(turmoilChance(steady)).toBeLessThan(turmoilChance(two()));
+    expect(turmoilChance(steady)).toBeGreaterThan(
+      turmoilChance(state({ status: 'married', partner: '何雨蓁' })),
+    );
+  });
+
+  it('裂痕與旅外照樣疊在上面，三人行不是免死金牌', () => {
+    expect(turmoilChance(two({ cracks: 3 }))).toBeGreaterThan(turmoilChance(two()));
+  });
+
+  it('破局是兩份一起賠', () => {
+    const solo = divorceCost(1_000_000, 0, '何雨蓁');
+    const both = divorceCost(1_000_000, 0, '何雨蓁', '蔡宜庭');
+    expect(both).toBeGreaterThan(solo);
+    // 兩位的花錢檔次相加，不是取平均。
+    expect(both).toBe(solo + divorceCost(1_000_000, 0, '蔡宜庭'));
+  });
+
+  it('孩子各記各的，畫面上是加總', () => {
+    expect(totalKids(two({ kids: 3, kids2: 2 }))).toBe(5);
+    // 各自從第一胎算起——第二位的第一胎不會吃到第一位生完之後的低機率。
+    expect(childbirthChance(0, '何雨蓁')).toBeGreaterThan(childbirthChance(3, '何雨蓁'));
+  });
+
+  it('縮頭烏龜結束時你是收錢的那一方，而且不多', () => {
+    const paid = alimony(1_000_000);
+    expect(paid).toBeGreaterThan(0);
+    expect(paid).toBeLessThan(divorceCost(1_000_000, 0));
+  });
+
+  it('新生涯不帶著任何三人行的殘留', () => {
+    const fresh = newLoveState();
+    expect(fresh.open).toBe('none');
+    expect(fresh.partner2).toBeNull();
+    expect(fresh.kids2).toBe(0);
   });
 });

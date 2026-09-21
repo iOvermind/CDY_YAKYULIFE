@@ -352,6 +352,16 @@ export interface LoveData {
     readonly turmoil_year: number;
   };
   readonly divorce: { readonly base_ratio: number; readonly per_kid_ratio: number };
+  /** 三人行：出軌之後的低機率隱藏分支。兩條路的形狀刻意不對稱。 */
+  readonly threesome: {
+    readonly chance: number;
+    readonly harem: { readonly trait: string; readonly turmoil_multiplier: number };
+    readonly cuckold: {
+      readonly trait: string;
+      readonly reward_points: number;
+      readonly alimony_ratio: number;
+    };
+  };
   readonly childhood_sweetheart: { readonly trait: string; readonly name: string };
   readonly names: {
     readonly school: readonly string[];

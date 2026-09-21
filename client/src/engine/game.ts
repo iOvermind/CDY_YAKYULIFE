@@ -150,6 +150,7 @@ import {
 } from './national.ts';
 import {
   afterBreakup,
+  alimony,
   earnsConfidante,
   cadenceChance,
   canPropose,
@@ -165,6 +166,7 @@ import {
   pickPartner,
   rehabChance,
   rewardMultiplier,
+  totalKids,
   turmoilChance,
   breakupChance,
   injuryRiskModifier,
@@ -356,6 +358,10 @@ export interface PlayerState {
   readonly love: {
     readonly status: string;
     readonly partner: string | null;
+    /** 第二位對象。只有三人行（鹿鼎公）有，其餘一律 null。 */
+    readonly partner2: string | null;
+    /** 三人行的形狀：none／harem（鹿鼎公）／cuckold（縮頭烏龜）。 */
+    readonly open: string;
     readonly marriedYear: number | null;
     readonly kids: number;
     readonly divorces: number;
@@ -843,8 +849,10 @@ export class Game {
       love: {
         status: this.#love.status,
         partner: this.#love.partner,
+        partner2: this.#love.partner2,
+        open: this.#love.open,
         marriedYear: this.#weddingYear,
-        kids: this.#love.kids,
+        kids: totalKids(this.#love),
         divorces: this.#love.divorces,
         caught: this.#love.caught,
         spouses: this.#spouses,
@@ -2287,7 +2295,15 @@ export class Game {
    * 的。因此感情給的點數只抬高這一季的能力，球季結束就歸零，也不寫進能力表。
    */
   #grantSeasonBonus(key: AbilityKey, points: number): string {
-    const scaled = Math.round(points * rewardMultiplier(this.#love));
+    // 倒扣不打折：裂痕讓好事變少，但不會讓壞事變少。
+    const scaled = points < 0 ? points : Math.round(points * rewardMultiplier(this.#love));
+    if (scaled < 0) {
+      this.#seasonBonus[key] = (this.#seasonBonus[key] ?? 0) + scaled;
+      return (
+        `<b class="dn">${esc(abilities.abilities[key] ?? key)} ${scaled}</b>` +
+        '<span class="sub">（本季狀態，不計入能力表）</span>'
+      );
+    }
     if (scaled <= 0) {
       return `${esc(abilities.abilities[key] ?? key)}沒有起色——<span class="sub">心裡有事的人，安定不下來</span>`;
     }
@@ -2295,12 +2311,35 @@ export class Game {
     return `<b class="up">${esc(abilities.abilities[key] ?? key)} +${scaled}</b><span class="sub">（本季狀態，不計入能力表）</span>`;
   }
 
+  /**
+   * 感情事件的年度回報。**三人行在這裡分岔。**
+   *
+   * 鹿鼎公是兩位各擲各的骰：各自走自己側寫的那兩項能力，所以一年可能兩項一起
+   * 漲。縮頭烏龜則是倒扣——留下來的代價每年都要付一次，走的一樣是當季狀態，
+   * 不寫回能力表。
+   */
+  #loveReward(points: number): string {
+    const love = this.#love;
+    if (love.open === 'cuckold') {
+      return this.#grantSeasonBonus(
+        partnerBonusKey(this.world, love.partner),
+        -loveCfg.threesome.cuckold.reward_points,
+      );
+    }
+    const first = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), points);
+    if (love.partner2 === null) return first;
+    const second = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner2), points);
+    return `${first}、${second}`;
+  }
+
   /** 這一季實際上場用的能力：真實能力加上當季暫時能力。 */
   get #seasonAbility(): Abilities {
     if (Object.keys(this.#seasonBonus).length === 0) return this.#ability;
     const out: Record<string, number> = { ...this.#ability };
     for (const [key, delta] of Object.entries(this.#seasonBonus)) {
-      out[key] = (out[key] ?? 0) + delta;
+      // 當季狀態可以是負的（縮頭烏龜），因此這裡要夾住量表的底——「比 20 更差」
+      // 在球探報告上沒有對應的說法。
+      out[key] = Math.max(abilities.scale.hard_floor, (out[key] ?? 0) + delta);
     }
     return out as Abilities;
   }
@@ -2496,7 +2535,10 @@ export class Game {
     const love = this.#love;
     this.flow.ask(
       {
-        title: `交往第 ${love.datingYears} 年——${love.partner} 看著別人的婚禮影片看了很久`,
+        title:
+          love.partner2 === null
+            ? `交往第 ${love.datingYears} 年——${love.partner} 看著別人的婚禮影片看了很久`
+            : `交往第 ${love.datingYears} 年——${love.partner} 與 ${love.partner2} 一起看著別人的婚禮影片`,
         options: [
           {
             id: 'love:propose',
@@ -2515,14 +2557,22 @@ export class Game {
         }
         love.status = 'married';
         love.kids = 0;
+        love.kids2 = 0;
         love.datingYears = 0;
         this.#weddingYear = this.#year;
+        // 三人行是**兩位一起進禮堂**，姻緣成就那一刻記兩筆——成就數的是不同的
+        // 對象，而這一天確實有兩個人走過紅毯。
         this.#recordSpouse(love.partner);
-        const gain = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), 2);
+        this.#recordSpouse(love.partner2);
+        const gain = this.#loveReward(2);
+        const brides =
+          love.partner2 === null
+            ? `<b class="hl">${esc(love.partner ?? '')}</b> 哭著點頭。`
+            : `<b class="hl">${esc(love.partner ?? '')}</b> 與 <b class="hl">${esc(love.partner2)}</b> 一起點了頭。`;
         this.flow.card(
           'gold',
           '婚禮',
-          `你在主場本壘板後方單膝跪地，大螢幕打出「Marry Me」。<b class="hl">${esc(love.partner ?? '')}</b> 哭著點頭。` +
+          `你在主場本壘板後方單膝跪地，大螢幕打出「Marry Me」。${brides}` +
             `休賽季完婚，紅毯用壘包排成——${gain}`,
         );
         if (isChildhoodSweetheart(love)) {
@@ -2556,24 +2606,42 @@ export class Game {
         next();
         return;
       }
-      if (
-        love.kids < loveCfg.marriage.max_kids &&
-        this.world.stream('career').chance(childbirthChance(love.kids, love.partner))
-      ) {
-        love.kids++;
-        const key = this.#randomVisibleAbility();
-        const gain = this.#grantSeasonBonus(key, 2);
-        this.flow.card(
-          'gold',
-          '新生命',
-          `${esc(love.partner ?? '')} 平安生下你們的第 <b class="hl">${love.kids}</b> 個孩子。` +
-            `當了${love.kids > 1 ? '幾次' : ''}爸爸的男人，眼神都不一樣了——${gain}`,
-        );
+      // 生子**一位一擲**：機率是逐胎遞減的，兩位得各自從第一胎算起。一年兩邊
+      // 都中就是兩個孩子，那是三人行真正的形狀。
+      const born = this.#childbirth(love.partner, 'first') + this.#childbirth(love.partner2, 'second');
+      if (born > 0) {
         next();
         return;
       }
       this.#affairOrFlavour(next);
     });
+  }
+
+  /**
+   * 一位對象的生子判定。生了回 1，沒生回 0。
+   *
+   * **兩位對象各記各的孩子數**：生子機率逐胎遞減，共用一個計數器的話，第二位
+   * 的第一胎會直接吃到第一位生完之後的低機率——那不是同一件事。畫面上顯示的
+   * 「幾個孩子」則是兩邊加總。
+   */
+  #childbirth(partner: string | null, slot: 'first' | 'second'): number {
+    const love = this.#love;
+    if (partner === null) return 0;
+    const kids = slot === 'first' ? love.kids : love.kids2;
+    if (kids >= loveCfg.marriage.max_kids) return 0;
+    if (!this.world.stream('career').chance(childbirthChance(kids, partner))) return 0;
+
+    if (slot === 'first') love.kids++;
+    else love.kids2++;
+    const total = totalKids(love);
+    const gain = this.#grantSeasonBonus(this.#randomVisibleAbility(), 2);
+    this.flow.card(
+      'gold',
+      '新生命',
+      `${esc(partner)} 平安生下你們的第 <b class="hl">${kids + 1}</b> 個孩子。` +
+        `當了${total > 1 ? '幾次' : ''}爸爸的男人，眼神都不一樣了——${gain}`,
+    );
+    return 1;
   }
 
   /**
@@ -2594,6 +2662,12 @@ export class Game {
     }
 
     love.turmoilThisYear = true;
+    // **她出軌的那張卡，低機率多一條路。** 抽不中就只有原本兩條——那個選項
+    // 根本不會出現，所以它是隱藏事件而不是一個每次都要重新拒絕的誘惑。
+    const openable =
+      kind.id === 'cheated' &&
+      love.open === 'none' &&
+      rng.chance(loveCfg.threesome.chance);
     // 標籤留在提問區，敘事留給卡片——提問區的 .title 是 12px 的小標，長文案在
     // 那裡等於沒寫，而且不會進事件記錄。只讀卡片的人會看到「沒有問出口」卻不
     // 知道發生過什麼事（#22／#28）。
@@ -2613,9 +2687,24 @@ export class Game {
             note: '當年重挫，但明年歸零，可以重新開始',
             role: 'warn',
           },
+          ...(openable
+            ? [
+                {
+                  id: 'love:open',
+                  label: '「那就……讓他也留下來吧。」',
+                  note: '關係保住了，往後不會再有風波——但你每年都要付一點代價，而且走不掉',
+                  role: 'warn' as const,
+                },
+              ]
+            : []),
         ],
       },
       (choice) => {
+        if (choice === 'love:open') {
+          this.#enterCuckold(kind.text);
+          next();
+          return;
+        }
         if (choice === 'love:swallow') {
           love.cracks++;
           this.flow.card(
@@ -2640,7 +2729,8 @@ export class Game {
   #affairOrFlavour(next: () => void): void {
     const love = this.#love;
     const rng = this.world.stream('career');
-    if (!rng.chance(loveCfg.affair.chance)) {
+    // 鹿鼎公不再收到誘惑——你已經有兩位了，那張卡沒有東西可以拿來誘惑你。
+    if (love.open === 'harem' || !rng.chance(loveCfg.affair.chance)) {
       this.#datingFlavour();
       next();
       return;
@@ -2670,10 +2760,7 @@ export class Game {
       },
       (choice) => {
         if (choice !== 'love:affair') {
-          const gain = this.#grantSeasonBonus(
-            partnerBonusKey(this.world, love.partner),
-            loveCfg.affair.reward.refused,
-          );
+          const gain = this.#loveReward(loveCfg.affair.reward.refused);
           this.flow.card('good', '正確答案', `心定了，身體就穩了——${gain}`);
           next();
           return;
@@ -2693,13 +2780,13 @@ export class Game {
           next();
           return;
         }
-        this.#affairCaught(next);
+        this.#affairCaught(other, next);
       },
     );
   }
 
   /** 被抓到。第二次起解鎖花樣年華，而那個量級與一次大傷相同——是刻意的。 */
-  #affairCaught(next: () => void): void {
+  #affairCaught(other: string, next: () => void): void {
     const love = this.#love;
     const c = loveCfg.affair.caught;
     love.caught++;
@@ -2730,6 +2817,24 @@ export class Game {
     });
 
     const married = love.status === 'married';
+
+    // **縮頭烏龜的唯一出口。** 那段關係走不掉，除非你自己也出軌——而一旦出軌被
+    // 抓，兩邊都破了，沒有道歉也沒有三人行，直接結束。
+    if (love.open === 'cuckold') {
+      this.#breakup(
+        married
+          ? '這一次換她把協議書推回來。你們都沒有再說什麼——那張桌子上該說的話，前幾年就說完了。'
+          : '她看完新聞只回了一句「所以呢」，然後把你封鎖了。',
+      );
+      next();
+      return;
+    }
+
+    // **三人行：劈腿唯一的好結局，而且低機率才看得到。** 抽不中就只有原本兩條
+    // 路，那個選項根本不會出現。
+    const openable =
+      love.open === 'none' && this.world.stream('career').chance(loveCfg.threesome.chance);
+
     this.flow.ask(
       {
         title: married
@@ -2743,9 +2848,24 @@ export class Game {
             role: 'main',
           },
           { id: 'love:accept', label: married ? '簽字離婚' : '坦然分手', role: 'warn' },
+          ...(openable
+            ? [
+                {
+                  id: 'love:open',
+                  label: `「要不……${other} 也一起？」`,
+                  note: '兩位都留下來：每年的感情回報與生子各擲各的——但風波加倍，而且破局是兩份一起賠',
+                  role: 'warn' as const,
+                },
+              ]
+            : []),
         ],
       },
       (choice) => {
+        if (choice === 'love:open') {
+          this.#enterHarem(other);
+          next();
+          return;
+        }
         if (choice === 'love:apologise') {
           if (this.world.stream('career').chance(c.apology_success)) {
             this.flow.card(
@@ -2770,24 +2890,88 @@ export class Game {
     );
   }
 
+  /**
+   * 進入三人行（鹿鼎公）：你外遇被抓，她反而把那個人請上檯面。
+   *
+   * **第二位是真的第二位**：她有自己的側寫，往後每年的感情回報與生子都各擲各
+   * 的骰。已婚的話她當場就是第二位配偶（姻緣成就記第二筆）；交往中則是兩位一
+   * 起交往，婚禮那天一起進禮堂。
+   */
+  #enterHarem(other: string): void {
+    const love = this.#love;
+    love.open = 'harem';
+    love.partner2 = other;
+    love.kids2 = 0;
+    // 被抓的分手加成沒有意義了——那件事已經有了另一個結局。
+    love.cheatPenaltyYears = 0;
+    if (love.status === 'married') this.#recordSpouse(other);
+    this.#unlockTrait(
+      loveCfg.threesome.harem.trait,
+      `<b class="hl">${esc(love.partner ?? '')}</b> 看了 <b class="hl">${esc(other)}</b> 很久，` +
+        '最後說：「與其你偷偷摸摸，不如三個人坐下來把話講清楚。」',
+    );
+    this.flow.card(
+      'gold',
+      love.status === 'married' ? '三個人的家' : '三個人的關係',
+      `事情沒有照任何人預期的方向發展。<b class="hl">${esc(other)}</b> 留了下來。` +
+        '<br><span class="sub">往後每年的感情回報與生子，兩邊各擲各的——但三個人的日子也比兩個人難走。</span>',
+    );
+  }
+
+  /**
+   * 進入三人行（縮頭烏龜）：她出軌，而你選擇留下來。
+   *
+   * 多出來的那個人不是你的，所以沒有第二份回報：每年倒扣一點當季狀態，風波不
+   * 再發生，而這段關係**走不掉**——除非你自己也出軌。
+   */
+  #enterCuckold(kindText: string): void {
+    const love = this.#love;
+    love.open = 'cuckold';
+    this.#unlockTrait(
+      loveCfg.threesome.cuckold.trait,
+      '你聽見自己說出那句話的時候，比她更驚訝。房子還是那間房子，只是從此多了一雙鞋。',
+    );
+    this.flow.card(
+      'bad',
+      '一個屋簷下',
+      `${kindText}<br><br>你沒有問，也沒有走。你只是說：「那就這樣吧。」` +
+        '<br><span class="sub">往後不會再有風波了——該發生的都已經發生過。至於孩子⋯⋯</span>',
+    );
+  }
+
   /** 分手或離婚。離婚要分財產——**一個只會增加的數字不是資產，是計分板**。 */
   #breakup(reason: string): void {
     const love = this.#love;
     const ex = love.partner ?? '';
+    const ex2 = love.partner2 ?? '';
     const wasMarried = love.status === 'married';
 
+    const kids = totalKids(love);
     let money = '';
     if (wasMarried) {
-      const cost = divorceCost(this.#earnings, love.kids, love.partner);
-      this.#earnings = Math.max(0, this.#earnings - cost);
       love.divorces++;
-      money = `<br>財產分配：<b class="dn">−${fmtMoney(cost)}</b>${love.kids > 0 ? '（含扶養費）' : ''}。`;
+      if (love.open === 'cuckold') {
+        // **她先外遇的事實不會因為你後來也外遇而消失**，所以錢是往你這邊流的。
+        // 數目不大——那不是賠償，只是一個誰對誰錯的註腳。
+        const paid = alimony(this.#earnings);
+        this.#earnings += paid;
+        money = `<br>財產分配：<b class="up">+${fmtMoney(paid)}</b>（這一次你是收的那一方）。`;
+      } else {
+        // 三人行破局是兩份一起賠——好處放大的那一段，就是在這裡還的。
+        const cost = divorceCost(this.#earnings, kids, love.partner, love.partner2);
+        this.#earnings = Math.max(0, this.#earnings - cost);
+        money = `<br>財產分配：<b class="dn">−${fmtMoney(cost)}</b>${kids > 0 ? '（含扶養費）' : ''}。`;
+      }
     }
 
     love.status = afterBreakup(love);
     love.partner = null;
+    // 三人行破局是**兩位一起走**：那段關係本來就是一個整體，沒有留下一位的走法。
+    love.partner2 = null;
+    love.open = 'none';
     love.datingYears = 0;
     love.kids = 0;
+    love.kids2 = 0;
     love.fromSchool = false;
     love.cracks = 0;
     love.overseas = 'none';
@@ -2797,7 +2981,7 @@ export class Game {
     this.flow.card(
       'bad',
       wasMarried ? '離婚' : '分手',
-      `${reason}<br><b class="hl">${esc(ex)}</b> 從此不在你的生活裡了。${money}`,
+      `${reason}<br><b class="hl">${esc(ex)}</b>${ex2 === '' ? '' : `與 <b class="hl">${esc(ex2)}</b>`} 從此不在你的生活裡了。${money}`,
     );
 
     if (!wasMarried) this.#confidante();
@@ -2806,8 +2990,25 @@ export class Game {
   /** 平淡但溫暖的一年。感情線多數的年份都是這種。 */
   #datingFlavour(): void {
     const love = this.#love;
-    const gain = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), 1);
+    const gain = this.#loveReward(1);
     const partner = esc(love.partner ?? '');
+    if (love.open === 'cuckold') {
+      this.flow.card(
+        'bad',
+        '一個屋簷下',
+        `客廳的燈亮著，玄關多了一雙不是你的鞋。你把裝備袋放下，自己走進房間——${gain}`,
+      );
+      return;
+    }
+    if (love.open === 'harem') {
+      this.flow.card(
+        'good',
+        '三個人的日常',
+        `客場回來，<b class="hl">${partner}</b> 與 <b class="hl">${esc(love.partner2 ?? '')}</b> 一起在機場等你。` +
+          `旁邊的人一臉困惑，你們三個人倒是很自在——${gain}`,
+      );
+      return;
+    }
     if (love.status === 'married' && love.kids > 0) {
       this.flow.card(
         'good',

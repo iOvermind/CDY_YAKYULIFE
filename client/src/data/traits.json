@@ -13,6 +13,7 @@
       "mrteam",
       "sweetheart",
       "confidante",
+      "rogue_king",
       "genius",
       "iron",
       "late",
@@ -33,6 +34,7 @@
     "negative": [
       "glass",
       "scum",
+      "cuckold",
       "yips",
       "distract",
       "cancer",
@@ -399,6 +401,20 @@
       "rules_complete": false,
       "name": "帕瓦諾",
       "effect_text": "痛痛人，受傷機率下限 40%"
+    },
+    {
+      "id": "rogue_king",
+      "tone": "good",
+      "rules_complete": false,
+      "name": "鹿鼎公",
+      "effect_text": "兩位對象同時在你身邊，每年的感情回報與生子各擲各的"
+    },
+    {
+      "id": "cuckold",
+      "tone": "bad",
+      "rules_complete": false,
+      "name": "縮頭烏龜",
+      "effect_text": "你留下來了，每年的感情事件改成倒扣狀態，而且這段關係走不掉。至於孩子⋯⋯"
     },
     {
       "id": "scum",

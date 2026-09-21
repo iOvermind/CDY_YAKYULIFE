@@ -40,6 +40,11 @@ describe('traitName', () => {
   it('青梅竹馬發得出來也查得到——它曾經只存在於 love.json', () => {
     expect(traitOf(loveCfg.childhood_sweetheart.trait)?.name).toBe('青梅竹馬');
   });
+
+  it('三人行的兩個特性查得到——它們的 id 只寫在 love.json 裡', () => {
+    expect(traitOf(loveCfg.threesome.harem.trait)?.name).toBe('鹿鼎公');
+    expect(traitOf(loveCfg.threesome.cuckold.trait)?.name).toBe('縮頭烏龜');
+  });
 });
 
 /** 把目前提問的第一個選項選下去，直到流程結束。 */

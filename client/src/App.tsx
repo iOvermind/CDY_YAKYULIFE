@@ -1301,7 +1301,9 @@ function shortLevelName(levelName: string, org: string): string {
 function lifeTags(love: PlayerState['love']): string[] {
   const out: string[] = [];
   if (love.status === 'married' && love.partner !== null) {
-    out.push(love.marriedYear === null ? `與${love.partner}結婚` : `與${love.partner}結婚（${love.marriedYear}）`);
+    // 三人行是一場婚禮、兩個名字——年表上不該只寫其中一位。
+    const who = love.partner2 === null ? love.partner : `${love.partner}、${love.partner2}`;
+    out.push(love.marriedYear === null ? `與${who}結婚` : `與${who}結婚（${love.marriedYear}）`);
   }
   if (love.kids > 0) out.push(`${love.kids} 個孩子`);
   if (love.divorces > 0) out.push(`離婚 ${love.divorces} 次`);

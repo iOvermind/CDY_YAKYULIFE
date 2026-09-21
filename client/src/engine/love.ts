@@ -20,15 +20,33 @@ export type LoveStatus = 'single' | 'dating' | 'married' | 'divorced';
 /** 旅外時對這段關係的安排。 */
 export type OverseasArrangement = 'none' | 'bring' | 'apart';
 
+/**
+ * 三人行的兩種形狀。**刻意不對稱**——你破的局收得回來，她破的局收不回來。
+ *
+ * `harem`（鹿鼎公）：你外遇被抓，她反而把那個人請上檯面。兩位對象並存，感情
+ * 回報與生子各擲各的骰。
+ *
+ * `cuckold`（縮頭烏龜）：她出軌，而你留下來了。多出來的那個人不是你的，所以
+ * 沒有第二份回報——只有每年倒扣的當季狀態，與一段走不掉的關係。
+ */
+export type OpenRelationship = 'none' | 'harem' | 'cuckold';
+
 /** 一段生涯的感情狀態。 */
 export interface LoveState {
   status: LoveStatus;
   partner: string | null;
+  /** 第二位對象。只有鹿鼎公有，其餘一律 null。 */
+  partner2: string | null;
+  /** 三人行的形狀。 */
+  open: OpenRelationship;
   /** 對象是在養成期認識的。青梅竹馬的前提。 */
   fromSchool: boolean;
   /** 交往年數。求婚可行之後才累計——見 `breakupChance`。 */
   datingYears: number;
+  /** 第一位對象生的孩子。 */
   kids: number;
+  /** 第二位對象生的孩子。**各記各的**——生子機率是逐胎遞減的，兩位得各自從第一胎算起。 */
+  kids2: number;
   /** 交往過幾段。啦啦隊殺手看它。 */
   datedTimes: number;
   /** 外遇次數（含沒被抓到的）。外務纏身看它。 */
@@ -53,9 +71,12 @@ export function newLoveState(): LoveState {
   return {
     status: 'single',
     partner: null,
+    partner2: null,
+    open: 'none',
     fromSchool: false,
     datingYears: 0,
     kids: 0,
+    kids2: 0,
     datedTimes: 0,
     affairs: 0,
     caught: 0,
@@ -66,6 +87,11 @@ export function newLoveState(): LoveState {
     overseas: 'none',
     overseasYears: 0,
   };
+}
+
+/** 兩位對象一起算的孩子數。畫面上的「幾個孩子」與贍養費看的都是這個。 */
+export function totalKids(love: LoveState): number {
+  return love.kids + love.kids2;
 }
 
 /** 有沒有伴。傷病的陪伴與風波都看它。 */
@@ -136,11 +162,17 @@ export function breakupChance(
  */
 export function turmoilChance(love: LoveState): number {
   if (!hasPartner(love)) return 0;
+  // 縮頭烏龜那段關係不會再有風波——**最壞的事已經發生過，而你選擇留下來**。
+  // 它的代價寫在別的地方（每年倒扣的狀態、走不掉的出口），不在這裡。
+  if (love.open === 'cuckold') return 0;
   const t = cfg.turmoil;
   // **她的性格決定起點，你們一起走過的事決定後來。** 檔次只換掉基礎那一格，
   // 裂痕與旅外的加成照樣疊在上面——不然「定得下來」會變成一張免死金牌。
+  //
+  // 三人行先取兩位的平均，再乘上三個人本來就比較難的那個倍率：抽到兩個安定
+  // 的人仍然比較平靜，但平靜不到只有兩個人的程度。
   let p =
-    t.base_chance * partnerTier(love.partner, 'loyalty') +
+    t.base_chance * loyaltyTier(love) * (love.open === 'harem' ? cfg.threesome.harem.turmoil_multiplier : 1) +
     love.cracks * t.swallow.crack_adds_chance;
 
   if (love.overseas === 'bring') {
@@ -150,6 +182,13 @@ export function turmoilChance(love: LoveState): number {
     p += cfg.overseas.apart.turmoil_add;
   }
   return Math.max(0, p * t.talent_multiplier);
+}
+
+/** 風波基礎值看的那一格「定不定得下來」。兩位對象時取平均。 */
+function loyaltyTier(love: LoveState): number {
+  const first = partnerTier(love.partner, 'loyalty');
+  if (love.partner2 === null) return first;
+  return (first + partnerTier(love.partner2, 'loyalty')) / 2;
 }
 
 /**
@@ -196,10 +235,28 @@ export function childbirthChance(kids: number, partner: string | null = null): n
  * **只有基礎那一段吃檔次，每個孩子那一段不吃**——孩子的贍養費是孩子的事，
  * 與她習慣怎麼過日子無關。
  */
-export function divorceCost(earnings: number, kids: number, partner: string | null = null): number {
+export function divorceCost(
+  earnings: number,
+  kids: number,
+  partner: string | null = null,
+  partner2: string | null = null,
+): number {
   const d = cfg.divorce;
-  const base = d.base_ratio * partnerTier(partner, 'spending');
-  return Math.round(earnings * (base + kids * d.per_kid_ratio));
+  // 三人行破局是**兩份一起賠**：兩位的花錢檔次相加，不是取平均——好處放大的
+  // 那一段就是這裡要還的。
+  const spending =
+    partnerTier(partner, 'spending') + (partner2 === null ? 0 : partnerTier(partner2, 'spending'));
+  return Math.round(earnings * (d.base_ratio * spending + kids * d.per_kid_ratio));
+}
+
+/**
+ * 縮頭烏龜那段關係結束時，你**收得到**的贍養費。
+ *
+ * 她先外遇的事實，不會因為你後來也外遇而消失——所以出口不管走哪一條，錢都是
+ * 往你這邊流。只有已婚才有，交往中就只是分手。
+ */
+export function alimony(earnings: number): number {
+  return Math.round(earnings * cfg.threesome.cuckold.alimony_ratio);
 }
 
 /**
