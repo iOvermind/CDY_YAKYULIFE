@@ -94,10 +94,15 @@ function Board({ board }: { board: LadderBoard }) {
   );
 }
 
+/** 聯盟那一排一次看得到幾個。多出來的靠左右箭頭滑。 */
+const LEAGUE_WINDOW = 4;
+
 export function Ladder({ account, self }: { account: Account; self: boolean }) {
   const [scope, setScope] = useState(CAREER_SCOPE);
   const [data, setData] = useState<LadderResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** 聯盟那一排的左端。資料換了之後可能超出範圍，因此在畫的時候才夾。 */
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -130,21 +135,66 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
   const batter = data.boards.filter((b) => b.side === 'batter');
   const pitcher = data.boards.filter((b) => b.side === 'pitcher');
 
+  // **生涯不是第七個聯盟。** 它是跨聯盟通算，與「誰在中職最強」問的是兩件事，
+  // 因此拉出來自己一排；聯盟那一排就永遠只有一行，多的靠箭頭滑。
+  const leagueScopes = data.scopes.filter((s) => s !== CAREER_SCOPE);
+  const hasCareer = data.scopes.includes(CAREER_SCOPE);
+  const maxOffset = Math.max(0, leagueScopes.length - LEAGUE_WINDOW);
+  const at = Math.min(offset, maxOffset);
+  const visible = leagueScopes.slice(at, at + LEAGUE_WINDOW);
+
   return (
     <>
-      {/* 範圍分頁。只出現有資料的那些——沒去過的聯盟整組不顯示。 */}
-      <div className="seg" style={{ marginBottom: 12 }}>
-        {data.scopes.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={scope === s ? 'on' : undefined}
-            onClick={() => setScope(s)}
-          >
-            {scopeName(s)}
-          </button>
-        ))}
+      {/*
+        範圍分頁。只出現有資料的那些——沒去過的聯盟整組不顯示。
+
+        **箭頭反灰而不是消失**：待過的聯盟不到四個時兩邊都按不動，但位置留著，
+        與左投守不了二三游那套「反灰而不是整排消失」同一個規矩——版面不會因為
+        多打了一個聯盟就整排跳動。
+      */}
+      <div className="seg-row" style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          className="seg-arrow"
+          aria-label="上一個聯盟"
+          disabled={at <= 0}
+          onClick={() => setOffset(Math.max(0, at - 1))}
+        >
+          ‹
+        </button>
+        <div className="seg">
+          {visible.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={scope === s ? 'on' : undefined}
+              onClick={() => setScope(s)}
+            >
+              {scopeName(s)}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="seg-arrow"
+          aria-label="下一個聯盟"
+          disabled={at >= maxOffset}
+          onClick={() => setOffset(Math.min(maxOffset, at + 1))}
+        >
+          ›
+        </button>
       </div>
+      {hasCareer && (
+        <div className="seg one" style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className={scope === CAREER_SCOPE ? 'on' : undefined}
+            onClick={() => setScope(CAREER_SCOPE)}
+          >
+            生涯
+          </button>
+        </div>
+      )}
 
       {/*
         野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是

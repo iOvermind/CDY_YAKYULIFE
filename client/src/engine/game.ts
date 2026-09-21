@@ -300,8 +300,12 @@ export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Se
  *    四壞與觸身球算出來；勝敗不再看能力，改由 ERA+ 與球隊勝率相撞。**抽取順序因此
  *    真的變了**——舊版是局數 → 勝敗 → 被安打 → 自責分，新版必須先有自責分才問得了
  *    勝敗。同一份日誌不只長出不同的成績，連後面每一次擲骰都整串偏移。
+ * 7：聯盟平均往能力軸上搬 2，每一格的次方跟著重解（ADR 0047）；守備分改用紀錄錨定
+ *    的形狀，守位去留從硬門檻改看 DEF（ADR 0048）；下放的壓力改成三分一階，往下
+ *    挖角要連簽約金一起比。**同一個球員在新舊規則下是兩把尺**——成績、守位、去留
+ *    與生涯評價分全部不同，因此舊日誌一律拒絕重播。
  */
-export const ENGINE_VERSION = 6;
+export const ENGINE_VERSION = 7;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
