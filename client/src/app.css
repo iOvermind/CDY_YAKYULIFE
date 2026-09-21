@@ -295,6 +295,13 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
    那一排本來就只有四格寬，一條捲軸會佔掉按鈕近三分之一的高度。 */
 .seg-scroll{display:flex;gap:8px;overflow-x:auto;cursor:grab;scrollbar-width:none;
   -webkit-overflow-scrolling:touch}
+/* 三排範圍分頁疊在一起，彼此留一點距離。 */
+.seg-scroll,.seg-row{margin-bottom:8px}
+/* 守位那兩排左邊掛一個固定的標籤——它是那一排的名字，不跟著捲。 */
+.seg-row{display:flex;align-items:stretch;gap:8px}
+.seg-row .seg-scroll{flex:1;min-width:0;margin-bottom:0}
+.seg-label{display:flex;align-items:center;flex:0 0 auto;color:var(--dim);
+  font-family:var(--sans);font-size:13px;font-weight:700;white-space:nowrap}
 .seg-scroll::-webkit-scrollbar{display:none}
 .seg-scroll:active{cursor:grabbing}
 .seg-scroll>button{flex:0 0 calc((100% - 24px) / 4)}

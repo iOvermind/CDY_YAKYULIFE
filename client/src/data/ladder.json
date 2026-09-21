@@ -16,6 +16,23 @@
     }
   },
 
+  "_shares_note": "**勝利份額與敗戰份額是整個球員的，不分投打。** 它們掛在兩側是為了讓純打者與純投手各自看得到自己那一張；二刀流兩張會顯示同一個數字，那是對的——他的份額本來就只有一份。敗戰份額由高到低排，那是一張「背最多敗戰的人」的榜：份額是責任額乘勝率，背得多代表他一直被放在場上，而那本身就是一種紀錄。",
+
+  "positions": {
+    "_note": "天梯的守位範圍。**只採計在那個守位登錄的球季**——二十六年生涯只有二十二年守游擊，游擊那張榜上就只有那二十二年。野手看登錄守位、投手看定位，二刀流兩邊都算。",
+    "_order_note": "順序就是顯示順序：野手依守備責任占比由重到輕（捕手最重、一壘最輕），指定打擊排在野手最後——它不守備，但它是這個遊戲裡打擊型球員最常落腳的地方。投手接在後面：先發、終結、布局、中繼、長中繼。",
+    "fielding": ["C", "SS", "2B", "CF", "3B", "RF", "LF", "1B", "DH"],
+    "pitching": ["SP", "CP", "SU", "MR", "LR"],
+    "_names_note": "投手定位的中文名。野手的守位名在 positions.json 就有，不在這裡抄第二份——同一件事有兩份資料遲早會對不起來。",
+    "pitching_names": {
+      "SP": "先發",
+      "CP": "終結",
+      "SU": "布局",
+      "MR": "中繼",
+      "LR": "長中繼"
+    }
+  },
+
   "columns": {
     "_note": "`side` 決定它排進野手榜還是投手榜；`rate` 為真的要過 qualification。`order` 是排名方向——`desc` 是越多越前面，`asc` 是越少越前面（防禦率）。`unit` 是顯示用的換算：投球局數存的是出局數。",
     "_negative_note": "被三振、失分、自責分、盜壘刺這幾項的第一名不是榮譽。它們照樣進榜，因為榜單問的是「誰最多」而不是「誰最好」——把它們藏起來等於假裝那些數字不存在。顯示時不特別褒揚，也不特別懲罰。",
@@ -38,7 +55,9 @@
       { "key": "defenseRuns", "name": "守備分", "rate": false, "order": "desc" },
       { "key": "avg", "name": "打擊率", "rate": true, "order": "desc", "digits": 3 },
       { "key": "obp", "name": "上壘率", "rate": true, "order": "desc", "digits": 3 },
-      { "key": "slg", "name": "長打率", "rate": true, "order": "desc", "digits": 3 }
+      { "key": "slg", "name": "長打率", "rate": true, "order": "desc", "digits": 3 },
+      { "key": "ws", "name": "勝利份額", "rate": false, "order": "desc", "digits": 1 },
+      { "key": "ls", "name": "敗戰份額", "rate": false, "order": "desc", "digits": 1 }
     ],
 
     "pitcher": [
@@ -54,7 +73,9 @@
       { "key": "runs", "name": "失分", "rate": false, "order": "desc" },
       { "key": "er", "name": "自責分", "rate": false, "order": "desc" },
       { "key": "bb", "name": "四壞", "rate": false, "order": "desc" },
-      { "key": "era", "name": "防禦率", "rate": true, "order": "asc", "digits": 2 }
+      { "key": "era", "name": "防禦率", "rate": true, "order": "asc", "digits": 2 },
+      { "key": "ws", "name": "勝利份額", "rate": false, "order": "desc", "digits": 1 },
+      { "key": "ls", "name": "敗戰份額", "rate": false, "order": "desc", "digits": 1 }
     ]
   }
 }

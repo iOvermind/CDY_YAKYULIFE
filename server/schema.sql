@@ -93,6 +93,11 @@ CREATE TABLE IF NOT EXISTS career_stats (
   PRIMARY KEY (career_id, scope)
 );
 
+-- 勝利份額與敗戰份額。**整個球員的，不分投打**——他的份額本來就只有一份。
+-- 後加的欄位走 ALTER：schema.sql 每次啟動都跑一次，而既有的資料庫不會重新建表。
+ALTER TABLE career_stats ADD COLUMN IF NOT EXISTS win_shares  REAL NOT NULL DEFAULT 0;
+ALTER TABLE career_stats ADD COLUMN IF NOT EXISTS loss_shares REAL NOT NULL DEFAULT 0;
+
 -- 個人天梯查 (user_id, scope)，全伺服器天梯查 (scope)。前者更常用，放前面。
 CREATE INDEX IF NOT EXISTS career_stats_user_idx  ON career_stats (user_id, scope);
 CREATE INDEX IF NOT EXISTS career_stats_scope_idx ON career_stats (scope);

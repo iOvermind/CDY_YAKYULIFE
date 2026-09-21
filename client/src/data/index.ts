@@ -1580,6 +1580,13 @@ export interface LadderData {
       { readonly stat: string; readonly per_team_game: number }
     >;
   };
+  /** 排得出榜的守位，依顯示順序。野手看登錄守位、投手看定位。 */
+  readonly positions: {
+    readonly fielding: readonly string[];
+    readonly pitching: readonly string[];
+    /** 投手定位的中文名。野手的守位名在 positions.json，不在這裡抄第二份。 */
+    readonly pitching_names: Readonly<Record<string, string>>;
+  };
   readonly columns: Record<"batter" | "pitcher", readonly LadderColumn[]>;
 }
 /**

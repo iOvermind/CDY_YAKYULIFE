@@ -13,8 +13,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { LadderBoard, LadderResponse } from './api/contract.ts';
 import type { Account } from './useAccount.ts';
-import { ladder as ladderCfg, leagues } from './data/index.ts';
-import { CAREER_SCOPE } from './engine/ladder.ts';
+import { ladder as ladderCfg, leagues, positions as positionsCfg } from './data/index.ts';
+import { BEST_PREFIX, CAREER_SCOPE, LADDER_POSITIONS, POSITION_PREFIX } from './engine/ladder.ts';
 import { ENGINE_VERSION } from './engine/game.ts';
 
 /**
@@ -29,6 +29,13 @@ import { ENGINE_VERSION } from './engine/game.ts';
 function scopeName(scope: string): string {
   if (scope === CAREER_SCOPE) return '生涯';
   return leagues.top_league_names[scope] ?? scope;
+}
+
+/** 守位的中文全名。野手查 positions.json，投手查 ladder.json 的定位名。 */
+function positionName(position: string): string {
+  return (
+    positionsCfg.positions[position] ?? ladderCfg.positions.pitching_names[position] ?? position
+  );
 }
 
 /** 一個欄位的設定。找不到就不畫——資料檔是唯一來源，這裡不自己編一份備援。 */
@@ -162,10 +169,51 @@ function useDragScroll() {
   };
 }
 
+/**
+ * 一排守位按鈕。生涯與單季各一排，形狀一樣，只是前綴不同。
+ *
+ * 左邊掛一個固定的標籤（「生涯」／「單季」），右邊是可以拖的守位。**標籤不跟著
+ * 捲**——它是那一排的名字，滑走了就分不出上下兩排在問什麼。
+ */
+function PositionRow({
+  label,
+  prefix,
+  positions,
+  scope,
+  setScope,
+  drag,
+}: {
+  label: string;
+  prefix: string;
+  positions: readonly string[];
+  scope: string;
+  setScope: (s: string) => void;
+  drag: ReturnType<typeof useDragScroll>;
+}) {
+  return (
+    <div className="seg-row">
+      <span className="seg-label">{label}</span>
+      <div className="seg-scroll" ref={drag.ref} {...drag.handlers}>
+        {positions.map((p) => (
+          <button
+            key={p}
+            type="button"
+            title={positionName(p)}
+            className={scope === `${prefix}${p}` ? 'on' : undefined}
+            onClick={() => {
+              if (!drag.wasDrag()) setScope(`${prefix}${p}`);
+            }}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Ladder({ account, self }: { account: Account; self: boolean }) {
-  const [scope, setScope] = useState(CAREER_SCOPE);
-  /** 生涯看哪一側。生涯的榜不左右並排，一次只畫一側。 */
-  const [careerSide, setCareerSide] = useState<'batter' | 'pitcher'>('batter');
+  const [scope, setScope] = useState(`${POSITION_PREFIX}${LADDER_POSITIONS[0] ?? ''}`);
   const [data, setData] = useState<LadderResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -176,7 +224,9 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
    * 聯盟之後畫面彈回最左邊的四個。清單本身與選了哪一個無關，留著就好。
    */
   const [scopes, setScopes] = useState<readonly string[]>([]);
-  const drag = useDragScroll();
+  const leagueDrag = useDragScroll();
+  const careerDrag = useDragScroll();
+  const bestDrag = useDragScroll();
 
   useEffect(() => {
     let live = true;
@@ -202,9 +252,15 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
 
   // **生涯不是第七個聯盟。** 它是跨聯盟通算，與「誰在中職最強」問的是兩件事，
   // 因此拉出來自己一排。聯盟那一排永遠只有一行，多的用拖的。
-  const leagueScopes = scopes.filter((s) => s !== CAREER_SCOPE);
-  const hasCareer = scopes.includes(CAREER_SCOPE);
-  const career = scope === CAREER_SCOPE;
+  const has = new Set(scopes);
+  const leagueScopes = scopes.filter(
+    (s) => s !== CAREER_SCOPE && !s.startsWith(POSITION_PREFIX) && !s.startsWith(BEST_PREFIX),
+  );
+  const careerPositions = LADDER_POSITIONS.filter((p) => has.has(`${POSITION_PREFIX}${p}`));
+  const bestPositions = LADDER_POSITIONS.filter((p) => has.has(`${BEST_PREFIX}${p}`));
+  // 守位的榜一次只畫一側：野手的守位沒有投球成績，投手的定位沒有打擊成績，
+  // 左右並排只會空一半。
+  const single = scope.startsWith(POSITION_PREFIX) || scope.startsWith(BEST_PREFIX);
 
   /**
    * 榜的那一段。查詢期間只換這裡，範圍分頁留在原地——不然那一排會被卸載再重建，
@@ -221,13 +277,15 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
         </p>
       );
     }
-    if (career) {
-      // 生涯一次只畫一側，因此不套 .ladder-sides 那個 1fr 1fr。
+    if (single) {
+      // 守位的榜一次只畫一側，因此不套 .ladder-sides 那個 1fr 1fr。野手的守位沒有
+      // 投球成績、投手的定位沒有打擊成績，哪一側有東西就畫哪一側。
+      const side = batter.length >= pitcher.length ? batter : pitcher;
       return (
         <section>
-          <h4>{careerSide === 'batter' ? '野手' : '投手'}</h4>
+          <h4>{side === batter ? '野手' : '投手'}</h4>
           <div className="ladder-grid">
-            {(careerSide === 'batter' ? batter : pitcher).map((b) => (
+            {side.map((b) => (
               <Board key={b.column} board={b} />
             ))}
           </div>
@@ -277,19 +335,14 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
         捲動：滑鼠按住拖，觸控就是原生的捲動。這裡沒有箭頭——箭頭要佔掉兩端的寬度，
         四顆按鈕就得跟著變窄。
       */}
-      <div
-        className="seg-scroll"
-        ref={drag.ref}
-        {...drag.handlers}
-        style={{ marginBottom: 8 }}
-      >
+      <div className="seg-scroll" ref={leagueDrag.ref} {...leagueDrag.handlers}>
         {leagueScopes.map((s) => (
           <button
             key={s}
             type="button"
             className={scope === s ? 'on' : undefined}
             onClick={() => {
-              if (!drag.wasDrag()) setScope(s);
+              if (!leagueDrag.wasDrag()) setScope(s);
             }}
           >
             {scopeName(s)}
@@ -297,33 +350,30 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
         ))}
       </div>
       {/*
-        生涯分成野手與投手兩顆。生涯的榜**一次只畫一側**：31 塊榜左右並排時，名字欄
-        不能折行（球員名・帳號），名字一長就把一側推寬擠進另一側。聯盟那邊維持並排，
-        靠 min-width:0 與各自的橫向捲動擋住同一件事。
+        **生涯依守位分，不是依投打分。** 一段生涯可能守過好幾個位置，而「他在游擊
+        這個位置上留下了什麼」與「他一輩子累積了什麼」是兩個問題——只採計在那個
+        守位登錄的球季，二十六年生涯只有二十二年守游擊，游擊榜上就只有那二十二年。
+        底下那一排是同一批守位的**單季**紀錄。
       */}
-      {hasCareer && (
-        <div className="seg two" style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            className={career && careerSide === 'batter' ? 'on' : undefined}
-            onClick={() => {
-              setScope(CAREER_SCOPE);
-              setCareerSide('batter');
-            }}
-          >
-            生涯・野手
-          </button>
-          <button
-            type="button"
-            className={career && careerSide === 'pitcher' ? 'on' : undefined}
-            onClick={() => {
-              setScope(CAREER_SCOPE);
-              setCareerSide('pitcher');
-            }}
-          >
-            生涯・投手
-          </button>
-        </div>
+      {careerPositions.length > 0 && (
+        <PositionRow
+          label="生涯"
+          prefix={POSITION_PREFIX}
+          positions={careerPositions}
+          scope={scope}
+          setScope={setScope}
+          drag={careerDrag}
+        />
+      )}
+      {bestPositions.length > 0 && (
+        <PositionRow
+          label="單季"
+          prefix={BEST_PREFIX}
+          positions={bestPositions}
+          scope={scope}
+          setScope={setScope}
+          drag={bestDrag}
+        />
       )}
       {boards()}
     </>

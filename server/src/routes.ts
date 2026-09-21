@@ -170,8 +170,9 @@ export async function finishCareer(
           await client.query(
             `INSERT INTO career_stats
                (career_id, user_id, scope, seasons, batting, pitching, defense_runs,
+                win_shares, loss_shares,
                 qualified_batter, qualified_pitcher, engine_version, player_name)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              ON CONFLICT (career_id, scope) DO NOTHING`,
             [
               careerId,
@@ -181,6 +182,8 @@ export async function finishCareer(
               row.batting === null ? null : JSON.stringify(row.batting),
               row.pitching === null ? null : JSON.stringify(row.pitching),
               row.defenseRuns,
+              row.winShares,
+              row.lossShares,
               row.qualifiedBatter,
               row.qualifiedPitcher,
               ENGINE_VERSION,
@@ -271,6 +274,7 @@ export async function ladder(
 
   const { rows } = await pool.query<StatRow>(
     `SELECT cs.scope, cs.seasons, cs.batting, cs.pitching, cs.defense_runs,
+            cs.win_shares, cs.loss_shares,
             cs.qualified_batter, cs.qualified_pitcher, cs.engine_version,
             cs.player_name, cs.finished_at, u.account
        FROM career_stats cs
@@ -298,6 +302,8 @@ interface StatRow {
   batting: Record<string, number> | null;
   pitching: Record<string, number> | null;
   defense_runs: number;
+  win_shares: number;
+  loss_shares: number;
   qualified_batter: boolean;
   qualified_pitcher: boolean;
   engine_version: number;
@@ -346,6 +352,10 @@ function valueOf(
   if (key === 'defenseRuns') return row.batting === null ? null : row.defense_runs;
   const line = side === 'batter' ? row.batting : row.pitching;
   if (line === null) return null;
+  // **份額是整個球員的，不分投打。** 它掛在兩側是為了讓純打者與純投手各自看得到
+  // 自己那一張；上面那道 null 檢查因此仍然要過——沒投過球的人不該出現在投手側。
+  if (key === 'ws') return row.win_shares;
+  if (key === 'ls') return row.loss_shares;
   const value = line[key];
   return typeof value === 'number' ? value : null;
 }

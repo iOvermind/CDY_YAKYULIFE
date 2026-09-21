@@ -39,6 +39,8 @@ interface StatRow {
   batting: Record<string, number> | null;
   pitching: Record<string, number> | null;
   defense_runs: number;
+  win_shares: number;
+  loss_shares: number;
   qualified_batter: boolean;
   qualified_pitcher: boolean;
   engine_version: number;
@@ -182,10 +184,12 @@ export class FakeDb implements Queryable {
         batting: v[4] === null ? null : (JSON.parse(String(v[4])) as Record<string, number>),
         pitching: v[5] === null ? null : (JSON.parse(String(v[5])) as Record<string, number>),
         defense_runs: Number(v[6]),
-        qualified_batter: Boolean(v[7]),
-        qualified_pitcher: Boolean(v[8]),
-        engine_version: Number(v[9]),
-        player_name: String(v[10]),
+        win_shares: Number(v[7]),
+        loss_shares: Number(v[8]),
+        qualified_batter: Boolean(v[9]),
+        qualified_pitcher: Boolean(v[10]),
+        engine_version: Number(v[11]),
+        player_name: String(v[12]),
         finished_at: new Date(),
       });
       return [];
