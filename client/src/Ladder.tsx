@@ -101,38 +101,60 @@ function Board({ board }: { board: LadderBoard }) {
  * 版面，按鈕維持原本的寬度。手機本來就是拖的——那一排是原生的橫向捲動容器，
  * 觸控不必接手，這裡只補上滑鼠的那一半。
  *
- * 拖過之後要吃掉那一次 click，否則放開滑鼠的位置剛好在某顆按鈕上就會誤選。
+ * **不能用 setPointerCapture。** 抓住指標之後 pointerdown 與 pointerup 的目標
+ * 都會變成容器，瀏覽器於是把 click 派給容器而不是按鈕——結果是整排點不動，每
+ * 一次點擊都被當成一次沒有位移的拖曳。改成只記狀態不抓指標：滑鼠移出那一排就
+ * 結束拖曳，代價是甩得太快會鬆手，而那比「按鈕全部失效」好得多。
+ *
+ * 真的拖過才要吃掉那一次 click，否則放開滑鼠的位置剛好在某顆按鈕上就會誤選。
+ * 門檻留四個像素——滑鼠按下去本來就很難完全不動。
  */
 function useDragScroll() {
   const ref = useRef<HTMLDivElement | null>(null);
+  const holding = useRef(false);
   const dragged = useRef(false);
   const from = useRef({ x: 0, left: 0 });
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse' || ref.current === null) return;
+    holding.current = true;
     dragged.current = false;
     from.current = { x: e.clientX, left: ref.current.scrollLeft };
-    ref.current.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const el = ref.current;
-    if (el === null || !el.hasPointerCapture(e.pointerId)) return;
+    if (!holding.current || el === null) return;
     const dx = e.clientX - from.current.x;
-    // 幾個像素的抖動不算拖——滑鼠按下去本來就很難完全不動。
     if (Math.abs(dx) > 4) dragged.current = true;
-    el.scrollLeft = from.current.left - dx;
+    if (dragged.current) el.scrollLeft = from.current.left - dx;
   };
 
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    ref.current?.releasePointerCapture(e.pointerId);
+  /** 放開、移出那一排、或系統收走指標，都算結束。 */
+  const stop = () => {
+    holding.current = false;
   };
 
   return {
     ref,
-    /** 這一次 click 是不是拖出來的。是的話呼叫端要忽略它。 */
-    wasDrag: () => dragged.current,
-    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+    /**
+     * 這一次 click 是不是拖出來的。是的話呼叫端要忽略它。
+     *
+     * **讀一次就清掉。** 不清的話旗標會留到下一次點擊——用鍵盤 Enter 按按鈕不會
+     * 經過 pointerdown，於是那一次會被上一次的拖曳吃掉。
+     */
+    wasDrag: () => {
+      const was = dragged.current;
+      dragged.current = false;
+      return was;
+    },
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: stop,
+      onPointerLeave: stop,
+      onPointerCancel: stop,
+    },
   };
 }
 
