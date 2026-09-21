@@ -1192,12 +1192,28 @@ interface StatColumn<T> {
   readonly key: string;
   readonly title: string;
   /**
-   * `shares` 是**整個球員**那一季的雙帳（打擊＋投球＋守備三本帳相加）。
+   * 那一季的三本帳，**分開給**。
    *
-   * 份額不分投打，所以它不能從單側那條成績列算出來：二刀流的同一季，打擊表與
-   * 投球表看到的必須是同一個數字。沒有那份資料時（養成期）才退回單側自算。
+   * 份額算不出來自單側那條成績列：守備那一本帳不在打擊列上，而球隊勝率的調整
+   * 也只有結算當下手上才有。兩張表各取自己該取的那幾本——**野手表是打擊加守備**
+   * （守備份額本來就是野手的一部分），投手表是投球。二刀流照樣分開放。
+   *
+   * 沒有那份資料時（養成期、國際賽）退回單側自算。
    */
-  readonly value: (line: T, base: Baseline, shares: Shares | null) => string | number;
+  readonly value: (line: T, base: Baseline, shares: SharesByPart | null) => string | number;
+}
+
+/** 三本帳。守備那一本沒有自己的表，它跟著野手走。 */
+type SharesByPart = SeasonRecord['shares'];
+
+/**
+ * 野手那張表的份額：**打擊加守備**。
+ *
+ * 守備份額本來就是野手的一部分——一個守游擊的人有三成多的價值在手套上，把它
+ * 留在表外等於說那些年他沒做什麼。沒有結算資料時退回只算打擊。
+ */
+function batterShares(line: BattingLine, base: Baseline, parts: SharesByPart | null): Shares {
+  return parts === null ? battingShares(line, base) : sumShares(parts.batting, parts.fielding);
 }
 
 /** 相對聯盟平均的指標統一這樣顯示：沒有樣本就畫破折號，不畫 0。 */
@@ -1223,9 +1239,9 @@ const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'SLG', title: '長打率', value: (b) => fmtAvg(b.slg) },
   { key: 'OPS', title: '整體攻擊指數', value: (b) => fmtAvg(ops(b)) },
   { key: 'OPS+', title: '相對聯盟平均的攻擊表現（100 為聯盟平均）', value: (b, base) => rel(opsPlus(b, base)) },
-  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（投打守三本帳相加）', value: (b, base, shares) => (shares ?? battingShares(b, base)).win.toFixed(1) },
-  { key: 'LS', title: '敗戰份額：佔用了出場機會卻沒換回勝利的部分（投打守三本帳相加）', value: (b, base, shares) => (shares ?? battingShares(b, base)).loss.toFixed(1) },
-  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base, shares) => fmtAvg(winPct(shares ?? battingShares(b, base))) },
+  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（打擊與守備合計）', value: (b, base, shares) => batterShares(b, base, shares).win.toFixed(1) },
+  { key: 'LS', title: '敗戰份額：佔用了出場機會與守備位置卻沒換回勝利的部分', value: (b, base, shares) => batterShares(b, base, shares).loss.toFixed(1) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base, shares) => fmtAvg(winPct(batterShares(b, base, shares))) },
 ];
 
 const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
@@ -1246,9 +1262,9 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'K/9', title: '每九局奪三振', value: (p) => kPerNine(p).toFixed(1) },
   { key: 'BB/9', title: '每九局四壞', value: (p) => bbPerNine(p).toFixed(1) },
   { key: 'ERA+', title: '相對聯盟平均的防禦率（100 為聯盟平均）', value: (p, base) => rel(eraPlus(p, base)) },
-  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（投打守三本帳相加）', value: (p, base, shares) => (shares ?? pitchingShares(p, base)).win.toFixed(1) },
-  { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分（投打守三本帳相加）', value: (p, base, shares) => (shares ?? pitchingShares(p, base)).loss.toFixed(1) },
-  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base, shares) => fmtAvg(winPct(shares ?? pitchingShares(p, base))) },
+  { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (p, base, shares) => (shares?.pitching ?? pitchingShares(p, base)).win.toFixed(1) },
+  { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分', value: (p, base, shares) => (shares?.pitching ?? pitchingShares(p, base)).loss.toFixed(1) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base, shares) => fmtAvg(winPct(shares?.pitching ?? pitchingShares(p, base))) },
 ];
 
 /** 一列通算成績。第一欄是列名（聯盟或「通算」），其餘欄位與生涯年表一致。 */
@@ -1258,8 +1274,8 @@ interface TotalRow {
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
   readonly defenseRuns: number;
-  /** 整季的雙帳：投打守三本帳相加。養成期沒有這份資料，一律 null。 */
-  readonly shares: Shares | null;
+  /** 這一季的三本帳。養成期沒有這份資料，一律 null。 */
+  readonly shares: SharesByPart | null;
   readonly base: Baseline;
 }
 
@@ -1309,8 +1325,8 @@ interface CareerRow {
   /** 這一年帶著什麼傷。養成期不追蹤傷病，一律 null。 */
   readonly injured: SeasonRecord['injured'];
   readonly defenseRuns: number;
-  /** 整季的雙帳：投打守三本帳相加。養成期沒有這份資料，一律 null。 */
-  readonly shares: Shares | null;
+  /** 這一季的三本帳。養成期沒有這份資料，一律 null。 */
+  readonly shares: SharesByPart | null;
   readonly base: Baseline;
 }
 
@@ -1330,7 +1346,7 @@ function StatCells<T>({
   columns: readonly StatColumn<T>[];
   line: T;
   base: Baseline;
-  shares: Shares | null;
+  shares: SharesByPart | null;
 }) {
   return (
     <>
@@ -1677,7 +1693,7 @@ export function careerCardOf(game: Game): CareerCard | null {
     cols: readonly StatColumn<T>[],
     v: T,
     base: Baseline,
-    shares: Shares | null,
+    shares: SharesByPart | null,
   ): string[] => cols.map((c) => String(c.value(v, base, shares)));
 
   const rows = careerRows(summary);
@@ -1939,7 +1955,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     pitching: s.pitching,
     injured: s.injured,
     defenseRuns: s.defenseRuns,
-    shares: sumShares(s.shares.batting, s.shares.pitching, s.shares.fielding),
+    shares: s.shares,
     base: proBaseline(s.level),
   }));
 
@@ -1954,7 +1970,7 @@ function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
     batting: l.batting,
     pitching: l.pitching,
     defenseRuns: l.defenseRuns,
-    shares: l.shares,
+    shares: l.sharesByPart,
     // 用結算給的頂級層級，**不要拿 org 拼字串**：墨聯的層級就叫 LMB、澳職叫
     // ABL、美職的頂級是 MLB，拼出來的 LMB1 不存在，讀它會直接拋錯——整個
     // 結算畫面因此變成一片空白。
@@ -1970,7 +1986,11 @@ function topTotalRow(summary: CareerSummary): TotalRow {
     batting: summary.topTotal.batting,
     pitching: summary.topTotal.pitching,
     defenseRuns: summary.leagues.reduce((n, l) => n + l.defenseRuns, 0),
-    shares: sumShares(...summary.leagues.map((l) => l.shares)),
+    shares: {
+      batting: sumShares(...summary.leagues.map((l) => l.sharesByPart.batting)),
+      pitching: sumShares(...summary.leagues.map((l) => l.sharesByPart.pitching)),
+      fielding: sumShares(...summary.leagues.map((l) => l.sharesByPart.fielding)),
+    },
     // 通算橫跨數個聯盟，基準線只能挑一個——取評價分最高的那座，那是這段生涯
     // 的代表舞台。沒有職業紀錄時退回中職一軍。
     base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
@@ -1990,8 +2010,8 @@ function StatLines({
   pitching: PitchingLine | null;
   /** 聯盟平均。ERA+／OPS+／WS 都要跟它比。 */
   base: Baseline;
-  /** 整季的雙帳：投打守三本帳相加。沒有就退回單側自算。 */
-  shares?: Shares | null;
+  /** 這一季的三本帳。沒有就退回單側自算。 */
+  shares?: SharesByPart | null;
   /** 這一季的守備分。守備沒有別的欄位，因此掛在野手那張表的最後一欄。 */
   defenseRuns?: number | null;
 }) {
