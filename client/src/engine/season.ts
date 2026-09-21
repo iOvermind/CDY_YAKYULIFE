@@ -536,8 +536,20 @@ export function battingCore(
 
   // 打點與得分由**打出來的東西**推導，不是由安打數乘一個係數。
   const rw = b.rbi.weights;
+  // **被敬遠會吃掉打點。** 敬遠不是隨機發生的——對手挑的正是壘上有人、你打得下來
+  // 的那一個打席，那些打席的打點期望值遠高於平均。權重那一側算不出這件事：它只看
+  // 你打出了什麼，而被敬遠的那一次你根本沒揮棒。折扣與敬遠佔打席的比例成正比，用
+  // 比例而不是次數，短季聯盟才不會被多罰。
+  const ibbPenalty =
+    pa <= 0
+      ? 1
+      : Math.max(b.rbi.ibb_penalty.min, 1 - b.rbi.ibb_penalty.per_share * (ibb / pa));
   const rbiRaw =
-    hr * (rw['hr'] ?? 0) + triple * (rw['triple'] ?? 0) + double * (rw['double'] ?? 0) + single * (rw['single'] ?? 0);
+    (hr * (rw['hr'] ?? 0) +
+      triple * (rw['triple'] ?? 0) +
+      double * (rw['double'] ?? 0) +
+      single * (rw['single'] ?? 0)) *
+    ibbPenalty;
   // 不低於全壘打數——每一支全壘打至少是一分打點，那是規則不是模型。
   const rbi = Math.max(
     hr,

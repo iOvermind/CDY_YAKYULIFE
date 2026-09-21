@@ -950,8 +950,23 @@ describe('全壘打的曲線', () => {
     expect(at(70)).toBeLessThan(45);
   });
 
-  it('能力 80 打得到錨點', () => {
-    expect(at(80)).toBeGreaterThan(55);
+  /**
+   * **錨點是率，不是季總量**（ADR 0046）。能力 80 的打者一季被敬遠一百次上下，
+   * 那些打席不進打數，季總量因此低於錨點——那不是曲線沒到位，是分母不同。
+   * Bonds 2004 年 45 轟 373 打數也是同一回事。
+   */
+  it('能力 80 打得到錨點——每 600 打數', () => {
+    const rate = (v: number) => {
+      let hr = 0;
+      let ab = 0;
+      for (let i = 0; i < 200; i++) {
+        const l = proBattingLine(new World(`hr-${v}-${i}`), with_(v, { sta: 75 }), '1B', 'MLB', v, null);
+        hr += l.hr;
+        ab += l.ab;
+      }
+      return (hr / ab) * 600;
+    };
+    expect(rate(80)).toBeGreaterThan(55);
   });
 
   it('一路遞增，沒有任何一段反轉', () => {

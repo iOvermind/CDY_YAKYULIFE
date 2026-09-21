@@ -1219,6 +1219,8 @@ export interface SeasonData {
     readonly rbi: {
       readonly anchor: number;
       readonly weights: Readonly<Record<string, number>>;
+      /** 被敬遠吃掉的打點：`1 − per_share × ibb / pa`，夾在 min 以上。 */
+      readonly ibb_penalty: { readonly per_share: number; readonly min: number };
       readonly jitter: number;
     };
     readonly runs: {

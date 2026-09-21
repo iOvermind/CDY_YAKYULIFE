@@ -123,7 +123,9 @@ describe('winningLine', () => {
     // 成績錨點的定義：能力 80 打一整季剛好打到錨點，d = 80 − 61。
     expect(hr.d).toBe(19);
     const line = winningLine(hr, MLB, 0.5)!;
-    expect(line).toBeGreaterThan(55);
+    // 累積型的獎看的是季總量，而能力 80 的人一季被敬遠一百次上下——那些打席不進
+    // 打數，所以季總量低於「每 600 打數」的錨點。門檻跟著往下，那是對的。
+    expect(line).toBeGreaterThan(48);
     expect(line).toBeLessThan(70);
   });
 
