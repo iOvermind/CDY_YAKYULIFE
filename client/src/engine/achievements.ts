@@ -13,7 +13,14 @@
  * 本模組是純函式：同一段生涯一定得到同一份成就清單。
  */
 
-import { achievements as cfg, amateur, leagues, traitName, traits as traitsData } from '../data/index.ts';
+import {
+  achievements as cfg,
+  amateur,
+  leagues,
+  teams as teamsData,
+  traitName,
+  traits as traitsData,
+} from '../data/index.ts';
 import { statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import type { AwardRecord } from './awards.ts';
 import type { CareerSummary } from './career.ts';
@@ -293,6 +300,12 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
   const cupBest = new Map<string, { index: number; name: string }>();
   const intlBest = new Map<string, { index: number; name: string }>();
   for (const honor of ctx.honors) {
+    // **職業的總冠軍不是盃賽。** 它的榮譽字串是「中職總冠軍」，剝掉名次之後剩下
+    // 「中職總」——而下面那段只認「字串結尾是不是名次」，於是它被當成一項養成期
+    // 的盃賽收進去，同時又以 award:<org>:championship 的身分進了聯盟那一格，一件
+    // 事在兩個大標底下各出現一次。盃賽改成認名單：養成期的賽事名是有限且寫死的
+    // （見 amateur.json 的 cups[*].names），不在名單上的就不是盃賽。
+    if (!honor.startsWith(intlPrefix) && !AMATEUR_CUPS.has(cupEventOf(honor))) continue;
     const isIntl = honor.startsWith(intlPrefix);
     if (isIntl && honor.endsWith('MVP')) {
       list.push({
@@ -474,6 +487,23 @@ const CATEGORY_ORDER: readonly string[] = [
   cfg.first_career_bonus.name,
 ];
 
+/** 養成期的盃賽名單。這是一份有限且寫死的名單，因此「是不是盃賽」認得出來。 */
+const AMATEUR_CUPS = new Set(
+  Object.values(amateur.cups).flatMap((stage) =>
+    typeof stage === 'object' && stage !== null && 'names' in stage
+      ? ((stage as { names?: readonly string[] }).names ?? [])
+      : [],
+  ),
+);
+
+/** 把榮譽字串剝掉名次，剩下的就是賽事名。認不出名次時回傳整串。 */
+function cupEventOf(honor: string): string {
+  for (const rank of Object.keys(cfg.categories.amateur_cup.by_rank)) {
+    if (honor.endsWith(rank)) return honor.slice(0, honor.length - rank.length).trim();
+  }
+  return honor;
+}
+
 /** 累積成就的聯盟順序，生涯合計永遠排在所有單一聯盟之後。 */
 const LEAGUE_ORDER: readonly string[] = Object.keys(leagues.top_league_names);
 const STAT_ORDER: readonly string[] = Object.keys(cfg.categories.cumulative.rungs);
@@ -572,6 +602,37 @@ export interface CabinetSection {
 const LEAGUE_NAMES: Readonly<Record<string, string>> = leagues.top_league_names;
 const ORG_BY_LEAGUE_NAME = new Map(Object.entries(LEAGUE_NAMES).map(([org, name]) => [name, org]));
 
+/**
+ * 「這串字是哪個體系」的反查表。
+ *
+ * 三種寫法都要收：頂級聯盟名（中職、大聯盟）、體系別名（旅美、旅日，見
+ * `leagues.org_names`）與球隊暱稱。動態命名的三個特性——◯◯歷史級球星、◯◯先生、
+ * ◯◯七彩球衣——填進去的就是這三種字串的其中一種，而它們都該落在對應聯盟底下。
+ */
+const ORG_BY_FILL = new Map<string, string>([
+  ...Object.entries(LEAGUE_NAMES).map(([org, name]) => [name, org] as const),
+  ...Object.entries(leagues.org_names).map(([org, name]) => [name, org] as const),
+  ...Object.entries(teamsData.leagues).flatMap(([org, list]) =>
+    (list ?? []).map((team) => [team.nick ?? team.name.slice(-2), org] as const),
+  ),
+]);
+
+/** 動態命名的特性：識別字串 → 名字裡固定的那一段後綴。 */
+const TRAIT_SUFFIX = new Map(
+  Object.entries(traitsData.dynamic_names).flatMap(([id, def]) =>
+    typeof def === 'object' && def !== null && typeof def.pattern === 'string'
+      ? [[id, def.pattern.replace(/\{[a-z_]+\}/g, '')] as const]
+      : [],
+  ),
+);
+
+/** 從「中職歷史級球星」這種組出來的名字裡取回填進去的那一段。 */
+function traitFillOf(traitId: string, name: string): string | null {
+  const suffix = TRAIT_SUFFIX.get(traitId);
+  if (suffix === undefined || suffix === '' || !name.endsWith(suffix)) return null;
+  return name.slice(0, name.length - suffix.length);
+}
+
 /** 生涯合計不屬於任何聯盟——它是把所有聯盟加起來的那一欄。 */
 const CAREER_TOTAL_TITLE = '生涯通算';
 
@@ -582,12 +643,25 @@ function orgOf(id: string): string | null {
   if (parts[0] === 'award') return parts[1] ?? null;
   // 名人堂的鍵帶的是聯盟**名字**（見 evaluateAchievements），反查回體系代碼。
   if (parts[0] === 'hall') return ORG_BY_LEAGUE_NAME.get(parts[1] ?? '') ?? null;
+  // 動態命名的特性帶著聯盟或球隊：◯◯歷史級球星、◯◯先生、◯◯七彩球衣。它們講的
+  // 就是某一個聯盟裡發生的事，沒有理由跟「魔鬼筋肉人」擠在同一個大標底下。
+  if (parts[0] === 'trait') {
+    const fill = traitFillOf(parts[1] ?? '', parts.slice(2).join(':'));
+    return fill === null ? null : (ORG_BY_FILL.get(fill) ?? null);
+  }
   return null;
 }
 
-/** 名字在源頭就帶了聯盟前綴；進了聯盟大標之後那個前綴就是重複的。 */
+/**
+ * 名字在源頭就帶了聯盟前綴；進了聯盟大標之後那個前綴就是重複的。
+ *
+ * 獎項是「中職 MVP」那種帶空格的，動態特性是「中職歷史級球星」那種直接黏著的，
+ * 兩種都剝。剝不掉就原樣留著——◯◯先生填的是球隊暱稱，本來就不會是聯盟名。
+ */
 function stripLeague(name: string, league: string): string {
-  return name.startsWith(`${league} `) ? name.slice(league.length + 1) : name;
+  if (name.startsWith(`${league} `)) return name.slice(league.length + 1);
+  if (name.startsWith(league) && name.length > league.length) return name.slice(league.length);
+  return name;
 }
 
 function push<T>(map: Map<string, T[]>, key: string, value: T): void {

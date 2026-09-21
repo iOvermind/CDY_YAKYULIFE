@@ -316,6 +316,42 @@ describe('成就櫃', () => {
     expect(titles('league:CPBL')).toEqual([cfg.categories.award.name, cfg.categories.cumulative.name]);
     expect(titles('league:MLB')).toEqual(titles('league:CPBL'));
   });
+
+  it('動態命名的特性歸到它講的那個聯盟', () => {
+    const sections = cabinetSections([
+      tile('trait:legend:中職歷史級球星', cfg.categories.trait.name, '中職歷史級球星'),
+      tile('trait:rainbow:大聯盟七彩球衣', cfg.categories.trait.name, '大聯盟七彩球衣'),
+      // 名字固定的特性沒有聯盟可歸，留在「特性」那個大標底下。
+      tile('trait:muscle', cfg.categories.trait.name, '魔鬼筋肉人'),
+    ]);
+    const names = (key: string) =>
+      sections.find((s) => s.key === key)?.groups.flatMap((g) => g.items.map((i) => i.name));
+    // 進了聯盟大標之後前綴就是重複的，剝掉。
+    expect(names('league:CPBL')).toEqual(['歷史級球星']);
+    expect(names('league:MLB')).toEqual(['七彩球衣']);
+    expect(names(cfg.categories.trait.name)).toEqual(['魔鬼筋肉人']);
+  });
+});
+
+describe('職業的總冠軍不是養成期的盃賽', () => {
+  /**
+   * 榮譽字串是「中職總冠軍」，剝掉名次之後剩「中職總」——而盃賽那一段只認
+   * 「結尾是不是名次」，於是它同時以盃賽與獎項的身分出現在兩個大標底下。
+   */
+  it('只以獎項的身分出現一次', () => {
+    const { list } = evaluateAchievements(
+      ctx({
+        honors: ['中職總冠軍', '墨聯總冠軍', joinName('黑豹旗', '冠軍')],
+        awards: [
+          { org: 'CPBL', code: 'championship', name: '中職 總冠軍', year: 2035 },
+          { org: 'LMB', code: 'championship', name: '墨聯 總冠軍', year: 2038 },
+        ] as unknown as AchievementContext['awards'],
+      }),
+    );
+    const cups = list.filter((a) => a.category === cfg.categories.amateur_cup.name);
+    expect(cups.map((a) => a.name)).toEqual([joinName('黑豹旗', '冠軍')]);
+    expect(list.filter((a) => a.id.includes('championship'))).toHaveLength(2);
+  });
 });
 
 describe('階梯上不封頂', () => {
