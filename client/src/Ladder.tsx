@@ -10,7 +10,7 @@
  * 見 [ADR 0038](../../docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)。
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { LadderBoard, LadderResponse } from './api/contract.ts';
 import type { Account } from './useAccount.ts';
 import { ladder as ladderCfg, leagues } from './data/index.ts';
@@ -94,15 +94,55 @@ function Board({ board }: { board: LadderBoard }) {
   );
 }
 
-/** 聯盟那一排一次看得到幾個。多出來的靠左右箭頭滑。 */
-const LEAGUE_WINDOW = 4;
+/**
+ * 聯盟那一排的拖曳捲動。
+ *
+ * **不用箭頭。** 箭頭要佔掉兩端的寬度，四顆聯盟按鈕就得跟著變窄；拖曳不佔任何
+ * 版面，按鈕維持原本的寬度。手機本來就是拖的——那一排是原生的橫向捲動容器，
+ * 觸控不必接手，這裡只補上滑鼠的那一半。
+ *
+ * 拖過之後要吃掉那一次 click，否則放開滑鼠的位置剛好在某顆按鈕上就會誤選。
+ */
+function useDragScroll() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const dragged = useRef(false);
+  const from = useRef({ x: 0, left: 0 });
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || ref.current === null) return;
+    dragged.current = false;
+    from.current = { x: e.clientX, left: ref.current.scrollLeft };
+    ref.current.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (el === null || !el.hasPointerCapture(e.pointerId)) return;
+    const dx = e.clientX - from.current.x;
+    // 幾個像素的抖動不算拖——滑鼠按下去本來就很難完全不動。
+    if (Math.abs(dx) > 4) dragged.current = true;
+    el.scrollLeft = from.current.left - dx;
+  };
+
+  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    ref.current?.releasePointerCapture(e.pointerId);
+  };
+
+  return {
+    ref,
+    /** 這一次 click 是不是拖出來的。是的話呼叫端要忽略它。 */
+    wasDrag: () => dragged.current,
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+  };
+}
 
 export function Ladder({ account, self }: { account: Account; self: boolean }) {
   const [scope, setScope] = useState(CAREER_SCOPE);
+  /** 生涯看哪一側。生涯的榜不左右並排，一次只畫一側。 */
+  const [careerSide, setCareerSide] = useState<'batter' | 'pitcher'>('batter');
   const [data, setData] = useState<LadderResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** 聯盟那一排的左端。資料換了之後可能超出範圍，因此在畫的時候才夾。 */
-  const [offset, setOffset] = useState(0);
+  const drag = useDragScroll();
 
   useEffect(() => {
     let live = true;
@@ -136,94 +176,108 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
   const pitcher = data.boards.filter((b) => b.side === 'pitcher');
 
   // **生涯不是第七個聯盟。** 它是跨聯盟通算，與「誰在中職最強」問的是兩件事，
-  // 因此拉出來自己一排；聯盟那一排就永遠只有一行，多的靠箭頭滑。
+  // 因此拉出來自己一排。聯盟那一排永遠只有一行，多的用拖的。
   const leagueScopes = data.scopes.filter((s) => s !== CAREER_SCOPE);
   const hasCareer = data.scopes.includes(CAREER_SCOPE);
-  const maxOffset = Math.max(0, leagueScopes.length - LEAGUE_WINDOW);
-  const at = Math.min(offset, maxOffset);
-  const visible = leagueScopes.slice(at, at + LEAGUE_WINDOW);
+  const career = scope === CAREER_SCOPE;
 
   return (
     <>
       {/*
         範圍分頁。只出現有資料的那些——沒去過的聯盟整組不顯示。
 
-        **箭頭反灰而不是消失**：待過的聯盟不到四個時兩邊都按不動，但位置留著，
-        與左投守不了二三游那套「反灰而不是整排消失」同一個規矩——版面不會因為
-        多打了一個聯盟就整排跳動。
+        **一排四個，多的用拖的。** 按鈕的寬度固定成「四個剛好塞滿」，容器自己橫向
+        捲動：滑鼠按住拖，觸控就是原生的捲動。這裡沒有箭頭——箭頭要佔掉兩端的寬度，
+        四顆按鈕就得跟著變窄。
       */}
-      <div className="seg-row" style={{ marginBottom: 8 }}>
-        <button
-          type="button"
-          className="seg-arrow"
-          aria-label="上一個聯盟"
-          disabled={at <= 0}
-          onClick={() => setOffset(Math.max(0, at - 1))}
-        >
-          ‹
-        </button>
-        <div className="seg">
-          {visible.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={scope === s ? 'on' : undefined}
-              onClick={() => setScope(s)}
-            >
-              {scopeName(s)}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="seg-arrow"
-          aria-label="下一個聯盟"
-          disabled={at >= maxOffset}
-          onClick={() => setOffset(Math.min(maxOffset, at + 1))}
-        >
-          ›
-        </button>
+      <div
+        className="seg-scroll"
+        ref={drag.ref}
+        {...drag.handlers}
+        style={{ marginBottom: 8 }}
+      >
+        {leagueScopes.map((s) => (
+          <button
+            key={s}
+            type="button"
+            className={scope === s ? 'on' : undefined}
+            onClick={() => {
+              if (!drag.wasDrag()) setScope(s);
+            }}
+          >
+            {scopeName(s)}
+          </button>
+        ))}
       </div>
+      {/*
+        生涯分成野手與投手兩顆。生涯的榜**一次只畫一側**：31 塊榜左右並排時，名字欄
+        不能折行（球員名・帳號），名字一長就把一側推寬擠進另一側。聯盟那邊維持並排，
+        靠 min-width:0 與各自的橫向捲動擋住同一件事。
+      */}
       {hasCareer && (
-        <div className="seg one" style={{ marginBottom: 12 }}>
+        <div className="seg two" style={{ marginBottom: 12 }}>
           <button
             type="button"
-            className={scope === CAREER_SCOPE ? 'on' : undefined}
-            onClick={() => setScope(CAREER_SCOPE)}
+            className={career && careerSide === 'batter' ? 'on' : undefined}
+            onClick={() => {
+              setScope(CAREER_SCOPE);
+              setCareerSide('batter');
+            }}
           >
-            生涯
+            生涯・野手
+          </button>
+          <button
+            type="button"
+            className={career && careerSide === 'pitcher' ? 'on' : undefined}
+            onClick={() => {
+              setScope(CAREER_SCOPE);
+              setCareerSide('pitcher');
+            }}
+          >
+            生涯・投手
           </button>
         </div>
       )}
-
-      {/*
-        野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是
-        平衡分欄**——野手 18 塊、投手 13 塊，高度本來就不齊，硬要等高就得把投手的
-        榜混進野手那一側。左右並排換到的是「不必滑過整個野手才看得到投手」。
-        欄寬不夠時（窄視窗）兩側自己疊回上下，見 app.css 的 media query。
-      */}
-      <div className="ladder-sides">
-        {batter.length > 0 && (
-          <section>
-            <h4>野手</h4>
-            <div className="ladder-grid">
-              {batter.map((b) => (
-                <Board key={b.column} board={b} />
-              ))}
-            </div>
-          </section>
-        )}
-        {pitcher.length > 0 && (
-          <section>
-            <h4>投手</h4>
-            <div className="ladder-grid">
-              {pitcher.map((b) => (
-                <Board key={b.column} board={b} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
+      {career ? (
+        // 生涯一次只畫一側，因此不套 .ladder-sides 那個 1fr 1fr。
+        <section>
+          <h4>{careerSide === 'batter' ? '野手' : '投手'}</h4>
+          <div className="ladder-grid">
+            {(careerSide === 'batter' ? batter : pitcher).map((b) => (
+              <Board key={b.column} board={b} />
+            ))}
+          </div>
+        </section>
+      ) : (
+        /*
+          野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是
+          平衡分欄**——野手 18 塊、投手 13 塊，高度本來就不齊，硬要等高就得把投手的
+          榜混進野手那一側。左右並排換到的是「不必滑過整個野手才看得到投手」。
+          欄寬不夠時（窄視窗）兩側自己疊回上下，見 app.css 的 media query。
+        */
+        <div className="ladder-sides">
+          {batter.length > 0 && (
+            <section>
+              <h4>野手</h4>
+              <div className="ladder-grid">
+                {batter.map((b) => (
+                  <Board key={b.column} board={b} />
+                ))}
+              </div>
+            </section>
+          )}
+          {pitcher.length > 0 && (
+            <section>
+              <h4>投手</h4>
+              <div className="ladder-grid">
+                {pitcher.map((b) => (
+                  <Board key={b.column} board={b} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
     </>
   );
 }
