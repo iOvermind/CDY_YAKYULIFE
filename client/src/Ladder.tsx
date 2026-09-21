@@ -168,6 +168,14 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
   const [careerSide, setCareerSide] = useState<'batter' | 'pitcher'>('batter');
   const [data, setData] = useState<LadderResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 記住上一次拿到的範圍清單。
+   *
+   * **換範圍時那一排不能消失。** 查詢期間 `data` 是 null，而範圍分頁如果跟著
+   * 整段不畫，那一排就會被卸載再重建——拖曳的捲動位置歸零，玩家點了第五個
+   * 聯盟之後畫面彈回最左邊的四個。清單本身與選了哪一個無關，留著就好。
+   */
+  const [scopes, setScopes] = useState<readonly string[]>([]);
   const drag = useDragScroll();
 
   useEffect(() => {
@@ -177,7 +185,9 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
     account.store
       .ladder(scope, self)
       .then((res) => {
-        if (live) setData(res);
+        if (!live) return;
+        setData(res);
+        setScopes(res.scopes);
       })
       .catch((e: unknown) => {
         if (live) setError(e instanceof Error ? e.message : '讀不到天梯。');
@@ -187,25 +197,76 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
     };
   }, [account, scope, self]);
 
-  if (error !== null) return <p className="modal-note">{error}</p>;
-  if (data === null) return <p className="modal-note">讀取中…</p>;
-  if (data.boards.length === 0) {
-    return (
-      <p className="modal-note">
-        還沒有任何紀錄。天梯收的是<b>打完並結算過</b>的生涯——
-        {self ? '打完一段就會出現在這裡。' : '這台服務上還沒有人打完一段生涯。'}
-      </p>
-    );
-  }
-
-  const batter = data.boards.filter((b) => b.side === 'batter');
-  const pitcher = data.boards.filter((b) => b.side === 'pitcher');
+  const batter = (data?.boards ?? []).filter((b) => b.side === 'batter');
+  const pitcher = (data?.boards ?? []).filter((b) => b.side === 'pitcher');
 
   // **生涯不是第七個聯盟。** 它是跨聯盟通算，與「誰在中職最強」問的是兩件事，
   // 因此拉出來自己一排。聯盟那一排永遠只有一行，多的用拖的。
-  const leagueScopes = data.scopes.filter((s) => s !== CAREER_SCOPE);
-  const hasCareer = data.scopes.includes(CAREER_SCOPE);
+  const leagueScopes = scopes.filter((s) => s !== CAREER_SCOPE);
+  const hasCareer = scopes.includes(CAREER_SCOPE);
   const career = scope === CAREER_SCOPE;
+
+  /**
+   * 榜的那一段。查詢期間只換這裡，範圍分頁留在原地——不然那一排會被卸載再重建，
+   * 拖曳的捲動位置歸零。
+   */
+  function boards() {
+    if (error !== null) return <p className="modal-note">{error}</p>;
+    if (data === null) return <p className="modal-note">讀取中…</p>;
+    if (data.boards.length === 0) {
+      return (
+        <p className="modal-note">
+          還沒有任何紀錄。天梯收的是<b>打完並結算過</b>的生涯——
+          {self ? '打完一段就會出現在這裡。' : '這台服務上還沒有人打完一段生涯。'}
+        </p>
+      );
+    }
+    if (career) {
+      // 生涯一次只畫一側，因此不套 .ladder-sides 那個 1fr 1fr。
+      return (
+        <section>
+          <h4>{careerSide === 'batter' ? '野手' : '投手'}</h4>
+          <div className="ladder-grid">
+            {(careerSide === 'batter' ? batter : pitcher).map((b) => (
+              <Board key={b.column} board={b} />
+            ))}
+          </div>
+        </section>
+      );
+    }
+    return (
+      /*
+        野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是
+        平衡分欄**——野手 18 塊、投手 13 塊，高度本來就不齊，硬要等高就得把投手的
+        榜混進野手那一側。左右並排換到的是「不必滑過整個野手才看得到投手」。
+        欄寬不夠時（窄視窗）兩側自己疊回上下，見 app.css 的 media query。
+      */
+      <div className="ladder-sides">
+        {batter.length > 0 && (
+          <section>
+            <h4>野手</h4>
+            <div className="ladder-grid">
+              {batter.map((b) => (
+                <Board key={b.column} board={b} />
+              ))}
+            </div>
+          </section>
+        )}
+        {pitcher.length > 0 && (
+          <section>
+            <h4>投手</h4>
+            <div className="ladder-grid">
+              {pitcher.map((b) => (
+                <Board key={b.column} board={b} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
+  if (scopes.length === 0) return boards();
 
   return (
     <>
@@ -264,46 +325,7 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
           </button>
         </div>
       )}
-      {career ? (
-        // 生涯一次只畫一側，因此不套 .ladder-sides 那個 1fr 1fr。
-        <section>
-          <h4>{careerSide === 'batter' ? '野手' : '投手'}</h4>
-          <div className="ladder-grid">
-            {(careerSide === 'batter' ? batter : pitcher).map((b) => (
-              <Board key={b.column} board={b} />
-            ))}
-          </div>
-        </section>
-      ) : (
-        /*
-          野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是
-          平衡分欄**——野手 18 塊、投手 13 塊，高度本來就不齊，硬要等高就得把投手的
-          榜混進野手那一側。左右並排換到的是「不必滑過整個野手才看得到投手」。
-          欄寬不夠時（窄視窗）兩側自己疊回上下，見 app.css 的 media query。
-        */
-        <div className="ladder-sides">
-          {batter.length > 0 && (
-            <section>
-              <h4>野手</h4>
-              <div className="ladder-grid">
-                {batter.map((b) => (
-                  <Board key={b.column} board={b} />
-                ))}
-              </div>
-            </section>
-          )}
-          {pitcher.length > 0 && (
-            <section>
-              <h4>投手</h4>
-              <div className="ladder-grid">
-                {pitcher.map((b) => (
-                  <Board key={b.column} board={b} />
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
+      {boards()}
     </>
   );
 }
