@@ -160,6 +160,7 @@ import {
   isChildhoodSweetheart,
   newLoveState,
   partnerBonusKey,
+  partnerTier,
   partnerOf,
   pickPartner,
   rehabChance,
@@ -2557,7 +2558,7 @@ export class Game {
       }
       if (
         love.kids < loveCfg.marriage.max_kids &&
-        this.world.stream('career').chance(childbirthChance(love.kids))
+        this.world.stream('career').chance(childbirthChance(love.kids, love.partner))
       ) {
         love.kids++;
         const key = this.#randomVisibleAbility();
@@ -2777,7 +2778,7 @@ export class Game {
 
     let money = '';
     if (wasMarried) {
-      const cost = divorceCost(this.#earnings, love.kids);
+      const cost = divorceCost(this.#earnings, love.kids, love.partner);
       this.#earnings = Math.max(0, this.#earnings - cost);
       love.divorces++;
       money = `<br>財產分配：<b class="dn">−${fmtMoney(cost)}</b>${love.kids > 0 ? '（含扶養費）' : ''}。`;
@@ -2906,7 +2907,10 @@ export class Game {
       return;
     }
 
-    const cost = Math.round(this.#earnings * loveCfg.overseas.bring.cost_ratio);
+    // 舉家旅外要養家，而養多少錢跟她習慣怎麼過日子有關——與離婚那一筆同一條軸。
+    const cost = Math.round(
+      this.#earnings * loveCfg.overseas.bring.cost_ratio * partnerTier(love.partner, 'spending'),
+    );
     this.flow.ask(
       {
         title: `要去${orgName}了。${love.partner} 站在還沒收的行李旁邊`,

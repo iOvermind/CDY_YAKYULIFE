@@ -2054,7 +2054,8 @@ describe('下放與換體系', () => {
    */
   it('降級通知報的是實際的綜合與門檻，不是編出來的成績說法', () => {
     let seen = 0;
-    for (let i = 0; i < 60; i++) {
+    // 掃到第幾顆才撞見「降級通知」會隨平衡改動漂移，範圍留寬一點。
+    for (let i = 0; i < 200; i++) {
       const game = playToEnd(started({ seed: `demote-why-${i}` }));
       for (const entry of game.flow.log) {
         if (entry.kind !== 'card') continue;

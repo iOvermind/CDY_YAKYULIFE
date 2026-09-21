@@ -15,6 +15,7 @@ import {
   newLoveState,
   partnerBonusKey,
   partnerOf,
+  partnerTier,
   pickPartner,
   rehabChance,
   rewardMultiplier,
@@ -170,6 +171,69 @@ describe('分手之後', () => {
   it('離過婚的人回不到「單身」', () => {
     expect(afterBreakup(state())).toBe('single');
     expect(afterBreakup(state({ divorces: 1 }))).toBe('divorced');
+  });
+});
+
+describe('對象的三條軸', () => {
+  const names = Object.keys(cfg.partners).filter((k) => !k.startsWith('_') && k !== 'tier_multipliers');
+
+  it('每一位都標齊三條軸，而且檔次名查得到倍率', () => {
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      for (const axis of ['spending', 'children', 'loyalty'] as const) {
+        const tier = cfg.partners[name]?.[axis];
+        expect(tier, `${name} 的 ${axis}`).toBeDefined();
+        expect(cfg.partners.tier_multipliers[axis][tier!], `${name} 的 ${axis}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('沒有兩位在數字上是同一個人', () => {
+    const combos = names.map((n) => {
+      const p = cfg.partners[n]!;
+      return `${p.spending}/${p.children}/${p.loyalty}`;
+    });
+    expect(new Set(combos).size).toBe(names.length);
+  });
+
+  it('三條軸都用得到三個檔次——只有兩檔的話中間那一級是白寫的', () => {
+    for (const axis of ['spending', 'children', 'loyalty'] as const) {
+      const used = new Set(names.map((n) => cfg.partners[n]?.[axis]));
+      expect(used.size, axis).toBe(3);
+    }
+  });
+
+  it('名單外的名字退回全域值——查無此人不該讓整條感情線斷掉', () => {
+    expect(partnerTier(null, 'spending')).toBe(1);
+    expect(partnerTier('查無此人', 'loyalty')).toBe(1);
+    // tier_multipliers 掛在同一張表上，但它不是一位對象。
+    expect(partnerOf('tier_multipliers')).toBeNull();
+  });
+
+  it('花錢的檔次同時吃離婚與旅外——省的那一檔兩邊都比較便宜', () => {
+    const thrifty = names.find((n) => cfg.partners[n]?.spending === 'thrifty')!;
+    const lavish = names.find((n) => cfg.partners[n]?.spending === 'lavish')!;
+    expect(divorceCost(1_000_000, 0, thrifty)).toBeLessThan(divorceCost(1_000_000, 0, lavish));
+    // 孩子那一段不吃檔次——贍養費是孩子的事，與她習慣怎麼過日子無關。
+    const gap = (n: string) => divorceCost(1_000_000, 3, n) - divorceCost(1_000_000, 0, n);
+    expect(gap(thrifty)).toBe(gap(lavish));
+  });
+
+  it('想要孩子的那一檔生得比較多，而且不會超過必然', () => {
+    const wants = names.find((n) => cfg.partners[n]?.children === 'wants')!;
+    const avoids = names.find((n) => cfg.partners[n]?.children === 'avoids')!;
+    expect(childbirthChance(0, wants)).toBeGreaterThan(childbirthChance(0, avoids));
+    expect(childbirthChance(0, wants)).toBeLessThanOrEqual(100);
+  });
+
+  it('定得下來的那一檔風波比較少，但裂痕照樣疊上去', () => {
+    const steady = names.find((n) => cfg.partners[n]?.loyalty === 'steady')!;
+    const restless = names.find((n) => cfg.partners[n]?.loyalty === 'restless')!;
+    const at = (name: string, cracks: number) =>
+      turmoilChance({ ...newLoveState(), status: 'married', partner: name, cracks });
+    expect(at(steady, 0)).toBeLessThan(at(restless, 0));
+    // 裂痕是共同的經歷，不因為她定得下來就不算。
+    expect(at(steady, 2) - at(steady, 0)).toBeCloseTo(at(restless, 2) - at(restless, 0), 10);
   });
 });
 

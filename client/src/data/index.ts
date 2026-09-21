@@ -359,10 +359,30 @@ export interface LoveData {
     /** 安全名單。與 school/pro 共用名字池，只在外遇抽選時排除。 */
     readonly safe: readonly string[];
   };
-  /** 名字 → 側寫。每個名字都要有一筆，見 `partnerOf()`。 */
+  /**
+   * 名字 → 側寫與檔次。每個名字都要有一筆，見 `partnerOf()`。
+   *
+   * 三條軸的檔次是側寫那三句話的兌現處：`spending` 吃離婚與旅外的花費、
+   * `children` 吃生子機率、`loyalty` 吃感情風波的基礎機率。十七位的組合兩兩相異。
+   */
   readonly partners: Readonly<
-    Record<string, { readonly desc: string; readonly abilities: readonly AbilityKey[] }>
-  >;
+    Record<
+      string,
+      {
+        readonly desc: string;
+        readonly abilities: readonly AbilityKey[];
+        readonly spending: string;
+        readonly children: string;
+        readonly loyalty: string;
+      }
+    >
+  > & {
+    readonly tier_multipliers: {
+      readonly spending: Readonly<Record<string, number>>;
+      readonly children: Readonly<Record<string, number>>;
+      readonly loyalty: Readonly<Record<string, number>>;
+    };
+  };
 }
 
 /** 成就與成就點數（AP）。跨局的 Meta-progression，見 CONTEXT.md。 */

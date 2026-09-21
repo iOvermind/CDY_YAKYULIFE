@@ -390,6 +390,8 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .achtiles{display:flex;flex-wrap:wrap;gap:6px}
 .achtiles li{border:1px solid var(--edge);border-radius:var(--r);background:var(--panel2);
   padding:6px 10px;font-size:12.5px;line-height:1.3;cursor:default}
+/* 姻緣那一格底下接側寫。**它自己換一行**，不然名字會被那一長串推到擠不下。 */
+.achtiles li .sub{display:block;margin-top:2px;max-width:22em}
 
 /* 成就櫃與天賦的兩欄。**用多欄而不是 grid**：多欄的閱讀順序是「左欄由上往下、
    再跳右欄」，成就櫃的固定排序（依聯盟階梯、生涯與名人堂放最後，ADR 0031）與

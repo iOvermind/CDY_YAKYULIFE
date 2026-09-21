@@ -137,7 +137,11 @@ export function breakupChance(
 export function turmoilChance(love: LoveState): number {
   if (!hasPartner(love)) return 0;
   const t = cfg.turmoil;
-  let p = t.base_chance + love.cracks * t.swallow.crack_adds_chance;
+  // **她的性格決定起點，你們一起走過的事決定後來。** 檔次只換掉基礎那一格，
+  // 裂痕與旅外的加成照樣疊在上面——不然「定得下來」會變成一張免死金牌。
+  let p =
+    t.base_chance * partnerTier(love.partner, 'loyalty') +
+    love.cracks * t.swallow.crack_adds_chance;
 
   if (love.overseas === 'bring') {
     const curve = cfg.overseas.bring.turmoil_curve;
@@ -176,15 +180,26 @@ export function rehabChance(love: LoveState, base: number): number {
   return hasPartner(love) ? cfg.injury_support.rehab_chance : base;
 }
 
-/** 生子的機率。第一胎最優先，越生越少。 */
-export function childbirthChance(kids: number): number {
-  return cfg.marriage.childbirth_chance.by_kids[kids] ?? 0;
+/**
+ * 生子的機率。第一胎最優先，越生越少，再乘上她自己想不想要。
+ *
+ * 夾在 100：想要孩子的那一檔乘完第一胎會超過 100，而機率不該大於必然。
+ */
+export function childbirthChance(kids: number, partner: string | null = null): number {
+  const base = cfg.marriage.childbirth_chance.by_kids[kids] ?? 0;
+  return Math.min(100, base * partnerTier(partner, 'children'));
 }
 
-/** 離婚要分走多少生涯收入。有孩子分得更多。 */
-export function divorceCost(earnings: number, kids: number): number {
+/**
+ * 離婚要分走多少生涯收入。有孩子分得更多，花錢兇的分得也更多。
+ *
+ * **只有基礎那一段吃檔次，每個孩子那一段不吃**——孩子的贍養費是孩子的事，
+ * 與她習慣怎麼過日子無關。
+ */
+export function divorceCost(earnings: number, kids: number, partner: string | null = null): number {
   const d = cfg.divorce;
-  return Math.round(earnings * (d.base_ratio + kids * d.per_kid_ratio));
+  const base = d.base_ratio * partnerTier(partner, 'spending');
+  return Math.round(earnings * (base + kids * d.per_kid_ratio));
 }
 
 /**
@@ -225,9 +240,30 @@ export function pickPartner(
  */
 export function partnerOf(
   name: string | null,
-): { readonly desc: string; readonly abilities: readonly AbilityKey[] } | null {
+): {
+  readonly desc: string;
+  readonly abilities: readonly AbilityKey[];
+  readonly spending: string;
+  readonly children: string;
+  readonly loyalty: string;
+} | null {
   if (name === null) return null;
-  return cfg.partners[name] ?? null;
+  const profile = cfg.partners[name];
+  // `tier_multipliers` 與側寫掛在同一張表上，它不是一位對象。
+  return profile === undefined || typeof profile.desc !== 'string' ? null : profile;
+}
+
+/**
+ * 對象在某一條軸上的倍率。
+ *
+ * 側寫那三句話——她怎麼花錢、想不想要孩子、定不定得下來——各對應一條軸，而
+ * **這支函式是那三句話唯一的兌現處**。名單外的名字（測試造的、舊存檔留下的）
+ * 一律回 1，也就是改版前的全域值：查無此人不該讓整條感情線斷掉。
+ */
+export function partnerTier(name: string | null, axis: 'spending' | 'children' | 'loyalty'): number {
+  const profile = partnerOf(name);
+  if (profile === null) return 1;
+  return cfg.partners.tier_multipliers[axis][profile[axis]] ?? 1;
 }
 
 /**
