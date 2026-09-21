@@ -1027,8 +1027,10 @@ export interface AgeWindowTier {
 export interface AgeWindow {
   readonly tiers: readonly AgeWindowTier[];
   readonly default: number;
-  /** 關窗之後的例外：能力遠超落地門檻的即戰力仍有微弱機會。 */
-  readonly monster?: { readonly over_landing_bar: number; readonly value: number };
+  /** 窗口之內的能力加成：每超過落地門檻 1 分加這麼多。窗口之外不適用。 */
+  readonly per_over_landing_bar?: number;
+  /** 加成之後的上限。 */
+  readonly max?: number;
 }
 
 /** 一個體系的轉會設定。`scouts` 為 false 者只接人、不挖人。 */

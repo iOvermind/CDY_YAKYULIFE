@@ -102,12 +102,15 @@ export function ageGate(org: string, age: number, overLandingBar: number): numbe
   if (window === undefined || window === null) return 1;
 
   for (const tier of window.tiers) {
-    if (age <= tier.max_age) return tier.value;
+    if (age > tier.max_age) continue;
+    // **窗口之內再加一道能力加成。** 這取代了舊的「怪物條款」——那一條是關窗之後
+    // 給一個固定的小機率，既分辨不出 35 歲與 45 歲，也分辨不出超出門檻 5 分與 20
+    // 分。改成連續的加成之後，34 歲而能力超出門檻 10 分的人是 15% + 30% = 45%。
+    const bonus = (window.per_over_landing_bar ?? 0) * Math.max(0, overLandingBar);
+    return Math.min(window.max ?? 1, tier.value + bonus);
   }
 
-  // 關窗之後的怪物條款：能力遠超落地門檻的即戰力仍有微弱機會。
-  const monster = window.monster;
-  if (monster !== undefined && overLandingBar >= monster.over_landing_bar) return monster.value;
+  // 窗口之外是硬關：加成不適用。年紀到了就是到了。
   return window.default;
 }
 
@@ -715,7 +718,7 @@ function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOf
   if (level === null || leagues.levels[level]?.top === undefined) return [];
 
   const overBar = ctx.overall - topLandingBar(target, ctx.standards, served, 'recruit', ctx.tier);
-  if (roll >= ageGate(target, ctx.age, overBar) * 100) return [];
+  if (roll >= overseasBidChance(ctx) * 100) return [];
 
   const table = tableFor(world, target, new Map());
   const bids: TransferOffer[] = [];
@@ -740,6 +743,26 @@ function overseasOffers(world: World, ctx: OverseasContext): readonly TransferOf
     });
   }
   return bids;
+}
+
+/**
+ * 目標體系會不會有人出價，0 到 1。
+ *
+ * **問得到的人才問。** 入札的流程是「球員申請 → 母隊同意 → 球團出價」，而年齡
+ * 窗口管的是最後那一關。窗口硬關之後這個數字是 0——那時候不該再跳出「要不要
+ * 申請入札」，那一問的每一個答案都通往同一個結果。
+ *
+ * 「點頭了卻沒有人出手」仍然存在，而且仍然該存在：那是機率落空，不是規則擋下。
+ * 這裡擋的只有規則那一半。
+ */
+export function overseasBidChance(ctx: OverseasContext): number {
+  const target = postingTarget(ctx.org);
+  if (target === null) return 0;
+  const served = servedIn(ctx.servedYears, target);
+  const level = landingLevel(target, ctx.overall, ctx.standards, served, 'recruit', ctx.tier);
+  if (level === null || leagues.levels[level]?.top === undefined) return 0;
+  const overBar = ctx.overall - topLandingBar(target, ctx.standards, served, 'recruit', ctx.tier);
+  return ageGate(target, ctx.age, overBar);
 }
 
 /** 入札的競標。母隊點頭之後才會走到這裡。 */

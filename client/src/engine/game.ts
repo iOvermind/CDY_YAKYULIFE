@@ -182,6 +182,7 @@ import { fmtMoney, postingFee, salaryFor } from './salary.ts';
 import {
   amateurOverseasOffers,
   canRequestPosting,
+  overseasBidChance,
   canRefuseDemotion,
   domesticFaOffers,
   fallbackOffers,
@@ -4319,6 +4320,13 @@ export class Game {
     }
     const target = postingTarget(ctx.org);
     if (target === null) {
+      next();
+      return;
+    }
+    // **問得到的人才問。** 年齡窗口硬關之後不會有任何球團出價，那一問的每一個
+    // 答案都通往同一個結果。「點頭了卻沒有人出手」仍然留著——那是機率落空，
+    // 不是規則擋下。
+    if (overseasBidChance(ctx) <= 0) {
       next();
       return;
     }

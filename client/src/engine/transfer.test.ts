@@ -12,6 +12,7 @@ import {
   fallbackOffers,
   hasOverseasFreeAgency,
   landingLevel,
+  overseasBidChance,
   overseasFaOffers,
   postingBids,
   postingConsentChance,
@@ -109,6 +110,36 @@ describe('入札的競標', () => {
       if (postingBids(world, ctx(topBar('MLB'), 36)).length === 0) empty++;
     }
     expect(empty).toBeGreaterThan(0);
+  });
+
+  it('機率是 0 的時候不該再問——overseasBidChance 擋在提問之前', () => {
+    // 35 歲窗口硬關，能力加成不適用。
+    expect(overseasBidChance(ctx(topBar('MLB') + 20, 35))).toBe(0);
+    // 窗口之內就有機率，而且吃能力加成。
+    expect(overseasBidChance(ctx(topBar('MLB') + 10, 34))).toBeCloseTo(0.15 + 0.03 * 10, 10);
+    // 沒有入札制度的體系一律是 0。
+    expect(overseasBidChance({ ...ctx(99, 25), org: 'CPBL' })).toBe(0);
+  });
+
+  it('三十五歲是硬關——能力再高也沒有人出價', () => {
+    // 窗口之內的能力加成不適用於窗口之外。年紀到了就是到了。
+    const world = new World('posting-35');
+    for (let i = 0; i < 100; i++) {
+      expect(postingBids(world, ctx(topBar('MLB') + 20, 35))).toHaveLength(0);
+    }
+  });
+
+  it('三十四歲的即戰力仍然出得去——每超過門檻一分多 3%', () => {
+    // 15%（34 歲那一階）+ 3% × 超出門檻的分數。超出 10 分就是 45%。
+    const window = leagues.transfer.orgs['MLB']?.age_window;
+    expect(window?.per_over_landing_bar).toBe(0.03);
+    let seen = 0;
+    for (let i = 0; i < 300; i++) {
+      if (postingBids(new World(`old-ace-${i}`), ctx(topBar('MLB') + 10, 34)).length > 0) seen++;
+    }
+    // 45% 上下，抓一個寬鬆的區間就好——這裡驗的是「出得去」，不是機率本身。
+    expect(seen).toBeGreaterThan(300 * 0.3);
+    expect(seen).toBeLessThan(300 * 0.6);
   });
 
   // 資格判定不能吃掉不同數量的亂數，否則同一個種子會因為某年差一分而讓後面
