@@ -452,10 +452,14 @@ function layout(ctx: Ctx, card: CareerCard, width: number): number {
 /**
  * 畫出來。
  *
- * 倍率從 2 起跳，但**面積有上限**——iOS Safari 對畫布的總像素數有限制，超過就
+ * 倍率從 3 起跳，但**面積有上限**——iOS Safari 對畫布的總像素數有限制，超過就
  * 什麼都不畫（而且不報錯，只回傳一張空白圖）。一段二十年的生涯配上兩張年表可以
- * 長到三千多點高，乘二就頂到那條線了，因此超過就降倍率，寧可稍微不那麼銳利也
+ * 長到三千多點高，乘三就頂到那條線了，因此超過就降倍率，寧可稍微不那麼銳利也
  * 不要拿到空白圖。
+ *
+ * **上限跟著倍率一起抬。** 11M 是舊倍率 2 的安全線，維持不動的話短生涯以外的卡
+ * 一律會被打回 2，這次的加倍等於沒發生。16.7M（4096²）才是 iOS Safari 真正的那
+ * 條線，取 15M 留一點餘裕。
  */
 export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElement> {
   // 字沒載完就量，量到的是備援字體的寬度，表格的欄寬會全部偏掉。
@@ -474,8 +478,8 @@ export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElem
 
   const height = Math.ceil(layout({ c: probe, p, dry: true }, card, width));
 
-  const MAX_AREA = 11_000_000;
-  let scale = 2;
+  const MAX_AREA = 15_000_000;
+  let scale = 3;
   while (scale > 1 && width * height * scale * scale > MAX_AREA) scale -= 0.25;
 
   const canvas = document.createElement('canvas');

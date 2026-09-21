@@ -223,18 +223,41 @@ function orgPar(org: string, standards: LeagueStandards | null): number {
  * 球員被大聯盟看上、落地 3A 領小聯盟薪水，那是真實會發生也應該發生的事。
  * 但韓職來挖一個正在日職打球的人卻不加薪，那在現實裡不會發生。
  *
- * 目前年薪是 0（還沒領過薪水的年份）時一律放行——那不是加薪不足，是沒有
- * 東西可以比。
+ * 平移與下降要過**兩關，而且是兩種不同的錢**：
+ *
+ * 1. **年薪**要比現在高出 `min_raise`。跨聯盟移動伴隨語言、家庭與適應成本，
+ *    薪水只是打平的話沒有人會走。
+ * 2. **簽約金**不能比留在原體系少。這一關是後來補的：年薪那一關只看得到
+ *    `salaryFor`，而它吃的是落地層級的 d——一個大聯盟中等水準的球員在日職一軍
+ *    是 d +9，年薪投影因此輕鬆過關，可是報價單上寫的是簽約金，而日職的簽約金
+ *    表整整比大聯盟小一截。於是玩家在大聯盟看到日職與韓職的邀請，錢還更少。
+ *    **要來挖一個在更強的體系站穩的人，錢就得真的更多。**
+ *
+ * 簽約金比的是**不含球隊處境倍率的底價**：那個倍率是逐隊的運氣，不該決定一個
+ * 體系提不提得出口。
+ *
+ * 目前年薪是 0（還沒領過薪水的年份）時年薪那一關一律放行——那不是加薪不足，
+ * 是沒有東西可以比。
  */
-function worthMoving(
-  org: string,
-  level: string,
-  ctx: ScoutContext,
-): boolean {
-  if (ctx.salary <= 0) return true;
+function worthMoving(org: string, level: string, overBar: number, ctx: ScoutContext): boolean {
   if (orgPar(org, ctx.standards) > orgPar(ctx.currentOrg, ctx.standards)) return true;
-  const projected = salaryFor(level, ctx.overall - personalStandardOf(ctx.standards, level, ctx.tier).par);
-  return projected >= ctx.salary * cfg.scouting.min_raise;
+
+  if (ctx.salary > 0) {
+    const projected = salaryFor(
+      level,
+      ctx.overall - personalStandardOf(ctx.standards, level, ctx.tier).par,
+    );
+    if (projected < ctx.salary * cfg.scouting.min_raise) return false;
+  }
+
+  const hereBar = topLandingBar(
+    ctx.currentOrg,
+    ctx.standards,
+    servedIn(ctx.servedYears, ctx.currentOrg),
+    'recruit',
+    ctx.tier,
+  );
+  return baseSigningBonus(org, overBar) >= baseSigningBonus(ctx.currentOrg, ctx.overall - hereBar);
 }
 
 /**
@@ -255,10 +278,14 @@ function contentionOf(table: LeagueTable, team: string): Contention {
 
 /** 簽約金：體系的基礎金額加上 d 值的加給，再乘上球隊處境的倍率。 */
 function signingBonus(org: string, d: number, at: Contention): number {
+  return Math.round(baseSigningBonus(org, d) * contentionBonusMult(at));
+}
+
+/** 簽約金的底價：不含球隊處境的倍率。體系之間要比的是這個。 */
+function baseSigningBonus(org: string, d: number): number {
   const spec = orgConfig(org)?.signing_bonus;
   if (spec === undefined) return 0;
-  const base = spec.base + Math.max(0, d) * spec.per_d;
-  return Math.round(base * contentionBonusMult(at));
+  return spec.base + Math.max(0, d) * spec.per_d;
 }
 
 /**
@@ -369,9 +396,9 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
     if (ctx.overall < minOverall) continue;
     if (ctx.lastWinPct < cfg.scouting.min_win_pct.value) continue;
     if (roll >= chance) continue;
-    // **挖角必須加薪。** 沒有這一關，韓職會來挖一個正在日職打球的人——跨聯盟
-    // 移動本來就伴隨語言、家庭與適應成本，薪水只是打平的話沒有人會走。
-    if (!worthMoving(org, level, ctx)) continue;
+    // **挖角必須加薪，而且兩種錢都要。** 年薪要比現在高出 min_raise，簽約金
+    // 也不能比留在原體系少——往下走的人得看到真的更多的錢才會動身。
+    if (!worthMoving(org, level, overBar, ctx)) continue;
 
     const table = tableFor(world, org, tables);
     const count = rng.int(cfg.scouting.offers_per_org.min, cfg.scouting.offers_per_org.max);

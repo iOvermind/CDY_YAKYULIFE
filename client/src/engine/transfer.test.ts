@@ -172,17 +172,19 @@ describe('挖角的加薪門檻', () => {
       salary,
     });
 
-  it('平移或下降時要加薪兩成才提得出口', () => {
-    // 日職球員（par 53）遇到韓職（par 50）——那是下降，必須加薪。
+  it('平移或下降時年薪要加兩成才提得出口', () => {
+    // 日職球員遇到韓職——那是下降，必須加薪。
     const rich = scout('NPB', 100_000_000).filter((o) => o.org === 'KBO');
     expect(rich).toHaveLength(0);
+  });
 
-    // 同一個人薪水很低時，韓職開得起價，報價就出得來。
+  it('往下挖人，簽約金也不能比留在原體系少', () => {
+    // 薪水低到年薪那一關必定放行，擋下來的是簽約金：韓職的簽約金表整整比日職
+    // 小一截，同一個球員在日職的底價本來就比韓職開得出來的高。
     let seen = 0;
     for (let i = 0; i < 40; i++) {
-      const world = new World(`poor-${i}`);
-      seen += scoutingOffers(world, {
-      tier: 'none' as const,
+      seen += scoutingOffers(new World(`poor-${i}`), {
+        tier: 'none' as const,
         overall: topBar('KBO') + 10,
         age: 26,
         lastWinPct: 0.7,
@@ -193,7 +195,25 @@ describe('挖角的加薪門檻', () => {
         salary: 1,
       }).filter((o) => o.org === 'KBO').length;
     }
-    expect(seen).toBeGreaterThan(0);
+    expect(seen).toBe(0);
+  });
+
+  it('在大聯盟站穩的人不會收到日職與韓職的邀請', () => {
+    let seen = 0;
+    for (let i = 0; i < 60; i++) {
+      seen += scoutingOffers(new World(`mlb-${i}`), {
+        tier: 'none' as const,
+        overall: topBar('MLB') + 8,
+        age: 27,
+        lastWinPct: 0.7,
+        currentOrg: 'MLB',
+        currentTeam: '',
+        playedOrgs: new Set<string>(['MLB']),
+        standards: null,
+        salary: 2400,
+      }).filter((o) => o.org === 'NPB' || o.org === 'KBO').length;
+    }
+    expect(seen).toBe(0);
   });
 
   it('往更強的體系去不受限制——他買的是舞台，不是薪水', () => {
