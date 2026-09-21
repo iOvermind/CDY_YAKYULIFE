@@ -82,6 +82,32 @@ describe('canPlay', () => {
   });
 });
 
+describe('defenseMark', () => {
+  const d = positions.defense_score;
+
+  it('站在平均線上是 0，高出 span 就是錨點', () => {
+    expect(defenseMark(70, 70)).toBe(0);
+    expect(defenseMark(70 + d.span, 70)).toBeCloseTo(d.anchor, 6);
+  });
+
+  it('守得住的最低標準（平均線 −4）落在 −4 左右，離降守位的線還有一段', () => {
+    expect(defenseMark(66, 70)).toBeCloseTo(-4, 1);
+    expect(defenseMark(66, 70)).toBeGreaterThan(d.demotion_line);
+  });
+
+  it('兩端都夾得住', () => {
+    expect(defenseMark(200, 70)).toBeCloseTo(d.anchor * d.cap_ratio, 6);
+    expect(defenseMark(0, 70)).toBe(-d.anchor);
+  });
+
+  it('所有守位的錨點都是同一個數字，縮的是拿到它需要的能力', () => {
+    const ss = positionAverageLine('SS', 'CPBL1')!;
+    const first = positionAverageLine('1B', 'CPBL1')!;
+    expect(first).toBeLessThan(ss);
+    expect(defenseMark(ss + d.span, ss)).toBeCloseTo(defenseMark(first + d.span, first), 6);
+  });
+});
+
 describe('positionAverage', () => {
   it('與借尺那一條同源——頂級聯盟量出同一個數字', () => {
     for (const pos of ['C', 'SS', '2B', '3B', 'CF', 'RF', 'LF', '1B']) {

@@ -318,6 +318,37 @@ describe('拒絕下放的代價（ADR 0020）', () => {
   });
 });
 
+describe('下放的級距', () => {
+  /** 落差 n 分時那一次判定用的壓力。 */
+  const pressureAt = (shortfall: number): number => {
+    for (let i = 0; i < 400; i++) {
+      const move = evaluateMovement(new World(`tier-${shortfall}-${i}`), {
+        tier: 'none',
+        level: 'CPBL1',
+        overall: CPBL1.min - shortfall,
+        yearsAtBottom: 0,
+      });
+      if (move.movement === 'demote') return move.pressure ?? 0;
+    }
+    throw new Error(`落差 ${shortfall} 分四百次都沒有下放`);
+  };
+
+  it('落差 1 到 3 分同屬第一階——球團眼裡那是同一種人', () => {
+    expect(pressureAt(2)).toBe(pressureAt(1));
+    expect(pressureAt(3)).toBe(pressureAt(1));
+  });
+
+  it('跨過級距才加一段', () => {
+    expect(pressureAt(4)).toBeGreaterThan(pressureAt(3));
+    expect(pressureAt(6)).toBe(pressureAt(4));
+    expect(pressureAt(7)).toBeGreaterThan(pressureAt(6));
+  });
+
+  it('第一階留得下來的機會接近一半', () => {
+    expect(100 - pressureAt(1)).toBeGreaterThan(35);
+  });
+});
+
 describe('shouldRetire', () => {
   it('只剩年齡上限會不由分說地結束生涯', () => {
     expect(shouldRetire({ age: cfg.retirement.max_age }).retire).toBe(true);

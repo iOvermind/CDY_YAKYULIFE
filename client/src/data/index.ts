@@ -1364,7 +1364,12 @@ export interface SeasonData {
     };
     readonly demote: {
       readonly margin: number;
-      readonly chance: { readonly base: number; readonly per_point: number } & Range;
+      readonly chance: {
+        readonly base: number;
+        readonly per_point: number;
+        /** 一階幾分。落差落在同一階的人拿到同一個壓力。 */
+        readonly tier_span: number;
+      } & Range;
       /** 拒絕下放後的釋出：先把倖存率乘上這個倍數再擲。 */
       readonly refuse_survival_multiplier: { readonly value: number };
     };

@@ -50,10 +50,17 @@ function indexOf(level: string): { org: string; path: readonly string[]; index: 
 
 /** 依 d 值算出一個機率並套上下限。 */
 function chanceOf(
-  spec: { base: number; per_point: number; min: number; max: number },
+  spec: { base: number; per_point: number; min: number; max: number; tier_span?: number },
   d: number,
 ): number {
-  return Math.max(spec.min, Math.min(spec.max, spec.base + d * spec.per_point));
+  // `tier_span` 存在時走級距：落差落在同一階的人拿到同一個壓力，而不是逐分敲。
+  // 差一分與差三分在球團眼裡是同一種人——都是跟不上、但還沒到非換不可（見
+  // season.json 的 movement.demote._tier_note）。
+  const steps =
+    spec.tier_span !== undefined && spec.tier_span > 0
+      ? Math.floor(Math.max(0, d - 1) / spec.tier_span) + 1
+      : d;
+  return Math.max(spec.min, Math.min(spec.max, spec.base + steps * spec.per_point));
 }
 
 /**
