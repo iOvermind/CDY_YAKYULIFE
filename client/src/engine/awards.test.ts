@@ -130,6 +130,24 @@ describe('winningLine', () => {
   it('防禦率的門檻低於聯盟平均——越低越好', () => {
     expect(winningLine(cfg.pitcher_of_year, CPBL, 0.5)!).toBeLessThan(BASE.era);
   });
+
+  it('賽揚的門檻比單項王低兩分——2.2 的球季該拿得到，不是五六季才一次', () => {
+    expect(cfg.pitcher_of_year.d).toBe(17);
+    // 波動的鬆那一端必須放得過 2.2，否則那種球季永遠是擲骰。
+    expect(winningLine(cfg.pitcher_of_year, MLB, 0)!).toBeGreaterThan(2.2);
+  });
+
+  it('年度最佳打者有門檻線——少了 d 的話這個獎永遠沒有人拿得到', () => {
+    // winningLine 在 d 缺席時回傳 null，而 null 一律判定為沒拿到。
+    expect(winningLine(cfg.batter_of_year, MLB, 0.5)).not.toBeNull();
+  });
+
+  it('MVP 的門檻只算打擊那一本——指定打擊也要構得到', () => {
+    // 線曾經用守備補回去，於是變成「守備中庸的野手打滿整季」；而 OPS 高到能爭
+    // MVP 的打者幾乎都被守位光譜推到一壘或指定打擊，守備份額接近 0。
+    const line = winningLine(cfg.mvp, MLB, 0.5)!;
+    expect(line).toBe(winningLine(cfg.batter_of_year, MLB, 0.5)!);
+  });
 });
 
 describe('單項王', () => {

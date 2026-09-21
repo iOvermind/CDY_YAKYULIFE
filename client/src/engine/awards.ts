@@ -25,7 +25,6 @@ import { awards as cfg, type FieldingAward, type LeaderAward } from '../data/ind
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import {
   battingShares,
-  positionPlayerShares,
   proBaseline,
   proBaselineAt,
   proLineAt,
@@ -183,10 +182,16 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
     const shares = battingShares(line, proBaseline(level), null);
     // 球隊勝率傳 null：門檻線問的是「這種等級的球員能打出多少份額」，不是
     // 「他在哪一隊」。球隊調整留給實際球員那一側，否則強隊的人門檻反而更高。
-    const batting = shares.win;
-    // MVP 吃全部三本帳，年度最佳打者只吃打擊那一本。
-    const total = award.stat === 'win_shares' ? positionPlayerShares(batting) : batting;
-    return total * swing;
+    // **門檻線只算打擊那一本，MVP 也一樣。**
+    //
+    // 它曾經用 `positionPlayerShares` 把守備那一段補回去，於是線變成「守備中庸
+    // 的野手打滿整季」。問題是 OPS 高到能爭 MVP 的打者在這個遊戲裡幾乎都被守位
+    // 光譜推到一壘或指定打擊，守備份額接近 0——大聯盟的線 34.53 份，而他的打擊
+    // 那一本帳頂多 27.4 份，**結構上永遠到不了**。
+    //
+    // 球員那一側仍然吃三本帳（MVP 的 stat 是 win_shares），所以守得好的野手與
+    // 二刀流照樣佔便宜，那是對的：MVP 本來就該把守備與投球算進去。
+    return shares.win * swing;
   }
 
   // 累積型：門檻線就是「那個等級的球員在這個聯盟打這麼多場，會累積到多少」。

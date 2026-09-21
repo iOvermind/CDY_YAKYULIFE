@@ -262,9 +262,18 @@ describe('intentionalWalks', () => {
     const edge = intentionalWalksFrom(dominanceAt(MLB_PAR + 13, MLB_PAR), 600, () => 0.5);
     expect(edge).toBeGreaterThan(0);
     expect(edge).toBeLessThan(5);
+    // 中段仍然離錨點很遠——120 次是留給三圍 80、腳程 20 的那一個人的。
     expect(
       intentionalWalksFrom(dominanceAt(MLB_PAR + 15, MLB_PAR), 600, () => 0.5),
-    ).toBeLessThan(15);
+    ).toBeLessThan(120 / 4);
+  });
+
+  it('腳程差 30 分不該讓敬遠數差掉三分之一', () => {
+    // 腳程的權重是 −0.125（曾經是 −0.25）。三圍 80、腳程 50 的頂級打者（OPS 約
+    // 1.42）現實裡就是拿 120 次的那一個人，舊權重下他只有 83 次。
+    const fast = with_(50, { pow: 80, con: 80, eye: 80, spd: 50 });
+    const ibb = intentionalWalks(new World('a'), fast, 600, MLB_PAR);
+    expect(ibb).toBeGreaterThan(120 * 0.7);
   });
 
   it('三圍只高一點的慢腳打者不該被敬遠', () => {
@@ -879,15 +888,15 @@ describe('三壘打的曲線', () => {
    * 側的地板壓平，而那不是曲線的形狀。
    */
   /**
-   * **護欄從五倍放寬到四點五倍。** 五倍是當初反解次方 17.5 的那條式子；次方收到
-   * 16.5 換產量之後它必然破（4.82）。真正在守中段的是上面那條絕對量——腳程 70
-   * 一年拿不到三支——這一條只是別讓曲線塌成一條斜線。
+   * **次方就是由這條反解出來的。** `ln5 ÷ ln1.1` = 16.886，取 16.89——那是「中段
+   * 要空」這件事允許的最平緩的曲線，再低就換不到五倍了。產量吃緊時先動的是錨點，
+   * 不是這裡。
    */
-  it('頂端仍然明顯——腳程 80 的比值是腳程 70 的四倍半以上', () => {
+  it('頂端仍然明顯——腳程 80 的比值是腳程 70 的五倍以上', () => {
     const t = cfg.batting.records.triple;
     const baseAt = (spd: number) => (60 * 1 + 60 * 1 + spd * 4) / (t.divisor ?? 1);
     const ratio = Math.pow(baseAt(80) / baseAt(70), t.exponent ?? 1);
-    expect(ratio).toBeGreaterThan(4.5);
+    expect(ratio).toBeGreaterThan(5);
   });
 
   it('頂端的支數看得見，中段幾乎沒有', () => {
