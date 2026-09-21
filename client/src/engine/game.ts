@@ -3627,7 +3627,7 @@ export class Game {
     }
 
     // ---- 老化
-    const aging = applyAging(this.world, this.#ability, this.#age);
+    const aging = applyAging(this.world, this.#ability, this.#age, this.#ceilingBonus);
     this.#ability = { ...aging.ability };
     // 能力值降下來之後，那一級的成本跟著變便宜——存著的點數可能已經夠用了。
     this.#settleCarry();
@@ -5313,7 +5313,7 @@ export class Game {
    */
   #poolPriceOf(key: AbilityKey): number {
     const current = this.#ability[key] ?? 0;
-    const cost = abilityCost(current, this.#ceilingOf(key), growthCurve(this.isTwoWay, this.#age));
+    const cost = abilityCost(current, this.#ceilingOf(key), growthCurve(this.isTwoWay, this.#age, key));
     return Math.max(1, cost - (this.#carry[key] ?? 0));
   }
 
@@ -5366,7 +5366,7 @@ export class Game {
     const dbgBefore = this.#ability[key] ?? 0;
     const dbgCarry = this.#carry[key] ?? 0;
     const dbgCeiling = this.#ceilingOf(key);
-    const dbgCurve = growthCurve(this.isTwoWay, this.#age);
+    const dbgCurve = growthCurve(this.isTwoWay, this.#age, key);
     const dbgCost = abilityCost(dbgBefore, dbgCeiling, dbgCurve);
     this.#applyPoints(key, value, { silent: true });
     console.info(
@@ -5485,7 +5485,7 @@ export class Game {
       points,
       this.#ceilingOf(key),
       this.#carry[key] ?? 0,
-      growthCurve(this.isTwoWay, this.#age),
+      growthCurve(this.isTwoWay, this.#age, key),
       this.#ceilingBonus[key] ?? 0,
     );
     this.#ability[key] = result.value;
@@ -5515,7 +5515,7 @@ export class Game {
       points,
       this.#ceilingOf(key),
       this.#carry[key] ?? 0,
-      growthCurve(this.isTwoWay, this.#age),
+      growthCurve(this.isTwoWay, this.#age, key),
     );
     this.#ability[key] = result.value;
     this.#carry[key] = result.carry;
@@ -5537,7 +5537,7 @@ export class Game {
       this.#ability[key] ?? 0,
       this.#ceilingOf(key),
       carry,
-      growthCurve(this.isTwoWay, this.#age),
+      growthCurve(this.isTwoWay, this.#age, key),
     );
     const head = `<span class="${points >= 0 ? 'up' : 'dn'}">${points > 0 ? '+' : ''}${points} 點</span>`;
 
@@ -5577,7 +5577,7 @@ export class Game {
       value,
       ceiling,
       carry,
-      growthCurve(this.isTwoWay, this.#age),
+      growthCurve(this.isTwoWay, this.#age, key),
       this.#ceilingBonus[key] ?? 0,
     );
 

@@ -466,11 +466,11 @@
         "_note": "先發的勝敗。ERA+ 的比值以 1.0 為聯盟平均。",
         "win_constant": 0.54,
         "win_exponent": 1.5,
-        "_win_note": "\u9019\u5169\u500b\u6578\u5b57\u5c0d\u5f97\u4e0a\u771f\u5be6\u7684\u6975\u7aef\u503c\uff1a1978 \u5e74\u57fa\u5fb7\u5229\u90a3\u4e00\u5b63\uff08\u968a .613\u3001ERA+ 208\u300135 \u5148\u767c\uff09\u9810\u6e2c 25.2 \u52dd\uff0c\u5be6\u969b 25 \u52dd\u3002",
+        "_win_note": "這兩個數字對得上真實的極端值：1978 年基德利那一季（隊 .613、ERA+ 208、35 先發）預測 25.2 勝，實際 25 勝。",
         "loss_constant": 1.174,
-        "_loss_constant_note": "**\u4e0d\u662f\u81ea\u7531\u53c3\u6578\u3002** \u7531\u300c\u806f\u76df\u5e73\u5747\u6295\u624b\u5728\u4e94\u6210\u968a\u5fc5\u9808\u52dd\u6557\u5404\u534a\u300d\u53cd\u89e3\uff1a\u52dd\u7387 pW = C\u1d21/(1+C\u1d21) = .3506\uff0c\u800c\u6557\u6295\u662f\u5f9e\u5269\u4e0b\u7684 .6494 \u88e1\u5207\uff0c\u56e0\u6b64 pL \u5fc5\u9808\u662f .54\uff0c\u89e3\u51fa C\u029f = 1.174\u3002\u5beb 1.0 \u7684\u8a71\u5e73\u5747\u6295\u624b\u6703\u662f\u5c0f\u8d0f\u7684\u3002",
+        "_loss_constant_note": "**不是自由參數。** 由「聯盟平均投手在五成隊必須勝敗各半」反解：勝率 pW = Cᴡ/(1+Cᴡ) = .3506，而敗投是從剩下的 .6494 裡切，因此 pL 必須是 .54，解出 Cʟ = 1.174。寫 1.0 的話平均投手會是小贏的。",
         "loss_exponent": 0.75,
-        "_loss_exponent_note": "\u540c\u6a23\u7531\u57fa\u5fb7\u5229 1978 \u53cd\u89e3\uff1a\u4ed6\u6c92\u8d0f\u7684 10 \u5834\u5148\u767c\u88e1\u541e\u4e86 3 \u6557\uff0c\u53cd\u89e3\u51fa 0.748\u3002\u6307\u6578\u6bd4\u52dd\u5834\u90a3\u908a\u4f4e\u5f88\u591a\uff0c\u610f\u601d\u662f**\u738b\u724c\u7684\u6557\u6295\u5c11\uff0c\u4e3b\u8981\u662f\u56e0\u70ba\u4ed6\u8d0f\u5f97\u591a\uff0c\u4e0d\u662f\u56e0\u70ba\u6c92\u8d0f\u7684\u5834\u6b21\u90fd\u8b8a\u6210\u7121\u95dc\u52dd\u6557**\u3002",
+        "_loss_exponent_note": "同樣由基德利 1978 反解：他沒贏的 10 場先發裡吞了 3 敗，反解出 0.748。指數比勝場那邊低很多，意思是**王牌的敗投少，主要是因為他贏得多，不是因為沒贏的場次都變成無關勝敗**。",
         "jitter": 2
       },
       "team_win_reference": 0.5,
@@ -678,7 +678,9 @@
       "points": {
         "min": 0,
         "max": 2
-      }
+      },
+      "_defense_note": "守備天賦「勤能補拙」的額外成長：到巔峰結束前（含巔峰期），每季有這個機率讓一項守備能力 +1。**平常是 0**，存在的意義是給設定覆蓋層一個可以寫入的位置。門檻看的是 peak_end，因此「不老妖精」把巔峰往後推的同時也把這條一併延長。",
+      "defense_bonus_chance": 0
     },
     "decline": {
       "_note": "巔峰之後每季衰退。per_year_after_peak 是每多一歲額外掉的量。",

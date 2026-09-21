@@ -11,6 +11,7 @@ import {
   train,
   untrain,
 } from './growth.ts';
+import { applyTalents } from './overlay.ts';
 import { World } from './rng.ts';
 
 const curve = growthCurve(false);
@@ -565,5 +566,46 @@ describe('hardCap', () => {
       carry = r.carry;
     }
     expect(value).toBe(hardCap(0));
+  });
+});
+
+describe('守備奇才的蓄力折扣', () => {
+  it('只打守備那四項，打擊與投球照原價', () => {
+    const revert = applyTalents({ defense_focus: 3 });
+    try {
+      // 能力 72 那一段一級 8 點，×0.7 = 5.6 → 6。
+      expect(abilityCost(72, 80, growthCurve(false, undefined, 'rng'))).toBe(6);
+      expect(abilityCost(72, 80, growthCurve(false, undefined, 'pow'))).toBe(8);
+      expect(abilityCost(72, 80, growthCurve(false, undefined, 'vel'))).toBe(8);
+      // 沒指定是哪一項的時候不打折——那是在問「這條曲線本身長怎樣」。
+      expect(abilityCost(72, 80, growthCurve(false))).toBe(8);
+    } finally {
+      revert();
+    }
+  });
+
+  it('成本 1 點的那幾級不打折——本來就是底價，再乘只會變成 0', () => {
+    const revert = applyTalents({ defense_focus: 3 });
+    try {
+      expect(abilityCost(40, 80, growthCurve(false, undefined, 'fld'))).toBe(1);
+      // 二刀流把 2 點折成 1 之後，守備折扣也咬不動了。
+      expect(abilityCost(50, 80, growthCurve(true, undefined, 'fld'))).toBe(1);
+    } finally {
+      revert();
+    }
+  });
+
+  it('乘在成長相關的加減之後：先扣二刀流與全域折扣，最後才打折', () => {
+    const revert = applyTalents({ defense_focus: 2, light_lift: 2 });
+    try {
+      const base = abilityCost(72, 80, growthCurve(true, undefined, 'pow'));
+      // 8 點扣掉二刀流 1 點與練武奇才的折扣之後，再 ×0.8。
+      expect(abilityCost(72, 80, growthCurve(true, undefined, 'arm'))).toBe(
+        Math.max(1, Math.round(base * 0.8)),
+      );
+      expect(base).toBeGreaterThan(1);
+    } finally {
+      revert();
+    }
   });
 });

@@ -9,6 +9,7 @@ import {
   refusalReleaseChance,
   shouldRetire,
 } from './pro.ts';
+import { applyTalents } from './overlay.ts';
 import type { Abilities } from './rating.ts';
 import { World } from './rng.ts';
 
@@ -240,6 +241,72 @@ describe('applyAging', () => {
     expect(r.phase).toBe('peak');
     expect(r.ability).toEqual(flat(50));
     expect(r.changes.size).toBe(0);
+  });
+
+  describe('守備天賦的額外成長', () => {
+    const FIELDING = abilities.display_groups.members.fielding ?? [];
+
+    it('沒買天賦時一顆骰子都不抽——加這條之前的生涯逐格不變', () => {
+      const revert = applyTalents({});
+      try {
+        for (const a of [22, cfg.aging.peak_start, cfg.aging.peak_end + 4]) {
+          for (let i = 0; i < 20; i++) {
+            const world = new World(`s${i}`);
+            const mine = applyAging(world, flat(50), a);
+            const theirs = applyAging(new World(`s${i}`), flat(50), a);
+            expect(mine.ability).toEqual(theirs.ability);
+          }
+        }
+      } finally {
+        revert();
+      }
+    });
+
+    it('巔峰結束前，守備能力會多長出來——而且只長守備那四項', () => {
+      const revert = applyTalents({ defense_drill: 3 });
+      try {
+        let bumped = 0;
+        for (let i = 0; i < 200; i++) {
+          const r = applyAging(new World(`d${i}`), flat(50), cfg.aging.peak_start);
+          expect(r.phase).toBe('peak');
+          for (const [key, delta] of r.changes) {
+            expect(FIELDING).toContain(key);
+            expect(delta).toBe(1);
+          }
+          if (r.changes.size > 0) bumped++;
+        }
+        // Lv3 是 65%，兩百季裡該有一百季以上長出東西。
+        expect(bumped).toBeGreaterThan(100);
+      } finally {
+        revert();
+      }
+    });
+
+    it('衰退期不再領——那一季只會掉，不會有守備憑空 +1', () => {
+      const revert = applyTalents({ defense_drill: 3 });
+      try {
+        for (let i = 0; i < 50; i++) {
+          const r = applyAging(new World(`x${i}`), flat(50), cfg.aging.peak_end + 1);
+          for (const delta of r.changes.values()) expect(delta).toBeLessThan(0);
+        }
+      } finally {
+        revert();
+      }
+    });
+
+    it('頂到硬上限的那幾項不進池子——四項全頂就整季不觸發', () => {
+      const revert = applyTalents({ defense_drill: 3 });
+      try {
+        const capped = { ...flat(50) } as Record<string, number>;
+        for (const key of FIELDING) capped[key] = abilities.scale.max;
+        for (let i = 0; i < 50; i++) {
+          const r = applyAging(new World(`c${i}`), capped as unknown as Abilities, cfg.aging.peak_start);
+          expect(r.changes.size).toBe(0);
+        }
+      } finally {
+        revert();
+      }
+    });
   });
 
   it('巔峰之後開始衰退', () => {

@@ -35,11 +35,23 @@ export interface CostContext {
    * 省略時附加費為零——養成期、以及只想問「這條曲線本身長怎樣」的地方都用得到。
    */
   readonly age?: number | undefined;
+  /**
+   * 這是哪一項能力。只有守備能力吃得到「守備奇才」那個折扣倍率。
+   *
+   * 省略時不套用守備折扣——問「這條曲線本身長怎樣」的地方不必指定是哪一項。
+   */
+  readonly key?: AbilityKey | undefined;
 }
 
 /** 取得成本情境。名稱沿用 growthCurve，呼叫端不必改。 */
-export function growthCurve(isTwoWay: boolean, age?: number): CostContext {
-  return { curve: abilities.growth_cost.default, twoWay: isTwoWay, age };
+export function growthCurve(isTwoWay: boolean, age?: number, key?: AbilityKey): CostContext {
+  return { curve: abilities.growth_cost.default, twoWay: isTwoWay, age, key };
+}
+
+/** 這一項算不算守備能力。與能力表的守備那一格同一份名單。 */
+function isFielding(key: AbilityKey | undefined): boolean {
+  if (key === undefined) return false;
+  return (abilities.display_groups.members.fielding ?? []).some((k) => k === key);
 }
 
 /**
@@ -97,7 +109,16 @@ export function abilityCost(current: number, ceiling: number, ctx: CostContext):
   }
 
   // 天賦折扣同樣後扣：先讓倍率把天花板之外撐貴，再扣掉固定的幾點。
-  return Math.max(curve.min_cost, cost - curve.discount);
+  cost = Math.max(curve.min_cost, cost - curve.discount);
+
+  // 守備折扣**乘在最後**，成長相關的加減全部算完才乘：玩家買的是「守備練起來
+  // 比較便宜」，那要對著他實際付的價錢打折，而不是對著還沒扣任何東西的牌價。
+  // 成本 1 點的那幾級不打折——本來就是底價，再乘只會變成 0。
+  if (isFielding(ctx.key) && cost > 1) {
+    cost = Math.max(1, Math.round(cost * curve.defense_multiplier));
+  }
+
+  return cost;
 }
 
 /**

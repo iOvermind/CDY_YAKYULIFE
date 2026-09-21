@@ -333,6 +333,17 @@ function AchievementList({ me }: { me: Me }) {
 function TalentPanel({ account, me }: { account: Account; me: Me }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // 攤開效果說明的天賦。**手機看不到 tooltip**——title 只在滑鼠停留時出現，觸控
+  // 裝置上等於整份效果表都讀不到，卡片上只剩一句玩笑話。可以同時攤開好幾張：玩家
+  // 常常是在兩三個天賦之間比較。
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (id: string) => {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  };
 
   /**
    * 送出「這個天賦要變成幾級」。**畫面上的按鈕只是把目標級數算出來**——加價、退錢
@@ -381,8 +392,10 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
               const short = next === undefined ? 0 : next.cost - me.ap;
               // 降一級退的就是「爬上這一級付的那一筆」——全額，沒有價差。
               const prev = level > 0 ? (t.levels[level - 1]?.cost ?? 0) : 0;
-              // 每一級的效果收進 tooltip：常態攤開來的話，一整頁天賦會變成一面
-              // 讀不完的規格表，而玩家在這一頁要做的決定只有「買不買」。
+              // 每一級的效果預設收起來：常態攤開的話，一整頁天賦會變成一面讀不完
+              // 的規格表，而玩家在這一頁要做的決定只有「買不買」。滑鼠停在卡片上
+              // 看得到同一份 tooltip，觸控裝置則按「各級效果」攤開。
+              const shown = open.has(t.id);
               const tip = t.levels
                 .map((l, i) => `Lv${i + 1} ${l.effect_text}（${l.cost} AP）`)
                 .join('\n');
@@ -391,55 +404,78 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                   **整張卡片就是控制項**：左鍵升一級、右鍵降一級。兩顆鍵互為反向
                   操作——玩家在自己的存檔上按出來的每一步，都要能用另一顆鍵原地
                   還原。等級只能一級一級走，價格由伺服器算；這裡只送目標級數。
+
+                  說明的展開鈕是卡片**外面**的另一顆按鈕：按鈕不能套按鈕，而
+                  「看一下說明」也不該順手把一級買下去。
                 */
-                <button
-                  type="button"
-                  key={t.id}
-                  className={`talent${level > 0 ? ' owned' : ''}${canBuy || next === undefined ? '' : ' broke'}`}
-                  /*
-                    **買不起但退得掉的時候不能 disable**：`disabled` 的按鈕收不到
-                    `contextmenu`，玩家會被鎖在一個退不回來的等級上。那種卡片只反灰
-                    （`.broke`），右鍵照樣退錢；真的什麼都不能做的才 disable。
-                  */
-                  disabled={busy !== null || (level === 0 && !canBuy)}
-                  title={`${tip}\n\n左鍵升一級、右鍵降一級${canBuy || next === undefined ? '' : `\nAP 不夠，還差 ${String(short)} 點`}`}
-                  onClick={() => {
-                    if (canBuy) act(t.id, level + 1);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    if (level > 0) act(t.id, level - 1);
-                  }}
-                >
-                  <div className="talent-head">
-                    <b>{t.name}</b>
-                    <span className="sub">
-                      {level} / {max}
+                <div className="talent-card" key={t.id}>
+                  <button
+                    type="button"
+                    className={`talent${level > 0 ? ' owned' : ''}${canBuy || next === undefined ? '' : ' broke'}`}
+                    /*
+                      **買不起但退得掉的時候不能 disable**：`disabled` 的按鈕收不到
+                      `contextmenu`，玩家會被鎖在一個退不回來的等級上。那種卡片只反灰
+                      （`.broke`），右鍵照樣退錢；真的什麼都不能做的才 disable。
+                    */
+                    disabled={busy !== null || (level === 0 && !canBuy)}
+                    title={`${tip}\n\n左鍵升一級、右鍵降一級${canBuy || next === undefined ? '' : `\nAP 不夠，還差 ${String(short)} 點`}`}
+                    onClick={() => {
+                      if (canBuy) act(t.id, level + 1);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      if (level > 0) act(t.id, level - 1);
+                    }}
+                  >
+                    <div className="talent-head">
+                      <b>{t.name}</b>
+                      <span className="sub">
+                        {level} / {max}
+                      </span>
+                    </div>
+                    <p className="talent-desc">{t.desc}</p>
+                    {/* 一條從左到右的進度，不是一格一格的刻度——玩家要看的是「還有
+                        多遠」，切成格子反而要先數格子才讀得出來。 */}
+                    <div className="talent-bar">
+                      <span
+                        className="fill"
+                        style={{ width: `${String(max === 0 ? 0 : (level / max) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="talent-hint">
+                      {next === undefined ? (
+                        '已經點滿'
+                      ) : (
+                        <>
+                          升到 Lv{level + 1} 需
+                          <b className={canBuy ? 'price on' : 'price'}>{next.cost} AP</b>
+                          {/* 差多少要寫在卡片上：反灰只說得出「不行」，說不出「還差幾點」。 */}
+                          {!canBuy && `（還差 ${String(short)}）`}
+                        </>
+                      )}
+                      {level > 0 && `・右鍵退回 Lv${level - 1}，返還 ${prev} AP`}
                     </span>
-                  </div>
-                  <p className="talent-desc">{t.desc}</p>
-                  {/* 一條從左到右的進度，不是一格一格的刻度——玩家要看的是「還有
-                      多遠」，切成格子反而要先數格子才讀得出來。 */}
-                  <div className="talent-bar">
-                    <span
-                      className="fill"
-                      style={{ width: `${String(max === 0 ? 0 : (level / max) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="talent-hint">
-                    {next === undefined ? (
-                      '已經點滿'
-                    ) : (
-                      <>
-                        升到 Lv{level + 1} 需
-                        <b className={canBuy ? 'price on' : 'price'}>{next.cost} AP</b>
-                        {/* 差多少要寫在卡片上：反灰只說得出「不行」，說不出「還差幾點」。 */}
-                        {!canBuy && `（還差 ${String(short)}）`}
-                      </>
-                    )}
-                    {level > 0 && `・右鍵退回 Lv${level - 1}，返還 ${prev} AP`}
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    className="talent-more"
+                    aria-expanded={shown}
+                    onClick={() => toggle(t.id)}
+                  >
+                    {shown ? '收起效果 ▴' : '各級效果 ▾'}
+                  </button>
+                  {shown && (
+                    <ol className="talent-levels">
+                      {t.levels.map((l, i) => (
+                        <li key={l.effect_text} className={i < level ? 'on' : undefined}>
+                          <b>Lv{i + 1}</b>
+                          <span>{l.effect_text}</span>
+                          <span className="sub">{l.cost} AP</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
               );
             })}
           </div>

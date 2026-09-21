@@ -695,6 +695,8 @@ export interface GrowthCurve {
   /** 天賦買來的全域折扣，平常是 0。在乘上倍率之後才扣。 */
   readonly discount: number;
   readonly min_cost: number;
+  /** 守備天賦買來的折扣倍率，平常是 1。只乘在守備能力上，且乘在最後。 */
+  readonly defense_multiplier: number;
 }
 
 /** 養成期投手的定位與勝敗設定。 */
@@ -1414,7 +1416,11 @@ export interface SeasonData {
   readonly aging: {
     readonly peak_start: number;
     readonly peak_end: number;
-    readonly growth: { readonly points: Range };
+    readonly growth: {
+      readonly points: Range;
+      /** 守備天賦買來的額外成長機率，平常是 0。到巔峰結束為止每季一次。 */
+      readonly defense_bonus_chance: number;
+    };
     readonly decline: {
       readonly base: number;
       readonly per_year_after_peak: number;

@@ -635,6 +635,96 @@
           ]
         }
       ]
+    },
+    {
+      "id": "defense_drill",
+      "name": "勤能補拙",
+      "group": "守備",
+      "desc": "別人放假你加練，手套磨到破皮也不停。球場上那些看起來像是運氣的球，都是這樣練出來的。",
+      "levels": [
+        {
+          "cost": 14,
+          "effect_text": "巔峰結束前，每季 35% 機率讓一項守備能力 +1",
+          "effects": [
+            {
+              "path": "season.aging.growth.defense_bonus_chance",
+              "op": "set",
+              "value": 0.35,
+              "max": 1
+            }
+          ]
+        },
+        {
+          "cost": 34,
+          "effect_text": "巔峰結束前，每季 50% 機率讓一項守備能力 +1",
+          "effects": [
+            {
+              "path": "season.aging.growth.defense_bonus_chance",
+              "op": "set",
+              "value": 0.5,
+              "max": 1
+            }
+          ]
+        },
+        {
+          "cost": 68,
+          "effect_text": "巔峰結束前，每季 65% 機率讓一項守備能力 +1",
+          "effects": [
+            {
+              "path": "season.aging.growth.defense_bonus_chance",
+              "op": "set",
+              "value": 0.65,
+              "max": 1
+            }
+          ]
+        }
+      ],
+      "_talent_note": "看的是 peak_end，因此「不老妖精」把巔峰往後推時，這條能領的年份跟著變長。抽的是還沒頂到硬上限的守備能力，四項都頂了就不觸發。"
+    },
+    {
+      "id": "defense_focus",
+      "name": "守備奇才",
+      "group": "守備",
+      "desc": "手套這件事你就是無師自通，別人練十次才抓得到的節奏，你看一次就會了。",
+      "levels": [
+        {
+          "cost": 12,
+          "effect_text": "守備能力的升級蓄力 ×0.9",
+          "effects": [
+            {
+              "path": "abilities.growth_cost.default.defense_multiplier",
+              "op": "set",
+              "value": 0.9,
+              "min": 0.5
+            }
+          ]
+        },
+        {
+          "cost": 30,
+          "effect_text": "守備能力的升級蓄力 ×0.8",
+          "effects": [
+            {
+              "path": "abilities.growth_cost.default.defense_multiplier",
+              "op": "set",
+              "value": 0.8,
+              "min": 0.5
+            }
+          ]
+        },
+        {
+          "cost": 60,
+          "effect_text": "守備能力的升級蓄力 ×0.7",
+          "effects": [
+            {
+              "path": "abilities.growth_cost.default.defense_multiplier",
+              "op": "set",
+              "value": 0.7,
+              "min": 0.5
+            }
+          ]
+        }
+      ],
+      "_talent_note": "乘在所有成長相關的加減之後，四捨五入、下限 1，且只在成本大於 1 時生效——1 點的那幾級本來就是底價。"
     }
   ]
 }

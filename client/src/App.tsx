@@ -2433,8 +2433,9 @@ function AbilityRow({
   // 與舊版一致的表達方式：蓄力／這一級所需點數，例如 0/2。成本 1 點時不顯示。
   // 欠點另外標一個「欠」字：分母跟著換成退一級退回來的錢，只寫負號會讀成
   // 「存了 -1 點」。
-  const gauge = carryGauge(current, ceiling, carry, growthCurve(state.traits.has('two_way'), state.age));
-  const cost = abilityCost(current, ceiling, growthCurve(state.traits.has('two_way'), state.age));
+  const curve = growthCurve(state.traits.has('two_way'), state.age, abilityKey);
+  const gauge = carryGauge(current, ceiling, carry, curve);
+  const cost = abilityCost(current, ceiling, curve);
 
   // 量表刻度固定 20–80，**任何情況都不伸縮**。尾端會跟著上限提升而變長的話，
   // 同一條能力在事件前後長度不同、十幾條之間也互相對不齊，玩家沒辦法一眼橫著

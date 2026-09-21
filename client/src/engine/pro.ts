@@ -10,6 +10,7 @@
  */
 
 import { abilities, leagues, season as cfg } from '../data/index.ts';
+import { hardCap } from './growth.ts';
 import { personalStandardOf, type LeagueStandards } from './league.ts';
 import type { HandednessTier } from './handedness.ts';
 import type { Abilities } from './rating.ts';
@@ -228,7 +229,12 @@ export interface AgingResult {
  * 衰退不是等比落在每項能力上：速度、守備範圍與球速先掉，接觸與選球撐得比較
  * 久。這是真實的老化順序，也讓老將的生存策略（移防、改當接觸型打者）成立。
  */
-export function applyAging(world: World, ability: Abilities, age: number): AgingResult {
+export function applyAging(
+  world: World,
+  ability: Abilities,
+  age: number,
+  ceilingBonus: Readonly<Record<string, number>> = {},
+): AgingResult {
   const rng = world.stream('growth');
   const a = cfg.aging;
   const changes = new Map<string, number>();
@@ -236,6 +242,10 @@ export function applyAging(world: World, ability: Abilities, age: number): Aging
 
   // 走訪順序必須固定，否則同一個種子會抽出不同結果。
   const keys = Object.keys(ability).sort();
+
+  // 守備天賦的額外成長，排在自然成長**之前**。機率為 0 時一顆骰子都不抽，沒買
+  // 天賦的生涯因此與加這條之前逐格相同。
+  defenseBonus(rng, next, changes, age, ceilingBonus);
 
   if (age < a.peak_start) {
     const points = rng.int(a.growth.points.min, a.growth.points.max);
@@ -248,7 +258,7 @@ export function applyAging(world: World, ability: Abilities, age: number): Aging
     return { ability: next as Abilities, changes, phase: 'growth' };
   }
 
-  if (age <= a.peak_end) return { ability, changes, phase: 'peak' };
+  if (age <= a.peak_end) return { ability: next as Abilities, changes, phase: 'peak' };
 
   const yearsPast = age - a.peak_end;
   const total = Math.min(a.decline.max, a.decline.base + yearsPast * a.decline.per_year_after_peak);
@@ -276,6 +286,38 @@ export function applyAging(world: World, ability: Abilities, age: number): Aging
   }
 
   return { ability: next as Abilities, changes, phase: 'decline' };
+}
+
+/**
+ * 守備天賦（勤能補拙）的額外成長：每季一次，一項守備能力 +1。
+ *
+ * **只到巔峰結束為止。** 門檻看的是 `peak_end` 而不是寫死的歲數，因此「不老妖
+ * 精」把巔峰往後推的同時，也把這條可以領的年份一併延長——兩個天賦疊起來的效果
+ * 是自然的，不必另外寫一條互動規則。
+ *
+ * 抽的池子只收**還沒頂到硬上限**的那幾項：頂到了還留在池子裡的話，機率會被一條
+ * 動不了的能力吃掉，抽中了卻什麼都沒發生。四項全頂就整季不觸發。
+ */
+function defenseBonus(
+  rng: ReturnType<World['stream']>,
+  next: Record<string, number>,
+  changes: Map<string, number>,
+  age: number,
+  ceilingBonus: Readonly<Record<string, number>>,
+): void {
+  const chance = cfg.aging.growth.defense_bonus_chance;
+  if (chance <= 0 || age > cfg.aging.peak_end) return;
+  if (rng.next() >= chance) return;
+
+  const pool = (abilities.display_groups.members.fielding ?? []).filter(
+    (key) => (next[key] ?? 0) < hardCap(ceilingBonus[key] ?? 0),
+  );
+  if (pool.length === 0) return;
+
+  const key = pool[rng.int(0, pool.length - 1)];
+  if (key === undefined) return;
+  next[key] = (next[key] ?? 0) + 1;
+  changes.set(key, (changes.get(key) ?? 0) + 1);
 }
 
 /**
