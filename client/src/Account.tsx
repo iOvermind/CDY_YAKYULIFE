@@ -15,7 +15,6 @@
 import { useEffect, useState } from 'react';
 import { Changelog } from './Changelog.tsx';
 import { Ladder } from './Ladder.tsx';
-import { partnerOf } from './engine/love.ts';
 import { type Account } from './useAccount.ts';
 import { ApiError, type Me } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
@@ -307,11 +306,6 @@ function AchievementList({ me }: { me: Me }) {
                       title={`+${String(a.points)} AP · ${DATE.format(new Date(a.at))}`}
                     >
                       {a.name}
-                      {/* 姻緣那一格底下接她的側寫。收藏櫃問的是「這一生遇過誰」，
-                          而那一句話正是你當初選她的理由。 */}
-                      {partnerOf(a.name) !== null && (
-                        <span className="sub">{partnerOf(a.name)?.desc}</span>
-                      )}
                     </li>
                   ))}
                 </ul>
