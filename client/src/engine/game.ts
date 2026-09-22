@@ -61,7 +61,6 @@ import {
 import { annualAwards, type AwardRecord } from './awards.ts';
 import {
   assignPosition,
-  defenseRuns,
   fieldingResponsibility,
   positionAverage,
   positionLabel,
@@ -2070,24 +2069,15 @@ export class Game {
     const position = this.#fieldPosition ?? DH;
     const line = playSeason(this.world, {
       level: pro.level,
-      // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。
+      // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。守備分用的
+      // 是真實能力表——那兩個今天不一樣，見 GitHub issue #3。
       ability: this.#seasonAbility,
+      defenseAbility: this.#ability,
       position,
-      overall: r.overall,
-      // 兩側各認自己那一側：扣掉「綜合能力高出本側評價的那一截」。對只守
-      // 一側的人這個差恆為 0（他的 overall 本來就是自己那側），所以既有
-      // 球員的數據一位元都不動；只有二刀流會被扣。
-      //
-      // 用扣的而不是直接換成 r.pitcher / r.fielder，是為了保住 overall 裡
-      // 的特性加成。
-      //
-      // 投球和打擊拆得開——投手能力再高也可以不上場打擊。守位和打席拆不開，
-      // 但那已經由 r.fielder 內含守備來保證，不必讓打擊側去吃投手評價。
-      pitchingOverall: r.overall - Math.max(0, r.fielder - r.pitcher),
-      battingOverall: r.overall - Math.max(0, r.pitcher - r.fielder),
-      // 定位鎖定之後就照鎖定的那一側打，不再每季比較評價高低——職業球員的
-      // 角色是固定的，不會因為某年打擊練得比較好就改當野手。
-      better: this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder'),
+      // 守備分要算的守位：純投手在職業沒有守位，那一格就是 null。
+      scoringPosition: this.#position,
+      rating: r,
+      lockedSide: this.#lockedSide,
       twoWay: this.isTwoWay,
       standards: this.#standards,
       // 定位是定位會議決定的，成績這邊照著用——現算會讓玩家拒絕過的升遷偷偷生效。
@@ -2106,23 +2096,10 @@ export class Game {
     this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
 
-    // 守備分只在頂級聯盟算。二軍現在也有登錄守位（ADR 0037），但守備分是拿來
-    // 與同層對手比的，二軍的守備不該進生涯的守備勝利份額。
-    let def: number | null = null;
-    const scoringPosition = levelOf(pro.level).top === undefined ? null : this.#position;
-    if (scoringPosition !== null && scoringPosition !== DH && line.batting !== null) {
-      def = defenseRuns({
-        ability: this.#ability,
-        position: scoringPosition,
-        level: pro.level,
-        standards: this.#standards,
-        gamesShare: line.batting.games / levelOf(pro.level).games,
-        // 抖動走 season 那條流——它與成績同一個球季結算，共用一條序列。
-        jitter: (n) => this.world.stream('season').int(-n, n),
-      });
-      this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
-      this.#seasonDefenseRuns = def;
-    }
+    // 守備分由 playSeason 一起算（規則見那邊）——這裡只負責累加進生涯。
+    const def = line.defenseRuns;
+    this.#defenseRuns[pro.level] = (this.#defenseRuns[pro.level] ?? 0) + def;
+    this.#seasonDefenseRuns = def;
 
     this.#lastD = r.overall - leagueStandardOf(this.#standards, pro.level).par;
     this.#playedOrgs.add(levelOf(pro.level).org);
@@ -2132,7 +2109,7 @@ export class Game {
     const salary = this.#seasonSalary;
     this.#earnings += salary;
 
-    const stints = this.#recordStints(line.batting, line.pitching, def ?? 0);
+    const stints = this.#recordStints(line.batting, line.pitching, def);
     // 上季勝率：這一年所有分段的份額加總。季中轉隊的人不能只算後半段。
     this.#lastWinPct = winPct(
       sumShares(

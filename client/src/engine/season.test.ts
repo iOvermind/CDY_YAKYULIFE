@@ -17,8 +17,9 @@ import {
   fullSeasonSta,
   trustFactor,
   offRoster,
+  type SeasonContext,
 } from './season.ts';
-import { bullpenScore, pitcherRating, type Abilities } from './rating.ts';
+import { bullpenScore, pitcherRating, type Abilities, type Rating } from './rating.ts';
 import { World } from './rng.ts';
 
 const KEYS = ['sta','vel','ctl','swp','drp','chg','gim','con','pow','spd','eye','rng','fld','arm','cat'];
@@ -594,13 +595,28 @@ describe('offRoster', () => {
 });
 
 describe('playSeason', () => {
-  const ctx = (over = {}) => ({
+  const rating = (over: Partial<Rating> = {}): Rating => ({
+    pitcher: 50,
+    fielder: 50,
+    batting: 50,
+    overall: 50,
+    better: 'fielder',
+    ...over,
+  });
+
+  const ctx = (over: Partial<SeasonContext> = {}): SeasonContext => ({
     level: 'CPBL1',
     ability: flat(50),
+    defenseAbility: flat(50),
     position: 'SS',
-    overall: 50,
-    better: 'fielder' as const,
+    scoringPosition: null,
+    rating: rating(),
+    lockedSide: 'fielder',
     twoWay: false,
+    standards: null,
+    teamWinRate: null,
+    pitcherRole: null,
+    seasonFactor: 1,
     ...over,
   });
 
@@ -611,7 +627,16 @@ describe('playSeason', () => {
   });
 
   it('投手只有投球成績', () => {
-    const line = playSeason(new World('a'), ctx({ better: 'pitcher' }));
+    const line = playSeason(new World('a'), ctx({ lockedSide: 'pitcher' }));
+    expect(line.pitching).not.toBeNull();
+    expect(line.batting).toBeNull();
+  });
+
+  it('還沒鎖定定位的人照評價高的那一側打', () => {
+    const line = playSeason(
+      new World('a'),
+      ctx({ lockedSide: null, rating: rating({ pitcher: 60, fielder: 50, overall: 60 }) }),
+    );
     expect(line.pitching).not.toBeNull();
     expect(line.batting).toBeNull();
   });
@@ -623,11 +648,12 @@ describe('playSeason', () => {
   });
 
   it('二刀流的棒子撐不起他的投手丘：強打弱投拿不到先發輪值', () => {
-    // 投球四項全爛、打擊全滿。他的 overall 70 是棒子掙來的，不該換成先發。
+    // 投球四項全爛、打擊全滿。他的 overall 70 是棒子掙來的，不該換成先發——
+    // 扣分由 playSeason 自己從評價算出來，呼叫端不必先算好。
     const ability = with_(20, { con: 80, pow: 80, spd: 80, eye: 80 });
     const line = playSeason(
       new World('a'),
-      ctx({ twoWay: true, ability, overall: 70, pitchingOverall: 20 }),
+      ctx({ twoWay: true, ability, rating: rating({ overall: 70, fielder: 70, pitcher: 20 }) }),
     );
     // 一場都沒登板的那一側整條不留——一整排 0 不是成績。
     expect(line.pitching).toBeNull();
@@ -636,12 +662,11 @@ describe('playSeason', () => {
   });
 
   it('二刀流的手臂換不到打席：強投弱打拿不到打擊出賽', () => {
-    // 打擊四項全爛、投球全滿。他的 overall 70 是手臂掙來的，不該換成打席——
-    // 投手能力再高也可以不上場打擊，這兩件事拆得開。
+    // 打擊四項全爛、投球全滿。投手能力再高也可以不上場打擊，這兩件事拆得開。
     const ability = with_(20, { vel: 80, ctl: 80, swp: 80, drp: 80 });
     const line = playSeason(
       new World('a'),
-      ctx({ twoWay: true, ability, overall: 70, battingOverall: 20 }),
+      ctx({ twoWay: true, ability, rating: rating({ overall: 70, pitcher: 70, fielder: 20 }) }),
     );
     // 一打席都沒有的那一側整條不留——不會有個掛著 .000 的打者。
     expect(line.batting).toBeNull();
@@ -650,23 +675,27 @@ describe('playSeason', () => {
   });
 
   it('游擊手的手套照樣灌進打席——守備算在野手評價裡，這條路徑不受影響', () => {
-    // 打擊平庸但守備撐起來的野手：battingOverall 等於他的野手評價，不被扣。
     const ability = with_(40, { fld: 80, arm: 80, spd: 70 });
     const line = playSeason(
       new World('a'),
-      ctx({ better: 'fielder', position: 'SS', ability, overall: 65, battingOverall: 65 }),
+      ctx({ position: 'SS', ability, rating: rating({ overall: 65, fielder: 65, pitcher: 40 }) }),
     );
     expect(line.batting?.pa).toBeGreaterThan(0);
   });
 
-  it('省略 pitchingOverall 時沿用 overall——單一守位球員一位元都不該動', () => {
+  it('只守一側的人扣分恆為 0——既有球員的數據一位元都不該動', () => {
     const ability = with_(60, { vel: 70, ctl: 70 });
-    const base = playSeason(new World('a'), ctx({ better: 'pitcher', ability, overall: 60 }));
-    const same = playSeason(
+    // 投手側較高的人：打擊側被扣光，投球側拿到完整的 overall。
+    const lopsided = playSeason(
       new World('a'),
-      ctx({ better: 'pitcher', ability, overall: 60, pitchingOverall: 60 }),
+      ctx({ lockedSide: 'pitcher', ability, rating: rating({ overall: 60, pitcher: 60, fielder: 40 }) }),
     );
-    expect(same).toEqual(base);
+    // 兩側相同的人：什麼都不扣，投球側也是完整的 overall。
+    const even = playSeason(
+      new World('a'),
+      ctx({ lockedSide: 'pitcher', ability, rating: rating({ overall: 60, pitcher: 60, fielder: 60 }) }),
+    );
+    expect(lopsided).toEqual(even);
   });
 
   it('0 局的投手不會生出勝投或救援——率型欄位不該自己長出成績', () => {
@@ -683,14 +712,20 @@ describe('playSeason', () => {
     expect(p.er).toBe(0);
     // 而 playSeason 這一層再把整條收掉。
     expect(
-      playSeason(new World('a'), ctx({ better: 'pitcher', ability: flat(20), overall: 20 }))
-        .pitching,
+      playSeason(
+        new World('a'),
+        ctx({
+          lockedSide: 'pitcher',
+          ability: flat(20),
+          rating: rating({ overall: 20, pitcher: 20, fielder: 20 }),
+        }),
+      ).pitching,
     ).toBeNull();
   });
 
   it('只消耗 season 流，不動其他流', () => {
     const world = new World('a');
-    playSeason(world, ctx({ twoWay: true }));
+    playSeason(world, ctx({ twoWay: true, scoringPosition: 'SS' }));
     const counts = world.drawCounts();
     expect(counts.season).toBeGreaterThan(0);
     expect(counts.genesis).toBe(0);
@@ -714,6 +749,56 @@ describe('playSeason', () => {
       return t / 100;
     };
     expect(avg('CPBL2')).toBeGreaterThan(avg('CPBL1'));
+  });
+
+  describe('守備分', () => {
+    const gloves = with_(50, { rng: 75, fld: 75, arm: 75, cat: 75 });
+
+    it('頂級聯盟的守位有守備分', () => {
+      const line = playSeason(
+        new World('d'),
+        ctx({ position: 'SS', scoringPosition: 'SS', ability: gloves, defenseAbility: gloves }),
+      );
+      expect(line.batting).not.toBeNull();
+      expect(line.defenseRuns).not.toBe(0);
+    });
+
+    it('沒有計分守位就是 0——純投手不該有守備分', () => {
+      expect(playSeason(new World('d'), ctx({ ability: gloves, defenseAbility: gloves })).defenseRuns).toBe(0);
+    });
+
+    it('指定打擊沒有守備分', () => {
+      const line = playSeason(
+        new World('d'),
+        ctx({ position: 'DH', scoringPosition: 'DH', ability: gloves, defenseAbility: gloves }),
+      );
+      expect(line.defenseRuns).toBe(0);
+    });
+
+    /**
+     * **二軍不算守備分。** 二軍現在也有登錄守位（ADR 0037），但守備分是拿來與
+     * 同層對手比的，二軍的守備不該進生涯的守備勝利份額。
+     */
+    it('二軍不算守備分', () => {
+      const line = playSeason(
+        new World('d'),
+        ctx({ level: 'CPBL2', position: 'SS', scoringPosition: 'SS', ability: gloves, defenseAbility: gloves }),
+      );
+      expect(line.batting).not.toBeNull();
+      expect(line.defenseRuns).toBe(0);
+    });
+
+    it('守備分看的是 defenseAbility，不是成績用的那一份', () => {
+      const good = playSeason(
+        new World('d'),
+        ctx({ position: 'SS', scoringPosition: 'SS', ability: flat(50), defenseAbility: gloves }),
+      );
+      const bad = playSeason(
+        new World('d'),
+        ctx({ position: 'SS', scoringPosition: 'SS', ability: flat(50), defenseAbility: flat(30) }),
+      );
+      expect(good.defenseRuns).toBeGreaterThan(bad.defenseRuns);
+    });
   });
 });
 

@@ -12,7 +12,8 @@
 import { ALL_ABILITIES, leagues, positions, season as cfg, type RecordSpec } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
-import { bullpenScore, pitcherStuff, type Abilities } from './rating.ts';
+import { defenseRuns } from './defense.ts';
+import { bullpenScore, pitcherStuff, type Abilities, type Rating } from './rating.ts';
 import type { World } from './rng.ts';
 
 
@@ -37,52 +38,66 @@ export interface SeasonLine {
   readonly level: string;
   readonly batting: ProBattingLine | null;
   readonly pitching: ProPitchingLine | null;
+  /**
+   * 這一季的守備分。**不計分的情況是 0**——純投手、指定打擊、二軍，都沒有它。
+   *
+   * 守備分只在頂級聯盟算：二軍現在也有登錄守位（ADR 0037），但守備分是拿來與
+   * 同層對手比的，二軍的守備不該進生涯的守備勝利份額。
+   */
+  readonly defenseRuns: number;
 }
 
 export interface SeasonContext {
   readonly level: string;
+  /**
+   * 算成績用的能力：**含當季暫時能力**（ADR 0006）。
+   *
+   * 與 `defenseAbility` 今天不是同一份——感情給的當季狀態會抬高打擊與投球，卻
+   * 不影響守備分。那是既有行為，不是這裡決定的；該不該統一見 GitHub issue #3。
+   */
   readonly ability: Abilities;
+  /** 算守備分用的能力：真實能力表，不含當季暫時能力。 */
+  readonly defenseAbility: Abilities;
+  /** 登錄守位。打擊那一側用它——純投手在職業沒有守位，呼叫端給 DH。 */
   readonly position: string;
-  /** 綜合能力，用於信任度與升降級判定。 */
-  readonly overall: number;
   /**
-   * 投球側專用的綜合能力。省略時沿用 `overall`。
+   * 守備分要算的守位。**null 就是不算**。
    *
-   * `overall` 是 `max(投手評價, 野手評價)`：單一守備位置的球員，那個 max 本來
-   * 就是他自己那一側，所以兩者相同。只有二刀流會分岔——強打弱投的人，他的
-   * 棒子會把投手出賽量一起撐起來，於是模型讓一個沒有球威的人繼續拿先發輪值。
+   * 與 `position` 分開是刻意的：純投手的打擊成績仍要標一個位置（DH），但他不
+   * 該有守備分。指定打擊同理，由 `defenseRuns()` 自己擋掉。
    */
-  readonly pitchingOverall?: number | null;
+  readonly scoringPosition: string | null;
   /**
-   * 打擊側專用的綜合能力。省略時沿用 `overall`。
-   *
-   * 投球與打擊可以拆開：能力夠的投手照樣可以不上場打擊，所以一條手臂不該
-   * 替他換來打席。這一側只認野手評價。
-   *
-   * 守位與打席則拆不開，但那不需要靠吃完整的 `overall` 來達成——守備已經
-   * 算在野手評價裡了。游擊手靠手套掙到先發、出賽就有打席，這條路徑原封不動。
+   * 這一季的評價。**兩側各認自己那一側的扣分在這裡算**，不必由呼叫端先算好。
    */
-  readonly battingOverall?: number | null;
-  readonly better: 'pitcher' | 'fielder';
+  readonly rating: Rating;
+  /**
+   * 定位鎖定的那一側；還沒鎖定是 null。
+   *
+   * 鎖定之後就照鎖定的那一側打，不再每季比較評價高低——職業球員的角色是固定
+   * 的，不會因為某年打擊練得比較好就改當野手。
+   */
+  readonly lockedSide: 'pitcher' | 'fielder' | null;
   readonly twoWay: boolean;
   /** 當年的聯盟水準。null 表示用 leagues.json 的基準值。 */
-  readonly standards?: LeagueStandards | null;
-  /** 球隊勝率。輪值線掛在它上面——強隊難擠、弱隊容易占。二軍沒有戰力表，未知時視為 .500。 */
-  readonly teamWinRate?: number | null;
+  readonly standards: LeagueStandards | null;
+  /** 球隊勝率。輪值線掛在它上面——強隊難擠、弱隊容易占。未知時視為 .500。 */
+  readonly teamWinRate: number | null;
   /**
-   * 這一季**已登錄的**投手定位。
+   * 這一季**已登錄的**投手定位；沒有登錄過是 null。
    *
    * 與守位同一個立場：定位是每季在定位會議上決定的，不是每次算成績時重新判定。
-   * 省略時現算——測試與還沒接上會議的呼叫端走這條。
+   * 傳 null 的話由 `proPitchingLine()` 現算——那是「這個呼叫端還沒有定位會議」
+   * 的意思，不是「這一季不必決定」。
    */
-  readonly pitcherRole?: PitcherRole | null;
+  readonly pitcherRole: PitcherRole | null;
   /**
    * 這一季的出賽係數，1 為全勤、0 為整季報銷。傷病落在這裡。
    *
    * **它乘的是出賽量，不是事後把數據打折**——他真的只上場了那麼多，因此率型
    * 數據（打擊率、防禦率）不受影響，累積型數據才會少。
    */
-  readonly seasonFactor?: number;
+  readonly seasonFactor: number;
 }
 
 /**
@@ -1175,45 +1190,69 @@ function clampInt(value: number, cap: number): number {
  * 順序若隨角色變動，同一個種子會產生不同結果。
  */
 export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
-  const asPitcher = ctx.twoWay || ctx.better === 'pitcher';
-  const asBatter = ctx.twoWay || ctx.better === 'fielder';
+  // 鎖定之後照鎖定的那一側打。**比的是四捨五入後的評價**，與呼叫端從前算的一
+  // 字不差——`rating.better` 比的是未取整的值，兩者在剛好平手的邊界上會不同。
+  const better = ctx.lockedSide ?? (ctx.rating.pitcher >= ctx.rating.fielder ? 'pitcher' : 'fielder');
+  const asPitcher = ctx.twoWay || better === 'pitcher';
+  const asBatter = ctx.twoWay || better === 'fielder';
 
-  const standards = ctx.standards ?? null;
-  return {
+  // **兩側各認自己那一側**：扣掉「綜合能力高出本側評價的那一截」。對只守一側
+  // 的人這個差恆為 0（他的 overall 本來就是自己那側），所以既有球員的數據一位
+  // 元都不動；只有二刀流會被扣。
+  //
+  // 用扣的而不是直接換成 pitcher／fielder，是為了保住 overall 裡的特性加成。
+  //
+  // 投球和打擊拆得開——投手能力再高也可以不上場打擊。守位和打席拆不開，但那
+  // 已經由 fielder 內含守備來保證，不必讓打擊側去吃投手評價。
+  const r = ctx.rating;
+  const pitchingOverall = r.overall - Math.max(0, r.fielder - r.pitcher);
+  const battingOverall = r.overall - Math.max(0, r.pitcher - r.fielder);
+
+  const pitching = played(
+    asPitcher
+      ? proPitchingLine(world, ctx.ability, ctx.level, pitchingOverall, ctx.standards, {
+          teamWinRate: ctx.teamWinRate,
+          seasonFactor: ctx.seasonFactor,
+          // 沒登錄過就由 proPitchingLine 現算——那是「這個呼叫端還沒有定位會議」。
+          ...(ctx.pitcherRole === null ? {} : { role: ctx.pitcherRole }),
+        })
+      : null,
+  );
+  const batting = played(
+    asBatter
+      ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, battingOverall, ctx.standards, {
+          seasonFactor: ctx.seasonFactor,
+        })
+      : null,
+  );
+
+  return { level: ctx.level, pitching, batting, defenseRuns: fieldingRuns(world, ctx, batting) };
+}
+
+/**
+ * 這一季的守備分。
+ *
+ * **只在頂級聯盟算。** 二軍現在也有登錄守位（ADR 0037），但守備分是拿來與同層
+ * 對手比的，二軍的守備不該進生涯的守備勝利份額。沒上過場（`batting` 是 null）
+ * 或沒有計分守位的人一律是 0。
+ */
+function fieldingRuns(
+  world: World,
+  ctx: SeasonContext,
+  batting: ProBattingLine | null,
+): number {
+  const position = ctx.scoringPosition;
+  if (position === null || batting === null) return 0;
+  if (levelOf(ctx.level).top === undefined) return 0;
+  return defenseRuns({
+    ability: ctx.defenseAbility,
+    position,
     level: ctx.level,
-    pitching: played(
-      asPitcher
-        ? proPitchingLine(
-            world,
-            ctx.ability,
-            ctx.level,
-            ctx.pitchingOverall ?? ctx.overall,
-            standards,
-            {
-              teamWinRate: ctx.teamWinRate ?? null,
-              seasonFactor: ctx.seasonFactor ?? 1,
-              // 沒登錄過就現算——測試與還沒接上定位會議的呼叫端走這條。
-              ...(ctx.pitcherRole === null || ctx.pitcherRole === undefined
-                ? {}
-                : { role: ctx.pitcherRole }),
-            },
-          )
-        : null,
-    ),
-    batting: played(
-      asBatter
-        ? proBattingLine(
-            world,
-            ctx.ability,
-            ctx.position,
-            ctx.level,
-            ctx.battingOverall ?? ctx.overall,
-            standards,
-            { seasonFactor: ctx.seasonFactor ?? 1 },
-          )
-        : null,
-    ),
-  };
+    standards: ctx.standards,
+    gamesShare: batting.games / levelOf(ctx.level).games,
+    // 抖動走 season 那條流——它與成績同一個球季結算，共用一條序列。
+    jitter: (n) => world.stream('season').int(-n, n),
+  });
 }
 
 /**
