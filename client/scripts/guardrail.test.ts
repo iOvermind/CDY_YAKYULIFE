@@ -171,6 +171,24 @@ describe('平衡護欄', () => {
     expect(Math.min(...scores)).toBeLessThan(Math.max(...scores));
   });
 
+  /**
+   * **一次出賽最多換到一個決定。** 勝、敗、救援、中繼互斥，所以四者相加不可能
+   * 超過出賽數。這條在一百二十段生涯的每一個投手球季上各驗一次——單元測試擋的
+   * 是極端情境，這裡擋的是「某個新公式讓它在真實的生涯裡破掉」。
+   */
+  it('沒有任何一個球季的決定數超過出賽數', () => {
+    for (const summary of summaries) {
+      for (const season of summary.seasons) {
+        const p = season.pitching;
+        if (p === null) continue;
+        expect(
+          p.wins + p.losses + p.saves + p.holds,
+          `${season.year} 年 G${p.games} ${p.wins}W ${p.losses}L ${p.saves}SV ${p.holds}HLD`,
+        ).toBeLessThanOrEqual(p.games);
+      }
+    }
+  });
+
   it('分級標籤與門檻數量對得起來', () => {
     expect(hallOfFame.tier_thresholds.labels).toHaveLength(
       hallOfFame.tier_thresholds.values.length + 1,

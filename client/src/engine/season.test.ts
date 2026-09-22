@@ -805,6 +805,70 @@ describe('playSeason', () => {
   });
 });
 
+describe('一次出賽最多換到一個決定', () => {
+  /**
+   * **勝、敗、救援、中繼是互斥的**：同一場比賽裡拿到中繼就不會同時是勝投。
+   *
+   * 這條曾經破過，而且破得很難看：`G17 3W 12L 4SV 13HLD`——32 個決定塞進 17 場。
+   * 每一格各自的夾子都過了，沒有人管總和；真正的產生器是「機會」用球隊勝場算
+   * 卻沒有被實際出賽夾住，於是搞砸的機會暴衝成十幾場敗投。
+   */
+  const decisions = (p: { wins: number; losses: number; saves: number; holds: number }) =>
+    p.wins + p.losses + p.saves + p.holds;
+
+  it('後援投手：不管球隊多強、上場多少，決定數都不超過出賽數', () => {
+    for (const role of ['CP', 'SU', 'MR', 'LR'] as const) {
+      for (const teamWinRate of [0.35, 0.5, 0.75]) {
+        for (const factor of [0.1, 0.3, 1]) {
+          for (let i = 0; i < 20; i++) {
+            const line = proPitchingLine(
+              new World(`dec-${role}-${teamWinRate}-${factor}-${i}`),
+              flat(70),
+              'CPBL1',
+              70,
+              null,
+              { teamWinRate, seasonFactor: factor, role },
+            );
+            expect(
+              decisions(line),
+              `${role} G${line.games} ${line.wins}W ${line.losses}L ${line.saves}SV ${line.holds}HLD`,
+            ).toBeLessThanOrEqual(line.games);
+          }
+        }
+      }
+    }
+  });
+
+  it('先發投手也一樣', () => {
+    for (const teamWinRate of [0.35, 0.5, 0.75]) {
+      for (let i = 0; i < 30; i++) {
+        const line = proPitchingLine(
+          new World(`dec-sp-${teamWinRate}-${i}`),
+          flat(70),
+          'CPBL1',
+          70,
+          null,
+          { teamWinRate, role: 'SP' },
+        );
+        expect(decisions(line)).toBeLessThanOrEqual(line.games);
+      }
+    }
+  });
+
+  /** 上場次數很少的那種球季，正是舊寫法會爆掉的地方。 */
+  it('只上十幾場的終結者不會吞下十幾敗', () => {
+    for (let i = 0; i < 50; i++) {
+      const line = proPitchingLine(new World(`few-${i}`), flat(70), 'MLB', 70, null, {
+        teamWinRate: 0.6,
+        seasonFactor: 0.1,
+        role: 'CP',
+      });
+      expect(line.losses).toBeLessThanOrEqual(line.games);
+      expect(decisions(line)).toBeLessThanOrEqual(line.games);
+    }
+  });
+});
+
 describe('投手的自責分由事件推導', () => {
   const line = (seed: string, v: number, over: Record<string, number> = {}, twr = 0.5) =>
     proPitchingLine(new World(seed), with_(v, over), 'MLB', v, null, { teamWinRate: twr });

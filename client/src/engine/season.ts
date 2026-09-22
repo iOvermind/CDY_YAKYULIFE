@@ -1123,15 +1123,23 @@ export function proPitchingLine(
   // 窄帶，因此不設硬上下限。
   const conversion = rel.conversion.anchor * Math.pow(ratio, rel.conversion.exponent);
 
-  // **機會不按出賽比例縮。** 終結者一年只上場六十場卻拿得到五十次救援機會——
-  // 他上場的那六十場就是球隊需要關門的那幾場，不是全季的一個抽樣。要擋的是
-  // 「沒上場卻拿到機會」，而那由下面的上限擋掉就夠了。
-  const saveOpps = teamWins * shareOf(rel.save_opportunity) * (dec.save_coefficient[role] ?? 0);
+  // **機會不按出賽比例縮，但它不能超過他實際上場的場次。** 終結者一年只上場
+  // 六十場卻拿得到五十次救援機會——他上場的那六十場就是球隊需要關門的那幾場，
+  // 不是全季的一個抽樣。但只上十七場的人不可能有四十次機會：那個差額會從
+  // `blown` 那條路變成十幾場敗投（一個 17 場 3 勝 12 敗 4 救援 13 中繼的球季
+  // 就是這樣長出來的）。機會因此先被後援出賽夾住，剩下的才留給下一項。
+  const saveOpps = Math.min(
+    relief,
+    teamWins * shareOf(rel.save_opportunity) * (dec.save_coefficient[role] ?? 0),
+  );
   const saves = clampInt(
     Math.round(saveOpps * conversion * noise()) + jit(rel.conversion.jitter),
     Math.min(Math.round(saveOpps), relief),
   );
-  const holdOpps = teamWins * shareOf(rel.hold_opportunity) * (dec.hold_coefficient[role] ?? 0);
+  const holdOpps = Math.min(
+    Math.max(0, relief - saves),
+    teamWins * shareOf(rel.hold_opportunity) * (dec.hold_coefficient[role] ?? 0),
+  );
   const holds = clampInt(
     Math.round(holdOpps * conversion * noise()) + jit(rel.conversion.jitter),
     Math.min(Math.round(holdOpps), relief - saves),
@@ -1140,17 +1148,23 @@ export function proPitchingLine(
   // 搞砸的機會有一部分變成敗投——不是全部，接手的人可能再掉分，球隊也可能打
   // 回來。撿勝與投得好不好幾乎無關，只與上場次數和球隊會不會逆轉有關。
   const blown = Math.max(0, saveOpps - saves) + Math.max(0, holdOpps - holds);
-  const reliefLosses = Math.max(0, Math.round(blown * rel.blown_to_loss.value * noise()));
-  const reliefWins = Math.max(
+  const blownLosses = Math.max(0, Math.round(blown * rel.blown_to_loss.value * noise()));
+  const vultureWins = Math.max(
     0,
     Math.round(relief * rel.vulture_win.per_game * (teamWp / dec.team_win_reference) * noise()) +
       jit(rel.vulture_win.jitter),
   );
 
-  // 三者共用同一個出賽數，因此依序夾住：先發那一段已經夾在先發場次內，後援
-  // 這一段再夾掉剩下的出賽。
-  wins = Math.min(games, wins + reliefWins);
-  losses = Math.min(games - wins, losses + reliefLosses);
+  // **一次出賽最多換到一個決定。** 勝、敗、救援、中繼是互斥的：同一場比賽裡
+  // 拿到中繼就不會同時是勝投。因此兩個出賽池各自分配，總和自然不會超過出賽數
+  // ——先發那一段早就夾在先發場次內，後援這一段依序切救援、中繼、撿勝、backfill
+  // 的敗投，切完就沒了。
+  const reliefLeft = Math.max(0, relief - saves - holds);
+  const reliefWins = Math.min(reliefLeft, vultureWins);
+  const reliefLosses = Math.min(reliefLeft - reliefWins, blownLosses);
+
+  wins += reliefWins;
+  losses += reliefLosses;
 
   return {
     role,
