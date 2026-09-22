@@ -447,8 +447,17 @@ export interface AchievementsData {
              * 也就沒有「表尾即天花板」這種沒人宣告過的上限。
              */
             readonly step: number;
-            /** 第一階的分數。第 n 階給 n×points，AP 與生涯評價分共用。 */
+            /** 一階的 AP。線性、封在 `ap_max_rungs` 階。 */
             readonly points: number;
+            /**
+             * 一階的**評價分**底數，第 n 階給 n×score_points。省略時沿用 `points`。
+             *
+             * 投手那幾項比較高，因為它們的級距比較粗：評價分是階數的平方，而野手的
+             * 打點與得分每 100 一階、投手的勝投每 50 一階——同一個量級的生涯，階數
+             * 差了一倍以上。補償寫在這裡而不是把級距切碎，因為底數要是真的有人在
+             * 紀錄的數字（沒有人在記「10 勝」）。
+             */
+            readonly score_points?: number;
           }
         >
       >;

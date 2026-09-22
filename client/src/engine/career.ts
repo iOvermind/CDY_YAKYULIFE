@@ -317,10 +317,12 @@ export function evaluateMilestones(
     const value = statTotal(stat, spec.side, spec.unit ?? 1, batting, pitching);
     if (value === null) continue;
 
-    // 與成就櫃共用 `ladderTop()`：同一個級距、同一套分數，門檻與分數都不封頂。
+    // 與成就櫃共用 `ladderTop()`：同一個級距、同一座階梯，門檻與分數都不封頂。
+    // **分數的底數不同**：AP 走 `points`，評價分走 `score_points`（省略時沿用
+    // `points`）——投手的級距比較粗，而評價分是階數的平方（見 achievements.json）。
     const { top: highest, points: pts } = ladderTop(
       spec.step,
-      spec.points,
+      spec.score_points ?? spec.points,
       cfgRungs.first_rung[scope],
       value,
     );

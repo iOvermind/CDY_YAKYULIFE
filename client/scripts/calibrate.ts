@@ -492,7 +492,10 @@ function report(results: readonly CareerResult[], policy: PolicyName, runs: numb
 
   console.log('\n── 守位分佈（守位門檻的校準依據）');
   console.log(`  守位門檻目前是暫定值，正式值要把各守位的守備分分布放在同一個分位數上。`);
-  console.log(`  現行 margin = ${positions.defense_average.margin}`);
+  // 守備分改用紀錄錨定的形狀之後（ADR 0048），`defense_average` 整組不存在了
+  // ——這一行曾經直接讓報表在最後一步炸掉。現在印的是那一版的兩個旋鈕。
+  const d = positions.defense_score;
+  console.log(`  現行 錨點 ${d.anchor}、幅度 ${d.span}、次方 ${d.exponent}、降守位線 ${d.demotion_line}`);
 
   console.log('');
 }
