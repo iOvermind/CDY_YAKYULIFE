@@ -13,7 +13,11 @@ import { beforeEach, describe, it } from 'node:test';
 import { Game, type ReplayLog } from '../../client/src/engine/game.ts';
 import { useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
-import { CAREER_SCOPE } from '../../client/src/engine/ladder.ts';
+import {
+  BEST_PREFIX,
+  CAREER_SCOPE,
+  POSITION_PREFIX,
+} from '../../client/src/engine/ladder.ts';
 import {
   finishCareer,
   HttpError,
@@ -450,7 +454,29 @@ describe('天梯', () => {
     const res = await ladder(user, CAREER_SCOPE, true);
     const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
     for (const scope of written) assert.ok(res.scopes.includes(scope), `少掉了 ${scope}`);
-    // 順序照聯盟階梯，生涯永遠殿後。
-    assert.equal(res.scopes.at(-1), CAREER_SCOPE);
+    // 順序照聯盟階梯，生涯接在聯盟後面，守位的兩排再接在生涯後面。
+    const leagueEnd = res.scopes.indexOf(CAREER_SCOPE);
+    assert.ok(leagueEnd >= 0);
+    for (const scope of res.scopes.slice(0, leagueEnd)) {
+      assert.ok(!scope.startsWith(POSITION_PREFIX) && !scope.startsWith(BEST_PREFIX));
+    }
+  });
+
+  /**
+   * 守位的兩排也要進清單。
+   *
+   * 畫面上的守位按鈕是拿這份清單畫的，所以這裡漏掉等於那兩排一顆都不會出現
+   * ——成績有寫進 career_stats，玩家卻看到一片空白，看起來像根本沒實作。
+   */
+  it('守位的生涯榜與單季榜都會出現在範圍清單裡', async () => {
+    const user = await finish('Overmind');
+    const res = await ladder(user, CAREER_SCOPE, true);
+    const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
+    const positions = [...written].filter(
+      (s) => s.startsWith(POSITION_PREFIX) || s.startsWith(BEST_PREFIX),
+    );
+    // 一段打完的生涯至少登錄過一個守位，所以這裡不該是空的。
+    assert.ok(positions.length > 0, '結算沒有寫進任何守位範圍');
+    for (const scope of positions) assert.ok(res.scopes.includes(scope), `少掉了 ${scope}`);
   });
 });

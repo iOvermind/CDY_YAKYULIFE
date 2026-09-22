@@ -7,7 +7,13 @@
 
 import { evaluateAchievements } from '../../client/src/engine/achievements.ts';
 import { ENGINE_VERSION, Game } from '../../client/src/engine/game.ts';
-import { ladderRows } from '../../client/src/engine/ladder.ts';
+import {
+  BEST_PREFIX,
+  CAREER_SCOPE,
+  LADDER_POSITIONS,
+  POSITION_PREFIX,
+  ladderRows,
+} from '../../client/src/engine/ladder.ts';
 import { runBallots } from '../../client/src/engine/hall.ts';
 import { costOf, maxLevelOf } from '../../client/src/engine/overlay.ts';
 import { ladder as ladderCfg, leagues, talents as talentData } from '../../client/src/data/index.ts';
@@ -380,6 +386,15 @@ async function scopesOf(user: UserRow | null): Promise<readonly string[]> {
   // 兩者同名，因此表裡沒有它們）。拿它當完整體系清單來 filter，等於把韓墨澳的
   // 分頁整組濾掉——打過那些聯盟的成績有寫進 career_stats，只是玩家看不到。
   const order = Object.keys(leagues.top_league_names).filter((org) => have.has(org));
-  if (have.has('CAREER')) order.push('CAREER');
+  if (have.has(CAREER_SCOPE)) order.push(CAREER_SCOPE);
+  // 守位的兩排。**這裡漏掉的話那兩排一顆按鈕都畫不出來**——成績有寫進
+  // career_stats，畫面卻是空的，看起來像根本沒實作。順序照 LADDER_POSITIONS，
+  // 與畫面上那兩排同一份清單。
+  for (const prefix of [POSITION_PREFIX, BEST_PREFIX]) {
+    for (const position of LADDER_POSITIONS) {
+      const scope = `${prefix}${position}`;
+      if (have.has(scope)) order.push(scope);
+    }
+  }
   return order;
 }
