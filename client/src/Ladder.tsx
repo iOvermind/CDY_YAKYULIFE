@@ -15,7 +15,7 @@ import type { LadderBoard, LadderResponse } from './api/contract.ts';
 import type { Account } from './useAccount.ts';
 import { ladder as ladderCfg, leagues, positions as positionsCfg } from './data/index.ts';
 import { BEST_PREFIX, CAREER_SCOPE, LADDER_POSITIONS, POSITION_PREFIX } from './engine/ladder.ts';
-import { ENGINE_VERSION } from './engine/game.ts';
+import { ENGINE_VERSION } from './engine/version.ts';
 
 /**
  * 範圍的中文名。生涯是跨聯盟通算，其餘是**頂級聯盟名**。

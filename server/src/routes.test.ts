@@ -10,14 +10,15 @@
 
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
-import { Game, type ReplayLog } from '../../client/src/engine/game.ts';
 import { useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
 import {
+  Game,
   BEST_PREFIX,
   CAREER_SCOPE,
   POSITION_PREFIX,
-} from '../../client/src/engine/ladder.ts';
+  type ReplayLog,
+} from '../../client/src/engine/index.ts';
 import {
   finishCareer,
   HttpError,

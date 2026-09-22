@@ -15,7 +15,7 @@ import { extname, join, normalize } from 'node:path';
 import { API } from '../../client/src/api/contract.ts';
 import { readCookie, readSession, sessionCookie, signSession } from './auth.ts';
 import { migrate, pool, type UserRow } from './db.ts';
-import { CAREER_SCOPE } from '../../client/src/engine/ladder.ts';
+import { CAREER_SCOPE } from '../../client/src/engine/index.ts';
 import {
   finishCareer,
   HttpError,

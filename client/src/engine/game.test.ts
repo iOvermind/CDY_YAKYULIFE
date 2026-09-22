@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { abilities, amateur, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ALL_ABILITIES } from '../data/index.ts';
-import { ENGINE_VERSION, Game, type GameSetup } from './game.ts';
+import { Game, type GameSetup } from './game.ts';
+import { ENGINE_VERSION } from './version.ts';
+import { BEST_PREFIX, CAREER_SCOPE, POSITION_PREFIX } from './ladder.ts';
 import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
 import { roleRank } from './season.ts';
@@ -2314,5 +2316,64 @@ describe('左右開投', () => {
     expect(found).not.toBeNull();
     const state = found!.state!;
     expect(handednessTier({ ...state.origin, traits: state.traits })).toBe('switch_pitcher');
+  });
+});
+
+describe('結算（score）', () => {
+  it('還沒走到結算就沒有結論', () => {
+    expect(started().score()).toBeNull();
+  });
+
+  it('一段打完的生涯結算得出成就與天梯列', () => {
+    const game = playWell(started({ seed: 'score-1' }));
+    const score = game.score();
+    expect(score).not.toBeNull();
+    expect(score?.engineVersion).toBe(ENGINE_VERSION);
+    expect(score?.playerName).toBe(setup.name);
+    // 引退時那張結算卡走的是同一個配方，兩者必須一致。
+    expect(score?.achievements).toEqual(game.achievements);
+    expect(score?.summary).toBe(game.summary);
+  });
+
+  it('天梯列與範圍代碼對得上：打過的頂級聯盟、生涯通算、守位', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playWell(started({ seed: `score-ladder-${i}` }));
+      const score = game.score();
+      if (score === null || score.ladder.length === 0) continue;
+      const scopes = score.ladder.map((r) => r.scope);
+      expect(new Set(scopes).size).toBe(scopes.length);
+      expect(scopes).toContain(CAREER_SCOPE);
+      // 守位那兩排一定跟著出現——一段打完的生涯至少登錄過一個守位。
+      expect(scopes.some((sc) => sc.startsWith(POSITION_PREFIX))).toBe(true);
+      expect(scopes.some((sc) => sc.startsWith(BEST_PREFIX))).toBe(true);
+      return;
+    }
+    throw new Error('二十段生涯都沒有上過頂級聯盟');
+  });
+
+  /**
+   * **跨局進度只有伺服器手上有真的那一份**，所以它是參數而不是欄位。同一段生涯
+   * 用不同的進度結算，清單一樣長，但新解鎖與 AP 不同——已經領過的不再給點。
+   */
+  it('進度是傳進來的：已經解鎖過的不再給 AP', () => {
+    const game = playWell(started({ seed: 'score-2' }));
+    const first = game.score();
+    expect(first).not.toBeNull();
+    if (first === null) return;
+
+    const again = game.score({
+      firstCareer: false,
+      unlocked: new Set(first.achievements.list.map((a) => a.id)),
+    });
+    expect(again?.achievements.newly).toEqual([]);
+    expect(again?.achievements.points).toBe(0);
+    // 清單本身是同一批（「第一段人生」那一項除外，它只在第一段給）。
+    const ids = new Set(first.achievements.list.map((a) => a.id));
+    for (const a of again?.achievements.list ?? []) expect(ids.has(a.id)).toBe(true);
+  });
+
+  it('同一段生涯結算兩次結果相同——結算本身不消耗抽取', () => {
+    const game = playWell(started({ seed: 'score-3' }));
+    expect(game.score()).toEqual(game.score());
   });
 });

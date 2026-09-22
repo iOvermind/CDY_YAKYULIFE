@@ -5,17 +5,17 @@
  * 自己算成就與 AP**。客戶端回報的數字只拿來比對，不採信。見 ADR 0007。
  */
 
-import { evaluateAchievements } from '../../client/src/engine/achievements.ts';
-import { ENGINE_VERSION, Game } from '../../client/src/engine/game.ts';
+// **只從引擎的入口 import**——那份檔案是伺服器被支援的 surface（ADR 0049）。
+// 直接點名 engine 內部的路徑，等於把引擎的任何重整變成這裡的執行期風險。
 import {
   BEST_PREFIX,
   CAREER_SCOPE,
+  costOf,
+  Game,
   LADDER_POSITIONS,
+  maxLevelOf,
   POSITION_PREFIX,
-  ladderRows,
-} from '../../client/src/engine/ladder.ts';
-import { runBallots } from '../../client/src/engine/hall.ts';
-import { costOf, maxLevelOf } from '../../client/src/engine/overlay.ts';
+} from '../../client/src/engine/index.ts';
 import { ladder as ladderCfg, leagues, talents as talentData } from '../../client/src/data/index.ts';
 import type {
   CareerResult,
@@ -127,23 +127,15 @@ export async function finishCareer(
     throw new HttpError(400, `重播失敗，這一局不算：${(e as Error).message}`);
   }
   try {
-    const summary = game.summary;
-    if (summary === null) throw new HttpError(400, '這一局還沒有走到結算。');
-
     const owned = await achievementsOf(user.id);
-    const ballots = summary.leagues.length > 0 ? runBallots(game.world, summary.leagues) : [];
-    const state = game.state;
-    const result = evaluateAchievements({
-      summary,
-      awards: state?.awards ?? [],
-      traits: state?.traits ?? new Set<string>(),
-      traitNames: state?.traitNames ?? new Map<string, string>(),
-      honors: state?.honors ?? [],
-      halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
+    // **結算的配方只有一份**，在引擎裡（`Game.score()`，見 ADR 0049）。這裡只
+    // 負責把跨局的進度交給它——那是只有伺服器手上有的東西。
+    const score = game.score({
       firstCareer: owned.length === 0,
-      spouses: state?.love.spouses ?? [],
       unlocked: new Set(owned.map((a) => a.id)),
     });
+    if (score === null) throw new HttpError(400, '這一局還沒有走到結算。');
+    const result = score.achievements;
 
     // 客戶端算的與伺服器算的一不一樣。不一樣仍以伺服器為準，但記一筆——那通常
     // 代表版本不同步，偶爾代表有人在改東西。
@@ -171,8 +163,7 @@ export async function finishCareer(
       // 那份，重跑必然對不上，那一局就不進榜（ADR 0038）。AP 仍然照給：伺服器
       // 算的那份本來就是它自己的數字，不受影響。
       if (verified) {
-        const playerName = game.player?.name ?? '';
-        for (const row of ladderRows(summary)) {
+        for (const row of score.ladder) {
           await client.query(
             `INSERT INTO career_stats
                (career_id, user_id, scope, seasons, batting, pitching, defense_runs,
@@ -192,8 +183,8 @@ export async function finishCareer(
               row.lossShares,
               row.qualifiedBatter,
               row.qualifiedPitcher,
-              ENGINE_VERSION,
-              playerName,
+              score.engineVersion,
+              score.playerName,
             ],
           );
         }

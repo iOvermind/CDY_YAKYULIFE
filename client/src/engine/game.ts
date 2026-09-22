@@ -27,6 +27,8 @@ import {
   type Hand,
   type SchoolStage,
 } from '../data/index.ts';
+import { fmtAvg } from './format.ts';
+import { ENGINE_VERSION } from './version.ts';
 import {
   academyUnlocked,
   nextStageOf,
@@ -83,6 +85,7 @@ import {
   type SeasonRecord,
 } from './career.ts';
 import { runBallots, type BallotResult } from './hall.ts';
+import { ladderRows, type LadderRow } from './ladder.ts';
 import {
   evaluateAchievements,
   type Achievement,
@@ -282,35 +285,26 @@ export interface CareerProgress {
   readonly unlocked: ReadonlySet<string>;
 }
 
+/**
+ * 一段走完的生涯換算出來的東西：成就、AP，以及天梯要的每一列。
+ *
+ * **它是結算的唯一產物。** 伺服器把它整份寫進資料庫（成就、AP、`career_stats`
+ * 的每一列與當下的引擎版本），客戶端只用其中的成就去畫那張結算卡。
+ */
+export interface CareerScore {
+  readonly summary: CareerSummary;
+  readonly achievements: AchievementResult;
+  /** 天梯的原料：各聯盟、生涯通算、各守位的生涯與單季。 */
+  readonly ladder: readonly LadderRow[];
+  /** 榜上要寫得出這是誰。 */
+  readonly playerName: string;
+  /** 結算當下的引擎版本。榜單是歷史，每一列帶著它（ADR 0002）。 */
+  readonly engineVersion: number;
+}
+
 /** 沒有帳號時的進度：每一局都是第一段人生，每一項都算新解鎖。 */
 export const NO_PROGRESS: CareerProgress = { firstCareer: true, unlocked: new Set<string>() };
 
-/**
- * 目前引擎版本。重播日誌帶著它，跨版本一律拒絕重播（ADR 0002）。
- *
- * **改動既有選項的意義就滘**（ADR 0032）。加欄位、加新選項不算——那些不改變舊
- * 日誌的重現結果；`alloc:sta` 從扣 1 點變成扣 6 點才算，那種日誌重跑不會壞，只
- * 會安靜地重出一個不同的人生。
- *
- * 2：大賽點數改成一次付滿該級成本（ADR 0032）。
- * 3：事件扣點改走成本曲線（ADR 0033）。同一張事件卡，能力 64 的球員舊規則掉 3 級、
- *    新規則只掉半級——重播不會壞，但生涯會長成另一個樣子。
- * 4：守位系統走遍三個階段（ADR 0037）。升守位變成一個可回答的選項，養成期每年
- *    都可能插進一次——舊日誌的選項序號從那一刻起整串對不上。
- * 5：養成期的投手定位改用職業那一套（SP／CP／SU／MR／LR），先發場數與單場局數
- *    都加了上限。選項序號沒有變，但**同一份日誌會長出不同的成績**——先發場數
- *    少了一半、牛棚多出中繼成功，獎項與里程碑跟著移動。重播不會壞，得到的卻是
- *    另一段生涯，因此照樣進版。
- * 6：投手成績改由事件推導。自責分不再是自己一條錨點式，改由被打出來的安打、長打、
- *    四壞與觸身球算出來；勝敗不再看能力，改由 ERA+ 與球隊勝率相撞。**抽取順序因此
- *    真的變了**——舊版是局數 → 勝敗 → 被安打 → 自責分，新版必須先有自責分才問得了
- *    勝敗。同一份日誌不只長出不同的成績，連後面每一次擲骰都整串偏移。
- * 7：聯盟平均往能力軸上搬 2，每一格的次方跟著重解（ADR 0047）；守備分改用紀錄錨定
- *    的形狀，守位去留從硬門檻改看 DEF（ADR 0048）；下放的壓力改成三分一階，往下
- *    挖角要連簽約金一起比。**同一個球員在新舊規則下是兩把尺**——成績、守位、去留
- *    與生涯評價分全部不同，因此舊日誌一律拒絕重播。
- */
-export const ENGINE_VERSION = 7;
 
 /** 一段可重播的生涯紀錄。 */
 export interface ReplayLog {
@@ -602,6 +596,8 @@ export class Game {
   #intlScore = 0;
   /** 這一局的成就結算。引退後才有值。 */
   #achievements: AchievementResult | null = null;
+  /** 名人堂票選的結果。跑一次就存著——它會消耗抽取，不能跑第二次。 */
+  #ballots: readonly BallotResult[] = [];
   /** 還原天賦覆蓋的函式。見 constructor 與 dispose()。 */
   #revertTalents: () => void = () => {};
   /** 國際賽的生涯成績。與聯盟成績分開——它不屬於任何聯盟。 */
@@ -827,6 +823,41 @@ export class Game {
   /** 這一局的成就結算。引退後才有值。 */
   get achievements(): AchievementResult | null {
     return this.#achievements;
+  }
+
+  /**
+   * 結算一段走完的生涯：成就、AP 與天梯要的每一列。
+   *
+   * **這是「一段生涯值多少」唯一的配方。** 客戶端引退時走它，伺服器重跑驗證時
+   * 也走它（見 ADR 0049）——那九個欄位的組裝因此只存在一處。從前兩邊各抄一份，
+   * 而伺服器拿不到私有欄位，只能用 `state?.awards ?? []` 這種退路補洞：`state`
+   * 是 null 時它不會失敗，會靜靜算出另一組看起來很合理的成就。
+   *
+   * `progress` 是**跨局**的進度（第幾段人生、已經解鎖過哪些成就），只有伺服器
+   * 手上有真的那一份；客戶端用開局時給的那份，沒有帳號時是 `NO_PROGRESS`。
+   *
+   * 還沒走到結算就回 null——那不是錯誤，是「這一局還沒有結論」。
+   */
+  score(progress: CareerProgress = this.#progress): CareerScore | null {
+    const summary = this.#summary;
+    if (summary === null) return null;
+    return {
+      summary,
+      achievements: evaluateAchievements({
+        summary,
+        awards: this.#awards,
+        traits: this.#traits,
+        traitNames: this.#traitNames,
+        honors: this.#honors,
+        halls: this.#ballots.filter((b) => b.inducted).map((b) => b.leagueName),
+        firstCareer: progress.firstCareer,
+        spouses: this.#spouses,
+        unlocked: progress.unlocked,
+      }),
+      ladder: ladderRows(summary),
+      playerName: this.#player?.name ?? '',
+      engineVersion: ENGINE_VERSION,
+    };
   }
 
   /** 目前的球員狀態。流程開始前為 null。 */
@@ -4976,11 +5007,14 @@ export class Game {
     this.#careerTables(summary);
     this.#careerScores(summary);
 
-    const ballots = summary.leagues.length > 0 ? runBallots(this.world, summary.leagues) : [];
+    // **票選只跑一次，結果存下來。** 它會消耗抽取，跑第二次得到的得票年與得票率
+    // 就不是玩家看到的那一份了；而結算（score()）也要知道誰進了名人堂。
+    this.#ballots = summary.leagues.length > 0 ? runBallots(this.world, summary.leagues) : [];
+    const ballots = this.#ballots;
     this.#retireScene(summary);
     this.#hallOfFame(ballots);
     this.#settlementTraits(summary, ballots);
-    this.#achievementCard(summary, ballots);
+    this.#achievementCard();
     this.#fanBoard(summary);
     this.#secondLife();
 
@@ -5301,19 +5335,11 @@ export class Game {
    * **這裡算出來的只是顯示用的。** 真正入帳的 AP 由伺服器重跑同一份日誌後認定，
    * 客戶端算的只拿去比對（見 ADR 0007）。
    */
-  #achievementCard(summary: CareerSummary, ballots: readonly BallotResult[]): void {
-    const result = evaluateAchievements({
-      summary,
-      awards: this.#awards,
-      traits: this.#traits,
-      traitNames: this.#traitNames,
-      honors: this.#honors,
-      halls: ballots.filter((b) => b.inducted).map((b) => b.leagueName),
-      // 未登入時是 NO_PROGRESS：每一局都是「第一段人生」、每一項都算新解鎖。
-      firstCareer: this.#progress.firstCareer,
-      spouses: this.#spouses,
-      unlocked: this.#progress.unlocked,
-    });
+  #achievementCard(): void {
+    // 配方在 score()，這裡只負責把結果講給玩家聽。未登入時進度是 NO_PROGRESS：
+    // 每一局都是「第一段人生」、每一項都算新解鎖。
+    const result = this.score()?.achievements;
+    if (result === undefined) return;
     this.#achievements = result;
     if (result.list.length === 0) return;
 
@@ -5818,11 +5844,6 @@ function slotText(n: number): string {
  */
 function pct(v: number): number {
   return Math.round(v);
-}
-
-/** 打擊率的棒球慣例寫法：去掉個位數的 0，例如 .333。 */
-export function fmtAvg(avg: number): string {
-  return avg.toFixed(3).replace(/^0/, '');
 }
 
 function handLabel(hand: string): string {

@@ -28,12 +28,12 @@ import {
 import type { AwardRecord } from './engine/awards.ts';
 import type { CareerSummary, SeasonRecord } from './engine/career.ts';
 import {
-  fmtAvg,
   Game,
   NO_PROGRESS,
   type CareerProgress,
   type PlayerState,
 } from './engine/game.ts';
+import { fmtAvg } from './engine/format.ts';
 import { abilityCost, carryGauge, growthCurve } from './engine/growth.ts';
 import {
   amateurBaseline,
