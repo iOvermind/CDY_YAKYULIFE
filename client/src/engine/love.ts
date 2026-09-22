@@ -55,6 +55,21 @@ export interface LoveState {
   caught: number;
   /** 離過幾次婚。 */
   divorces: number;
+  /**
+   * 結婚的年份。沒結過婚是 null。
+   *
+   * **它是感情的狀態，不是流程的變數**——結算的【人生】那一列要寫它，而那一列
+   * 問的正是「這段感情走到哪裡」。
+   */
+  marriedYear: number | null;
+  /**
+   * 走過紅毯的對象，依序去重。離婚再娶不會抹掉前一個名字。
+   *
+   * 與 `partner` 分工：那個是**現在**在身邊的人，這份是這一生走過紅毯的全部。
+   * 成就的「姻緣」數的是不同的對象（見 achievements.ts），所以它活得比任何一段
+   * 關係都長——分手與離婚都不清空它。
+   */
+  spouses: string[];
   /** 吞下去的風波次數。裂痕越多，往後越不平靜。 */
   cracks: number;
   /** 劈腿被抓之後的分手加成還剩幾年。 */
@@ -81,12 +96,26 @@ export function newLoveState(): LoveState {
     affairs: 0,
     caught: 0,
     divorces: 0,
+    marriedYear: null,
+    spouses: [],
     cracks: 0,
     cheatPenaltyYears: 0,
     turmoilThisYear: false,
     overseas: 'none',
     overseasYears: 0,
   };
+}
+
+/**
+ * 把一位對象記進婚姻史。
+ *
+ * 去重是刻意的：離婚後與同一個人復合再婚，成就上不算新的一項——那是同一段關係
+ * 的第二次嘗試，不是另一個人。
+ */
+export function recordSpouse(love: LoveState, name: string | null): void {
+  if (name === null || name === '') return;
+  if (love.spouses.includes(name)) return;
+  love.spouses.push(name);
 }
 
 /** 兩位對象一起算的孩子數。畫面上的「幾個孩子」與贍養費看的都是這個。 */

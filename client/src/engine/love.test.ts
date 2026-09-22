@@ -3,6 +3,7 @@ import { love as cfg } from '../data/index.ts';
 import {
   afterBreakup,
   alimony,
+  recordSpouse,
   breakupChance,
   cadenceChance,
   canPropose,
@@ -375,5 +376,23 @@ describe('三人行', () => {
     expect(fresh.open).toBe('none');
     expect(fresh.partner2).toBeNull();
     expect(fresh.kids2).toBe(0);
+  });
+});
+
+describe('婚姻史', () => {
+  it('依序記下，同一個人不記第二次', () => {
+    const love = state();
+    recordSpouse(love, '何雨蓁');
+    recordSpouse(love, '蔡宜庭');
+    // 離婚後與同一個人復合再婚是同一段關係的第二次嘗試，不是另一個人。
+    recordSpouse(love, '何雨蓁');
+    expect(love.spouses).toEqual(['何雨蓁', '蔡宜庭']);
+  });
+
+  it('空的名字不進去', () => {
+    const love = state();
+    recordSpouse(love, null);
+    recordSpouse(love, '');
+    expect(love.spouses).toEqual([]);
   });
 });

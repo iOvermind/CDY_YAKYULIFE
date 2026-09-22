@@ -167,6 +167,7 @@ import {
   partnerBonusKey,
   partnerTier,
   partnerOf,
+  recordSpouse,
   pickPartner,
   rehabChance,
   rewardMultiplier,
@@ -584,10 +585,6 @@ export class Game {
   #rehabYear = false;
   /** 感情狀態。 */
   #love: LoveState = newLoveState();
-  /** 結婚的年份。結算的【人生】區塊要寫它。 */
-  #weddingYear: number | null = null;
-  /** 走過紅毯的對象，依序去重。離婚再娶不會抹掉前一個名字。 */
-  #spouses: string[] = [];
   /** 第一次被徵召的年份。列管期從這裡算。 */
   #intlLockedSince: number | null = null;
   /** 打進國際賽冠亞軍的次數。東亞功夫的解鎖條件看它。 */
@@ -851,7 +848,7 @@ export class Game {
         honors: this.#honors,
         halls: this.#ballots.filter((b) => b.inducted).map((b) => b.leagueName),
         firstCareer: progress.firstCareer,
-        spouses: this.#spouses,
+        spouses: this.#love.spouses,
         unlocked: progress.unlocked,
       }),
       ladder: ladderRows(summary),
@@ -883,11 +880,11 @@ export class Game {
         partner: this.#love.partner,
         partner2: this.#love.partner2,
         open: this.#love.open,
-        marriedYear: this.#weddingYear,
+        marriedYear: this.#love.marriedYear,
         kids: totalKids(this.#love),
         divorces: this.#love.divorces,
         caught: this.#love.caught,
-        spouses: this.#spouses,
+        spouses: this.#love.spouses,
       },
       earnings: this.#earnings,
       pool: this.#pool,
@@ -2591,11 +2588,11 @@ export class Game {
         love.kids = 0;
         love.kids2 = 0;
         love.datingYears = 0;
-        this.#weddingYear = this.#year;
+        love.marriedYear = this.#year;
         // 三人行是**兩位一起進禮堂**，姻緣成就那一刻記兩筆——成就數的是不同的
         // 對象，而這一天確實有兩個人走過紅毯。
-        this.#recordSpouse(love.partner);
-        this.#recordSpouse(love.partner2);
+        recordSpouse(love, love.partner);
+        recordSpouse(love, love.partner2);
         const gain = this.#loveReward(2);
         const brides =
           love.partner2 === null
@@ -2616,18 +2613,6 @@ export class Game {
         next();
       },
     );
-  }
-
-  /**
-   * 把一位對象記進婚姻史。
-   *
-   * 去重是刻意的：離婚後與同一個人復合再婚，成就上不算新的一項——那是同一段
-   * 關係的第二次嘗試，不是另一個人。
-   */
-  #recordSpouse(name: string | null): void {
-    if (name === null || name === '') return;
-    if (this.#spouses.includes(name)) return;
-    this.#spouses.push(name);
   }
 
   /** 已婚的一年：風波 → 生子 → 外遇或日常。 */
@@ -2936,7 +2921,7 @@ export class Game {
     love.kids2 = 0;
     // 被抓的分手加成沒有意義了——那件事已經有了另一個結局。
     love.cheatPenaltyYears = 0;
-    if (love.status === 'married') this.#recordSpouse(other);
+    if (love.status === 'married') recordSpouse(love, other);
     this.#unlockTrait(
       loveCfg.threesome.harem.trait,
       `<b class="hl">${esc(love.partner ?? '')}</b> 看了 <b class="hl">${esc(other)}</b> 很久，` +
