@@ -235,6 +235,7 @@ import {
   rate,
   ratingPosition,
   sideOfStartPosition,
+  sideOveralls,
   UTIL,
   type Abilities,
 } from './rating.ts';
@@ -2069,10 +2070,9 @@ export class Game {
     const position = this.#fieldPosition ?? DH;
     const line = playSeason(this.world, {
       level: pro.level,
-      // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。守備分用的
-      // 是真實能力表——那兩個今天不一樣，見 GitHub issue #3。
+      // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。打擊、投球
+      // 與守備分吃的是同一份。
       ability: this.#seasonAbility,
-      defenseAbility: this.#ability,
       position,
       // 守備分要算的守位：純投手在職業沒有守位，那一格就是 null。
       scoringPosition: this.#position,
@@ -3045,7 +3045,10 @@ export class Game {
     const level = pro.level;
     const side = this.#lockedSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder');
     const par = tournamentPar();
-    const overall = r.overall ?? 0;
+    // **兩側各認自己那一側**，與聯盟球季同一份扣分（issue #2）：那個扣分講的是
+    // 「這一側的實力沒有那麼強」，與賽事長短無關。強打弱投的二刀流從前在這裡
+    // 是以棒子撐起來的 overall 在投球。
+    const sides = sideOveralls(r);
 
     if (side === 'pitcher' || this.isTwoWay) {
       const role = (this.#seasonPitching as ProPitchingLine | null)?.role ?? 'SP';
@@ -3054,7 +3057,7 @@ export class Game {
         this.world,
         this.#seasonAbility,
         level,
-        overall,
+        sides.pitching,
         this.#standards,
         {
           appearances: games,
@@ -3078,7 +3081,7 @@ export class Game {
         this.#seasonAbility,
         position,
         level,
-        overall,
+        sides.batting,
         this.#standards,
         { appearances: games, par },
       );

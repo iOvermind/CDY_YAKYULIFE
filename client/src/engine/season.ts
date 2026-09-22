@@ -13,7 +13,7 @@ import { ALL_ABILITIES, leagues, positions, season as cfg, type RecordSpec } fro
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { leagueStandardOf, type LeagueStandards } from './league.ts';
 import { defenseRuns } from './defense.ts';
-import { bullpenScore, pitcherStuff, type Abilities, type Rating } from './rating.ts';
+import { bullpenScore, pitcherStuff, sideOveralls, type Abilities, type Rating } from './rating.ts';
 import type { World } from './rng.ts';
 
 
@@ -50,14 +50,12 @@ export interface SeasonLine {
 export interface SeasonContext {
   readonly level: string;
   /**
-   * 算成績用的能力：**含當季暫時能力**（ADR 0006）。
+   * 這一季的能力：**含當季暫時能力**（ADR 0006）。
    *
-   * 與 `defenseAbility` 今天不是同一份——感情給的當季狀態會抬高打擊與投球，卻
-   * 不影響守備分。那是既有行為，不是這裡決定的；該不該統一見 GitHub issue #3。
+   * 打擊、投球與守備分吃的是同一份——當季狀態講的是「他今年的身手」，沒有理由
+   * 只算進打擊與投球（issue #3）。
    */
   readonly ability: Abilities;
-  /** 算守備分用的能力：真實能力表，不含當季暫時能力。 */
-  readonly defenseAbility: Abilities;
   /** 登錄守位。打擊那一側用它——純投手在職業沒有守位，呼叫端給 DH。 */
   readonly position: string;
   /**
@@ -1196,21 +1194,12 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
   const asPitcher = ctx.twoWay || better === 'pitcher';
   const asBatter = ctx.twoWay || better === 'fielder';
 
-  // **兩側各認自己那一側**：扣掉「綜合能力高出本側評價的那一截」。對只守一側
-  // 的人這個差恆為 0（他的 overall 本來就是自己那側），所以既有球員的數據一位
-  // 元都不動；只有二刀流會被扣。
-  //
-  // 用扣的而不是直接換成 pitcher／fielder，是為了保住 overall 裡的特性加成。
-  //
-  // 投球和打擊拆得開——投手能力再高也可以不上場打擊。守位和打席拆不開，但那
-  // 已經由 fielder 內含守備來保證，不必讓打擊側去吃投手評價。
-  const r = ctx.rating;
-  const pitchingOverall = r.overall - Math.max(0, r.fielder - r.pitcher);
-  const battingOverall = r.overall - Math.max(0, r.pitcher - r.fielder);
+  // 兩側各認自己那一側的綜合能力，規則見 sideOveralls()——國際賽用的是同一份。
+  const sides = sideOveralls(ctx.rating);
 
   const pitching = played(
     asPitcher
-      ? proPitchingLine(world, ctx.ability, ctx.level, pitchingOverall, ctx.standards, {
+      ? proPitchingLine(world, ctx.ability, ctx.level, sides.pitching, ctx.standards, {
           teamWinRate: ctx.teamWinRate,
           seasonFactor: ctx.seasonFactor,
           // 沒登錄過就由 proPitchingLine 現算——那是「這個呼叫端還沒有定位會議」。
@@ -1220,7 +1209,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
   );
   const batting = played(
     asBatter
-      ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, battingOverall, ctx.standards, {
+      ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, sides.batting, ctx.standards, {
           seasonFactor: ctx.seasonFactor,
         })
       : null,
@@ -1245,7 +1234,7 @@ function fieldingRuns(
   if (position === null || batting === null) return 0;
   if (levelOf(ctx.level).top === undefined) return 0;
   return defenseRuns({
-    ability: ctx.defenseAbility,
+    ability: ctx.ability,
     position,
     level: ctx.level,
     standards: ctx.standards,

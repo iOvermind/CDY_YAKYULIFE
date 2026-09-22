@@ -607,7 +607,6 @@ describe('playSeason', () => {
   const ctx = (over: Partial<SeasonContext> = {}): SeasonContext => ({
     level: 'CPBL1',
     ability: flat(50),
-    defenseAbility: flat(50),
     position: 'SS',
     scoringPosition: null,
     rating: rating(),
@@ -757,20 +756,20 @@ describe('playSeason', () => {
     it('頂級聯盟的守位有守備分', () => {
       const line = playSeason(
         new World('d'),
-        ctx({ position: 'SS', scoringPosition: 'SS', ability: gloves, defenseAbility: gloves }),
+        ctx({ position: 'SS', scoringPosition: 'SS', ability: gloves }),
       );
       expect(line.batting).not.toBeNull();
       expect(line.defenseRuns).not.toBe(0);
     });
 
     it('沒有計分守位就是 0——純投手不該有守備分', () => {
-      expect(playSeason(new World('d'), ctx({ ability: gloves, defenseAbility: gloves })).defenseRuns).toBe(0);
+      expect(playSeason(new World('d'), ctx({ ability: gloves })).defenseRuns).toBe(0);
     });
 
     it('指定打擊沒有守備分', () => {
       const line = playSeason(
         new World('d'),
-        ctx({ position: 'DH', scoringPosition: 'DH', ability: gloves, defenseAbility: gloves }),
+        ctx({ position: 'DH', scoringPosition: 'DH', ability: gloves }),
       );
       expect(line.defenseRuns).toBe(0);
     });
@@ -782,20 +781,24 @@ describe('playSeason', () => {
     it('二軍不算守備分', () => {
       const line = playSeason(
         new World('d'),
-        ctx({ level: 'CPBL2', position: 'SS', scoringPosition: 'SS', ability: gloves, defenseAbility: gloves }),
+        ctx({ level: 'CPBL2', position: 'SS', scoringPosition: 'SS', ability: gloves }),
       );
       expect(line.batting).not.toBeNull();
       expect(line.defenseRuns).toBe(0);
     });
 
-    it('守備分看的是 defenseAbility，不是成績用的那一份', () => {
+    /**
+     * 守備分與成績吃**同一份**能力，含當季暫時能力（ADR 0006、issue #3）。當季
+     * 狀態講的是「他今年的身手」，沒有理由只算進打擊與投球。
+     */
+    it('手套好的人守備分比較高，而且看的是傳進來的那一份能力', () => {
       const good = playSeason(
         new World('d'),
-        ctx({ position: 'SS', scoringPosition: 'SS', ability: flat(50), defenseAbility: gloves }),
+        ctx({ position: 'SS', scoringPosition: 'SS', ability: gloves }),
       );
       const bad = playSeason(
         new World('d'),
-        ctx({ position: 'SS', scoringPosition: 'SS', ability: flat(50), defenseAbility: flat(30) }),
+        ctx({ position: 'SS', scoringPosition: 'SS', ability: with_(50, { rng: 30, fld: 30, arm: 30, cat: 30 }) }),
       );
       expect(good.defenseRuns).toBeGreaterThan(bad.defenseRuns);
     });

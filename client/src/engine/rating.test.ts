@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { abilities, ALL_ABILITIES, amateur, positions } from '../data/index.ts';
 import {
-  positionAverageLine,
   battingRating,
   defenseScore,
-  fieldingPosition,
   fielderRating,
+  fieldingPosition,
   pitcherRating,
+  positionAverageLine,
   rate,
   ratingPosition,
+  sideOveralls,
   twoWayPositionBonus,
   type Abilities,
+  type Rating,
 } from './rating.ts';
 
 const build = (base: number, over: Record<string, number> = {}) => ({
@@ -345,5 +347,35 @@ describe('fieldingPosition', () => {
 
   it('相同能力永遠得到相同守位——沒有隨機成分', () => {
     expect(fieldingPosition(flat(55), LEVEL)).toBe(fieldingPosition(flat(55), LEVEL));
+  });
+});
+
+describe('兩側各認自己那一側', () => {
+  const rating = (over: Partial<Rating> = {}): Rating => ({
+    pitcher: 50,
+    fielder: 50,
+    batting: 50,
+    overall: 50,
+    better: 'fielder',
+    ...over,
+  });
+
+  it('只守一側的人一點都不扣——他的 overall 本來就是自己那一側', () => {
+    const r = rating({ pitcher: 60, fielder: 40, overall: 60 });
+    expect(sideOveralls(r).pitching).toBe(60);
+    // 反方向照扣：他的打擊側沒有 60 的實力。
+    expect(sideOveralls(r).batting).toBe(40);
+  });
+
+  it('強打弱投的二刀流，投球側被扣到自己的評價', () => {
+    const r = rating({ pitcher: 20, fielder: 70, overall: 70 });
+    expect(sideOveralls(r).pitching).toBe(20);
+    expect(sideOveralls(r).batting).toBe(70);
+  });
+
+  it('兩側一樣強就兩側都不扣', () => {
+    const r = rating({ pitcher: 65, fielder: 65, overall: 68 });
+    // overall 比兩側都高是特性加成的結果，那一截保得住。
+    expect(sideOveralls(r)).toEqual({ pitching: 68, batting: 68 });
   });
 });

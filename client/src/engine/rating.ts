@@ -445,6 +445,29 @@ export interface Rating {
 }
 
 /**
+ * 兩側各認自己那一側的綜合能力。
+ *
+ * 扣掉「綜合能力高出本側評價的那一截」：對只守一側的人這個差恆為 0（他的
+ * `overall` 本來就是自己那一側），只有二刀流會被扣。用扣的而不是直接換成
+ * `pitcher` / `fielder`，是為了保住 `overall` 裡的特性加成。
+ *
+ * **投球和打擊拆得開**——投手能力再高也可以不上場打擊，一條手臂不該替他換來
+ * 打席。守位和打席拆不開，但那已經由 `fielder` 內含守備來保證。
+ *
+ * 聯盟球季與國際賽用的是同一份：那個扣分講的是「這一側的實力沒有那麼強」，
+ * 與賽事長短無關（issue #2）。
+ */
+export function sideOveralls(rating: Rating): {
+  readonly pitching: number;
+  readonly batting: number;
+} {
+  return {
+    pitching: rating.overall - Math.max(0, rating.fielder - rating.pitcher),
+    batting: rating.overall - Math.max(0, rating.pitcher - rating.fielder),
+  };
+}
+
+/**
  * 計算完整評價。
  *
  * 整體取兩側較高者。另一側目前不計入——二刀流的價值在於「能同時貢獻兩種
