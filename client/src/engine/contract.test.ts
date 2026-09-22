@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { season as cfg } from '../data/index.ts';
 import {
   buyoutCost,
+  clubOption,
   contractYears,
   isFreeAgentEligible,
   offersExtension,
@@ -10,6 +11,7 @@ import {
   yearsCap,
   type Contract,
 } from './contract.ts';
+import { World } from './rng.ts';
 
 const c = cfg.contract;
 
@@ -220,5 +222,37 @@ describe('rookieContract', () => {
     expect(r.years).toBe(c.rookie_contract.years);
     expect(r.mult).toBe(c.rookie_contract.multiplier);
     expect(r.extensionOffered).toBe(false);
+  });
+});
+
+describe('clubOption', () => {
+  const opt = c.control.club_option;
+
+  it('年數落在設定的區間裡，薪資照層級基數不加成', () => {
+    for (let i = 0; i < 40; i++) {
+      const got = clubOption(new World(`opt-${i}`));
+      expect(got.years).toBeGreaterThanOrEqual(opt.years.min);
+      expect(got.years).toBeLessThanOrEqual(opt.years.max);
+      expect(got.mult).toBe(opt.multiplier);
+      // 續約權是新的一張約，母隊還沒提過延長。
+      expect(got.extensionOffered).toBe(false);
+    }
+  });
+
+  it('區間兩端都抽得到——不是每次都給同一個年數', () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 60; i++) seen.add(clubOption(new World(`span-${i}`)).years);
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('同一個種子抽出同一張約', () => {
+    expect(clubOption(new World('same'))).toEqual(clubOption(new World('same')));
+  });
+
+  it('抽取走 career 子序列——換掉別條序列的抽法不影響它', () => {
+    const a = new World('stream');
+    a.stream('growth').int(1, 6);
+    const b = new World('stream');
+    expect(clubOption(a)).toEqual(clubOption(b));
   });
 });

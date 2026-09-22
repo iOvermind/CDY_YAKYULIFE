@@ -69,6 +69,7 @@ import {
 import type { AmateurSeasonRecord, InternationalRecord } from './career.ts';
 import {
   buyoutCost,
+  clubOption,
   isFreeAgentEligible,
   offersExtension,
   rookieContract,
@@ -4008,31 +4009,20 @@ export class Game {
     }
 
     // ---- 合約到期
-    if (!top) {
-      // 非頂級層級沒有談判可言——續個短約繼續打。
-      const opt = seasonCfg.contract.control.club_option;
-      pro.contract = {
-        years: this.world.stream('career').int(opt.years.min, opt.years.max),
-        mult: opt.multiplier,
-        extensionOffered: false,
-      };
-      next();
-      return;
-    }
-
-    if (!eligible) {
-      const opt = seasonCfg.contract.control.club_option;
-      pro.contract = {
-        years: this.world.stream('career').int(opt.years.min, opt.years.max),
-        mult: opt.multiplier,
-        extensionOffered: false,
-      };
-      this.flow.card(
-        'info',
-        '球團續約',
-        `你仍在選秀球隊的掌控期（服務 ${pro.serviceYears}／${seasonCfg.contract.control.years} 年），` +
-          `球團行使續約權——續 <b class="hl">${pro.contract.years} 年</b>，薪資照層級基數。`,
-      );
+    //
+    // 兩種人拿到的是同一張約：**非頂級層級沒有談判可言**，而**掌控期之內球員沒有
+    // 選擇**。規則歸 contract.ts，這裡只決定要不要把它講給玩家聽——非頂級層級不
+    // 發卡片，那一層的續約不是一件事（ADR 0025）。
+    if (!top || !eligible) {
+      pro.contract = clubOption(this.world);
+      if (top) {
+        this.flow.card(
+          'info',
+          '球團續約',
+          `你仍在選秀球隊的掌控期（服務 ${pro.serviceYears}／${seasonCfg.contract.control.years} 年），` +
+            `球團行使續約權——續 <b class="hl">${pro.contract.years} 年</b>，薪資照層級基數。`,
+        );
+      }
       next();
       return;
     }

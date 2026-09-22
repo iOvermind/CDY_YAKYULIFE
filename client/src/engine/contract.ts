@@ -12,10 +12,14 @@
  * 球團記得那件事。傷病史縮短年限（`injuries`）的公式同樣寫完整了，但傷病系統
  * 還沒上線，那個輸入目前恆為零。
  *
- * 本模組是純函式。續約權的年數要擲骰，因此那部分在 `game.ts`。
+ * 抽取走 career 子序列（生涯層級的決定），與 `transfer.ts`、`draft.ts` 一致。
+ * **純函式不是這條 seam 的判準，領域才是**——續約權的年數要擲骰，而「掌控期到期
+ * 會拿到什麼約」是合約的規則，不是流程的規則。這裡曾經把它排除在外，代價是那條
+ * 規則在 `game.ts` 被寫了兩份，而讀 contract.ts 的人看不到它。
  */
 
 import { season as cfg } from '../data/index.ts';
+import type { World } from './rng.ts';
 
 /** 一張合約。 */
 export interface Contract {
@@ -188,6 +192,25 @@ export function offersExtension(options: {
   if (e.requires_top_level && !options.topLevel) return false;
   if (!options.freeAgentEligible) return false;
   return options.d >= e.requires_min_d;
+}
+
+/**
+ * 球團行使續約權：掌控期之內合約到期時，球員拿到的那張短約。
+ *
+ * **球員沒有選擇**，所以這裡沒有長短約的取捨——年數在設定給的區間裡擲一次，
+ * 薪資照層級基數不加成（係數 1.0）。那是選秀球隊的回報（見 CONTEXT.md 的
+ * 「掌控期」）。
+ *
+ * 非頂級層級的續約走同一條規則：那裡也沒有談判可言。差別只在頂級層級要發一張
+ * 卡片告訴玩家發生了什麼，而那是流程的事（ADR 0025）。
+ */
+export function clubOption(world: World): Contract {
+  const opt = cfg.contract.control.club_option;
+  return {
+    years: world.stream('career').int(opt.years.min, opt.years.max),
+    mult: opt.multiplier,
+    extensionOffered: false,
+  };
 }
 
 /** 選秀進來的第一張約。 */
