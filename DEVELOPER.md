@@ -146,7 +146,7 @@ CDY_YAKYULIFE/
 | :--- | :--- | :--- |
 | `index_legacy.html` | 舊版實作：包含畫面結構、樣式設計與所有遊戲邏輯 | 無外部依賴 |
 | `client/src/data/` | 規則資料與載入層。10 個 JSON 加上型別定義 | 無 |
-| `client/src/engine/` | 模擬引擎。`rng.ts` 是確定性亂數層，其餘領域模組各自宣告使用哪一條子序列 | `data/` |
+| `client/src/engine/` | 模擬引擎。`rng.ts` 是確定性亂數層，其餘領域模組各自宣告使用哪一條子序列。**需要玩家回答的領域寫成步驟機**（`loveYear.ts` 是第一個，見 [ADR 0050](docs/adr/0050-domains-that-ask-the-player-are-step-machines.md)）：規則 `yield` 出一步，`game.ts` 負責把它講出來 | `data/` |
 | `client/src/*.tsx` | React 介面 | `engine/`、`data/` |
 | `client/src/*.ts`（`src/` 下、不在 `engine/` 裡的） | 介面側的純邏輯：成就櫃的版面（`cabinet.ts`）、生涯卡的圖（`careerImage.ts`）。**不是引擎**——它們回答「畫面怎麼排」，不回答「這一生值多少」 | `engine/`、`data/` |
 | `server/src/` | 帳號、成就結算與重跑驗證。**直接 import client 的引擎原始碼**，所以兩邊永遠是同一份規則——但只准走三條線：`engine/index.ts`（引擎的入口契約，見 [ADR 0049](docs/adr/0049-the-engine-entry-is-the-servers-contract.md)）、`data/index.ts`、`api/contract.ts`，有護欄測試盯著 | `client/src/engine/index.ts`、`client/src/data/`、`client/src/api/` |

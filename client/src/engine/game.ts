@@ -105,7 +105,7 @@ import {
   winPct,
   type Shares,
 } from './metrics.ts';
-import { esc, Flow, type Option } from './flow.ts';
+import { esc, Flow, type Option, type Prompt } from './flow.ts';
 import { joinName } from './naming.ts';
 import { applyTalents, type TalentLevels } from './overlay.ts';
 import {
@@ -153,30 +153,23 @@ import {
   type Tournament,
 } from './national.ts';
 import {
-  afterBreakup,
-  alimony,
-  earnsConfidante,
-  cadenceChance,
-  canPropose,
-  childbirthChance,
-  confessionChance,
-  divorceCost,
-  hasPartner,
-  isChildhoodSweetheart,
+  injuryRiskModifier,
   newLoveState,
-  partnerBonusKey,
-  partnerTier,
-  partnerOf,
-  recordSpouse,
-  pickPartner,
   rehabChance,
   rewardMultiplier,
   totalKids,
-  turmoilChance,
-  breakupChance,
-  injuryRiskModifier,
   type LoveState,
 } from './love.ts';
+import {
+  loveCheckpoint,
+  loveOverseas,
+  loveYear,
+  partnerProfile,
+  type LoveAsk,
+  type LoveEffect,
+  type LoveFlow,
+  type LoveTell,
+} from './loveYear.ts';
 import {
   applyAging,
   asksRetirement,
@@ -301,6 +294,29 @@ export interface CareerScore {
   readonly playerName: string;
   /** 結算當下的引擎版本。榜單是歷史，每一列帶著它（ADR 0002）。 */
   readonly engineVersion: number;
+}
+
+/**
+ * 感情線解鎖特性時要講的那段話。
+ *
+ * **規則那邊只說解鎖哪一個 id**，措辭在這裡（ADR 0025、0050）。
+ */
+const LOVE_TRAIT_TEXT: Readonly<Record<string, string>> = {
+  [loveCfg.childhood_sweetheart.trait]:
+    '十五歲那年放學後的河堤，一路走到了主場的本壘板。中間有幾次差點走散，但你們都熬過來了。',
+  [loveCfg.dating.confidante.trait]:
+    '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
+  [loveCfg.affair.caught.scum.trait]:
+    `第二次被逮個正著。從今以後你在球迷心中的形象定型了——<b class="dn">每次被抓到，全能力 −${loveCfg.affair.caught.scum.all_ability_loss}</b>。`,
+  [loveCfg.threesome.harem.trait]:
+    '她看了那個人很久，最後說：「與其你偷偷摸摸，不如三個人坐下來把話講清楚。」',
+  [loveCfg.threesome.cuckold.trait]:
+    '你聽見自己說出那句話的時候，比她更驚訝。房子還是那間房子，只是從此多了一雙鞋。',
+};
+
+/** 風波那五張卡的敘事。文案住在 `love.json`，這裡只負責取。 */
+function turmoilText(kindId: string): string {
+  return loveCfg.turmoil.kinds.find((k) => k.id === kindId)?.text ?? '';
 }
 
 /** 沒有帳號時的進度：每一局都是第一段人生，每一項都算新解鎖。 */
@@ -2340,27 +2356,6 @@ export class Game {
     return `<b class="up">${esc(abilities.abilities[key] ?? key)} +${scaled}</b><span class="sub">（本季狀態，不計入能力表）</span>`;
   }
 
-  /**
-   * 感情事件的年度回報。**三人行在這裡分岔。**
-   *
-   * 鹿鼎公是兩位各擲各的骰：各自走自己側寫的那兩項能力，所以一年可能兩項一起
-   * 漲。縮頭烏龜則是倒扣——留下來的代價每年都要付一次，走的一樣是當季狀態，
-   * 不寫回能力表。
-   */
-  #loveReward(points: number): string {
-    const love = this.#love;
-    if (love.open === 'cuckold') {
-      return this.#grantSeasonBonus(
-        partnerBonusKey(this.world, love.partner),
-        -loveCfg.threesome.cuckold.reward_points,
-      );
-    }
-    const first = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), points);
-    if (love.partner2 === null) return first;
-    const second = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner2), points);
-    return `${first}、${second}`;
-  }
-
   /** 這一季實際上場用的能力：真實能力加上當季暫時能力。 */
   get #seasonAbility(): Abilities {
     if (Object.keys(this.#seasonBonus).length === 0) return this.#ability;
@@ -2378,697 +2373,503 @@ export class Game {
    *
    * **獨立於事件卡**——事件卡是球場上的事，感情是場外的事，混在同一個牌庫裡會
    * 互相稀釋。
+   *
+   * 規則在 `loveYear.ts`（ADR 0050），這裡只做兩件事：把步驟畫成卡片或提問，
+   * 以及把步驟帶出來的意圖（能力、金錢、特性、榮銜）兌現。
    */
   #loveEvent(next: () => void): void {
-    const love = this.#love;
-    love.turmoilThisYear = false;
-    if (this.#age < loveCfg.gate.min_age) {
-      next();
-      return;
-    }
-
-    const rng = this.world.stream('career');
-    // 抽取一律先做，與狀態無關——否則某一年的狀態差異會讓後面所有判定整串偏移。
-    const runs = rng.chance(cadenceChance(love));
-    if (love.cheatPenaltyYears > 0) love.cheatPenaltyYears--;
-    if (love.overseas !== 'none') love.overseasYears++;
-    if (!runs) {
-      next();
-      return;
-    }
-
-    switch (love.status) {
-      case 'dating':
-        this.#datingYear(next);
-        return;
-      case 'married':
-        this.#marriedYear(next);
-        return;
-      default:
-        this.#singleYear(next);
-    }
+    this.#runLove(
+      loveYear(this.world, this.#love, {
+        age: this.#age,
+        year: this.#year,
+        pro: this.#pro !== null,
+        bestRank: this.#bestRankThisYear,
+        earnings: this.#earnings,
+      }),
+      next,
+    );
   }
 
-  /** 單身或離婚：認識一個人。校園看球場上的表現，職業看緋聞。 */
-  #singleYear(next: () => void): void {
-    const pro = this.#pro !== null;
-    const partner = pickPartner(this.world, pro ? 'pro' : 'school', null);
-    // 側寫要在「要不要告白」之前就攤開——選擇之前拿不到的資訊不構成選擇。
-    const desc = partnerOf(partner)?.desc ?? '';
-    const profile = desc === '' ? '' : `<br><span class="sub">${esc(desc)}</span>`;
+  /**
+   * 驅動一台感情的步驟機。
+   *
+   * 敘事型的步驟畫完就往下走，提問型的停下來等玩家——`flow.choose()` 會在回答
+   * 時把選項 id 送回產生器，於是「這一年接下來發生什麼」由規則那邊決定，不是
+   * 由這裡的巢狀 callback 決定。
+   */
+  #runLove(flow: LoveFlow, next: () => void, answer?: string): void {
+    const result = answer === undefined ? flow.next() : flow.next(answer);
+    if (result.done === true) {
+      next();
+      return;
+    }
+    const step = result.value;
+    if (step.kind === 'tell') {
+      this.#loveTell(step);
+      this.#runLove(flow, next, '');
+      return;
+    }
+    this.flow.ask(this.#lovePrompt(step), (choice) => {
+      this.#runLove(flow, next, choice);
+    });
+  }
 
-    if (!pro) {
-      const rank = this.#bestRankThisYear;
-      const chance = confessionChance(rank);
-      this.flow.ask(
+  /** 升學或進職業時的關卡。規則見 `loveCheckpoint()`——這裡只負責講。 */
+  #loveCheckpoint(label: string): void {
+    this.#runLove(loveCheckpoint(this.world, this.#love, label), () => {});
+  }
+
+  /** 旅外時對這段關係的安排。 */
+  #loveOverseas(orgName: string, next: () => void): void {
+    this.#runLove(
+      loveOverseas(
+        this.#love,
         {
-          title: `${partner}最近常常在球場邊等你`,
+          age: this.#age,
+          year: this.#year,
+          pro: this.#pro !== null,
+          bestRank: this.#bestRankThisYear,
+          earnings: this.#earnings,
+        },
+        orgName,
+      ),
+      next,
+    );
+  }
+
+  /**
+   * 兌現一步的意圖，回傳要寫進卡片的那幾句。
+   *
+   * **抽取留在這裡**：挑哪一項能力要看這一側在用哪些，那是這個類別才知道的事。
+   * 位置沒有變——規則那邊 `yield` 出步驟的當下，就是從前呼叫這些 helper 的當下。
+   */
+  #applyLoveEffects(effects: readonly LoveEffect[]): readonly string[] {
+    const lines: string[] = [];
+    for (const effect of effects) {
+      switch (effect.kind) {
+        case 'bonus':
+          lines.push(this.#grantSeasonBonus(effect.ability, effect.points));
+          break;
+        case 'bonus-random':
+          lines.push(this.#grantSeasonBonus(this.#randomVisibleAbility(), effect.points));
+          break;
+        case 'ability-loss':
+          lines.push(this.#loseAbility(effect.points));
+          break;
+        case 'all-ability-loss':
+          for (const key of ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide))) {
+            this.#ability[key] = Math.max(
+              abilities.scale.hard_floor,
+              (this.#ability[key] ?? 0) - effect.points,
+            );
+          }
+          this.#settleCarry();
+          lines.push(`<br><b class="dn">全能力 −${effect.points}</b>（花樣年華的代價）。`);
+          break;
+        case 'money':
+          this.#earnings = Math.max(0, this.#earnings + effect.amount);
+          break;
+        case 'trait':
+          this.#unlockTrait(effect.id, LOVE_TRAIT_TEXT[effect.id] ?? '');
+          break;
+        case 'honor':
+          this.#addHonor(effect.name);
+          break;
+      }
+    }
+    return lines;
+  }
+
+  /** 一步的提問：選項 id 由規則那邊給，這裡只決定怎麼寫。 */
+  #lovePrompt(step: LoveAsk): Prompt {
+    const love = this.#love;
+    switch (step.id) {
+      case 'confess': {
+        const desc = partnerProfile(step.partner);
+        return {
+          title: `${step.partner}最近常常在球場邊等你`,
           options: [
             {
               id: 'love:confess',
               label: '找個機會告白',
-              note: `成功率 ${pct(chance)}%｜${rank === null ? '今年沒有大賽成績' : `今年打到${rank}`}｜${desc}`,
+              note: `成功率 ${pct(step.chance)}%｜${step.rank === null ? '今年沒有大賽成績' : `今年打到${step.rank}`}｜${desc}`,
               role: 'main',
             },
             { id: 'love:wait', label: '再說吧，先專心打球' },
           ],
-        },
-        (choice) => {
-          if (choice !== 'love:confess') {
-            this.flow.card('info', '再說吧', '你把話吞回去，走進打擊籠。');
-            next();
-            return;
-          }
-          if (!this.world.stream('career').chance(chance)) {
-            this.flow.card(
-              'info',
-              '被拒絕了',
-              `${esc(partner)}低著頭說「對不起」。接下來那一週，你在走廊上都繞路。`,
-            );
-            next();
-            return;
-          }
-          this.#startDating(partner, true);
-          next();
-        },
-      );
-      return;
+        };
+      }
+      case 'public-confirm':
+        return {
+          title: '記者把麥克風遞到你面前：「兩位是在交往嗎？」',
+          options: [
+            {
+              id: 'love:admit',
+              label: '大方承認：「請大家祝福我們」',
+              note: '還要看她那邊敢不敢承認——啦啦隊的禁愛令壓力不小',
+            },
+            { id: 'love:dodge', label: '笑而不答，快步走過', note: '不承認就沒有下文', role: 'main' },
+          ],
+        };
+      case 'proposal':
+        return {
+          title:
+            step.partner2 === null
+              ? `交往第 ${step.years} 年——${step.partner} 看著別人的婚禮影片看了很久`
+              : `交往第 ${step.years} 年——${step.partner} 與 ${step.partner2} 一起看著別人的婚禮影片`,
+          options: [
+            {
+              id: 'love:propose',
+              label: '就是現在——求婚',
+              note: '本季狀態提升，而且往後的受傷率下降',
+              role: 'main',
+            },
+            { id: 'love:later', label: '再存一點錢吧', note: '她沒說什麼，但交往越久分手風險越高' },
+          ],
+        };
+      case 'turmoil':
+        // 標籤留在提問區，敘事留給卡片——提問區的 .title 是 12px 的小標，長文案在
+        // 那裡等於沒寫，而且不會進事件記錄（#22／#28）。
+        return {
+          title: '感情出現裂痕 · 你要怎麼處理？',
+          options: [
+            {
+              id: 'love:swallow',
+              label: '不問，當作沒看見',
+              note: '關係還在，但裂痕會累積——往後越來越不平靜，感情帶來的狀態也越來越少',
+              role: 'main',
+            },
+            {
+              id: 'love:leave',
+              label: '問清楚，然後結束',
+              note: '當年重挫，但明年歸零，可以重新開始',
+              role: 'warn',
+            },
+            ...(step.openable
+              ? [
+                  {
+                    id: 'love:open',
+                    label: '「那就……讓他也留下來吧。」',
+                    note: '關係保住了，往後不會再有風波——但你每年都要付一點代價，而且走不掉',
+                    role: 'warn' as const,
+                  },
+                ]
+              : []),
+          ],
+        };
+      case 'affair':
+        return {
+          title: step.married
+            ? `客場飯店酒吧，${step.other} 傳來訊息：「睡了嗎？」`
+            : `聚餐散場，${step.other} 說順路想搭你的車`,
+          options: [
+            {
+              id: 'love:affair',
+              label: step.married ? '赴約' : '讓她上車',
+              note: '沒被抓到＝本季狀態提升｜被抓到＝能力重挫、感情危機',
+              role: 'warn',
+            },
+            {
+              id: 'love:decline',
+              label: step.married
+                ? '回訊息：「陪小孩讀完故事書了，晚安」'
+                : `「不順路。」直接載 ${love.partner} 回家`,
+              note: '穩定，絕對不虧',
+              role: 'main',
+            },
+          ],
+        };
+      case 'caught':
+        return {
+          title: step.married
+            ? `${love.partner} 把離婚協議書放在餐桌上`
+            : `${love.partner} 已讀不回三天後，終於答應見面`,
+          options: [
+            {
+              id: 'love:apologise',
+              label: '道歉，求她再給一次機會',
+              note: `成功率 ${pct(loveCfg.affair.caught.apology_success)}%｜失敗要再扣能力並${step.married ? '離婚' : '分手'}`,
+              role: 'main',
+            },
+            { id: 'love:accept', label: step.married ? '簽字離婚' : '坦然分手', role: 'warn' },
+            ...(step.openable
+              ? [
+                  {
+                    id: 'love:open',
+                    label: `「要不……${step.other} 也一起？」`,
+                    note: '兩位都留下來：每年的感情回報與生子各擲各的——但風波加倍，而且破局是兩份一起賠',
+                    role: 'warn' as const,
+                  },
+                ]
+              : []),
+          ],
+        };
+      case 'overseas':
+        return {
+          title: `要去${step.orgName}了。${step.partner} 站在還沒收的行李旁邊`,
+          options: [
+            {
+              id: 'love:bring',
+              label: '帶她一起走',
+              note: `養家要花 ${fmtMoney(step.cost)}｜前兩年新鮮，第三四年最難熬，之後會回穩`,
+              role: 'main',
+            },
+            {
+              id: 'love:apart',
+              label: '先遠距離看看',
+              note: '她的人生還在，只是你們的時差對不上——一直都不會太穩',
+            },
+            { id: 'love:end', label: '分手，不拖累她', role: 'warn' },
+          ],
+        };
     }
-
-    this.flow.card(
-      'info',
-      '場外話題',
-      `你和啦啦隊的 <b class="hl">${esc(partner)}</b> 被拍到球場外同框，緋聞登上娛樂版頭條。` +
-        profile +
-        (this.#love.divorces > 0 ? '<br><span class="sub">（評論區：「離過婚還這麼搶手」）</span>' : ''),
-    );
-    this.flow.ask(
-      {
-        title: '記者把麥克風遞到你面前：「兩位是在交往嗎？」',
-        options: [
-          {
-            id: 'love:admit',
-            label: '大方承認：「請大家祝福我們」',
-            note: '還要看她那邊敢不敢承認——啦啦隊的禁愛令壓力不小',
-          },
-          { id: 'love:dodge', label: '笑而不答，快步走過', note: '不承認就沒有下文', role: 'main' },
-        ],
-      },
-      (choice) => {
-        if (choice !== 'love:admit') {
-          this.flow.card('info', '未完待續', '緋聞燒了三天就退燒。也許時機還沒到。');
-          next();
-          return;
-        }
-        if (!this.world.stream('career').chance(loveCfg.dating.public_confirm.chance)) {
-          this.flow.card(
-            'bad',
-            '單方面承認',
-            `她隔天透過經紀公司否認：「只是普通朋友。」據傳<b class="dn">禁愛令</b>壓力不小。你一個人站在風裡。`,
-          );
-          next();
-          return;
-        }
-        this.#startDating(partner, false);
-        next();
-      },
-    );
   }
 
-  /** 開始交往。 */
-  #startDating(partner: string, fromSchool: boolean): void {
-    const love = this.#love;
-    love.status = 'dating';
-    love.partner = partner;
-    love.fromSchool = fromSchool;
-    love.datingYears = 0;
-    love.datedTimes++;
-
-    const gain = this.#grantSeasonBonus(partnerBonusKey(this.world, love.partner), 1);
-    this.flow.card(
-      'gold',
-      fromSchool ? '在一起了' : '戀情公開',
-      fromSchool
-        ? `放學後的河堤，你們並肩走了很久。${esc(partner)}說：「我一直都有在看你比賽。」——${gain}`
-        : `<b class="hl">${esc(partner)}</b> 在社群發出十指緊扣的照片：「謝謝大家的祝福。」——${gain}`,
-    );
-  }
-
-  /** 啦啦隊殺手。條件與判定時機見 `earnsConfidante()`。 */
-  #confidante(): void {
-    if (!earnsConfidante(this.#love)) return;
-    this.#unlockTrait(
-      loveCfg.dating.confidante.trait,
-      '第三段戀情，還是走到了同樣的結局。「我愛上了你，你卻只把我當好姊妹。」——有些人註定是別人生命裡的過客。',
-    );
-  }
-
-  /** 交往中的一年：風波 → 分手判定 → 插曲 → 求婚。 */
-  #datingYear(next: () => void): void {
-    const love = this.#love;
-    const propose = canPropose({ pro: this.#pro !== null, age: this.#age });
-    if (propose) love.datingYears++;
-
-    this.#turmoil(() => {
-      if (love.status !== 'dating') {
-        next();
-        return;
-      }
-      if (this.world.stream('career').chance(breakupChance(love, { canPropose: propose }))) {
-        this.#breakup(
-          `交往 ${love.datingYears} 年，婚期一延再延。<b class="hl">${esc(love.partner ?? '')}</b> 最後留下一句：「我等不到了。」`,
+  /** 一步的敘事。先兌現意圖拿到那幾句，再把它們寫進卡片。 */
+  #loveTell(step: LoveTell): void {
+    const lines = this.#applyLoveEffects(step.effects);
+    const gain = lines.join('');
+    switch (step.id) {
+      case 'confess-skipped':
+        this.flow.card('info', '再說吧', '你把話吞回去，走進打擊籠。');
+        break;
+      case 'confess-rejected':
+        this.flow.card(
+          'info',
+          '被拒絕了',
+          `${esc(step.partner)}低著頭說「對不起」。接下來那一週，你在走廊上都繞路。`,
         );
-        next();
-        return;
+        break;
+      case 'scandal': {
+        const desc = partnerProfile(step.partner);
+        this.flow.card(
+          'info',
+          '場外話題',
+          `你和啦啦隊的 <b class="hl">${esc(step.partner)}</b> 被拍到球場外同框，緋聞登上娛樂版頭條。` +
+            (desc === '' ? '' : `<br><span class="sub">${esc(desc)}</span>`) +
+            (step.divorced ? '<br><span class="sub">（評論區：「離過婚還這麼搶手」）</span>' : ''),
+        );
+        break;
       }
-      if (!propose) {
-        this.#datingFlavour();
-        next();
-        return;
-      }
-      // **被抓到之後那一年就結束了。** 外遇那一段可能以分手收場，而求婚接在它
-      // 後面——沒有這道檢查的話，同一年會出現「劈腿曝光、她提分手」然後立刻
-      // 「要不要求婚」，對著一個已經走了的人跪下去。與上面風波那一段同一個守衛。
-      this.#affairOrFlavour(() => {
-        if (this.#love.status !== 'dating') {
-          next();
-          return;
-        }
-        this.#proposalAsk(next);
-      });
-    });
-  }
-
-  /** 求婚。**十五歲的人不會在主場本壘板後方跪下來**，因此它有職業與年齡的門檻。 */
-  #proposalAsk(next: () => void): void {
-    const love = this.#love;
-    this.flow.ask(
-      {
-        title:
-          love.partner2 === null
-            ? `交往第 ${love.datingYears} 年——${love.partner} 看著別人的婚禮影片看了很久`
-            : `交往第 ${love.datingYears} 年——${love.partner} 與 ${love.partner2} 一起看著別人的婚禮影片`,
-        options: [
-          {
-            id: 'love:propose',
-            label: '就是現在——求婚',
-            note: '本季狀態提升，而且往後的受傷率下降',
-            role: 'main',
-          },
-          { id: 'love:later', label: '再存一點錢吧', note: '她沒說什麼，但交往越久分手風險越高' },
-        ],
-      },
-      (choice) => {
-        if (choice !== 'love:propose') {
-          this.flow.card('info', '再等等', '她關掉影片，笑著說沒事。你假裝沒看到她眼裡的東西。');
-          next();
-          return;
-        }
-        love.status = 'married';
-        love.kids = 0;
-        love.kids2 = 0;
-        love.datingYears = 0;
-        love.marriedYear = this.#year;
-        // 三人行是**兩位一起進禮堂**，姻緣成就那一刻記兩筆——成就數的是不同的
-        // 對象，而這一天確實有兩個人走過紅毯。
-        recordSpouse(love, love.partner);
-        recordSpouse(love, love.partner2);
-        const gain = this.#loveReward(2);
+      case 'scandal-faded':
+        this.flow.card('info', '未完待續', '緋聞燒了三天就退燒。也許時機還沒到。');
+        break;
+      case 'scandal-denied':
+        this.flow.card(
+          'bad',
+          '單方面承認',
+          `她隔天透過經紀公司否認：「只是普通朋友。」據傳<b class="dn">禁愛令</b>壓力不小。你一個人站在風裡。`,
+        );
+        break;
+      case 'dating-started':
+        this.flow.card(
+          'gold',
+          step.fromSchool ? '在一起了' : '戀情公開',
+          step.fromSchool
+            ? `放學後的河堤，你們並肩走了很久。${esc(step.partner)}說：「我一直都有在看你比賽。」——${gain}`
+            : `<b class="hl">${esc(step.partner)}</b> 在社群發出十指緊扣的照片：「謝謝大家的祝福。」——${gain}`,
+        );
+        break;
+      case 'proposal-later':
+        this.flow.card('info', '再等等', '她關掉影片，笑著說沒事。你假裝沒看到她眼裡的東西。');
+        break;
+      case 'wedding': {
         const brides =
-          love.partner2 === null
-            ? `<b class="hl">${esc(love.partner ?? '')}</b> 哭著點頭。`
-            : `<b class="hl">${esc(love.partner ?? '')}</b> 與 <b class="hl">${esc(love.partner2)}</b> 一起點了頭。`;
+          step.partner2 === null
+            ? `<b class="hl">${esc(step.partner)}</b> 哭著點頭。`
+            : `<b class="hl">${esc(step.partner)}</b> 與 <b class="hl">${esc(step.partner2)}</b> 一起點了頭。`;
         this.flow.card(
           'gold',
           '婚禮',
           `你在主場本壘板後方單膝跪地，大螢幕打出「Marry Me」。${brides}` +
             `休賽季完婚，紅毯用壘包排成——${gain}`,
         );
-        if (isChildhoodSweetheart(love)) {
-          this.#unlockTrait(
-            loveCfg.childhood_sweetheart.trait,
-            '十五歲那年放學後的河堤，一路走到了主場的本壘板。中間有幾次差點走散，但你們都熬過來了。',
-          );
-        }
-        next();
-      },
-    );
-  }
-
-  /** 已婚的一年：風波 → 生子 → 外遇或日常。 */
-  #marriedYear(next: () => void): void {
-    const love = this.#love;
-    this.#turmoil(() => {
-      if (love.status !== 'married') {
-        next();
-        return;
+        break;
       }
-      // 生子**一位一擲**：機率是逐胎遞減的，兩位得各自從第一胎算起。一年兩邊
-      // 都中就是兩個孩子，那是三人行真正的形狀。
-      const born = this.#childbirth(love.partner, 'first') + this.#childbirth(love.partner2, 'second');
-      if (born > 0) {
-        next();
-        return;
-      }
-      this.#affairOrFlavour(next);
-    });
-  }
-
-  /**
-   * 一位對象的生子判定。生了回 1，沒生回 0。
-   *
-   * **兩位對象各記各的孩子數**：生子機率逐胎遞減，共用一個計數器的話，第二位
-   * 的第一胎會直接吃到第一位生完之後的低機率——那不是同一件事。畫面上顯示的
-   * 「幾個孩子」則是兩邊加總。
-   */
-  #childbirth(partner: string | null, slot: 'first' | 'second'): number {
-    const love = this.#love;
-    if (partner === null) return 0;
-    const kids = slot === 'first' ? love.kids : love.kids2;
-    if (kids >= loveCfg.marriage.max_kids) return 0;
-    if (!this.world.stream('career').chance(childbirthChance(kids, partner))) return 0;
-
-    if (slot === 'first') love.kids++;
-    else love.kids2++;
-    const total = totalKids(love);
-    const gain = this.#grantSeasonBonus(this.#randomVisibleAbility(), 2);
-    this.flow.card(
-      'gold',
-      '新生命',
-      `${esc(partner)} 平安生下你們的第 <b class="hl">${kids + 1}</b> 個孩子。` +
-        `當了${total > 1 ? '幾次' : ''}爸爸的男人，眼神都不一樣了——${gain}`,
-    );
-    return 1;
-  }
-
-  /**
-   * 感情風波。
-   *
-   * **這是整條感情線唯一沒有正確答案的地方**——外遇算得出來該拒絕，這條算不出來。
-   * 吞下去是慢性、分手是重擊：斷乾淨的人痛一次，忍下來的人被慢慢消耗。
-   */
-  #turmoil(next: () => void): void {
-    const love = this.#love;
-    const rng = this.world.stream('career');
-    const hit = rng.chance(turmoilChance(love));
-    const kinds = loveCfg.turmoil.kinds;
-    const kind = kinds[rng.int(0, kinds.length - 1)];
-    if (!hit || kind === undefined || !hasPartner(love)) {
-      next();
-      return;
-    }
-
-    love.turmoilThisYear = true;
-    // **她出軌的那張卡，低機率多一條路。** 抽不中就只有原本兩條——那個選項
-    // 根本不會出現，所以它是隱藏事件而不是一個每次都要重新拒絕的誘惑。
-    const openable =
-      kind.id === 'cheated' &&
-      love.open === 'none' &&
-      rng.chance(loveCfg.threesome.chance);
-    // 標籤留在提問區，敘事留給卡片——提問區的 .title 是 12px 的小標，長文案在
-    // 那裡等於沒寫，而且不會進事件記錄。只讀卡片的人會看到「沒有問出口」卻不
-    // 知道發生過什麼事（#22／#28）。
-    this.flow.ask(
-      {
-        title: '感情出現裂痕 · 你要怎麼處理？',
-        options: [
-          {
-            id: 'love:swallow',
-            label: '不問，當作沒看見',
-            note: '關係還在，但裂痕會累積——往後越來越不平靜，感情帶來的狀態也越來越少',
-            role: 'main',
-          },
-          {
-            id: 'love:leave',
-            label: '問清楚，然後結束',
-            note: '當年重挫，但明年歸零，可以重新開始',
-            role: 'warn',
-          },
-          ...(openable
-            ? [
-                {
-                  id: 'love:open',
-                  label: '「那就……讓他也留下來吧。」',
-                  note: '關係保住了，往後不會再有風波——但你每年都要付一點代價，而且走不掉',
-                  role: 'warn' as const,
-                },
-              ]
-            : []),
-        ],
-      },
-      (choice) => {
-        if (choice === 'love:open') {
-          this.#enterCuckold(kind.text);
-          next();
-          return;
-        }
-        if (choice === 'love:swallow') {
-          love.cracks++;
-          this.flow.card(
-            'bad',
-            '沒有問出口',
-            `${kind.text}<br><br>` +
-              `你把話吞了回去。那天之後你們還是一起吃飯、一起睡覺，只是有些話再也沒有提起。` +
-              `<br><span class="sub">裂痕 ${love.cracks} 道——往後的日子會越來越不平靜。</span>`,
-          );
-          next();
-          return;
-        }
-        this.#loseAbility(loveCfg.turmoil.leave.ability_loss, (line) => {
-          this.#breakup(`${kind.text}<br><br>你問了，她也答了。然後你們都知道結束了。${line}`);
-        });
-        next();
-      },
-    );
-  }
-
-  /** 外遇的誘惑，或平淡的一年。 */
-  #affairOrFlavour(next: () => void): void {
-    const love = this.#love;
-    const rng = this.world.stream('career');
-    // 鹿鼎公不再收到誘惑——你已經有兩位了，那張卡沒有東西可以拿來誘惑你。
-    if (love.open === 'harem' || !rng.chance(loveCfg.affair.chance)) {
-      this.#datingFlavour();
-      next();
-      return;
-    }
-
-    const other = pickPartner(this.world, this.#pro !== null ? 'pro' : 'school', love.partner, true);
-    const married = love.status === 'married';
-    this.flow.ask(
-      {
-        title: married
-          ? `客場飯店酒吧，${other} 傳來訊息：「睡了嗎？」`
-          : `聚餐散場，${other} 說順路想搭你的車`,
-        options: [
-          {
-            id: 'love:affair',
-            label: married ? '赴約' : '讓她上車',
-            note: '沒被抓到＝本季狀態提升｜被抓到＝能力重挫、感情危機',
-            role: 'warn',
-          },
-          {
-            id: 'love:decline',
-            label: married ? '回訊息：「陪小孩讀完故事書了，晚安」' : `「不順路。」直接載 ${love.partner} 回家`,
-            note: '穩定，絕對不虧',
-            role: 'main',
-          },
-        ],
-      },
-      (choice) => {
-        if (choice !== 'love:affair') {
-          const gain = this.#loveReward(loveCfg.affair.reward.refused);
-          this.flow.card('good', '正確答案', `心定了，身體就穩了——${gain}`);
-          next();
-          return;
-        }
-        love.affairs++;
-        if (this.world.stream('career').chance(loveCfg.affair.escape_chance)) {
-          const gain = this.#grantSeasonBonus(
-            partnerBonusKey(this.world, love.partner),
-            loveCfg.affair.reward.escaped,
-          );
-          this.flow.card(
-            'bad',
-            married ? '深夜行程' : '深夜兜風',
-            `沒有人拍到。不知為何，罪惡感反而讓你精神亢奮——${gain}` +
-              '<br><span class="sub">（你知道這不會有好下場）</span>',
-          );
-          next();
-          return;
-        }
-        this.#affairCaught(other, next);
-      },
-    );
-  }
-
-  /** 被抓到。第二次起解鎖花樣年華，而那個量級與一次大傷相同——是刻意的。 */
-  #affairCaught(other: string, next: () => void): void {
-    const love = this.#love;
-    const c = loveCfg.affair.caught;
-    love.caught++;
-    love.turmoilThisYear = true;
-    love.cheatPenaltyYears = loveCfg.affair.dating_breakup_penalty.years;
-
-    this.#loseAbility(c.single_ability_loss, (line) => {
-      let extra = '';
-      if (love.caught >= c.scum.caught_times) {
-        this.#unlockTrait(
-          c.scum.trait,
-          `第二次被逮個正著。從今以後你在球迷心中的形象定型了——<b class="dn">每次被抓到，全能力 −${c.scum.all_ability_loss}</b>。`,
+      case 'childbirth':
+        this.flow.card(
+          'gold',
+          '新生命',
+          `${esc(step.partner)} 平安生下你們的第 <b class="hl">${step.nth}</b> 個孩子。` +
+            `當了${step.total > 1 ? '幾次' : ''}爸爸的男人，眼神都不一樣了——${gain}`,
         );
-        for (const key of ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide))) {
-          this.#ability[key] = Math.max(
-            abilities.scale.hard_floor,
-            (this.#ability[key] ?? 0) - c.scum.all_ability_loss,
-          );
-        }
-        this.#settleCarry();
-        extra = `<br><b class="dn">全能力 −${c.scum.all_ability_loss}</b>（花樣年華的代價）。`;
-      }
-      this.flow.card(
-        'bad',
-        love.status === 'married' ? '頭版醜聞' : '劈腿曝光',
-        `狗仔的鏡頭比你想的更快，照片鋪滿版面。贊助商緊急撤圖。${line}${extra}`,
-      );
-    });
+        break;
+      case 'turmoil-swallow':
+        this.flow.card(
+          'bad',
+          '沒有問出口',
+          `${turmoilText(step.kindId)}<br><br>` +
+            `你把話吞了回去。那天之後你們還是一起吃飯、一起睡覺，只是有些話再也沒有提起。` +
+            `<br><span class="sub">裂痕 ${step.cracks} 道——往後的日子會越來越不平靜。</span>`,
+        );
+        break;
+      case 'cuckold':
+        this.flow.card(
+          'bad',
+          '一個屋簷下',
+          `${turmoilText(step.kindId)}<br><br>你沒有問，也沒有走。你只是說：「那就這樣吧。」` +
+            '<br><span class="sub">往後不會再有風波了——該發生的都已經發生過。至於孩子⋯⋯</span>',
+        );
+        break;
+      case 'harem':
+        this.flow.card(
+          'gold',
+          step.married ? '三個人的家' : '三個人的關係',
+          `事情沒有照任何人預期的方向發展。<b class="hl">${esc(step.other)}</b> 留了下來。` +
+            '<br><span class="sub">往後每年的感情回報與生子，兩邊各擲各的——但三個人的日子也比兩個人難走。</span>',
+        );
+        break;
+      case 'affair-declined':
+        this.flow.card('good', '正確答案', `心定了，身體就穩了——${gain}`);
+        break;
+      case 'affair-escaped':
+        this.flow.card(
+          'bad',
+          step.married ? '深夜行程' : '深夜兜風',
+          `沒有人拍到。不知為何，罪惡感反而讓你精神亢奮——${gain}` +
+            '<br><span class="sub">（你知道這不會有好下場）</span>',
+        );
+        break;
+      case 'affair-caught':
+        this.flow.card(
+          'bad',
+          step.married ? '頭版醜聞' : '劈腿曝光',
+          `狗仔的鏡頭比你想的更快，照片鋪滿版面。贊助商緊急撤圖。${gain}`,
+        );
+        break;
+      case 'apology-accepted':
+        this.flow.card(
+          'info',
+          '低谷之後',
+          `長談了一整夜。<b class="hl">${esc(step.partner)}</b> 最後說：「最後一次。」` +
+            '關係保住了，但有些東西回不去了。',
+        );
+        break;
+      case 'breakup':
+        this.#breakupCard(step, gain);
+        break;
+      case 'flavour':
+        this.#flavourCard(step, gain);
+        break;
+      case 'overseas-bring':
+        this.flow.card(
+          'gold',
+          '舉家旅外',
+          `兩張單程機票。她辭掉了工作，說「反正我本來也想換個環境」。` +
+            `<br>安家費 <b class="dn">−${fmtMoney(step.cost)}</b>。`,
+        );
+        break;
+      case 'overseas-apart':
+        this.flow.card(
+          'info',
+          '遠距離',
+          '登機前她抱了你很久，然後推你進安檢。往後的日子靠時差對不上的視訊撐著。',
+        );
+        break;
+    }
+    this.#applyLoveEffects(step.after);
+  }
 
-    const married = love.status === 'married';
+  /** 分手或離婚那張卡。離婚要分財產——**一個只會增加的數字不是資產，是計分板**。 */
+  #breakupCard(step: LoveTell & { id: 'breakup' }, lossLine: string): void {
+    const reason = step.reason;
+    const said =
+      reason.id === 'waited-too-long'
+        ? `交往 ${reason.years} 年，婚期一延再延。<b class="hl">${esc(step.ex)}</b> 最後留下一句：「我等不到了。」`
+        : reason.id === 'turmoil-leave'
+          ? `${turmoilText(reason.kindId)}<br><br>你問了，她也答了。然後你們都知道結束了。${lossLine}`
+          : reason.id === 'apology-failed'
+            ? `她聽完只是搖頭，隔天律師的存證信函就到了。${lossLine}`
+            : reason.id === 'accept'
+              ? step.wasMarried
+                ? '你在協議書上簽了名。'
+                : '她把你送的東西整箱寄回。'
+              : reason.id === 'cuckold-exit'
+                ? step.wasMarried
+                  ? '這一次換她把協議書推回來。你們都沒有再說什麼——那張桌子上該說的話，前幾年就說完了。'
+                  : '她看完新聞只回了一句「所以呢」，然後把你封鎖了。'
+                : reason.id === 'overseas-end'
+                  ? '你說了那句「不要等我」。她沒有哭，只是點頭。'
+                  : `${esc(reason.label)}的那個夏天，<b class="hl">${esc(step.ex)}</b> 說：「我們可能不會再見面了吧。」` +
+                    '<br><span class="sub">沒有人做錯什麼，只是路不同了。</span>';
 
-    // **縮頭烏龜的唯一出口。** 那段關係走不掉，除非你自己也出軌——而一旦出軌被
-    // 抓，兩邊都破了，沒有道歉也沒有三人行，直接結束。
-    if (love.open === 'cuckold') {
-      this.#breakup(
-        married
-          ? '這一次換她把協議書推回來。你們都沒有再說什麼——那張桌子上該說的話，前幾年就說完了。'
-          : '她看完新聞只回了一句「所以呢」，然後把你封鎖了。',
-      );
-      next();
+    // 關卡那一條是「各奔東西」，語氣與分手不同：沒有人做錯什麼。
+    if (reason.id === 'checkpoint') {
+      this.flow.card('bad', '各奔東西', said);
       return;
     }
 
-    // **三人行：劈腿唯一的好結局，而且低機率才看得到。** 抽不中就只有原本兩條
-    // 路，那個選項根本不會出現。
-    const openable =
-      love.open === 'none' && this.world.stream('career').chance(loveCfg.threesome.chance);
-
-    this.flow.ask(
-      {
-        title: married
-          ? `${love.partner} 把離婚協議書放在餐桌上`
-          : `${love.partner} 已讀不回三天後，終於答應見面`,
-        options: [
-          {
-            id: 'love:apologise',
-            label: '道歉，求她再給一次機會',
-            note: `成功率 ${pct(c.apology_success)}%｜失敗要再扣能力並${married ? '離婚' : '分手'}`,
-            role: 'main',
-          },
-          { id: 'love:accept', label: married ? '簽字離婚' : '坦然分手', role: 'warn' },
-          ...(openable
-            ? [
-                {
-                  id: 'love:open',
-                  label: `「要不……${other} 也一起？」`,
-                  note: '兩位都留下來：每年的感情回報與生子各擲各的——但風波加倍，而且破局是兩份一起賠',
-                  role: 'warn' as const,
-                },
-              ]
-            : []),
-        ],
-      },
-      (choice) => {
-        if (choice === 'love:open') {
-          this.#enterHarem(other);
-          next();
-          return;
-        }
-        if (choice === 'love:apologise') {
-          if (this.world.stream('career').chance(c.apology_success)) {
-            this.flow.card(
-              'info',
-              '低谷之後',
-              `長談了一整夜。<b class="hl">${esc(love.partner ?? '')}</b> 最後說：「最後一次。」` +
-                '關係保住了，但有些東西回不去了。',
-            );
-            love.cracks++;
-            next();
-            return;
-          }
-          this.#loseAbility(c.apology_failed_loss, (line) => {
-            this.#breakup(`她聽完只是搖頭，隔天律師的存證信函就到了。${line}`);
-          });
-          next();
-          return;
-        }
-        this.#breakup(married ? '你在協議書上簽了名。' : '她把你送的東西整箱寄回。');
-        next();
-      },
-    );
-  }
-
-  /**
-   * 進入三人行（鹿鼎公）：你外遇被抓，她反而把那個人請上檯面。
-   *
-   * **第二位是真的第二位**：她有自己的側寫，往後每年的感情回報與生子都各擲各
-   * 的骰。已婚的話她當場就是第二位配偶（姻緣成就記第二筆）；交往中則是兩位一
-   * 起交往，婚禮那天一起進禮堂。
-   */
-  #enterHarem(other: string): void {
-    const love = this.#love;
-    love.open = 'harem';
-    love.partner2 = other;
-    love.kids2 = 0;
-    // 被抓的分手加成沒有意義了——那件事已經有了另一個結局。
-    love.cheatPenaltyYears = 0;
-    if (love.status === 'married') recordSpouse(love, other);
-    this.#unlockTrait(
-      loveCfg.threesome.harem.trait,
-      `<b class="hl">${esc(love.partner ?? '')}</b> 看了 <b class="hl">${esc(other)}</b> 很久，` +
-        '最後說：「與其你偷偷摸摸，不如三個人坐下來把話講清楚。」',
-    );
-    this.flow.card(
-      'gold',
-      love.status === 'married' ? '三個人的家' : '三個人的關係',
-      `事情沒有照任何人預期的方向發展。<b class="hl">${esc(other)}</b> 留了下來。` +
-        '<br><span class="sub">往後每年的感情回報與生子，兩邊各擲各的——但三個人的日子也比兩個人難走。</span>',
-    );
-  }
-
-  /**
-   * 進入三人行（縮頭烏龜）：她出軌，而你選擇留下來。
-   *
-   * 多出來的那個人不是你的，所以沒有第二份回報：每年倒扣一點當季狀態，風波不
-   * 再發生，而這段關係**走不掉**——除非你自己也出軌。
-   */
-  #enterCuckold(kindText: string): void {
-    const love = this.#love;
-    love.open = 'cuckold';
-    this.#unlockTrait(
-      loveCfg.threesome.cuckold.trait,
-      '你聽見自己說出那句話的時候，比她更驚訝。房子還是那間房子，只是從此多了一雙鞋。',
-    );
+    const money =
+      step.money === 0
+        ? ''
+        : step.money > 0
+          ? `<br>財產分配：<b class="up">+${fmtMoney(step.money)}</b>（這一次你是收的那一方）。`
+          : `<br>財產分配：<b class="dn">−${fmtMoney(-step.money)}</b>${step.kids > 0 ? '（含扶養費）' : ''}。`;
+    const ex2 = step.ex2 === null ? '' : `與 <b class="hl">${esc(step.ex2)}</b>`;
     this.flow.card(
       'bad',
-      '一個屋簷下',
-      `${kindText}<br><br>你沒有問，也沒有走。你只是說：「那就這樣吧。」` +
-        '<br><span class="sub">往後不會再有風波了——該發生的都已經發生過。至於孩子⋯⋯</span>',
+      step.wasMarried ? '離婚' : '分手',
+      `${said}<br><b class="hl">${esc(step.ex)}</b>${ex2} 從此不在你的生活裡了。${money}`,
     );
-  }
-
-  /** 分手或離婚。離婚要分財產——**一個只會增加的數字不是資產，是計分板**。 */
-  #breakup(reason: string): void {
-    const love = this.#love;
-    const ex = love.partner ?? '';
-    const ex2 = love.partner2 ?? '';
-    const wasMarried = love.status === 'married';
-
-    const kids = totalKids(love);
-    let money = '';
-    if (wasMarried) {
-      love.divorces++;
-      if (love.open === 'cuckold') {
-        // **她先外遇的事實不會因為你後來也外遇而消失**，所以錢是往你這邊流的。
-        // 數目不大——那不是賠償，只是一個誰對誰錯的註腳。
-        const paid = alimony(this.#earnings);
-        this.#earnings += paid;
-        money = `<br>財產分配：<b class="up">+${fmtMoney(paid)}</b>（這一次你是收的那一方）。`;
-      } else {
-        // 三人行破局是兩份一起賠——好處放大的那一段，就是在這裡還的。
-        const cost = divorceCost(this.#earnings, kids, love.partner, love.partner2);
-        this.#earnings = Math.max(0, this.#earnings - cost);
-        money = `<br>財產分配：<b class="dn">−${fmtMoney(cost)}</b>${kids > 0 ? '（含扶養費）' : ''}。`;
-      }
-    }
-
-    love.status = afterBreakup(love);
-    love.partner = null;
-    // 三人行破局是**兩位一起走**：那段關係本來就是一個整體，沒有留下一位的走法。
-    love.partner2 = null;
-    love.open = 'none';
-    love.datingYears = 0;
-    love.kids = 0;
-    love.kids2 = 0;
-    love.fromSchool = false;
-    love.cracks = 0;
-    love.overseas = 'none';
-    love.overseasYears = 0;
-    love.turmoilThisYear = true;
-
-    this.flow.card(
-      'bad',
-      wasMarried ? '離婚' : '分手',
-      `${reason}<br><b class="hl">${esc(ex)}</b>${ex2 === '' ? '' : `與 <b class="hl">${esc(ex2)}</b>`} 從此不在你的生活裡了。${money}`,
-    );
-
-    if (!wasMarried) this.#confidante();
   }
 
   /** 平淡但溫暖的一年。感情線多數的年份都是這種。 */
-  #datingFlavour(): void {
-    const love = this.#love;
-    const gain = this.#loveReward(1);
-    const partner = esc(love.partner ?? '');
-    if (love.open === 'cuckold') {
-      this.flow.card(
-        'bad',
-        '一個屋簷下',
-        `客廳的燈亮著，玄關多了一雙不是你的鞋。你把裝備袋放下，自己走進房間——${gain}`,
-      );
-      return;
+  #flavourCard(step: LoveTell & { id: 'flavour' }, gain: string): void {
+    const partner = esc(step.partner);
+    switch (step.variant) {
+      case 'cuckold':
+        this.flow.card(
+          'bad',
+          '一個屋簷下',
+          `客廳的燈亮著，玄關多了一雙不是你的鞋。你把裝備袋放下，自己走進房間——${gain}`,
+        );
+        return;
+      case 'harem':
+        this.flow.card(
+          'good',
+          '三個人的日常',
+          `客場回來，<b class="hl">${partner}</b> 與 <b class="hl">${esc(step.partner2 ?? '')}</b> 一起在機場等你。` +
+            `旁邊的人一臉困惑，你們三個人倒是很自在——${gain}`,
+        );
+        return;
+      case 'married-kids':
+        this.flow.card(
+          'good',
+          '球場邊的父親',
+          `你被拍到賽前隔著護網教孩子怎麼戴手套，影片配文「最強棒球教室」瘋傳——${gain}`,
+        );
+        return;
+      case 'married':
+        this.flow.card(
+          'good',
+          '結婚紀念日',
+          `你推掉了自主訓練，陪 <b class="hl">${partner}</b> 回到當年辦婚禮的場地。她說：「明年也要來喔。」——${gain}`,
+        );
+        return;
+      case 'school':
+        this.flow.card(
+          'good',
+          '放學後',
+          `練習結束天已經黑了，${partner}還在看台上寫作業等你。回家的路上你們什麼都聊——${gain}`,
+        );
+        return;
+      case 'pro':
+        this.flow.card(
+          'good',
+          '愛情長跑',
+          `沒有大新聞，只有每個客場系列賽結束後，機場出口那杯 <b class="hl">${partner}</b> 替你買好的熱美式——${gain}`,
+        );
     }
-    if (love.open === 'harem') {
-      this.flow.card(
-        'good',
-        '三個人的日常',
-        `客場回來，<b class="hl">${partner}</b> 與 <b class="hl">${esc(love.partner2 ?? '')}</b> 一起在機場等你。` +
-          `旁邊的人一臉困惑，你們三個人倒是很自在——${gain}`,
-      );
-      return;
-    }
-    if (love.status === 'married' && love.kids > 0) {
-      this.flow.card(
-        'good',
-        '球場邊的父親',
-        `你被拍到賽前隔著護網教孩子怎麼戴手套，影片配文「最強棒球教室」瘋傳——${gain}`,
-      );
-      return;
-    }
-    if (love.status === 'married') {
-      this.flow.card(
-        'good',
-        '結婚紀念日',
-        `你推掉了自主訓練，陪 <b class="hl">${partner}</b> 回到當年辦婚禮的場地。她說：「明年也要來喔。」——${gain}`,
-      );
-      return;
-    }
-    if (this.#pro === null) {
-      this.flow.card(
-        'good',
-        '放學後',
-        `練習結束天已經黑了，${partner}還在看台上寫作業等你。回家的路上你們什麼都聊——${gain}`,
-      );
-      return;
-    }
-    this.flow.card(
-      'good',
-      '愛情長跑',
-      `沒有大新聞，只有每個客場系列賽結束後，機場出口那杯 <b class="hl">${partner}</b> 替你買好的熱美式——${gain}`,
-    );
   }
 
-  /** 扣一項隨機能力，把敘述交給呼叫端。 */
-  #loseAbility(points: number, then: (line: string) => void): void {
+  /** 扣一項隨機能力，回傳要寫進卡片的那一句。 */
+  #loseAbility(points: number): string {
     const key = this.#randomVisibleAbility();
     const before = this.#ability[key] ?? 0;
     this.#ability[key] = Math.max(abilities.scale.hard_floor, before - points);
     this.#settleCarry();
     const lost = before - (this.#ability[key] ?? 0);
-    then(
-      lost > 0
-        ? `<br><b class="dn">${esc(abilities.abilities[key] ?? key)} −${lost}</b>。`
-        : '',
-    );
+    return lost > 0 ? `<br><b class="dn">${esc(abilities.abilities[key] ?? key)} −${lost}</b>。` : '';
   }
 
   /** 隨機挑一項這一側實際在用的能力。 */
@@ -3076,106 +2877,6 @@ export class Game {
     const keys = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide));
     const pool = keys.length > 0 ? keys : ALL_ABILITIES;
     return pool[this.world.stream('career').int(0, pool.length - 1)] ?? 'sta';
-  }
-
-  /**
-   * 升學或進職業時的關卡。
-   *
-   * **還不能求婚的人不該因為沒結婚而被拆散**，因此學生時期不累計「婚期一延再延」
-   * 的風險，改成身分轉換各擲一次。撐過去的對象會延續到職業生涯——那個在國中認識
-   * 的人，可能就是日後在本壘板後方跪下來求婚的對象。
-   *
-   * 天賦「絕對真愛」乘的是**撐過去的機率**而不是分手機率（見 ADR 0033）：這個天賦
-   * 要保證的就是「這段感情走得過身分轉換」。
-   */
-  #loveCheckpoint(label: string): void {
-    const love = this.#love;
-    const rng = this.world.stream('career');
-    const cp = loveCfg.amateur.checkpoint;
-    const survive = (100 - cp.break_chance) * cp.talent_survive_multiplier;
-    const broke = rng.chance(Math.max(0, 100 - survive));
-    if (love.status !== 'dating' || !broke) return;
-
-    const ex = love.partner ?? '';
-    love.status = afterBreakup(love);
-    love.partner = null;
-    love.datingYears = 0;
-    love.fromSchool = false;
-    this.flow.card(
-      'bad',
-      '各奔東西',
-      `${esc(label)}的那個夏天，<b class="hl">${esc(ex)}</b> 說：「我們可能不會再見面了吧。」` +
-        '<br><span class="sub">沒有人做錯什麼，只是路不同了。</span>',
-    );
-
-    this.#confidante();
-  }
-
-  /**
-   * 旅外時的安排。
-   *
-   * **帶她走與遠距離都會壞，只是壞的形狀不同**——沒有代價的選項不是選擇，是儀式。
-   * 帶她走是駝峰（適應期會過去），遠距離是一條平穩的高線（她的人生還在，只是
-   * 時差對不上）。
-   */
-  #loveOverseas(orgName: string, next: () => void): void {
-    const love = this.#love;
-    if (!hasPartner(love)) {
-      next();
-      return;
-    }
-
-    // 舉家旅外要養家，而養多少錢跟她習慣怎麼過日子有關——與離婚那一筆同一條軸。
-    const cost = Math.round(
-      this.#earnings * loveCfg.overseas.bring.cost_ratio * partnerTier(love.partner, 'spending'),
-    );
-    this.flow.ask(
-      {
-        title: `要去${orgName}了。${love.partner} 站在還沒收的行李旁邊`,
-        options: [
-          {
-            id: 'love:bring',
-            label: '帶她一起走',
-            note: `養家要花 ${fmtMoney(cost)}｜前兩年新鮮，第三四年最難熬，之後會回穩`,
-            role: 'main',
-          },
-          {
-            id: 'love:apart',
-            label: '先遠距離看看',
-            note: '她的人生還在，只是你們的時差對不上——一直都不會太穩',
-          },
-          { id: 'love:end', label: '分手，不拖累她', role: 'warn' },
-        ],
-      },
-      (choice) => {
-        if (choice === 'love:end') {
-          this.#breakup('你說了那句「不要等我」。她沒有哭，只是點頭。');
-          next();
-          return;
-        }
-        love.overseasYears = 0;
-        if (choice === 'love:bring') {
-          love.overseas = 'bring';
-          this.#earnings = Math.max(0, this.#earnings - cost);
-          this.#addHonor(loveCfg.overseas.bring.achievement);
-          this.flow.card(
-            'gold',
-            '舉家旅外',
-            `兩張單程機票。她辭掉了工作，說「反正我本來也想換個環境」。` +
-              `<br>安家費 <b class="dn">−${fmtMoney(cost)}</b>。`,
-          );
-          next();
-          return;
-        }
-        love.overseas = 'apart';
-        this.flow.card(
-          'info',
-          '遠距離',
-          '登機前她抱了你很久，然後推你進安檢。往後的日子靠時差對不上的視訊撐著。',
-        );
-        next();
-      },
-    );
   }
 
   /**
