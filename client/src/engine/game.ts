@@ -197,6 +197,7 @@ import {
   type TransferOffer,
 } from './transfer.ts';
 import {
+  isStarterRole,
   levelOf,
   playSeason,
   pitcherRole,
@@ -3051,8 +3052,15 @@ export class Game {
     const sides = sideOveralls(r);
 
     if (side === 'pitcher' || this.isTwoWay) {
-      const role = (this.#seasonPitching as ProPitchingLine | null)?.role ?? 'SP';
-      const games = tournamentGames(rankIndex, role === 'SP' ? 'starter' : 'reliever');
+      // **照登錄的定位打。** 定位是定位會議決定的，不是每次算成績時重新判定——
+      // 這裡從前只拿它決定上幾場，卻沒有傳進去，於是成績那一層走了它的退路
+      // 現算一次；而現算只看體力與球威，體力夠的終結者因此被拉去先發，那幾場
+      // 還全部算成先發（`starts = isStarterRole(role) ? games : 0`）。
+      //
+      // 還沒有登錄定位的人（剛升上來還沒開過會、或這季根本沒投球的二刀流）就
+      // 讓成績那一層現算——那個退路的意思本來就是「這個呼叫端還沒有定位會議」。
+      const role = this.#pitcherRole;
+      const games = tournamentGames(rankIndex, isStarterRole(role ?? 'SP') ? 'starter' : 'reliever');
       const line = proPitchingLine(
         this.world,
         this.#seasonAbility,
@@ -3060,7 +3068,8 @@ export class Game {
         sides.pitching,
         this.#standards,
         {
-          appearances: games,
+          // 上幾場與以什麼定位上是同一件事，綁在一起傳（見 PitchingLineOptions）。
+          usage: { role, appearances: games },
           par,
           innings: tournamentInnings(),
           // 勝敗要知道「他的球隊有多強」，而國際賽沒有戰力表。拿這一屆的名次

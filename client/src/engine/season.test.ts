@@ -827,7 +827,7 @@ describe('一次出賽最多換到一個決定', () => {
               'CPBL1',
               70,
               null,
-              { teamWinRate, seasonFactor: factor, role },
+              { teamWinRate, seasonFactor: factor, usage: { role } },
             );
             expect(
               decisions(line),
@@ -848,7 +848,7 @@ describe('一次出賽最多換到一個決定', () => {
           'CPBL1',
           70,
           null,
-          { teamWinRate, role: 'SP' },
+          { teamWinRate, usage: { role: 'SP' } },
         );
         expect(decisions(line)).toBeLessThanOrEqual(line.games);
       }
@@ -861,11 +861,51 @@ describe('一次出賽最多換到一個決定', () => {
       const line = proPitchingLine(new World(`few-${i}`), flat(70), 'MLB', 70, null, {
         teamWinRate: 0.6,
         seasonFactor: 0.1,
-        role: 'CP',
+        usage: { role: 'CP' },
       });
       expect(line.losses).toBeLessThanOrEqual(line.games);
       expect(decisions(line)).toBeLessThanOrEqual(line.games);
     }
+  });
+});
+
+describe('指定出賽時照登錄的定位打', () => {
+  /**
+   * **出賽與定位是同一件事的兩面。** 國際賽直接指定上幾場，而那幾場算不算先發
+   * 由定位決定——它們因此綁在同一個選項裡（`usage`）。
+   *
+   * 這條規則曾經破過：國際賽拿登錄定位決定上幾場，卻沒把定位傳進來，於是這一層
+   * 現算了一次。現算只看體力與球威，**體力夠的終結者就被判成先發**，那幾場還全部
+   * 算成先發（每場 4.4 局的節奏）。
+   */
+  const closer = with_(70, { sta: 75 });
+
+  it('終結者指定五場，五場都是後援', () => {
+    const line = proPitchingLine(new World('usage-cp'), closer, 'MLB', 70, null, {
+      teamWinRate: 0.55,
+      usage: { role: 'CP', appearances: 5 },
+    });
+    expect(line.games).toBe(5);
+    expect(line.starts).toBe(0);
+  });
+
+  it('先發指定五場，五場都是先發', () => {
+    const line = proPitchingLine(new World('usage-sp'), closer, 'MLB', 70, null, {
+      teamWinRate: 0.55,
+      usage: { role: 'SP', appearances: 5 },
+    });
+    expect(line.games).toBe(5);
+    expect(line.starts).toBe(5);
+  });
+
+  /** 體力夠的終結者正是會被現算判成先發的那種人——所以定位不能省。 */
+  it('不給定位就會現算，而現算會把這個體力夠的終結者判成先發', () => {
+    const line = proPitchingLine(new World('usage-none'), closer, 'MLB', 70, null, {
+      teamWinRate: 0.55,
+      usage: { role: null, appearances: 5 },
+    });
+    expect(line.role).toBe('SP');
+    expect(line.starts).toBe(5);
   });
 });
 
@@ -914,7 +954,7 @@ describe('投手的自責分由事件推導', () => {
     for (let i = 0; i < 200; i++) {
       const l = proPitchingLine(new World(`avg-${i}`), flat(par), 'MLB', par, null, {
         teamWinRate: 0.5,
-        role: 'SP',
+        usage: { role: 'SP' },
       });
       if (l.outs < 300) continue;
       total += l.era;
@@ -927,7 +967,7 @@ describe('投手的自責分由事件推導', () => {
 
 describe('投手的勝敗由成績與球隊推導', () => {
   const line = (seed: string, v: number, twr: number) =>
-    proPitchingLine(new World(seed), flat(v), 'MLB', v, null, { teamWinRate: twr, role: 'SP' });
+    proPitchingLine(new World(seed), flat(v), 'MLB', v, null, { teamWinRate: twr, usage: { role: 'SP' } });
 
   const totals = (v: number, twr: number, tag: string) => {
     let w = 0, l = 0, n = 0, maxW = 0, unbeaten = 0;
@@ -973,7 +1013,7 @@ describe('後援：機會 × 成功率', () => {
   const closer = (seed: string, v: number, twr: number) =>
     proPitchingLine(new World(seed), with_(v, { sta: 20 }), 'MLB', v, null, {
       teamWinRate: twr,
-      role: 'CP',
+      usage: { role: 'CP' },
     });
 
   it('強隊的終結者救援機會多——機會是球隊給的', () => {
@@ -998,8 +1038,7 @@ describe('後援：機會 × 成功率', () => {
     for (let i = 0; i < 60; i++) {
       const p = proPitchingLine(new World(`intl-${i}`), with_(70, { sta: 20 }), 'MLB', 70, null, {
         teamWinRate: 0.42,
-        role: 'CP',
-        appearances: 5,
+        usage: { role: 'CP', appearances: 5 },
       });
       total += p.saves;
     }

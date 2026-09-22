@@ -456,25 +456,10 @@ export function intentionalWalksFrom(dom: number, pa: number, noise: () => numbe
  * 而位置參數多到某個程度，加一格就會有人把值填進隔壁的洞——`trade.ts` 的兩支
  * split 就是這樣被我修掉兩次的。
  */
-export interface SeasonLineOptions {
-  /** 球隊勝率。勝敗場掛在它上面；投手才用得到。 */
-  readonly teamWinRate?: number | null;
+/** 兩條成績線都吃得到的選項。 */
+export interface LineOptions {
   /** 出賽量的縮放。傷病落在這裡——他真的只上場了那麼多，率型數據不受影響。 */
   readonly seasonFactor?: number;
-  /**
-   * 直接指定上了幾場。
-   *
-   * **國際賽用，不能改用比例去縮**：一屆兩場對上一季一百二十場是 0.017，整季場次
-   * 乘完再四捨五入就是 0。
-   */
-  readonly appearances?: number;
-  /**
-   * 指定投手定位，不要現算。
-   *
-   * 定位是在定位會議上決定的（升要問過玩家、降不問），所以成績這邊只能照著用——
-   * 現算會讓玩家拒絕過的升遷在成績上偷偷生效。
-   */
-  readonly role?: PitcherRole;
   /**
    * 覆寫對手水準。
    *
@@ -482,6 +467,46 @@ export interface SeasonLineOptions {
    * **個別能力**去比 par，所以平移 `overall` 動不到那些格子——par 得自己傳。
    */
   readonly par?: number;
+}
+
+/** 打擊成績線的選項。 */
+export interface BattingLineOptions extends LineOptions {
+  /**
+   * 直接指定上了幾場。
+   *
+   * **國際賽用，不能改用比例去縮**：一屆兩場對上一季一百二十場是 0.017，整季場次
+   * 乘完再四捨五入就是 0。
+   */
+  readonly appearances?: number;
+}
+
+/**
+ * 投球成績線的選項。
+ *
+ * **出賽與定位是同一件事的兩面**，所以它們綁在 `usage` 裡：先發上二十八場、終結者
+ * 上六十場，那個差別正是定位本身。分成兩個獨立的選項欄位的年代出過事——國際賽拿
+ * 登錄定位決定上幾場，卻沒把定位傳進來，於是這一層現算了一次，而現算只看體力與
+ * 球威：體力夠的終結者被拉去先發，那幾場還全部算成先發。綁在一起之後，那個錯誤
+ * 寫不出來。
+ */
+export interface PitchingLineOptions extends LineOptions {
+  /** 球隊勝率。勝敗場掛在它上面。 */
+  readonly teamWinRate?: number | null;
+  /**
+   * 這一季（或這一屆）的出賽形狀。
+   *
+   * - 省略：場次照能力與聯盟推，定位現算。
+   * - `{ role }`：場次照推，**定位照給**——定位是在定位會議上決定的（升要問過玩家、
+   *   降不問），現算會讓玩家拒絕過的升遷在成績上偷偷生效。
+   * - `{ role, appearances }`：場次與定位都指定（國際賽）。
+   *
+   * `role` 給 null 是「這個呼叫端還沒有定位會議，請現算」——那是一句要說出口的話，
+   * 不是一個可以忘記填的欄位。
+   */
+  readonly usage?: {
+    readonly role: PitcherRole | null;
+    readonly appearances?: number;
+  };
   /**
    * 覆寫投球局數：**期望值與天花板都要給**。
    *
@@ -645,7 +670,7 @@ export function proBattingLine(
   level: string,
   overall: number,
   standards: LeagueStandards | null = null,
-  options: SeasonLineOptions = {},
+  options: BattingLineOptions = {},
 ): ProBattingLine {
   const { seasonFactor = 1, appearances, par: parOverride } = options;
   const rng = world.stream('season');
@@ -939,16 +964,19 @@ export function proPitchingLine(
   level: string,
   overall: number,
   standards: LeagueStandards | null = null,
-  options: SeasonLineOptions = {},
+  options: PitchingLineOptions = {},
 ): ProPitchingLine {
   const {
     teamWinRate = null,
     seasonFactor = 1,
-    appearances,
     par: parOverride,
     innings: inningsOverride,
-    role: roleOverride,
+    usage,
   } = options;
+  // 出賽與定位綁在一起（見 PitchingLineOptions.usage）：指定了上幾場就一定說得
+  // 出是以什麼定位上的。
+  const appearances = usage?.appearances;
+  const roleOverride = usage?.role ?? null;
   const rng = world.stream('season');
   const p = cfg.pitching;
   const info = levelOf(level);
@@ -1216,8 +1244,9 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
       ? proPitchingLine(world, ctx.ability, ctx.level, sides.pitching, ctx.standards, {
           teamWinRate: ctx.teamWinRate,
           seasonFactor: ctx.seasonFactor,
-          // 沒登錄過就由 proPitchingLine 現算——那是「這個呼叫端還沒有定位會議」。
-          ...(ctx.pitcherRole === null ? {} : { role: ctx.pitcherRole }),
+          // 場次照能力推，定位照登錄的給；沒登錄過（null）才由那一層現算——那是
+          // 「這個呼叫端還沒有定位會議」。
+          usage: { role: ctx.pitcherRole },
         })
       : null,
   );
