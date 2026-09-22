@@ -148,6 +148,7 @@ CDY_YAKYULIFE/
 | `client/src/data/` | 規則資料與載入層。10 個 JSON 加上型別定義 | 無 |
 | `client/src/engine/` | 模擬引擎。`rng.ts` 是確定性亂數層，其餘領域模組各自宣告使用哪一條子序列 | `data/` |
 | `client/src/*.tsx` | React 介面 | `engine/`、`data/` |
+| `client/src/*.ts`（`src/` 下、不在 `engine/` 裡的） | 介面側的純邏輯：成就櫃的版面（`cabinet.ts`）、生涯卡的圖（`careerImage.ts`）。**不是引擎**——它們回答「畫面怎麼排」，不回答「這一生值多少」 | `engine/`、`data/` |
 | `server/src/` | 帳號、成就結算與重跑驗證。**直接 import client 的引擎原始碼**，所以兩邊永遠是同一份規則 | `client/src/engine/`、`client/src/data/` |
 
 依賴方向是單向的：介面依賴引擎，引擎依賴資料，資料不依賴任何東西。**引擎不得反向依賴介面**——伺服器端要能不經 UI 重跑一整段生涯來驗證成績（見 ADR 0002）。

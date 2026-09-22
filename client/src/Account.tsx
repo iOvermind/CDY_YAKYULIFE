@@ -18,7 +18,7 @@ import { Ladder } from './Ladder.tsx';
 import { type Account } from './useAccount.ts';
 import { ApiError, type Me } from './api/contract.ts';
 import { talents as talentData } from './data/index.ts';
-import { cabinetSections, cabinetTiles } from './engine/achievements.ts';
+import { cabinetSections, cabinetTiles } from './cabinet.ts';
 import { maxLevelOf } from './engine/overlay.ts';
 
 /** 開局畫面右上角。 */

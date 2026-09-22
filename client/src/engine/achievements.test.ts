@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { achievements as cfg, amateur } from '../data/index.ts';
 import type { BattingLine } from './amateurStats.ts';
 import {
-  cabinetSections,
   evaluateAchievements,
   ladderAp,
   ladderTop,
@@ -291,45 +290,6 @@ describe('名人堂', () => {
     const rows = got.list.filter((a) => a.id.startsWith('hall:'));
     expect(rows).toHaveLength(2);
     expect(got.points).toBe(cfg.categories.hall.default * 2);
-  });
-});
-
-describe('成就櫃', () => {
-  const tile = (id: string, category: string, name: string) => ({
-    id,
-    name,
-    category,
-    points: 10,
-    at: '2030',
-  });
-
-  it('聯盟底下的小標一律是獎項在前、累積在後', () => {
-    const sections = cabinetSections([
-      tile('award:CPBL:mvp', cfg.categories.award.name, '中職 年度MVP'),
-      tile('cum:CPBL:hits:0', cfg.categories.cumulative.name, '中職 安打'),
-      // 大聯盟只有名人堂沒有獎項——名人堂併進「獎項」之後仍然要排在累積前面。
-      tile('cum:MLB:hits:0', cfg.categories.cumulative.name, '大聯盟 安打'),
-      tile('hall:大聯盟', cfg.categories.hall.name, '大聯盟 名人堂'),
-    ]);
-    const titles = (key: string) =>
-      sections.find((s) => s.key === key)?.groups.map((g) => g.title);
-    expect(titles('league:CPBL')).toEqual([cfg.categories.award.name, cfg.categories.cumulative.name]);
-    expect(titles('league:MLB')).toEqual(titles('league:CPBL'));
-  });
-
-  it('動態命名的特性歸到它講的那個聯盟', () => {
-    const sections = cabinetSections([
-      tile('trait:legend:中職歷史級球星', cfg.categories.trait.name, '中職歷史級球星'),
-      tile('trait:rainbow:大聯盟七彩球衣', cfg.categories.trait.name, '大聯盟七彩球衣'),
-      // 名字固定的特性沒有聯盟可歸，留在「特性」那個大標底下。
-      tile('trait:muscle', cfg.categories.trait.name, '魔鬼筋肉人'),
-    ]);
-    const names = (key: string) =>
-      sections.find((s) => s.key === key)?.groups.flatMap((g) => g.items.map((i) => i.name));
-    // 進了聯盟大標之後前綴就是重複的，剝掉。
-    expect(names('league:CPBL')).toEqual(['歷史級球星']);
-    expect(names('league:MLB')).toEqual(['七彩球衣']);
-    expect(names(cfg.categories.trait.name)).toEqual(['魔鬼筋肉人']);
   });
 });
 
