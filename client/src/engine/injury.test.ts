@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { injury as cfg } from '../data/index.ts';
-import { injuryChance, rollAmateurInjury, rollInjury, unlocksGlass } from './injury.ts';
+import { agedInjuryLoss, injuryChance, rollAmateurInjury, rollInjury, unlocksGlass } from './injury.ts';
 import { World } from './rng.ts';
 
 const none = new Set<string>();
@@ -253,5 +253,62 @@ describe('左右開投', () => {
       10,
     );
     expect(at(['glass', 'switch_pitcher'])).toBeGreaterThan(at(['iron']));
+  });
+});
+
+/** 大傷永久少一顆訓練骰（issue #11）。 */
+describe('大傷的訓練骰', () => {
+  const majors = (tag: string) => {
+    const world = new World(tag);
+    const out = [];
+    for (let i = 0; i < 400; i++) {
+      const r = rollInjury(world, { age: 36, traits: new Set(['glass']) });
+      if (r.kind !== 'none') out.push(r);
+    }
+    return out;
+  };
+
+  it('平常每一次大傷都拿走一顆，小傷不會', () => {
+    const hurt = majors('dice');
+    expect(hurt.some((r) => r.kind === 'major')).toBe(true);
+    for (const r of hurt) expect(r.diceLoss).toBe(r.kind === 'major');
+  });
+
+  it('機率被天賦乘低之後，有些大傷保得住骰子', () => {
+    const spec = cfg.severity.major.dice_loss as { chance: number };
+    const before = spec.chance;
+    spec.chance = before * 0.3;
+    try {
+      const big = majors('dice-talent').filter((r) => r.kind === 'major');
+      expect(big.some((r) => r.diceLoss)).toBe(true);
+      expect(big.some((r) => !r.diceLoss)).toBe(true);
+    } finally {
+      spec.chance = before;
+    }
+  });
+});
+
+/** 巔峰結束之後的大傷：再抽兩項各 −3（issue #12）。 */
+describe('衰退期大傷的額外損失', () => {
+  const keys = ['con', 'pow', 'eye', 'spd'];
+
+  it('抽兩項不同的，各扣 3', () => {
+    const changes = agedInjuryLoss(new World('aged'), { con: 60, pow: 60, eye: 60, spd: 60 }, keys);
+    expect(changes.size).toBe(2);
+    for (const c of changes.values()) expect(c.before - c.after).toBe(3);
+  });
+
+  it('已經在 20 的不會被抽到，21 只扣到 20', () => {
+    for (let i = 0; i < 30; i++) {
+      const changes = agedInjuryLoss(new World(`floor-${i}`), { con: 20, pow: 20, eye: 21, spd: 50 }, keys);
+      expect([...changes.keys()].sort()).toEqual(['eye', 'spd']);
+      expect(changes.get('eye')?.after).toBe(20);
+      expect(changes.get('spd')?.after).toBe(47);
+    }
+  });
+
+  it('扣得動的不到兩項就只扣那些', () => {
+    const changes = agedInjuryLoss(new World('one'), { con: 20, pow: 20, eye: 20, spd: 30 }, keys);
+    expect([...changes.keys()]).toEqual(['spd']);
   });
 });

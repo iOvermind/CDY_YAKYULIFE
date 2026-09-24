@@ -12,7 +12,7 @@
  */
 
 import { SWITCH_PITCHER_TRAIT } from './handedness.ts';
-import { injury as cfg } from '../data/index.ts';
+import { abilities, injury as cfg } from '../data/index.ts';
 import type { World } from './rng.ts';
 import { fullSeasonSta, staThresholdForLeague } from './season.ts';
 
@@ -29,6 +29,8 @@ export interface Injury {
   readonly loss: { readonly scope: 'none' | 'all' | 'one'; readonly points: number };
   /** 隔年是否整季報廢。 */
   readonly rehabNextYear: boolean;
+  /** 是否永久少一顆訓練骰。只有大傷會是 true。 */
+  readonly diceLoss: boolean;
   /** 給卡片用的敘述。 */
   readonly text: string;
 }
@@ -38,6 +40,7 @@ const HEALTHY: Injury = {
   seasonFactor: 1,
   loss: { scope: 'none', points: 0 },
   rehabNextYear: false,
+  diceLoss: false,
   text: '',
 };
 
@@ -161,6 +164,8 @@ export function rollInjury(
     s.major.season_played_percent.max,
   );
   const rehab = rng.chance(s.major.rehab_next_year.chance);
+  // 無條件抽，理由同上：抽取次數不能隨結果變動。
+  const diceLoss = rng.chance(s.major.dice_loss.chance);
 
   if (!hit) return HEALTHY;
 
@@ -172,6 +177,7 @@ export function rollInjury(
         ? { scope: 'one', points: aftereffectPoints }
         : { scope: 'none', points: 0 },
       rehabNextYear: false,
+      diceLoss: false,
       text: `肌肉拉傷進了傷兵名單，本季出賽量減少 ${lostPercent}%。`,
     };
   }
@@ -181,6 +187,7 @@ export function rollInjury(
     seasonFactor: playedPercent / 100,
     loss: { scope: 'all', points: s.major.ability_loss.points },
     rehabNextYear: rehab,
+    diceLoss,
     text: `重大傷勢——進手術室了。賽季提前報銷（本季留下 ${playedPercent}% 的出賽紀錄）。`,
   };
 }
@@ -219,6 +226,33 @@ export function rollAmateurInjury(world: World, age: number): Injury {
     seasonFactor: 1 - lostPercent / 100,
     loss: { scope: 'none', points: 0 },
     rehabNextYear: false,
+    diceLoss: false,
     text: `練習中拉傷，這一季少了 ${lostPercent}% 的出賽。`,
   };
+}
+
+/**
+ * 巔峰結束之後的大傷再多扣的那一刀（issue #12）。
+ *
+ * 從 `keys`（在用那一側的能力）裡、仍高於硬下限的，抽 `picks` 項**不同的**各扣
+ * `points`，扣到硬下限為止。已經在硬下限的不會被抽到——抽到一項扣不動的等於白抽。
+ * 回傳每一項的前後值；年齡判定是呼叫端的事。
+ */
+export function agedInjuryLoss(
+  world: World,
+  ability: Readonly<Record<string, number>>,
+  keys: readonly string[],
+): ReadonlyMap<string, { readonly before: number; readonly after: number }> {
+  const spec = cfg.severity.major.aged_loss;
+  const floor = abilities.scale.hard_floor;
+  const pool = keys.filter((k) => (ability[k] ?? 0) > floor);
+  const rng = world.stream('health');
+  const out = new Map<string, { before: number; after: number }>();
+  for (let i = 0; i < spec.picks && pool.length > 0; i++) {
+    const [key] = pool.splice(rng.int(0, pool.length - 1), 1);
+    if (key === undefined) continue;
+    const before = ability[key] ?? 0;
+    out.set(key, { before, after: Math.max(floor, before - spec.points) });
+  }
+  return out;
 }

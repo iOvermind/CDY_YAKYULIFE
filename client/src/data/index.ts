@@ -275,6 +275,10 @@ export interface InjuryData {
       readonly season_played_percent: Range;
       readonly ability_loss: { readonly points: number };
       readonly rehab_next_year: { readonly chance: number };
+      /** 大傷永久少一顆訓練骰的機率（百分比）。 */
+      readonly dice_loss: { readonly chance: number };
+      /** 巔峰結束之後的大傷：再抽幾項、各扣幾點。 */
+      readonly aged_loss: { readonly picks: number; readonly points: number };
     };
   };
   readonly glass_unlock: {

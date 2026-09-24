@@ -132,7 +132,7 @@ import {
   train,
   untrain,
 } from './growth.ts';
-import { injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
+import { agedInjuryLoss, injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
 import {
   isConscripted,
   isEligible,
@@ -603,6 +603,8 @@ export class Game {
   #catcherSeasons = 0;
   /** 生涯大傷次數。帕瓦諾的解鎖條件與合約年限都看它。 */
   #majorInjuries = 0;
+  /** 大傷永久拿走的訓練骰顆數（issue #11）。職業期的基礎骰數扣掉它，最低 1 顆。 */
+  #diceLost = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
   #rehabYear = false;
   /** 感情狀態。 */
@@ -2050,7 +2052,8 @@ export class Game {
     // 走養成期的同一條路：職業只是基礎骰數比較少，特性的骰面與天賦買來的骰數
     // 在職業期照樣生效——天賦是玩家帶進場的東西，不會因為畢業就失效。
     const dice = rollTrainingDice(this.world, this.#traits, {
-      baseCount: proDiceCount(this.world, this.#age),
+      // 大傷拿走的骰從基礎骰數扣，最低 1 顆；冠軍與天賦的骰另外加，大傷拿不走。
+      baseCount: Math.max(1, proDiceCount(this.world, this.#age) - this.#diceLost),
       bonusDice: bonus,
     });
     const values = dice.values;
@@ -2268,6 +2271,12 @@ export class Game {
 
     if (result.kind === 'major') {
       this.#majorInjuries++;
+      const aged = this.#applyAgedLoss();
+      if (aged !== '') lines.push(aged);
+      if (result.diceLoss) {
+        this.#diceLost++;
+        lines.push('身體再也回不到從前的訓練量：<b class="dn">往後每季的自主訓練少一顆骰</b>。');
+      }
       // 有人陪的話熬得住——不是治好，是熬得住。
       const rehabHit =
         result.rehabNextYear &&
@@ -2298,6 +2307,25 @@ export class Game {
         '「這是歲月的損耗，不是體質問題。」——老將的傷，球團看得比誰都開。',
       );
     }
+  }
+
+  /**
+   * 巔峰結束之後的大傷再多扣一刀（issue #12）：從在用那一側、仍高於硬下限的能力裡
+   * 抽幾項不同的，各扣幾點，扣到硬下限為止。已經在硬下限的不會被抽到。
+   *
+   * 巔峰看的是 `peak_end`——「不老妖精」把它往後延，這一條就跟著延。
+   */
+  #applyAgedLoss(): string {
+    if (this.#age <= seasonCfg.aging.peak_end) return '';
+    const keys = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide));
+    const changes = agedInjuryLoss(this.world, this.#ability, keys);
+    if (changes.size === 0) return '';
+    for (const [key, after] of changes) this.#ability[key] = after.after;
+    this.#settleCarry();
+    const hit = [...changes].map(
+      ([key, c]) => `${esc(abilities.abilities[key] ?? key)} −${c.before - c.after}`,
+    );
+    return `老將的身體恢復得慢：<b class="dn">${hit.join('、')}</b>。`;
   }
 
   /** 套用傷勢留下的永久損失，回傳給卡片用的敘述。 */

@@ -442,6 +442,47 @@
       ]
     },
     {
+      "id": "rebirth",
+      "name": "浴火重生",
+      "group": "傷病",
+      "desc": "刀疤是勳章。手術台上躺過的人，回來的時候練得比誰都兇。",
+      "levels": [
+        {
+          "cost": 12,
+          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.8",
+          "effects": [
+            {
+              "path": "injury.severity.major.dice_loss.chance",
+              "op": "mul",
+              "value": 0.8
+            }
+          ]
+        },
+        {
+          "cost": 30,
+          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.5",
+          "effects": [
+            {
+              "path": "injury.severity.major.dice_loss.chance",
+              "op": "mul",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "cost": 52,
+          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.3",
+          "effects": [
+            {
+              "path": "injury.severity.major.dice_loss.chance",
+              "op": "mul",
+              "value": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "scouted",
       "name": "隱藏原石",
       "group": "職業",

@@ -1788,9 +1788,10 @@ describe('合約', () => {
     // 自主引退一年只問一次；談約談到一半才反悔的人，手上不能只有簽或不簽兩個鍵。
     let seen = 0;
     let quit = 0;
-    // 打到「老將還在談約」本身就不常見，而哪幾顆種子走得到那裡會隨平衡改動漂移
-    // ——聯盟平均往上搬 2 之後，第一次撞見落在兩百多顆，所以範圍拉到四百。
-    for (let i = 0; i < 400; i++) {
+    // 打到「老將還在談約」本身就不常見，而哪幾顆種子走得到那裡會隨平衡改動漂移。
+    // **配點要配好**：點數全丟體力的球員一輩子站不穩一軍，走到老將談約是抽獎——
+    // 大傷在衰退期多扣兩項、永久少一顆骰之後，四百顆種子一次都沒撞見。看到三次就夠。
+    for (let i = 0; i < 400 && seen < 3; i++) {
       const game = new Game({
         seed: `quit-${i}`,
         name: '顧客',
@@ -1811,20 +1812,18 @@ describe('合約', () => {
           took = true;
           break;
         }
-        const usable = prompt.options.filter((o) => o.disabled !== true && o.id !== 'alloc:undo');
         const pick =
-          usable.find((o) => o.id === 'retire:stay') ??
-          usable.find((o) => o.id === 'alloc:confirm') ??
-          usable[0];
+          prompt.options.find((o) => o.id === 'retire:stay' && o.disabled !== true)?.id ??
+          defaultPick(game, EFFECTIVE);
         if (pick === undefined) break;
-        game.choose(pick.id);
+        game.choose(pick);
       }
       if (!took) continue;
       quit++;
       const log = JSON.stringify(game.flow.log);
       expect(log, `seed quit-${i} 選了引退卻沒有引退`).toContain('引退');
     }
-    expect(seen, '一百五十條生涯裡沒有任何一次合約問句掛出引退選項').toBeGreaterThan(0);
+    expect(seen, '四百條生涯裡沒有任何一次合約問句掛出引退選項').toBeGreaterThan(0);
     expect(quit).toBe(seen);
   });
 
