@@ -617,6 +617,8 @@ export interface FieldingAward extends AwardChance {
   readonly name: string;
   readonly min_win_pct: number;
   readonly god_win_pct: number;
+  /** 只在這些體系頒。省略時每個體系都頒。 */
+  readonly orgs?: readonly string[];
 }
 
 export interface AwardsData {

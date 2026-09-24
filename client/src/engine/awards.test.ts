@@ -415,3 +415,18 @@ describe('紀錄的形狀', () => {
     ).toEqual([]);
   });
 });
+
+/** 守備王只有大聯盟頒，名字是白金手套（issue #34）。 */
+describe('白金手套', () => {
+  const god = { fieldingWinPct: 0.9 };
+
+  it('中職只有金手套，沒有守備王', () => {
+    expect(rate({ ...god, org: 'CPBL', level: 'CPBL1' }, 'defense_king')).toBe(0);
+    expect(rate({ ...god, org: 'CPBL', level: 'CPBL1' }, 'gold_glove')).toBe(1);
+  });
+
+  it('大聯盟拿得到，名字寫白金手套', () => {
+    const got = annualAwards(new World('platinum'), ctx({ ...god, org: 'MLB', level: 'MLB', leagueGames: 162 }));
+    expect(got.find((a) => a.code === 'defense_king')?.name).toContain('白金手套');
+  });
+});

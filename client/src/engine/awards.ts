@@ -394,6 +394,9 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
 
   // ---- 守備獎項
   for (const award of cfg.fielding.list) {
+    // 只在指定體系頒的獎（白金手套只有大聯盟）。不抽骰就跳過：抽取次數會跟著聯盟
+    // 變，但同一個聯盟裡每一季都一樣，重播不受影響。
+    if (award.orgs !== undefined && !award.orgs.includes(ctx.org)) continue;
     const chance = fieldingChance(ctx, award);
     if (chance !== null && rng.chance(chance)) add(award.code, award.name, 'batter');
   }

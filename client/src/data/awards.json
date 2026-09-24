@@ -172,6 +172,8 @@
       {
         "code": "defense_king",
         "name": "守備王",
+        "orgs": ["MLB"],
+        "_orgs_note": "**只有大聯盟頒**，名字是白金手套（aliases）：全聯盟守備最好的那一位，門檻比金手套高。日職、韓職、中職都只有金手套，這座獎在那裡只是重複頒一次（issue #34）。",
         "min_win_pct": 0.64,
         "god_win_pct": 0.78,
         "base": 30,
@@ -261,7 +263,8 @@
     },
     "MLB": {
       "pitcher_of_year": "賽揚獎",
-      "batter_of_year": "漢克阿倫獎"
+      "batter_of_year": "漢克阿倫獎",
+      "defense_king": "白金手套"
     },
     "ABL": {
       "mvp": "海姆斯獎"
