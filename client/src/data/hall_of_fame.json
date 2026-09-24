@@ -68,42 +68,42 @@
       "wait_years": 5,
       "min_seasons": 5,
       "total_voters": 132,
-      "league": "中職"
+      "league": "中華職棒"
     },
     "NPB": {
       "name": "日本野球殿堂",
       "wait_years": 5,
       "min_seasons": 5,
       "total_voters": 326,
-      "league": "日職"
+      "league": "日本職棒"
     },
     "KBO": {
       "name": "韓國棒球名人堂",
       "wait_years": 5,
       "min_seasons": 5,
       "total_voters": 150,
-      "league": "韓職"
+      "league": "韓國職棒"
     },
     "LMB": {
       "name": "墨西哥棒球殿堂",
       "wait_years": 5,
       "min_seasons": 5,
       "total_voters": 200,
-      "league": "墨聯"
+      "league": "墨西哥聯盟"
     },
     "ABL": {
       "name": "澳洲棒球名人堂",
       "wait_years": 5,
       "min_seasons": 5,
       "total_voters": 50,
-      "league": "澳職"
+      "league": "澳洲聯盟"
     },
     "MLB": {
       "name": "美國棒球名人堂",
       "wait_years": 5,
       "min_seasons": 10,
       "total_voters": 389,
-      "league": "大聯盟"
+      "league": "美國大聯盟"
     },
     "_min_seasons_note": "**候選資格要有年資**：在該聯盟的一軍打過這麼多個球季才進得了候選名單（季中被交易的那一年算一季，二軍與小聯盟不算，與生涯表的各聯盟通算同一條界線）。大聯盟 10 季是真實規則；其他聯盟 5 季。沒有這道門，一個只在日職打兩季、拿過一座 MVP 的人會連續七年入圍日本野球殿堂。"
   },

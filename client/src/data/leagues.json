@@ -4,14 +4,14 @@
   "_note": "聯盟階梯。par 是該層級的平均水準，min 是最低限度（低於則降級或戰力外），games 是球季場次。有 top 欄位者為頂級聯盟——進入後才登錄守備位置並累積 FA 年資。",
   "levels": {
     "CPBL2": {
-      "name": "中職二軍",
+      "name": "中華職棒二軍",
       "par": 37,
       "min": 33,
       "games": 80,
       "org": "CPBL"
     },
     "CPBL1": {
-      "name": "中職一軍",
+      "name": "中華職棒一軍",
       "par": 47,
       "min": 44,
       "games": 120,
@@ -19,14 +19,14 @@
       "top": "CPBL"
     },
     "NPB2": {
-      "name": "日職二軍",
+      "name": "日本職棒二軍",
       "par": 50,
       "min": 47,
       "games": 100,
       "org": "NPB"
     },
     "NPB1": {
-      "name": "日職一軍",
+      "name": "日本職棒一軍",
       "par": 56,
       "min": 53,
       "games": 143,
@@ -34,14 +34,14 @@
       "top": "NPB"
     },
     "KBO2": {
-      "name": "韓職二軍",
+      "name": "韓國職棒二軍",
       "par": 43,
       "min": 39,
       "games": 100,
       "org": "KBO"
     },
     "KBO1": {
-      "name": "韓職一軍",
+      "name": "韓國職棒一軍",
       "par": 53,
       "min": 50,
       "games": 144,
@@ -57,7 +57,7 @@
       "top": "LMB"
     },
     "ABL": {
-      "name": "澳洲棒球聯盟",
+      "name": "澳洲聯盟",
       "par": 45,
       "min": 41,
       "games": 40,
@@ -93,7 +93,7 @@
       "org": "MLB"
     },
     "MLB": {
-      "name": "大聯盟",
+      "name": "美國大聯盟",
       "par": 62,
       "min": 59,
       "games": 162,
@@ -132,16 +132,16 @@
   "_top_league_names_note": "下面那張表的鍵是**體系代碼**（org），值是那個體系最高一層的名字——獎項、名人堂、里程碑的前綴，以及成就櫃的聯盟分區，全部拿 org 去查它。表本身不放註解鍵，因為它會被整個 Object.keys 拿去當聯盟清單。",
   "_org_code_note": "**體系代碼一律等於該體系頂級聯盟的代碼**（CPBL / NPB / KBO / LMB / ABL / MLB），層級代碼才帶軍別後綴（CPBL1、NPB2）。美職曾經例外——體系代碼寫成 `MiLB`、頂級層級叫 `MLB`——結果每一份以 org 為鍵的設定表（teams、hall_of_fame 的 halls 與 check_order、traits 的 rainbow、awards 的 aliases、flavor 的 retire_scenes、這裡的 top_league_names）作者都自然地寫成 `MLB`，六張表全部查不到而靜默 fallback：美國名人堂永遠進不去、七彩球衣永遠不會亮、賽揚獎顯示成預設名、大聯盟的引退場景一次都沒播過，而且沒有任何一處報錯。**不要再讓任何體系的 org 代碼與它的頂級聯盟代碼不同。** 護欄測試現在盯著每一張 org-keyed 表。",
   "top_league_names": {
-    "CPBL": "中職",
-    "NPB": "日職",
-    "KBO": "韓職",
-    "LMB": "墨聯",
-    "ABL": "澳職",
-    "MLB": "大聯盟"
+    "CPBL": "中華職棒",
+    "NPB": "日本職棒",
+    "KBO": "韓國職棒",
+    "LMB": "墨西哥聯盟",
+    "ABL": "澳洲聯盟",
+    "MLB": "美國大聯盟"
   },
   "_expansion_note": "KBO / LMB / ABL 是新架構的擴充聯盟，index_legacy.html 沒有它們。ROADMAP 階段五的「擴充聯盟資料」即指這批。index_legacy 的線性升降級無法表達它們之間的轉會關係，需要 ROADMAP 階段五的有向圖尋路系統才能真正啟用。",
   "org_names": {
-    "CPBL": "中職",
+    "CPBL": "中華職棒",
     "NPB": "旅日",
     "MLB": "旅美"
   },

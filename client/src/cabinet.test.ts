@@ -18,11 +18,11 @@ describe('成就櫃', () => {
 
   it('聯盟底下的小標一律是獎項在前、累積在後', () => {
     const sections = cabinetSections([
-      tile('award:CPBL:mvp', cfg.categories.award.name, '中職 年度MVP'),
-      tile('cum:CPBL:hits:0', cfg.categories.cumulative.name, '中職 安打'),
+      tile('award:CPBL:mvp', cfg.categories.award.name, '中華職棒 年度MVP'),
+      tile('cum:CPBL:hits:0', cfg.categories.cumulative.name, '中華職棒 安打'),
       // 大聯盟只有名人堂沒有獎項——名人堂併進「獎項」之後仍然要排在累積前面。
-      tile('cum:MLB:hits:0', cfg.categories.cumulative.name, '大聯盟 安打'),
-      tile('hall:大聯盟', cfg.categories.hall.name, '大聯盟 名人堂'),
+      tile('cum:MLB:hits:0', cfg.categories.cumulative.name, '美國大聯盟 安打'),
+      tile('hall:美國大聯盟', cfg.categories.hall.name, '美國大聯盟 名人堂'),
     ]);
     const titles = (key: string) =>
       sections.find((s) => s.key === key)?.groups.map((g) => g.title);
@@ -32,8 +32,8 @@ describe('成就櫃', () => {
 
   it('動態命名的特性歸到它講的那個聯盟', () => {
     const sections = cabinetSections([
-      tile('trait:legend:中職歷史級球星', cfg.categories.trait.name, '中職歷史級球星'),
-      tile('trait:rainbow:大聯盟七彩球衣', cfg.categories.trait.name, '大聯盟七彩球衣'),
+      tile('trait:legend:中華職棒歷史級球星', cfg.categories.trait.name, '中華職棒歷史級球星'),
+      tile('trait:rainbow:美國大聯盟七彩球衣', cfg.categories.trait.name, '美國大聯盟七彩球衣'),
       // 名字固定的特性沒有聯盟可歸，留在「特性」那個大標底下。
       tile('trait:muscle', cfg.categories.trait.name, '魔鬼筋肉人'),
     ]);

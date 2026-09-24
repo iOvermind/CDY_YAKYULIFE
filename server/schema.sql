@@ -111,3 +111,21 @@ CREATE TABLE IF NOT EXISTS ladder_rows (
 -- 查一格榜：全伺服器天梯查 (org, position, kind)，個人天梯再加 user_id。
 CREATE INDEX IF NOT EXISTS ladder_rows_combo_idx ON ladder_rows (org, position, kind);
 CREATE INDEX IF NOT EXISTS ladder_rows_user_idx  ON ladder_rows (user_id, org, position, kind);
+
+-- 聯盟正名（2026-09-25）：中職→中華職棒、日職→日本職棒、韓職→韓國職棒、墨聯→墨西哥
+-- 聯盟、澳職→澳洲聯盟、大聯盟→美國大聯盟。成就的名字是解鎖當下凍結寫入的，跟著改；
+-- 名人堂入選、歷史級球星、七彩球衣這三種的 id 也含聯盟名，一併改掉——不改的話舊
+-- 帳號下一次拿到同一件事會以新 id 再領一次 AP。舊名都在字串開頭，新名沒有一個以
+-- 舊名開頭，所以重跑是冪等的。
+UPDATE achievements SET name = regexp_replace(name, '^中職', '中華職棒') WHERE name ~ '^中職';
+UPDATE achievements SET name = regexp_replace(name, '^日職', '日本職棒') WHERE name ~ '^日職';
+UPDATE achievements SET name = regexp_replace(name, '^韓職', '韓國職棒') WHERE name ~ '^韓職';
+UPDATE achievements SET name = regexp_replace(name, '^墨聯', '墨西哥聯盟') WHERE name ~ '^墨聯';
+UPDATE achievements SET name = regexp_replace(name, '^澳職', '澳洲聯盟') WHERE name ~ '^澳職';
+UPDATE achievements SET name = regexp_replace(name, '^大聯盟', '美國大聯盟') WHERE name ~ '^大聯盟';
+UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)中職', '\1中華職棒') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)中職';
+UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)日職', '\1日本職棒') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)日職';
+UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)韓職', '\1韓國職棒') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)韓職';
+UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)墨聯', '\1墨西哥聯盟') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)墨聯';
+UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)澳職', '\1澳洲聯盟') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)澳職';
+UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)大聯盟', '\1美國大聯盟') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)大聯盟';

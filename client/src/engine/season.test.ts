@@ -36,7 +36,7 @@ const CPBL1 = leagues.levels['CPBL1']!;
 
 describe('levelOf', () => {
   it('取得層級設定', () => {
-    expect(levelOf('CPBL1').name).toBe('中職一軍');
+    expect(levelOf('CPBL1').name).toBe('中華職棒一軍');
   });
 
   it('未知層級直接炸開——默默用預設值只會產生一段看似合理的假資料', () => {

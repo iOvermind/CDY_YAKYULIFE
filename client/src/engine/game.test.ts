@@ -514,7 +514,7 @@ describe('職業階段的狀態', () => {
     expect(pro?.team).not.toBe('');
     expect(pro?.levelName).not.toBe('');
     expect(pro?.org).toBe('CPBL');
-    expect(pro?.orgName).toBe('中職');
+    expect(pro?.orgName).toBe('中華職棒');
     expect(pro?.year).toBeGreaterThanOrEqual(1);
   });
 
@@ -542,7 +542,7 @@ describe('職業階段的狀態', () => {
     for (let i = 0; i < 120 && checked < 3; i++) {
       const game = playWell(started({ seed: `split-${i}` }));
       const log = JSON.stringify(game.flow.log);
-      if (!log.includes('送回') || !log.includes('升上中職一軍')) continue;
+      if (!log.includes('送回') || !log.includes('升上中華職棒一軍')) continue;
       checked++;
       expect(game.state?.statsByStage['CPBL']).toBeDefined();
       // 上上下下之後仍然只有一份中職紀錄
