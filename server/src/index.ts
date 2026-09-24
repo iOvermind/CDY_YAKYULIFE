@@ -15,7 +15,7 @@ import { extname, join, normalize } from 'node:path';
 import { API } from '../../client/src/api/contract.ts';
 import { readCookie, readSession, sessionCookie, signSession } from './auth.ts';
 import { migrate, pool, type UserRow } from './db.ts';
-import { CAREER_SCOPE } from '../../client/src/engine/index.ts';
+import { ALL } from '../../client/src/engine/index.ts';
 import {
   finishCareer,
   HttpError,
@@ -142,9 +142,12 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   }
   // 天梯。**全伺服器天梯不必登入也看得到**——它是這台服務的門面；個人天梯要有身分。
   if (path === '/api/ladder' && method === 'GET') {
-    const scope = url.searchParams.get('scope') ?? CAREER_SCOPE;
+    // 省略的選單就是「跨」——`/api/ladder` 不帶參數等於跨聯盟、跨守位、累計。
+    const org = url.searchParams.get('org') ?? ALL;
+    const position = url.searchParams.get('position') ?? ALL;
+    const kind = url.searchParams.get('kind') === 'best' ? 'best' : 'total';
     const self = url.searchParams.get('self') === '1';
-    send(res, 200, await ladder(await currentUser(req), scope, self));
+    send(res, 200, await ladder(await currentUser(req), { org, position, kind }, self));
     return;
   }
   if (path.startsWith('/api/talents/')) {

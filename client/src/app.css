@@ -289,22 +289,6 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .field input:focus{border-color:var(--accent)}
 .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .seg.two{grid-template-columns:repeat(2,1fr)}
-/* 聯盟那一排：一排四個，多的用拖的。按鈕的寬度算成「四顆剛好塞滿」，容器自己
-   橫向捲動——滑鼠按住拖（見 Ladder.tsx 的 useDragScroll），觸控是原生捲動。
-   **刻意不放箭頭**：箭頭要佔掉兩端的寬度，四顆按鈕就得跟著變窄。捲軸藏起來，
-   那一排本來就只有四格寬，一條捲軸會佔掉按鈕近三分之一的高度。 */
-.seg-scroll{display:flex;gap:8px;overflow-x:auto;cursor:grab;scrollbar-width:none;
-  -webkit-overflow-scrolling:touch}
-/* 三排範圍分頁疊在一起，彼此留一點距離。 */
-.seg-scroll,.seg-row{margin-bottom:8px}
-/* 守位那兩排左邊掛一個固定的標籤——它是那一排的名字，不跟著捲。 */
-.seg-row{display:flex;align-items:stretch;gap:8px}
-.seg-row .seg-scroll{flex:1;min-width:0;margin-bottom:0}
-.seg-label{display:flex;align-items:center;flex:0 0 auto;color:var(--dim);
-  font-family:var(--sans);font-size:13px;font-weight:700;white-space:nowrap}
-.seg-scroll::-webkit-scrollbar{display:none}
-.seg-scroll:active{cursor:grabbing}
-.seg-scroll>button{flex:0 0 calc((100% - 24px) / 4)}
 .poslist{display:grid;gap:8px}
 /* 完整的成績列比右欄寬——讓表格自己橫向捲動，而不是把頁面撐出橫捲軸。 */
 .fin-scroll{overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch}
@@ -317,10 +301,6 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 /* 規則上不可能的組合（左投守二三游）：留在原地反灰，不要整排消失——玩家要看得出
    「這個位置存在，只是你這隻手守不了」，而不是以為遊戲少了三個守位。 */
 .seg button:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
-.seg-scroll>button{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);
-  color:var(--dim);font-family:var(--sans);font-size:14.5px;font-weight:700;padding:11px 4px;
-  cursor:pointer;user-select:none}
-.seg-scroll>button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}
 /* 反灰的行動鈕：留在原地但按不動——藏起來會讓版面在配點過程中跳動。
    選擇器掛在 .btn 上而不是 #act 底下：動作區的實際 id 是 panel-act。 */
 .btn:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
@@ -652,6 +632,13 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
 /* 天梯：一項數值一塊，塊與塊之間自動排版。
    欄位有十幾項，直排會捲到天荒地老；grid 讓寬螢幕一次看得到好幾項，窄螢幕自動
    掉成單欄。每一塊自己是一張小表，不共用表頭——各欄的單位本來就不同。 */
+/* 天梯的四個選單：我的／所有玩家、聯盟、累計／單季、守位。寬的時候一排四個，窄的
+   時候兩兩一排——四個選單在手機上擠成一排，每一個都只剩兩三個字寬。 */
+.ladder-filters{display:grid;gap:8px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:12px}
+.ladder-filters select{width:100%;font:inherit;color:var(--text);background:var(--panel);
+  border:1px solid var(--edge);border-radius:var(--r);padding:8px 10px;cursor:pointer}
+.ladder-filters select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (max-width:560px){ .ladder-filters{grid-template-columns:repeat(2,minmax(0,1fr))} }
 .ladder-grid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:8px;min-width:0}
 /* 野手一側、投手一側，左右並排。**這是語意分欄，不是平衡分欄**：野手 18 塊榜、
    投手 13 塊，兩側高度本來就不齊，硬要等高就得把投手的榜混進野手那一側。換到的

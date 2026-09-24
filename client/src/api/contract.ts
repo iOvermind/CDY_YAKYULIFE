@@ -83,7 +83,7 @@ export interface LadderEntry {
   readonly account: string;
   /** 榜上的那個數字。率型已經是算好的比率，累積型是整數。 */
   readonly value: number;
-  /** 這個範圍內的球季數。用來讓玩家看出這是幾年打出來的。 */
+  /** 這個組合內的球季數。用來讓玩家看出這是幾年打出來的；單季是 1。 */
   readonly seasons: number;
   /**
    * 結算當下的引擎版本。
@@ -96,25 +96,41 @@ export interface LadderEntry {
   readonly at: string;
 }
 
-/** 一整張榜：一個範圍下的一個欄位。 */
+/**
+ * 查哪一格天梯：聯盟 × 守位 × 累計／單季。`*` 是跨聯盟、跨守位。
+ *
+ * 第四個選單（我的／所有玩家）不在這裡——它決定的是查誰的列，不是查哪一格。
+ */
+export interface LadderQuery {
+  readonly org: string;
+  readonly position: string;
+  readonly kind: 'total' | 'best';
+}
+
+/**
+ * 一整張榜：一個組合下的一個欄位。
+ *
+ * `side` 是它屬於哪一張表：野手、投手，或投打共通（份額、評價分、薪水）。
+ */
 export interface LadderBoard {
-  /** 欄位代碼，對應 ladder.json 的 `columns[].key`。 */
+  /** 欄位代碼，對應 ladder.json 的 `columns[side][].key`。 */
   readonly column: string;
-  readonly side: 'batter' | 'pitcher';
+  readonly side: 'batter' | 'pitcher' | 'shared';
   readonly entries: readonly LadderEntry[];
 }
 
 /** 查榜的回應。 */
 export interface LadderResponse {
-  /** 這個範圍下的每一張榜。空的榜（沒有任何人有資格）不會出現。 */
+  /** 這個組合下的每一張榜。空的榜（沒有任何人有資格）不會出現。 */
   readonly boards: readonly LadderBoard[];
   /**
-   * 這個帳號實際去過的範圍，供畫面畫分頁用。
+   * 有資料的組合，供畫面的選單用。
    *
-   * **沒去過的聯盟整組不出現**——與成就櫃「未解鎖的一律不顯示」同一個規矩。
-   * 全伺服器天梯回的是所有玩家去過的聯集。
+   * **選單只列在其他選擇下有資料的選項**——沒去過墨聯就沒有墨聯，與成就櫃「未解鎖
+   * 的一律不顯示」同一個規矩。個人天梯回的是自己打過的，全伺服器天梯回的是所有
+   * 玩家的聯集。
    */
-  readonly scopes: readonly string[];
+  readonly combos: readonly LadderQuery[];
 }
 
 /** 結算的請求。 */
@@ -134,10 +150,11 @@ export const API = {
   career: (id: string) => `/api/careers/${id}`,
   talent: (id: string) => `/api/talents/${id}`,
   /**
-   * 天梯。`scope` 是體系代碼或 `CAREER`；`self=1` 是個人天梯，否則是全伺服器。
+   * 天梯。聯盟與守位給 `*` 就是跨聯盟、跨守位；`self=1` 是個人天梯，否則是全伺服器。
    */
-  ladder: (scope: string, self: boolean) =>
-    `/api/ladder?scope=${encodeURIComponent(scope)}${self ? '&self=1' : ''}`,
+  ladder: (q: LadderQuery, self: boolean) =>
+    `/api/ladder?org=${encodeURIComponent(q.org)}&position=${encodeURIComponent(q.position)}` +
+    `&kind=${q.kind}${self ? '&self=1' : ''}`,
 } as const;
 
 /**
@@ -151,8 +168,8 @@ export interface ProgressStore {
   register(account: string, password: string): Promise<Me>;
   login(account: string, password: string): Promise<Me>;
   logout(): Promise<void>;
-  /** 查一個範圍下的天梯。`self` 為真時只看自己打過的生涯。 */
-  ladder(scope: string, self: boolean): Promise<LadderResponse>;
+  /** 查一格天梯。`self` 為真時只看自己打過的生涯。 */
+  ladder(q: LadderQuery, self: boolean): Promise<LadderResponse>;
   /** 開局登記：凍結當下的天賦組合。 */
   startCareer(): Promise<CareerTicket>;
   /** 結算：上傳重播日誌，伺服器重跑驗證。 */

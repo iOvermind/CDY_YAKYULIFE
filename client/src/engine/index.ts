@@ -20,10 +20,11 @@ export { Game, NO_PROGRESS, type CareerProgress, type CareerScore, type ReplayLo
 
 // ---- 天梯的範圍代碼。伺服器要用它們排範圍清單與查榜
 export {
-  BEST_PREFIX,
-  CAREER_SCOPE,
+  ALL,
+  isPitcherRole,
   LADDER_POSITIONS,
-  POSITION_PREFIX,
+  type LadderKey,
+  type LadderKind,
   type LadderRow,
 } from './ladder.ts';
 

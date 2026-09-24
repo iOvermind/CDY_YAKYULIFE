@@ -204,8 +204,6 @@ function AchievementPanel({
   const [tab, setTab] = useState<'achievements' | 'talents' | 'ladder' | 'changelog'>(
     'achievements',
   );
-  // 天梯的兩種範圍。個人是預設——玩家打開這一頁最先想看的是自己。
-  const [self, setSelf] = useState(true);
 
   return (
     <Modal title={`${me.account} · ${me.ap} AP`} onClose={onClose} wide>
@@ -244,20 +242,10 @@ function AchievementPanel({
           更新
         </button>
       </div>
-      {tab === 'ladder' && (
-        // 個人／全伺服器是同一份資料的兩種查法，不是兩張榜（ADR 0038）。
-        <div className="seg" style={{ marginBottom: 12 }}>
-          <button type="button" className={self ? 'on' : undefined} onClick={() => setSelf(true)}>
-            我的
-          </button>
-          <button type="button" className={self ? undefined : 'on'} onClick={() => setSelf(false)}>
-            全伺服器
-          </button>
-        </div>
-      )}
       {tab === 'achievements' && <AchievementList me={me} />}
       {tab === 'talents' && <TalentPanel account={account} me={me} />}
-      {tab === 'ladder' && <Ladder account={account} self={self} />}
+      {/* 我的／所有玩家是天梯自己的第一個選單——同一份資料的兩種查法（ADR 0038）。 */}
+      {tab === 'ladder' && <Ladder account={account} />}
       {tab === 'changelog' && <Changelog />}
     </Modal>
   );

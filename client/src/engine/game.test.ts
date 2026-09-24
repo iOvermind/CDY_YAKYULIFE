@@ -4,7 +4,7 @@ import { stageOf } from './amateur.ts';
 import { ALL_ABILITIES } from '../data/index.ts';
 import { Game, type GameSetup } from './game.ts';
 import { ENGINE_VERSION } from './version.ts';
-import { BEST_PREFIX, CAREER_SCOPE, POSITION_PREFIX } from './ladder.ts';
+import { ALL } from './ladder.ts';
 import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
 import { roleRank } from './season.ts';
@@ -2316,17 +2316,18 @@ describe('結算（score）', () => {
     expect(score?.summary).toBe(game.summary);
   });
 
-  it('天梯列與範圍代碼對得上：打過的頂級聯盟、生涯通算、守位', () => {
+  it('天梯列的組合不重複，而且跨聯盟跨守位那一格一定在', () => {
     for (let i = 0; i < 20; i++) {
       const game = playWell(started({ seed: `score-ladder-${i}` }));
       const score = game.score();
       if (score === null || score.ladder.length === 0) continue;
-      const scopes = score.ladder.map((r) => r.scope);
-      expect(new Set(scopes).size).toBe(scopes.length);
-      expect(scopes).toContain(CAREER_SCOPE);
-      // 守位那兩排一定跟著出現——一段打完的生涯至少登錄過一個守位。
-      expect(scopes.some((sc) => sc.startsWith(POSITION_PREFIX))).toBe(true);
-      expect(scopes.some((sc) => sc.startsWith(BEST_PREFIX))).toBe(true);
+      const keys = score.ladder.map((r) => `${r.org}|${r.position}|${r.kind}`);
+      // 資料表的主鍵就是這三欄——重複的話第二列會被 ON CONFLICT 靜靜吃掉。
+      expect(new Set(keys).size).toBe(keys.length);
+      expect(keys).toContain(`${ALL}|${ALL}|total`);
+      expect(keys).toContain(`${ALL}|${ALL}|best`);
+      // 一段打完的生涯至少登錄過一個守位。
+      expect(score.ladder.some((r) => r.position !== ALL)).toBe(true);
       return;
     }
     throw new Error('二十段生涯都沒有上過頂級聯盟');

@@ -11,6 +11,7 @@ import {
   ApiError,
   type CareerResult,
   type CareerTicket,
+  type LadderQuery,
   type LadderResponse,
   type Me,
   type ProgressStore,
@@ -51,8 +52,8 @@ const post = <T>(path: string, data?: unknown): Promise<T> =>
   call<T>(path, data === undefined ? { method: 'POST' } : { method: 'POST', body: JSON.stringify(data) });
 
 export const httpProgress: ProgressStore = {
-  ladder(scope: string, self: boolean): Promise<LadderResponse> {
-    return call<LadderResponse>(API.ladder(scope, self));
+  ladder(q: LadderQuery, self: boolean): Promise<LadderResponse> {
+    return call<LadderResponse>(API.ladder(q, self));
   },
 
   /** 未登入時伺服器回 401，那不是錯誤，是「還沒登入」。 */

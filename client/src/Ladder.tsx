@@ -1,34 +1,32 @@
 /**
  * 天梯。
  *
- * **先選範圍，再看一整面欄位**：範圍是「生涯／中職／日職…」，底下一項數值一塊、
- * 每塊列前十。攤開所有範圍的話是十幾個欄位乘上七個範圍，沒有人讀得完。
+ * **四個選單挑一格，再看一整面欄位**：我的／所有玩家 × 聯盟／跨聯盟 × 累計／單季
+ * × 守位／跨守位。守位選單同時決定畫哪幾張表——跨守位畫野手、投手與共通三張，
+ * 野手守位只畫野手與共通，投手定位只畫投手與共通。共通那一張是份額、評價分、
+ * 薪水：整個球員的數字，不分投打。
  *
- * 沒去過的聯盟整組不出現——與成就櫃「未解鎖的一律不顯示」同一個規矩。範圍清單
- * 由伺服器算（它知道有哪些資料），這裡不自己推。
+ * **選單只列在其他選擇下有資料的選項**——沒去過墨聯就沒有墨聯，選了大聯盟之後守位
+ * 只列有人在大聯盟守過的。清單由伺服器給（它知道有哪些資料），這裡不自己推。
  *
  * 見 [ADR 0038](../../docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)。
  */
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import type { LadderBoard, LadderResponse } from './api/contract.ts';
+import { useEffect, useState } from 'react';
+import type { LadderBoard, LadderQuery, LadderResponse } from './api/contract.ts';
 import type { Account } from './useAccount.ts';
 import { ladder as ladderCfg, leagues, positions as positionsCfg } from './data/index.ts';
-import { BEST_PREFIX, CAREER_SCOPE, LADDER_POSITIONS, POSITION_PREFIX } from './engine/ladder.ts';
+import { ALL } from './engine/ladder.ts';
+import { fmtMoney } from './engine/salary.ts';
 import { ENGINE_VERSION } from './engine/version.ts';
 
 /**
- * 範圍的中文名。生涯是跨聯盟通算，其餘是**頂級聯盟名**。
- *
- * 用 `top_league_names`（中職／日職／韓職／墨聯／澳職／大聯盟）而不是 `org_names`
- * （中職／旅日／旅美），有兩個理由。一是語意：天梯只收頂級聯盟的成績，榜上問的是
- * 「誰在這個聯盟最強」，不是「你待過哪個體系」——與獎項前綴同一把尺（見
- * `career.ts` 的 `orgNameOf`）。二是完整性：`org_names` 是刻意只寫幾個體系的覆蓋表，
- * 拿它當清單會讓韓職、墨聯、澳職顯示成生的代碼。
+ * 聯盟選單上的名字。跨聯盟之外寫**頂級聯盟名**（中職／日職／大聯盟），不是體系名
+ * （旅日／旅美）——榜上問的是「誰在這個聯盟最強」，與獎項前綴同一把尺。
  */
-function scopeName(scope: string): string {
-  if (scope === CAREER_SCOPE) return '生涯';
-  return leagues.top_league_names[scope] ?? scope;
+function orgName(org: string): string {
+  if (org === ALL) return '跨聯盟';
+  return leagues.top_league_names[org] ?? org;
 }
 
 /** 守位的中文全名。野手查 positions.json，投手查 ladder.json 的定位名。 */
@@ -39,7 +37,7 @@ function positionName(position: string): string {
 }
 
 /** 一個欄位的設定。找不到就不畫——資料檔是唯一來源，這裡不自己編一份備援。 */
-function columnOf(side: 'batter' | 'pitcher', key: string) {
+function columnOf(side: LadderBoard['side'], key: string) {
   return ladderCfg.columns[side].find((c) => c.key === key);
 }
 
@@ -49,9 +47,11 @@ function columnOf(side: 'batter' | 'pitcher', key: string) {
  * 率型帶小數位（打擊率 .312、防禦率 3.05）；投球局數存的是出局數，要換回棒球
  * 寫法（29.1 是 29 局又一人出局，不是 29.1 局）。
  */
-function fmt(value: number, side: 'batter' | 'pitcher', key: string): string {
+function fmt(value: number, side: LadderBoard['side'], key: string): string {
   const column = columnOf(side, key);
   if (column === undefined) return String(value);
+  // 薪水存的是萬元，寫成玩家讀得懂的 3000 萬、25 億。
+  if (column.unit === 'money') return fmtMoney(value);
   if (column.unit === 3) {
     const whole = Math.floor(value / 3);
     return `${whole}.${value % 3}`;
@@ -91,7 +91,7 @@ function Board({ board }: { board: LadderBoard }) {
                   </span>
                 )}
               </td>
-              <td style={{ width: '4em' }} title="這個範圍內的球季數">
+              <td style={{ width: '4em' }} title="這個組合內的球季數">
                 {e.seasons} 季
               </td>
               <td style={{ textAlign: 'right', width: '6em' }}>
@@ -105,139 +105,42 @@ function Board({ board }: { board: LadderBoard }) {
   );
 }
 
-/**
- * 聯盟那一排的拖曳捲動。
- *
- * **不用箭頭。** 箭頭要佔掉兩端的寬度，四顆聯盟按鈕就得跟著變窄；拖曳不佔任何
- * 版面，按鈕維持原本的寬度。手機本來就是拖的——那一排是原生的橫向捲動容器，
- * 觸控不必接手，這裡只補上滑鼠的那一半。
- *
- * **不能用 setPointerCapture。** 抓住指標之後 pointerdown 與 pointerup 的目標
- * 都會變成容器，瀏覽器於是把 click 派給容器而不是按鈕——結果是整排點不動，每
- * 一次點擊都被當成一次沒有位移的拖曳。改成只記狀態不抓指標：滑鼠移出那一排就
- * 結束拖曳，代價是甩得太快會鬆手，而那比「按鈕全部失效」好得多。
- *
- * 真的拖過才要吃掉那一次 click，否則放開滑鼠的位置剛好在某顆按鈕上就會誤選。
- * 門檻留四個像素——滑鼠按下去本來就很難完全不動。
- */
-function useDragScroll() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const holding = useRef(false);
-  const dragged = useRef(false);
-  const from = useRef({ x: 0, left: 0 });
+/** 三張表的標題，依畫面上的順序。 */
+const SIDES: readonly { readonly side: LadderBoard['side']; readonly title: string }[] = [
+  { side: 'shared', title: '綜合' },
+  { side: 'batter', title: '野手' },
+  { side: 'pitcher', title: '投手' },
+];
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse' || ref.current === null) return;
-    holding.current = true;
-    dragged.current = false;
-    from.current = { x: e.clientX, left: ref.current.scrollLeft };
-  };
+const START: LadderQuery = { org: ALL, position: ALL, kind: 'total' };
 
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const el = ref.current;
-    if (!holding.current || el === null) return;
-    const dx = e.clientX - from.current.x;
-    if (Math.abs(dx) > 4) dragged.current = true;
-    if (dragged.current) el.scrollLeft = from.current.left - dx;
-  };
-
-  /** 放開、移出那一排、或系統收走指標，都算結束。 */
-  const stop = () => {
-    holding.current = false;
-  };
-
-  return {
-    ref,
-    /**
-     * 這一次 click 是不是拖出來的。是的話呼叫端要忽略它。
-     *
-     * **讀一次就清掉。** 不清的話旗標會留到下一次點擊——用鍵盤 Enter 按按鈕不會
-     * 經過 pointerdown，於是那一次會被上一次的拖曳吃掉。
-     */
-    wasDrag: () => {
-      const was = dragged.current;
-      dragged.current = false;
-      return was;
-    },
-    handlers: {
-      onPointerDown,
-      onPointerMove,
-      onPointerUp: stop,
-      onPointerLeave: stop,
-      onPointerCancel: stop,
-    },
-  };
+/** 去重並保留第一次出現的順序——伺服器給的清單已經排好了。 */
+function unique(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
 }
 
-/**
- * 一排守位按鈕。生涯與單季各一排，形狀一樣，只是前綴不同。
- *
- * 左邊掛一個固定的標籤（「生涯」／「單季」），右邊是可以拖的守位。**標籤不跟著
- * 捲**——它是那一排的名字，滑走了就分不出上下兩排在問什麼。
- */
-function PositionRow({
-  label,
-  prefix,
-  positions,
-  scope,
-  setScope,
-  drag,
-}: {
-  label: string;
-  prefix: string;
-  positions: readonly string[];
-  scope: string;
-  setScope: (s: string) => void;
-  drag: ReturnType<typeof useDragScroll>;
-}) {
-  return (
-    <div className="seg-row">
-      <span className="seg-label">{label}</span>
-      <div className="seg-scroll" ref={drag.ref} {...drag.handlers}>
-        {positions.map((p) => (
-          <button
-            key={p}
-            type="button"
-            title={positionName(p)}
-            className={scope === `${prefix}${p}` ? 'on' : undefined}
-            onClick={() => {
-              if (!drag.wasDrag()) setScope(`${prefix}${p}`);
-            }}
-          >
-            {p}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function Ladder({ account, self }: { account: Account; self: boolean }) {
-  const [scope, setScope] = useState(`${POSITION_PREFIX}${LADDER_POSITIONS[0] ?? ''}`);
+export function Ladder({ account }: { account: Account }) {
+  // 個人是預設——玩家打開這一頁最先想看的是自己。
+  const [self, setSelf] = useState(true);
+  const [query, setQuery] = useState<LadderQuery>(START);
   const [data, setData] = useState<LadderResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
-   * 記住上一次拿到的範圍清單。
-   *
-   * **換範圍時那一排不能消失。** 查詢期間 `data` 是 null，而範圍分頁如果跟著
-   * 整段不畫，那一排就會被卸載再重建——拖曳的捲動位置歸零，玩家點了第五個
-   * 聯盟之後畫面彈回最左邊的四個。清單本身與選了哪一個無關，留著就好。
+   * 記住上一次拿到的組合清單。**查詢期間選單不能消失**——那時 `data` 是 null，選單
+   * 要是跟著不畫，每換一次選項整排就閃一次。
    */
-  const [scopes, setScopes] = useState<readonly string[]>([]);
-  const leagueDrag = useDragScroll();
-  const careerDrag = useDragScroll();
-  const bestDrag = useDragScroll();
+  const [combos, setCombos] = useState<readonly LadderQuery[]>([]);
 
   useEffect(() => {
     let live = true;
     setData(null);
     setError(null);
     account.store
-      .ladder(scope, self)
+      .ladder(query, self)
       .then((res) => {
         if (!live) return;
         setData(res);
-        setScopes(res.scopes);
+        setCombos(res.combos);
       })
       .catch((e: unknown) => {
         if (live) setError(e instanceof Error ? e.message : '讀不到天梯。');
@@ -245,27 +148,36 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
     return () => {
       live = false;
     };
-  }, [account, scope, self]);
+  }, [account, query, self]);
 
-  const batter = (data?.boards ?? []).filter((b) => b.side === 'batter');
-  const pitcher = (data?.boards ?? []).filter((b) => b.side === 'pitcher');
-
-  // **生涯不是第七個聯盟。** 它是跨聯盟通算，與「誰在中職最強」問的是兩件事，
-  // 因此拉出來自己一排。聯盟那一排永遠只有一行，多的用拖的。
-  const has = new Set(scopes);
-  const leagueScopes = scopes.filter(
-    (s) => s !== CAREER_SCOPE && !s.startsWith(POSITION_PREFIX) && !s.startsWith(BEST_PREFIX),
+  // 每個選單只列「在其他選單目前的選擇下有資料」的選項。累計與單季一定成對出現
+  // （結算時每個組合兩種都寫），所以那一個選單不必篩。
+  const orgs = unique(
+    combos.filter((c) => c.position === query.position && c.kind === query.kind).map((c) => c.org),
   );
-  const careerPositions = LADDER_POSITIONS.filter((p) => has.has(`${POSITION_PREFIX}${p}`));
-  const bestPositions = LADDER_POSITIONS.filter((p) => has.has(`${BEST_PREFIX}${p}`));
-  // 守位的榜一次只畫一側：野手的守位沒有投球成績，投手的定位沒有打擊成績，
-  // 左右並排只會空一半。
-  const single = scope.startsWith(POSITION_PREFIX) || scope.startsWith(BEST_PREFIX);
+  const positions = unique(
+    combos.filter((c) => c.org === query.org && c.kind === query.kind).map((c) => c.position),
+  );
 
   /**
-   * 榜的那一段。查詢期間只換這裡，範圍分頁留在原地——不然那一排會被卸載再重建，
-   * 拖曳的捲動位置歸零。
+   * 換聯盟時守位可能不存在了（大聯盟守過三壘、日職沒有）。那就回到跨守位——每一個
+   * 打過的聯盟都一定有跨守位那一格。
    */
+  const pickOrg = (org: string) => {
+    const has = combos.some((c) => c.org === org && c.position === query.position);
+    setQuery({ ...query, org, position: has ? query.position : ALL });
+  };
+
+  // 換「我的／所有玩家」時組合清單會跟著換；目前這一格在新清單裡不存在的話就回到
+  // 起點（跨聯盟、跨守位、累計），那一格只要有任何一段生涯就一定存在。
+  useEffect(() => {
+    if (combos.length === 0) return;
+    const ok = combos.some(
+      (c) => c.org === query.org && c.position === query.position && c.kind === query.kind,
+    );
+    if (!ok) setQuery(START);
+  }, [combos, query]);
+
   function boards() {
     if (error !== null) return <p className="modal-note">{error}</p>;
     if (data === null) return <p className="modal-note">讀取中…</p>;
@@ -277,104 +189,60 @@ export function Ladder({ account, self }: { account: Account; self: boolean }) {
         </p>
       );
     }
-    if (single) {
-      // 守位的榜一次只畫一側，因此不套 .ladder-sides 那個 1fr 1fr。野手的守位沒有
-      // 投球成績、投手的定位沒有打擊成績，哪一側有東西就畫哪一側。
-      const side = batter.length >= pitcher.length ? batter : pitcher;
+    return SIDES.map(({ side, title }) => {
+      const list = data.boards.filter((b) => b.side === side);
+      if (list.length === 0) return null;
       return (
-        <section>
-          <h4>{side === batter ? '野手' : '投手'}</h4>
+        <section key={side}>
+          <h4>{title}</h4>
           <div className="ladder-grid">
-            {side.map((b) => (
+            {list.map((b) => (
               <Board key={b.column} board={b} />
             ))}
           </div>
         </section>
       );
-    }
-    return (
-      /*
-        野手一側、投手一側，左右並排，各自內部再排兩欄榜。**兩側是語意分欄，不是
-        平衡分欄**——野手 18 塊、投手 13 塊，高度本來就不齊，硬要等高就得把投手的
-        榜混進野手那一側。左右並排換到的是「不必滑過整個野手才看得到投手」。
-        欄寬不夠時（窄視窗）兩側自己疊回上下，見 app.css 的 media query。
-      */
-      <div className="ladder-sides">
-        {batter.length > 0 && (
-          <section>
-            <h4>野手</h4>
-            <div className="ladder-grid">
-              {batter.map((b) => (
-                <Board key={b.column} board={b} />
-              ))}
-            </div>
-          </section>
-        )}
-        {pitcher.length > 0 && (
-          <section>
-            <h4>投手</h4>
-            <div className="ladder-grid">
-              {pitcher.map((b) => (
-                <Board key={b.column} board={b} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-    );
+    });
   }
-
-  if (scopes.length === 0) return boards();
 
   return (
     <>
-      {/*
-        範圍分頁。只出現有資料的那些——沒去過的聯盟整組不顯示。
-
-        **一排四個，多的用拖的。** 按鈕的寬度固定成「四個剛好塞滿」，容器自己橫向
-        捲動：滑鼠按住拖，觸控就是原生的捲動。這裡沒有箭頭——箭頭要佔掉兩端的寬度，
-        四顆按鈕就得跟著變窄。
-      */}
-      <div className="seg-scroll" ref={leagueDrag.ref} {...leagueDrag.handlers}>
-        {leagueScopes.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={scope === s ? 'on' : undefined}
-            onClick={() => {
-              if (!leagueDrag.wasDrag()) setScope(s);
-            }}
-          >
-            {scopeName(s)}
-          </button>
-        ))}
+      <div className="ladder-filters">
+        <select
+          aria-label="誰的生涯"
+          value={self ? 'self' : 'all'}
+          onChange={(e) => setSelf(e.target.value === 'self')}
+        >
+          <option value="self">我的生涯</option>
+          <option value="all">所有玩家</option>
+        </select>
+        <select aria-label="聯盟" value={query.org} onChange={(e) => pickOrg(e.target.value)}>
+          {(orgs.length > 0 ? orgs : [ALL]).map((o) => (
+            <option key={o} value={o}>
+              {orgName(o)}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="累計或單季"
+          value={query.kind}
+          onChange={(e) => setQuery({ ...query, kind: e.target.value === 'best' ? 'best' : 'total' })}
+        >
+          <option value="total">累計</option>
+          <option value="best">單季</option>
+        </select>
+        <select
+          aria-label="守位"
+          value={query.position}
+          onChange={(e) => setQuery({ ...query, position: e.target.value })}
+        >
+          {(positions.length > 0 ? positions : [ALL]).map((p) => (
+            <option key={p} value={p}>
+              {p === ALL ? '跨守位' : `${p} ${positionName(p)}`}
+            </option>
+          ))}
+        </select>
       </div>
-      {/*
-        **生涯依守位分，不是依投打分。** 一段生涯可能守過好幾個位置，而「他在游擊
-        這個位置上留下了什麼」與「他一輩子累積了什麼」是兩個問題——只採計在那個
-        守位登錄的球季，二十六年生涯只有二十二年守游擊，游擊榜上就只有那二十二年。
-        底下那一排是同一批守位的**單季**紀錄。
-      */}
-      {careerPositions.length > 0 && (
-        <PositionRow
-          label="生涯"
-          prefix={POSITION_PREFIX}
-          positions={careerPositions}
-          scope={scope}
-          setScope={setScope}
-          drag={careerDrag}
-        />
-      )}
-      {bestPositions.length > 0 && (
-        <PositionRow
-          label="單季"
-          prefix={BEST_PREFIX}
-          positions={bestPositions}
-          scope={scope}
-          setScope={setScope}
-          drag={bestDrag}
-        />
-      )}
       {boards()}
     </>
   );

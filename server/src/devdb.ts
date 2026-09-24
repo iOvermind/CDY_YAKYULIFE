@@ -20,7 +20,11 @@ interface Snapshot {
   talents: FakeDb['talents'];
   achievements: (Omit<FakeDb['achievements'][number], 'unlocked_at'> & { unlocked_at: string })[];
   careers: (Omit<FakeDb['careers'][number], 'finished_at'> & { finished_at: string | null })[];
-  careerStats: (Omit<FakeDb['careerStats'][number], 'finished_at'> & { finished_at: string })[];
+  /**
+   * 天梯的列。舊的快照存的是 `careerStats`（一個範圍字串一列），讀進來時直接丟掉
+   * ——天梯改成三欄組合之後舊資料清掉重來，與正式資料庫的遷移同一個決定。
+   */
+  ladderRows?: (Omit<FakeDb['ladderRows'][number], 'finished_at'> & { finished_at: string })[];
   nextUserId: number;
 }
 
@@ -53,7 +57,7 @@ export class JsonDb extends FakeDb {
         ...c,
         finished_at: c.finished_at === null ? null : c.finished_at.toISOString(),
       })),
-      careerStats: this.careerStats.map((r) => ({ ...r, finished_at: r.finished_at.toISOString() })),
+      ladderRows: this.ladderRows.map((r) => ({ ...r, finished_at: r.finished_at.toISOString() })),
       nextUserId: this.nextUserId,
     };
     mkdirSync(dirname(this.path), { recursive: true });
@@ -77,7 +81,7 @@ export class JsonDb extends FakeDb {
       finished_at: c.finished_at === null ? null : new Date(c.finished_at),
     }));
     // 舊的存檔沒有這一欄——不存在時當成空的，不要讓它變成一個載入錯誤。
-    this.careerStats = (snapshot.careerStats ?? []).map((r) => ({
+    this.ladderRows = (snapshot.ladderRows ?? []).map((r) => ({
       ...r,
       finished_at: new Date(r.finished_at),
     }));

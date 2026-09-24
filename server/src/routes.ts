@@ -8,13 +8,13 @@
 // **只從引擎的入口 import**——那份檔案是伺服器被支援的 surface（ADR 0049）。
 // 直接點名 engine 內部的路徑，等於把引擎的任何重整變成這裡的執行期風險。
 import {
-  BEST_PREFIX,
-  CAREER_SCOPE,
+  ALL,
   costOf,
   Game,
+  isPitcherRole,
   LADDER_POSITIONS,
   maxLevelOf,
-  POSITION_PREFIX,
+  type LadderKey,
 } from '../../client/src/engine/index.ts';
 import { ladder as ladderCfg, leagues, talents as talentData } from '../../client/src/data/index.ts';
 import type {
@@ -165,22 +165,26 @@ export async function finishCareer(
       if (verified) {
         for (const row of score.ladder) {
           await client.query(
-            `INSERT INTO career_stats
-               (career_id, user_id, scope, seasons, batting, pitching, defense_runs,
-                win_shares, loss_shares,
+            `INSERT INTO ladder_rows
+               (career_id, user_id, org, position, kind, seasons, batting, pitching,
+                defense_runs, win_shares, loss_shares, score, salary,
                 qualified_batter, qualified_pitcher, engine_version, player_name)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-             ON CONFLICT (career_id, scope) DO NOTHING`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+             ON CONFLICT (career_id, org, position, kind) DO NOTHING`,
             [
               careerId,
               user.id,
-              row.scope,
+              row.org,
+              row.position,
+              row.kind,
               row.seasons,
               row.batting === null ? null : JSON.stringify(row.batting),
               row.pitching === null ? null : JSON.stringify(row.pitching),
               row.defenseRuns,
               row.winShares,
               row.lossShares,
+              row.score,
+              Math.round(row.salary),
               row.qualifiedBatter,
               row.qualifiedPitcher,
               score.engineVersion,
@@ -246,42 +250,41 @@ export async function setTalent(user: UserRow, id: string, level: number): Promi
 }
 
 /**
- * 天梯。
+ * 查一格天梯：聯盟 × 守位 × 累計／單季。
  *
- * 個人天梯與全伺服器天梯是同一支查詢，差別只在限不限 `user_id`——資料只有一份，
- * 兩張榜就不可能對不起來（ADR 0038）。
+ * **守位決定畫哪幾張表**：跨守位畫野手＋投手＋共通，野手守位畫野手＋共通，投手
+ * 定位畫投手＋共通。共通那一張是份額、評價分、薪水——整個球員的數字，不分投打。
  *
- * 每個欄位各排一張榜。率型欄位只收有資格的那些列（`qualified_*`，資格在結算當下
- * 就算好了），累積欄位一律沒有門檻。
+ * 率型欄位要過資格（寫入時就算好了），累積欄位一律沒有門檻。
  */
 export async function ladder(
   user: UserRow | null,
-  scope: string,
+  key: LadderKey,
   self: boolean,
 ): Promise<LadderResponse> {
   // 個人天梯一定要有身分；全伺服器天梯不必登入也看得到。
   if (self && user === null) throw new HttpError(401, '請先登入。');
 
-  const params: unknown[] = [scope];
-  let where = 'cs.scope = $1';
+  const params: unknown[] = [key.org, key.position, key.kind];
+  let where = 'lr.org = $1 AND lr.position = $2 AND lr.kind = $3';
   if (self && user !== null) {
     params.push(user.id);
-    where += ' AND cs.user_id = $2';
+    where += ' AND lr.user_id = $4';
   }
 
   const { rows } = await pool.query<StatRow>(
-    `SELECT cs.scope, cs.seasons, cs.batting, cs.pitching, cs.defense_runs,
-            cs.win_shares, cs.loss_shares,
-            cs.qualified_batter, cs.qualified_pitcher, cs.engine_version,
-            cs.player_name, cs.finished_at, u.account
-       FROM career_stats cs
-       JOIN users u ON u.id = cs.user_id
+    `SELECT lr.org, lr.position, lr.kind, lr.seasons, lr.batting, lr.pitching,
+            lr.defense_runs, lr.win_shares, lr.loss_shares, lr.score, lr.salary,
+            lr.qualified_batter, lr.qualified_pitcher, lr.engine_version,
+            lr.player_name, lr.finished_at, u.account
+       FROM ladder_rows lr
+       JOIN users u ON u.id = lr.user_id
       WHERE ${where}`,
     params,
   );
 
   const boards: LadderBoard[] = [];
-  for (const side of ['batter', 'pitcher'] as const) {
+  for (const side of sidesFor(key.position)) {
     for (const column of ladderCfg.columns[side]) {
       const entries = rankOf(rows, side, column);
       // 空的榜不出現——沒有人有資格的欄位畫出來只是一個空框。
@@ -289,18 +292,31 @@ export async function ladder(
     }
   }
 
-  return { boards, scopes: await scopesOf(self ? user : null) };
+  return { boards, combos: await combosOf(self ? user : null) };
 }
+
+/** 守位選單決定要畫哪幾張表。 */
+function sidesFor(position: string): readonly LadderSide[] {
+  if (position === ALL) return ['batter', 'pitcher', 'shared'];
+  return isPitcherRole(position) ? ['pitcher', 'shared'] : ['batter', 'shared'];
+}
+
+type LadderSide = 'batter' | 'pitcher' | 'shared';
 
 /** 資料庫回來的一列。`batting` / `pitching` 是整條成績的 JSONB。 */
 interface StatRow {
-  scope: string;
+  org: string;
+  position: string;
+  kind: string;
   seasons: number;
   batting: Record<string, number> | null;
   pitching: Record<string, number> | null;
   defense_runs: number;
   win_shares: number;
   loss_shares: number;
+  score: number;
+  /** BIGINT 從 pg 回來是字串。 */
+  salary: number | string;
   qualified_batter: boolean;
   qualified_pitcher: boolean;
   engine_version: number;
@@ -312,13 +328,15 @@ interface StatRow {
 /** 一個欄位的前 N 名。 */
 function rankOf(
   rows: readonly StatRow[],
-  side: 'batter' | 'pitcher',
+  side: LadderSide,
   column: { key: string; rate: boolean; order: string },
 ): readonly LadderEntry[] {
   const picked: { row: StatRow; value: number }[] = [];
   for (const row of rows) {
-    // 率型要有資格；累積型沒有門檻。
-    if (column.rate && !(side === 'batter' ? row.qualified_batter : row.qualified_pitcher)) continue;
+    // 率型要有資格；累積型沒有門檻。共通欄位沒有率型。
+    if (column.rate && side !== 'shared') {
+      if (!(side === 'batter' ? row.qualified_batter : row.qualified_pitcher)) continue;
+    }
     const value = valueOf(row, side, column.key);
     if (value === null) continue;
     picked.push({ row, value });
@@ -338,54 +356,53 @@ function rankOf(
 /**
  * 取一列在某個欄位上的值。
  *
- * 守備分不在 BattingLine 上，它是獨立一欄——這是唯一的特例，其餘都是直接取。
- * 那一側整條是 null（例如純投手沒有打擊成績）時回 null，那一列就不進這張榜。
+ * 共通欄位（份額、評價分、薪水）是整個球員的，直接讀那幾欄。守備分不在
+ * BattingLine 上，它是獨立一欄。那一側整條是 null（例如純投手沒有打擊成績）時回
+ * null，那一列就不進這張榜。
  */
-function valueOf(
-  row: StatRow,
-  side: 'batter' | 'pitcher',
-  key: string,
-): number | null {
+function valueOf(row: StatRow, side: LadderSide, key: string): number | null {
+  if (side === 'shared') {
+    if (key === 'ws') return row.win_shares;
+    if (key === 'ls') return row.loss_shares;
+    if (key === 'score') return row.score;
+    if (key === 'salary') return Number(row.salary);
+    return null;
+  }
   if (key === 'defenseRuns') return row.batting === null ? null : row.defense_runs;
   const line = side === 'batter' ? row.batting : row.pitching;
   if (line === null) return null;
-  // **份額是整個球員的，不分投打。** 它掛在兩側是為了讓純打者與純投手各自看得到
-  // 自己那一張；上面那道 null 檢查因此仍然要過——沒投過球的人不該出現在投手側。
-  if (key === 'ws') return row.win_shares;
-  if (key === 'ls') return row.loss_shares;
   const value = line[key];
   return typeof value === 'number' ? value : null;
 }
 
 /**
- * 有資料的範圍，供畫面畫分頁用。
+ * 有資料的組合，供畫面的選單用。
  *
- * **沒去過的聯盟整組不出現**——與成就櫃「未解鎖的一律不顯示」同一個規矩。個人
- * 天梯回他自己去過的，全伺服器天梯回所有人去過的聯集。順序照 leagues.json 的
- * 體系順序，生涯放最後。
+ * **選單只列在其他選擇下有資料的選項**——沒去過的聯盟不出現，與成就櫃「未解鎖的
+ * 一律不顯示」同一個規矩。個人天梯回他自己打過的，全伺服器天梯回所有人的聯集。
+ *
+ * 順序固定：聯盟照 `top_league_names`（**不是** `org_names`——後者是「旅日／旅美」
+ * 那種體系用語的覆蓋表，韓墨澳不在裡面），跨聯盟放最前；守位照 LADDER_POSITIONS，
+ * 跨守位放最前。
  */
-async function scopesOf(user: UserRow | null): Promise<readonly string[]> {
-  const { rows } = await pool.query<{ scope: string }>(
+async function combosOf(user: UserRow | null): Promise<readonly LadderKey[]> {
+  const { rows } = await pool.query<{ org: string; position: string; kind: string }>(
     user === null
-      ? 'SELECT DISTINCT scope FROM career_stats'
-      : 'SELECT DISTINCT scope FROM career_stats WHERE user_id = $1',
+      ? 'SELECT DISTINCT org, position, kind FROM ladder_rows'
+      : 'SELECT DISTINCT org, position, kind FROM ladder_rows WHERE user_id = $1',
     user === null ? [] : [user.id],
   );
-  const have = new Set(rows.map((r) => r.scope));
-  // **順序讀 `top_league_names`，不是 `org_names`。** 後者是「旅日／旅美」那種
-  // 體系用語的**覆蓋表**，只寫體系名與頂級聯盟名不同的那幾個（韓職、墨聯、澳職
-  // 兩者同名，因此表裡沒有它們）。拿它當完整體系清單來 filter，等於把韓墨澳的
-  // 分頁整組濾掉——打過那些聯盟的成績有寫進 career_stats，只是玩家看不到。
-  const order = Object.keys(leagues.top_league_names).filter((org) => have.has(org));
-  if (have.has(CAREER_SCOPE)) order.push(CAREER_SCOPE);
-  // 守位的兩排。**這裡漏掉的話那兩排一顆按鈕都畫不出來**——成績有寫進
-  // career_stats，畫面卻是空的，看起來像根本沒實作。順序照 LADDER_POSITIONS，
-  // 與畫面上那兩排同一份清單。
-  for (const prefix of [POSITION_PREFIX, BEST_PREFIX]) {
-    for (const position of LADDER_POSITIONS) {
-      const scope = `${prefix}${position}`;
-      if (have.has(scope)) order.push(scope);
-    }
-  }
-  return order;
+  const orgRank = (org: string) =>
+    org === ALL ? -1 : Object.keys(leagues.top_league_names).indexOf(org);
+  const posRank = (position: string) =>
+    position === ALL ? -1 : LADDER_POSITIONS.indexOf(position);
+  return rows
+    .filter((r) => r.kind === 'total' || r.kind === 'best')
+    .map((r) => ({ org: r.org, position: r.position, kind: r.kind as LadderKey['kind'] }))
+    .sort(
+      (a, b) =>
+        orgRank(a.org) - orgRank(b.org) ||
+        posRank(a.position) - posRank(b.position) ||
+        a.kind.localeCompare(b.kind),
+    );
 }

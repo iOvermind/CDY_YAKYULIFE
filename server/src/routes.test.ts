@@ -12,13 +12,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 import { useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
-import {
-  Game,
-  BEST_PREFIX,
-  CAREER_SCOPE,
-  POSITION_PREFIX,
-  type ReplayLog,
-} from '../../client/src/engine/index.ts';
+import { ALL, Game, isPitcherRole, type ReplayLog } from '../../client/src/engine/index.ts';
 import {
   finishCareer,
   HttpError,
@@ -368,12 +362,15 @@ describe('天梯', () => {
     return user;
   }
 
-  it('結算會寫下每個範圍的一列', async () => {
+  /** 跨聯盟、跨守位、累計——一段打過頂級聯盟的生涯一定有這一格。 */
+  const TOTAL = { org: ALL, position: ALL, kind: 'total' } as const;
+
+  it('結算會寫下每個打過的組合', async () => {
     const user = await finish('Overmind');
-    const mine = db.careerStats.filter((r) => r.user_id === user.id);
+    const mine = db.ladderRows.filter((r) => r.user_id === user.id);
     assert.ok(mine.length > 0, '一列都沒寫');
-    // 生涯那一列一定在——只要他上過頂級聯盟。
-    assert.ok(mine.some((r) => r.scope === CAREER_SCOPE));
+    assert.ok(mine.some((r) => r.org === ALL && r.position === ALL && r.kind === 'total'));
+    assert.ok(mine.some((r) => r.org === ALL && r.position === ALL && r.kind === 'best'));
     // 每一列都帶著引擎版本與姓名，榜上才寫得出這是誰、哪一版的規則。
     for (const row of mine) {
       assert.ok(row.engine_version > 0);
@@ -390,16 +387,16 @@ describe('天梯', () => {
       claimed: ['這個成就不存在'],
     });
     assert.equal(db.careers[0]?.verified, false);
-    assert.equal(db.careerStats.length, 0);
+    assert.equal(db.ladderRows.length, 0);
   });
 
   it('個人天梯只看自己，全伺服器天梯看所有人', async () => {
     const a = await finish('Overmind');
     await finish('Someone');
-    assert.ok(db.careerStats.some((r) => r.user_id !== a.id), '第二個人沒有寫進去');
+    assert.ok(db.ladderRows.some((r) => r.user_id !== a.id), '第二個人沒有寫進去');
 
-    const mine = await ladder(a, CAREER_SCOPE, true);
-    const all = await ladder(a, CAREER_SCOPE, false);
+    const mine = await ladder(a, TOTAL, true);
+    const all = await ladder(a, TOTAL, false);
     const accountsOf = (r: Awaited<ReturnType<typeof ladder>>) =>
       new Set(r.boards.flatMap((b) => b.entries.map((e) => e.account)));
 
@@ -409,17 +406,17 @@ describe('天梯', () => {
 
   it('沒登入也看得到全伺服器天梯，但個人天梯要有身分', async () => {
     await finish('Overmind');
-    const all = await ladder(null, CAREER_SCOPE, false);
+    const all = await ladder(null, TOTAL, false);
     assert.ok(all.boards.length > 0);
     await assert.rejects(
-      () => ladder(null, CAREER_SCOPE, true),
+      () => ladder(null, TOTAL, true),
       (e: HttpError) => e.status === 401,
     );
   });
 
   it('名次從 1 起算，而且照欄位的方向排', async () => {
     await finish('Overmind');
-    const res = await ladder(null, CAREER_SCOPE, false);
+    const res = await ladder(null, TOTAL, false);
     for (const board of res.boards) {
       assert.deepEqual(
         board.entries.map((e) => e.rank),
@@ -428,56 +425,62 @@ describe('天梯', () => {
     }
   });
 
-  it('沒去過的聯盟不會出現在範圍清單裡', async () => {
+  /**
+   * **守位決定畫哪幾張表**：跨守位畫野手、投手與共通三張，野手守位只畫野手與共通，
+   * 投手定位只畫投手與共通。共通那一張是份額、評價分、薪水。
+   */
+  it('跨守位有三張表，指定守位只有那一側與共通', async () => {
     const user = await finish('Overmind');
-    const res = await ladder(user, CAREER_SCOPE, true);
-    const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
-    for (const scope of res.scopes) assert.ok(written.has(scope), `多出了 ${scope}`);
+    const sides = (r: Awaited<ReturnType<typeof ladder>>) => new Set(r.boards.map((b) => b.side));
+
+    const whole = sides(await ladder(user, TOTAL, true));
+    assert.ok(whole.has('shared'));
+
+    const fielding = db.ladderRows.find((r) => r.position !== ALL && !isPitcherRole(r.position));
+    if (fielding !== undefined) {
+      const got = sides(await ladder(user, { org: fielding.org, position: fielding.position, kind: 'total' }, true));
+      assert.ok(!got.has('pitcher'), '野手守位不該畫投手表');
+      assert.ok(got.has('shared'));
+    }
+  });
+
+  it('共通那一張排得出評價分與薪水', async () => {
+    const user = await finish('Overmind');
+    const res = await ladder(user, TOTAL, true);
+    const columns = new Set(res.boards.filter((b) => b.side === 'shared').map((b) => b.column));
+    for (const key of ['ws', 'ls', 'score', 'salary']) assert.ok(columns.has(key), `少了 ${key}`);
+    // 跨聯盟跨守位累計的薪水是生涯淨收入——一段打過職業的生涯不會是 0。
+    const salary = res.boards.find((b) => b.side === 'shared' && b.column === 'salary');
+    assert.ok((salary?.entries[0]?.value ?? 0) > 0);
+  });
+
+  it('組合清單只列寫過的——不多也不少', async () => {
+    const user = await finish('Overmind');
+    const res = await ladder(user, TOTAL, true);
+    const key = (c: { org: string; position: string; kind: string }) => `${c.org}|${c.position}|${c.kind}`;
+    const written = new Set(db.ladderRows.filter((r) => r.user_id === user.id).map(key));
+    const listed = new Set(res.combos.map(key));
+    assert.deepEqual([...listed].sort(), [...written].sort());
   });
 
   /**
-   * 反方向：**去過的聯盟一個都不能漏**。
+   * **去過的聯盟一個都不能漏**。
    *
-   * 原本的清單是拿 `leagues.org_names` 的鍵去 filter 的，而那張表是「旅日／旅美」
-   * 這種體系用語的**覆蓋表**，只寫體系名與頂級聯盟名不同的那幾個——韓職、墨聯、
-   * 澳職兩者同名，所以表裡沒有它們，分頁就整組被濾掉了。成績有寫進 career_stats，
-   * 玩家卻永遠看不到。上面那條測試只擋「多出來」，擋不住「少掉」。
+   * 範圍清單曾經拿 `leagues.org_names` 的鍵去排序過濾，而那張表是「旅日／旅美」這種
+   * 體系用語的**覆蓋表**，韓職、墨聯、澳職不在裡面——成績有寫進去，玩家卻永遠看不
+   * 到。順序改讀 `top_league_names`，跨聯盟放最前。
    */
-  it('去過的聯盟一個都不會少——韓職、墨聯、澳職也要有分頁', async () => {
+  it('韓職、墨聯、澳職也在組合清單裡，而且跨聯盟排最前', async () => {
     const user = await finish('Overmind');
     // 直接補幾列：走完整局才進得了那三個聯盟，而這裡要測的是清單怎麼算出來的。
-    const seed = db.careerStats[0];
+    const seed = db.ladderRows[0];
     assert.ok(seed !== undefined);
-    for (const scope of ['KBO', 'LMB', 'ABL']) {
-      db.careerStats.push({ ...seed, scope });
-    }
+    for (const org of ['KBO', 'LMB', 'ABL']) db.ladderRows.push({ ...seed, org, position: ALL, kind: 'total' });
 
-    const res = await ladder(user, CAREER_SCOPE, true);
-    const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
-    for (const scope of written) assert.ok(res.scopes.includes(scope), `少掉了 ${scope}`);
-    // 順序照聯盟階梯，生涯接在聯盟後面，守位的兩排再接在生涯後面。
-    const leagueEnd = res.scopes.indexOf(CAREER_SCOPE);
-    assert.ok(leagueEnd >= 0);
-    for (const scope of res.scopes.slice(0, leagueEnd)) {
-      assert.ok(!scope.startsWith(POSITION_PREFIX) && !scope.startsWith(BEST_PREFIX));
+    const res = await ladder(user, TOTAL, true);
+    for (const org of ['KBO', 'LMB', 'ABL']) {
+      assert.ok(res.combos.some((c) => c.org === org), `少掉了 ${org}`);
     }
-  });
-
-  /**
-   * 守位的兩排也要進清單。
-   *
-   * 畫面上的守位按鈕是拿這份清單畫的，所以這裡漏掉等於那兩排一顆都不會出現
-   * ——成績有寫進 career_stats，玩家卻看到一片空白，看起來像根本沒實作。
-   */
-  it('守位的生涯榜與單季榜都會出現在範圍清單裡', async () => {
-    const user = await finish('Overmind');
-    const res = await ladder(user, CAREER_SCOPE, true);
-    const written = new Set(db.careerStats.filter((r) => r.user_id === user.id).map((r) => r.scope));
-    const positions = [...written].filter(
-      (s) => s.startsWith(POSITION_PREFIX) || s.startsWith(BEST_PREFIX),
-    );
-    // 一段打完的生涯至少登錄過一個守位，所以這裡不該是空的。
-    assert.ok(positions.length > 0, '結算沒有寫進任何守位範圍');
-    for (const scope of positions) assert.ok(res.scopes.includes(scope), `少掉了 ${scope}`);
+    assert.equal(res.combos[0]?.org, ALL);
   });
 });

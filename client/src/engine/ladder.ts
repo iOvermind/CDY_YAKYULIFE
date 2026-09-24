@@ -1,25 +1,35 @@
 /**
  * 天梯：把一段生涯攤成排名榜要的資料列。
  *
- * 一段生涯產出數列——每個他待過的頂級聯盟各一列，加上跨聯盟通算的「生涯」那列。
+ * **一列是一個組合**：聯盟（或跨聯盟）× 守位（或跨守位）× 累計／單季。一段生涯
+ * 只寫它實際打過的組合——打過中職與大聯盟、守過游擊與三壘的人，大概二三十列。
+ * 畫面上的四個選單（我的／所有玩家、聯盟、累計／單季、守位）就是在這些列上挑。
  * 個人天梯與全伺服器天梯用的是同一份資料，差別只在查詢時限不限 `user_id`
  * （見 [ADR 0038](../../../docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)）。
  *
  * **只收頂級聯盟。** 與生涯表的「各聯盟通算」同一個界線——二軍與小聯盟的成績不
- * 進通算，也不該進榜：那些數字是在不同水準的對手身上打出來的。
+ * 進通算，也不該進榜：那些數字是在不同水準的對手身上打出來的。唯一的例外是薪水：
+ * 某個聯盟的薪水問的是「那個體系的球團付了多少」，二軍那幾年也是他們付的。
  */
 
 import { leagues, ladder } from '../data/index.ts';
 import { addBatting, addPitching, type BattingLine, type PitchingLine } from './amateurStats.ts';
-import type { CareerSummary, SeasonRecord } from './career.ts';
+import { seasonPoints, type CareerSummary, type SeasonRecord } from './career.ts';
 
-/** 生涯範圍的代碼。與體系代碼共用同一個欄位，因此挑一個不可能是體系代碼的字。 */
-export const CAREER_SCOPE = 'CAREER';
+/** 「跨聯盟」與「跨守位」。與體系代碼、守位代碼共用同一個欄位，挑一個不可能撞名的字。 */
+export const ALL = '*';
 
-/** 守位的生涯榜：`pos:SS`。 */
-export const POSITION_PREFIX = 'pos:';
-/** 守位的單季榜：`best:SS`。 */
-export const BEST_PREFIX = 'best:';
+/** 累計，或單季最佳。 */
+export type LadderKind = 'total' | 'best';
+
+/** 一列的身分：三個選單的選擇。 */
+export interface LadderKey {
+  /** 體系代碼，或 `*`（跨聯盟）。 */
+  readonly org: string;
+  /** 守位或投手定位，或 `*`（跨守位）。 */
+  readonly position: string;
+  readonly kind: LadderKind;
+}
 
 /** 天梯排得出榜的守位，依顯示順序。野手在前、投手在後。 */
 export const LADDER_POSITIONS: readonly string[] = [
@@ -28,6 +38,11 @@ export const LADDER_POSITIONS: readonly string[] = [
 ];
 
 const PITCHER_ROLES = new Set<string>(ladder.positions.pitching);
+
+/** 這個守位代碼是投手定位嗎。守位選單靠它決定要畫野手表還是投手表。 */
+export function isPitcherRole(position: string): boolean {
+  return PITCHER_ROLES.has(position);
+}
 
 /**
  * 這一季算不算在某個守位底下。
@@ -42,15 +57,13 @@ function playedAt(record: SeasonRecord, position: string): boolean {
 }
 
 /**
- * 一段生涯在某個範圍下的成績，以及它的上榜資格。
+ * 一段生涯在某個組合下的成績，以及它的上榜資格。
  *
  * 資格算在這裡而不是查詢時：門檻要逐年累加各聯盟的球隊場次，那份逐年資料只在
  * 結算當下手上有——存進去之後就不必為了排一次榜把所有日誌重跑一遍。
  */
-export interface LadderRow {
-  /** 體系代碼，或 `CAREER`。 */
-  readonly scope: string;
-  /** 這個範圍內的球季數。 */
+export interface LadderRow extends LadderKey {
+  /** 這個組合內的球季數。單季寫 1。 */
   readonly seasons: number;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
@@ -58,11 +71,18 @@ export interface LadderRow {
   /** 勝利份額與敗戰份額。**整個球員的，不分投打**——他的份額本來就只有一份。 */
   readonly winShares: number;
   readonly lossShares: number;
+  /** 評價分。每種組合的意思不同，見 `scoreOf()`。 */
+  readonly score: number;
+  /** 薪水（萬元台幣）。每種組合的意思不同，見 `salaryOf()`。 */
+  readonly salary: number;
   /** 率型打擊數值（打擊率／上壘率／長打率）上不上得了榜。 */
   readonly qualifiedBatter: boolean;
   /** 率型投球數值（防禦率）上不上得了榜。 */
   readonly qualifiedPitcher: boolean;
 }
+
+/** 一列扣掉身分、評價分與薪水之後的部分——那三樣要看它是哪一種組合。 */
+type RowBody = Omit<LadderRow, keyof LadderKey | 'score' | 'salary'>;
 
 /** 一個範圍內的規定打席與規定局數（出局數），逐年累加。 */
 interface Threshold {
@@ -133,60 +153,101 @@ function qualifies(total: number, required: number, seasons: number): boolean {
   return seasons >= ladder.qualification.min_seasons && total >= required;
 }
 
-/** 把一段生涯攤成榜單資料列。 */
-export function ladderRows(summary: CareerSummary): readonly LadderRow[] {
+/**
+ * 把一段生涯攤成榜單資料列：每一個打過的「聯盟 × 守位 × 累計／單季」各一列。
+ *
+ * `earnings` 是生涯淨收入——跨聯盟跨守位那一列的薪水要它（扣掉離婚分走的財產
+ * 與旅外安家費），其他組合拆不出淨收入，改用逐季的年薪與簽約金。
+ */
+export function ladderRows(summary: CareerSummary, earnings: number): readonly LadderRow[] {
   const rows: LadderRow[] = [];
+  // 沒打過任何頂級聯盟就一列都沒有——一段沒上過一軍的生涯在榜上是空的，那是對
+  // 的，不是漏算。
+  if (summary.leagues.length === 0) return rows;
 
-  for (const league of summary.leagues) {
-    const at = topSeasons(summary, league.org);
-    const t = thresholdOf(at);
-    const shares = sharesOf(at);
-    rows.push({
-      scope: league.org,
-      seasons: league.seasons,
-      batting: league.batting,
-      pitching: league.pitching,
-      defenseRuns: league.defenseRuns,
-      winShares: shares.win,
-      lossShares: shares.loss,
-      qualifiedBatter: qualifies(league.batting?.pa ?? 0, t.pa, t.seasons),
-      qualifiedPitcher: qualifies(league.pitching?.outs ?? 0, t.outs, t.seasons),
-    });
+  for (const org of [ALL, ...summary.leagues.map((l) => l.org)]) {
+    const top = topSeasons(summary, org === ALL ? null : org);
+    if (top.length === 0) continue;
+    // 守位：**只採計在那個守位登錄的球季**，二十六年生涯只有二十二年守游擊，游擊
+    // 那兩列就只有那二十二年。二刀流兩邊都算。
+    const played = LADDER_POSITIONS.filter((p) => top.some((r) => playedAt(r, p)));
+    for (const position of [ALL, ...played]) {
+      const records = position === ALL ? top : top.filter((r) => playedAt(r, position));
+      const key = { org, position };
+      rows.push({
+        ...careerRow(records),
+        ...key,
+        kind: 'total',
+        score: scoreOf(summary, key, 'total', records),
+        salary: salaryOf(summary, key, 'total', records, earnings),
+      });
+      rows.push({
+        ...bestRow(records),
+        ...key,
+        kind: 'best',
+        score: scoreOf(summary, key, 'best', records),
+        salary: salaryOf(summary, key, 'best', records, earnings),
+      });
+    }
   }
-
-  // 生涯：跨聯盟通算。沒打過任何頂級聯盟就沒有這一列——一段沒上過一軍的生涯
-  // 在榜上是空的，那是對的，不是漏算。
-  if (summary.leagues.length > 0) {
-    const all = topSeasons(summary, null);
-    const t = thresholdOf(all);
-    const shares = sharesOf(all);
-    rows.push({
-      scope: CAREER_SCOPE,
-      seasons: summary.leagues.reduce((n, l) => n + l.seasons, 0),
-      batting: summary.topTotal.batting,
-      pitching: summary.topTotal.pitching,
-      defenseRuns: summary.leagues.reduce((n, l) => n + l.defenseRuns, 0),
-      winShares: shares.win,
-      lossShares: shares.loss,
-      qualifiedBatter: qualifies(summary.topTotal.batting?.pa ?? 0, t.pa, t.seasons),
-      qualifiedPitcher: qualifies(summary.topTotal.pitching?.outs ?? 0, t.outs, t.seasons),
-    });
-  }
-
-  // 守位：每個守位兩列——生涯累計與單季最佳。**只採計在那個守位登錄的球季**，
-  // 二十六年生涯只有二十二年守游擊，游擊那兩列就只有那二十二年。
-  for (const position of LADDER_POSITIONS) {
-    const at = topSeasons(summary, null).filter((r) => playedAt(r, position));
-    if (at.length === 0) continue;
-    rows.push(careerRow(`${POSITION_PREFIX}${position}`, at));
-    rows.push(bestRow(`${BEST_PREFIX}${position}`, at));
-  }
-
   return rows;
 }
 
-/** 一批球季的累計列。 */
-function careerRow(scope: string, records: readonly SeasonRecord[]): LadderRow {
+/**
+ * 這一列的評價分。
+ *
+ * - 某聯盟、跨守位、累計：**那個聯盟的生涯評價分**（份額＋獎項＋里程碑），與名人堂
+ *   看的是同一個數字。
+ * - 跨聯盟、跨守位、累計：**總評價分**。
+ * - 有指定守位：那些球季的份額淨分。獎項與里程碑分不到守位上——一座 MVP 是那一
+ *   季拿的，不是游擊這個位置拿的。
+ * - 單季：那一季的份額淨分，取最高的那一季。
+ */
+function scoreOf(
+  summary: CareerSummary,
+  key: { readonly org: string; readonly position: string },
+  kind: LadderKind,
+  records: readonly SeasonRecord[],
+): number {
+  if (kind === 'best') return records.reduce((best, r) => Math.max(best, seasonPoints(r)), 0);
+  if (key.position === ALL) {
+    if (key.org === ALL) return summary.totalScore;
+    const league = summary.leagues.find((l) => l.org === key.org);
+    if (league !== undefined) return league.score;
+  }
+  return records.reduce((sum, r) => sum + seasonPoints(r), 0);
+}
+
+/**
+ * 這一列的薪水（萬元台幣）。
+ *
+ * - 某聯盟、跨守位、累計：**那個體系的球團付的年薪＋簽約金**。這裡刻意連二軍與
+ *   小聯盟那幾年都算——問的是「那些球團付了多少」，而選秀的簽約金就是在二軍那一
+ *   季入帳的。
+ * - 跨聯盟、跨守位、累計：**生涯淨收入**，扣掉離婚分走的財產與旅外安家費。
+ * - 有指定守位：那些球季的年薪＋簽約金。
+ * - 單季：只算年薪，取最高的那一季。簽約金是一次性的，算進去的話「單季最高薪」
+ *   會變成「哪一年跳槽」。
+ */
+function salaryOf(
+  summary: CareerSummary,
+  key: { readonly org: string; readonly position: string },
+  kind: LadderKind,
+  records: readonly SeasonRecord[],
+  earnings: number,
+): number {
+  if (kind === 'best') return records.reduce((best, r) => Math.max(best, r.salary), 0);
+  if (key.position === ALL) {
+    if (key.org === ALL) return earnings;
+    return summary.seasons
+      .filter((r) => r.org === key.org)
+      .reduce((sum, r) => sum + r.salary + r.bonus, 0);
+  }
+  return records.reduce((sum, r) => sum + r.salary + r.bonus, 0);
+}
+
+/** 一批球季的累計列。身分（聯盟、守位）與評價分、薪水由呼叫端補上。 */
+function careerRow(records: readonly SeasonRecord[]): RowBody {
   const t = thresholdOf(records);
   const shares = sharesOf(records);
   let batting: BattingLine | null = null;
@@ -198,7 +259,6 @@ function careerRow(scope: string, records: readonly SeasonRecord[]): LadderRow {
     defenseRuns += r.defenseRuns;
   }
   return {
-    scope,
     seasons: t.seasons,
     batting,
     pitching,
@@ -220,7 +280,7 @@ function careerRow(scope: string, records: readonly SeasonRecord[]): LadderRow {
  * 率型只看**那一季自己達得到規定打席**的球季；一季都沒達到就整列沒有資格，與
  * 累計列同一套規則，只是分母換成一季。
  */
-function bestRow(scope: string, records: readonly SeasonRecord[]): LadderRow {
+function bestRow(records: readonly SeasonRecord[]): RowBody {
   const qualified = (r: SeasonRecord, side: 'batter' | 'pitcher'): boolean => {
     const cfg = ladder.qualification.per_season;
     const games = leagues.levels[r.level]?.games ?? 0;
@@ -237,7 +297,6 @@ function bestRow(scope: string, records: readonly SeasonRecord[]): LadderRow {
   }
 
   return {
-    scope,
     // 單季榜比的就是一季，季數寫 1——榜上那一欄問的是「這是幾季累積出來的」。
     seasons: 1,
     batting: bestLine('batter', records, qualified),

@@ -6,6 +6,7 @@
 --
 -- 順序是相依的反向：先掉子表，再掉 users。CASCADE 會一併帶走外鍵。
 
+DROP TABLE IF EXISTS ladder_rows CASCADE;
 DROP TABLE IF EXISTS career_stats CASCADE;
 DROP TABLE IF EXISTS careers      CASCADE;
 DROP TABLE IF EXISTS talents      CASCADE;

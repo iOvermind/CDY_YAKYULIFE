@@ -1604,6 +1604,9 @@ export interface TraitsData {
 }
 
 /** 天梯的一個欄位。見 ladder.json 與 ADR 0038。 */
+/** 天梯的三張表。`shared` 是投打共通的欄位。 */
+export type LadderSide = 'batter' | 'pitcher' | 'shared';
+
 export interface LadderColumn {
   /** 對應 BattingLine／PitchingLine 的欄位名；`defenseRuns` 是守備分，不在那兩張表上。 */
   readonly key: string;
@@ -1614,8 +1617,11 @@ export interface LadderColumn {
   readonly order: "desc" | "asc";
   /** 顯示小數位。累積數值沒有。 */
   readonly digits?: number;
-  /** 顯示換算：投球局數存的是出局數，unit 為 3。 */
-  readonly unit?: number;
+  /**
+   * 顯示換算：投球局數存的是出局數，unit 為 3。`money` 是薪水——存的是萬元，
+   * 顯示走 `fmtMoney()`（3000 萬、25 億）。
+   */
+  readonly unit?: number | 'money';
 }
 
 export interface LadderData {
@@ -1634,7 +1640,11 @@ export interface LadderData {
     /** 投手定位的中文名。野手的守位名在 positions.json，不在這裡抄第二份。 */
     readonly pitching_names: Readonly<Record<string, string>>;
   };
-  readonly columns: Record<"batter" | "pitcher", readonly LadderColumn[]>;
+  /**
+   * 三張表的欄位：野手、投手，以及投打共通（份額、評價分、薪水）。共通那一張的
+   * 數字是整個球員的，不分投打。
+   */
+  readonly columns: Record<LadderSide, readonly LadderColumn[]>;
 }
 /**
  * 更新紀錄。

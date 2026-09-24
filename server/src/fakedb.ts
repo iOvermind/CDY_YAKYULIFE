@@ -30,17 +30,21 @@ interface CareerRow {
   finished_at: Date | null;
 }
 
-/** 天梯的原料。見 server/schema.sql 的 career_stats。 */
+/** 天梯的原料。見 server/schema.sql 的 ladder_rows。 */
 interface StatRow {
   career_id: string;
   user_id: string;
-  scope: string;
+  org: string;
+  position: string;
+  kind: string;
   seasons: number;
   batting: Record<string, number> | null;
   pitching: Record<string, number> | null;
   defense_runs: number;
   win_shares: number;
   loss_shares: number;
+  score: number;
+  salary: number;
   qualified_batter: boolean;
   qualified_pitcher: boolean;
   engine_version: number;
@@ -55,7 +59,7 @@ export class FakeDb implements Queryable {
   achievements: AchievementRow[] = [];
   talents: { user_id: string; talent: string; level: number }[] = [];
   careers: CareerRow[] = [];
-  careerStats: StatRow[] = [];
+  ladderRows: StatRow[] = [];
   /** 每一句跑過的 SQL，讓測試可以斷言「真的有寫進去」。 */
   seen: string[] = [];
   /**
@@ -171,46 +175,61 @@ export class FakeDb implements Queryable {
       }
       return [];
     }
-    if (s.startsWith('INSERT INTO career_stats')) {
-      // 主鍵是 (career_id, scope)，ON CONFLICT DO NOTHING。
+    if (s.startsWith('INSERT INTO ladder_rows')) {
+      // 主鍵是 (career_id, org, position, kind)，ON CONFLICT DO NOTHING。
       const careerId = String(v[0]);
-      const scope = String(v[2]);
-      if (this.careerStats.some((r) => r.career_id === careerId && r.scope === scope)) return [];
-      this.careerStats.push({
+      const [org, position, kind] = [String(v[2]), String(v[3]), String(v[4])];
+      const dup = this.ladderRows.some(
+        (r) => r.career_id === careerId && r.org === org && r.position === position && r.kind === kind,
+      );
+      if (dup) return [];
+      this.ladderRows.push({
         career_id: careerId,
         user_id: String(v[1]),
-        scope,
-        seasons: Number(v[3]),
-        batting: v[4] === null ? null : (JSON.parse(String(v[4])) as Record<string, number>),
-        pitching: v[5] === null ? null : (JSON.parse(String(v[5])) as Record<string, number>),
-        defense_runs: Number(v[6]),
-        win_shares: Number(v[7]),
-        loss_shares: Number(v[8]),
-        qualified_batter: Boolean(v[9]),
-        qualified_pitcher: Boolean(v[10]),
-        engine_version: Number(v[11]),
-        player_name: String(v[12]),
+        org,
+        position,
+        kind,
+        seasons: Number(v[5]),
+        batting: v[6] === null ? null : (JSON.parse(String(v[6])) as Record<string, number>),
+        pitching: v[7] === null ? null : (JSON.parse(String(v[7])) as Record<string, number>),
+        defense_runs: Number(v[8]),
+        win_shares: Number(v[9]),
+        loss_shares: Number(v[10]),
+        score: Number(v[11]),
+        salary: Number(v[12]),
+        qualified_batter: Boolean(v[13]),
+        qualified_pitcher: Boolean(v[14]),
+        engine_version: Number(v[15]),
+        player_name: String(v[16]),
         finished_at: new Date(),
       });
       return [];
     }
-    if (s.startsWith('SELECT cs.scope, cs.seasons')) {
-      // WHERE cs.scope = $1 [AND cs.user_id = $2]，JOIN users 取 account。
-      const scope = String(v[0]);
-      const userId = v.length > 1 ? String(v[1]) : null;
-      return this.careerStats
-        .filter((r) => r.scope === scope && (userId === null || r.user_id === userId))
+    if (s.startsWith('SELECT lr.org, lr.position, lr.kind')) {
+      // WHERE org = $1 AND position = $2 AND kind = $3 [AND user_id = $4]，JOIN users 取 account。
+      const [org, position, kind] = [String(v[0]), String(v[1]), String(v[2])];
+      const userId = v.length > 3 ? String(v[3]) : null;
+      return this.ladderRows
+        .filter(
+          (r) =>
+            r.org === org &&
+            r.position === position &&
+            r.kind === kind &&
+            (userId === null || r.user_id === userId),
+        )
         .map((r) => ({
           ...r,
           account: this.users.find((u) => u.id === r.user_id)?.account ?? '',
         }));
     }
-    if (s.startsWith('SELECT DISTINCT scope FROM career_stats')) {
+    if (s.startsWith('SELECT DISTINCT org, position, kind FROM ladder_rows')) {
       const userId = v.length > 0 ? String(v[0]) : null;
-      const scopes = new Set(
-        this.careerStats.filter((r) => userId === null || r.user_id === userId).map((r) => r.scope),
-      );
-      return [...scopes].map((scope) => ({ scope }));
+      const seen = new Map<string, { org: string; position: string; kind: string }>();
+      for (const r of this.ladderRows) {
+        if (userId !== null && r.user_id !== userId) continue;
+        seen.set(`${r.org}|${r.position}|${r.kind}`, { org: r.org, position: r.position, kind: r.kind });
+      }
+      return [...seen.values()];
     }
     throw new Error(`假資料庫不認得這句 SQL，請補上：${s}`);
   }

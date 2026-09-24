@@ -61,27 +61,42 @@ CREATE TABLE IF NOT EXISTS careers (
 
 CREATE INDEX IF NOT EXISTS careers_user_idx ON careers (user_id, started_at DESC);
 
--- 天梯的原料：一段生涯在一個範圍下的成績。見 ADR 0038 與 client/src/data/ladder.json。
+-- 舊的天梯表。範圍從一個字串（`CPBL`、`CAREER`、`pos:SS`、`best:SS`）改成三欄的
+-- 組合之後，**舊資料清掉重來**——跨版本重跑本來就被拒絕（ADR 0002），補不回新組合
+-- 要的列。只丟天梯：帳號、AP、成就、天賦都不動。schema.sql 每次啟動都跑一次，第一
+-- 次之後這一行就什麼都不做。
+DROP TABLE IF EXISTS career_stats;
+
+-- 天梯的原料：一段生涯在一個組合下的成績。見 ADR 0038 與 client/src/data/ladder.json。
 --
--- `scope` 是體系代碼（CPBL／NPB／…）或 `CAREER`（跨聯盟通算）。一段打過中職與
--- 大聯盟的生涯因此有三列。**只收頂級聯盟**——二軍的數字是在不同水準的對手身上
--- 打出來的，不進通算，也不該進榜。
+-- **一列是一個組合**：聯盟（`org`，`*` 是跨聯盟）× 守位（`position`，`*` 是跨守位）
+-- × 累計或單季（`kind`）。一段生涯只寫它實際打過的組合——打過中職與大聯盟、守過
+-- 游擊與三壘的人，大概二三十列。畫面上的選單就在這些列上挑。
+--
+-- **只收頂級聯盟**——二軍的數字是在不同水準的對手身上打出來的，不進通算，也不該
+-- 進榜。唯一的例外是薪水：某個聯盟的薪水問的是「那個體系的球團付了多少」。
 --
 -- 成績整條存成 JSONB 而不是攤成幾十個欄位：欄位清單住在 ladder.json，加一項不該
--- 需要動 schema。排序走 `(batting->>'hits')::numeric` 這種運算式，真的慢了再對熱門
--- 欄位建運算式索引。
+-- 需要動 schema。
 --
 -- **資格在寫入時就算好**（`qualified_batter` / `qualified_pitcher`）：率型數值的門檻
--- 要逐年累加各聯盟的球隊場次，那份逐年資料只有結算當下手上有。存進來之後，排一次
--- 榜就不必把所有日誌重跑一遍。
-CREATE TABLE IF NOT EXISTS career_stats (
+-- 要逐年累加各聯盟的球隊場次，那份逐年資料只有結算當下手上有。
+CREATE TABLE IF NOT EXISTS ladder_rows (
   career_id         UUID NOT NULL REFERENCES careers(id) ON DELETE CASCADE,
   user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  scope             TEXT NOT NULL,
+  org               TEXT NOT NULL,
+  position          TEXT NOT NULL,
+  kind              TEXT NOT NULL,
   seasons           INTEGER NOT NULL,
   batting           JSONB,
   pitching          JSONB,
   defense_runs      INTEGER NOT NULL DEFAULT 0,
+  -- 勝利份額與敗戰份額。**整個球員的，不分投打**——他的份額本來就只有一份。
+  win_shares        REAL NOT NULL DEFAULT 0,
+  loss_shares       REAL NOT NULL DEFAULT 0,
+  -- 評價分與薪水（萬元台幣）。兩者在每種組合下的意思不同，見 ladder.json。
+  score             REAL NOT NULL DEFAULT 0,
+  salary            BIGINT NOT NULL DEFAULT 0,
   qualified_batter  BOOLEAN NOT NULL DEFAULT FALSE,
   qualified_pitcher BOOLEAN NOT NULL DEFAULT FALSE,
   -- 結算當下的引擎版本。**規則改版後舊生涯留在榜上**，但標得出來是舊規則的產物
@@ -90,14 +105,9 @@ CREATE TABLE IF NOT EXISTS career_stats (
   -- 顯示用：榜上要寫得出這是誰、哪一年的哪一段生涯。
   player_name       TEXT NOT NULL DEFAULT '',
   finished_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (career_id, scope)
+  PRIMARY KEY (career_id, org, position, kind)
 );
 
--- 勝利份額與敗戰份額。**整個球員的，不分投打**——他的份額本來就只有一份。
--- 後加的欄位走 ALTER：schema.sql 每次啟動都跑一次，而既有的資料庫不會重新建表。
-ALTER TABLE career_stats ADD COLUMN IF NOT EXISTS win_shares  REAL NOT NULL DEFAULT 0;
-ALTER TABLE career_stats ADD COLUMN IF NOT EXISTS loss_shares REAL NOT NULL DEFAULT 0;
-
--- 個人天梯查 (user_id, scope)，全伺服器天梯查 (scope)。前者更常用，放前面。
-CREATE INDEX IF NOT EXISTS career_stats_user_idx  ON career_stats (user_id, scope);
-CREATE INDEX IF NOT EXISTS career_stats_scope_idx ON career_stats (scope);
+-- 查一格榜：全伺服器天梯查 (org, position, kind)，個人天梯再加 user_id。
+CREATE INDEX IF NOT EXISTS ladder_rows_combo_idx ON ladder_rows (org, position, kind);
+CREATE INDEX IF NOT EXISTS ladder_rows_user_idx  ON ladder_rows (user_id, org, position, kind);
