@@ -2843,6 +2843,24 @@ export class Game {
     this.#runLove(loveCheckpoint(this.world, this.#love, label), () => {});
   }
 
+  /**
+   * 換了體系之後的感情安排。**每一條換體系的路都走這裡**：挖角、自由市場、戰力外
+   * 尋路、入札（申請旅美）、下放時的他隊邀請。以前只有挖角會問，於是被放生到墨聯的
+   * 人，對象就這樣默默跟過去了。
+   *
+   * 去海外就問帶她走、遠距離還是分手——海外之間轉隊也重問一次，新的國家是新的適應
+   * 期；回到母國是團聚，不問，旅外的安排直接清掉。
+   */
+  #afterMove(offer: { readonly org: string; readonly orgName: string }, next: () => void): void {
+    if (offer.org === leagues.transfer.home_org.value) {
+      this.#love.overseas = 'none';
+      this.#love.overseasYears = 0;
+      next();
+      return;
+    }
+    this.#loveOverseas(offer.orgName, next);
+  }
+
   /** 旅外時對這段關係的安排。 */
   #loveOverseas(orgName: string, next: () => void): void {
     this.#runLove(
@@ -4378,7 +4396,7 @@ export class Game {
         return;
       }
       this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
-      next();
+      this.#afterMove(picked, next);
     });
   }
 
@@ -4551,7 +4569,7 @@ export class Game {
         }
         this.#payBuyout('player');
         this.#moveTo(picked, '旅外');
-        this.#loveOverseas(picked.orgName, next);
+        this.#afterMove(picked, next);
       },
     );
   }
@@ -4595,7 +4613,7 @@ export class Game {
         return;
       }
       this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
-      this.flow.push(() => this.#proYear());
+      this.#afterMove(picked, () => this.flow.push(() => this.#proYear()));
     });
   }
 
@@ -4831,7 +4849,7 @@ export class Game {
         }
         // 入札不必付買斷——母隊拿到的入札金就是對價。
         this.#moveTo(picked, `${words.noun}成功`);
-        next();
+        this.#afterMove(picked, next);
       },
     );
   }
@@ -4941,6 +4959,8 @@ export class Game {
       if (picked !== undefined) {
         this.#payBuyout('player');
         this.#moveTo(picked, picked.homecoming ? '落葉歸根' : '新的舞台');
+        this.#afterMove(picked, next);
+        return;
       }
       next();
     });

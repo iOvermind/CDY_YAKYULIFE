@@ -53,6 +53,7 @@ import { tournamentPar } from './engine/national.ts';
 import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
 import { positionName, ROLE_NAMES } from './engine/season.ts';
+import { partnerProfile } from './engine/loveYear.ts';
 import { newSeed } from './engine/rng.ts';
 
 /**
@@ -984,7 +985,7 @@ function StatsPanel({ state }: { state: PlayerState }) {
         shares={state.seasonShares}
         defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
       />
-      <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} />
+      <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} tags={relationTags(state)} />
     </div>
   );
 }
@@ -1100,19 +1101,25 @@ function TraitList({
   traits: owned,
   names,
   notes,
+  tags = [],
   heading = true,
 }: {
   traits: ReadonlySet<string>;
   names: ReadonlyMap<string, string>;
   /** 特性的即時註記（例如七傷拳現在加了多少受傷機率），接在說明後面。 */
   notes?: ReadonlyMap<string, string>;
+  /** 特性之外的狀態標籤（已婚：名字），排在特性前面，點開一樣看說明。 */
+  tags?: readonly { readonly id: string; readonly label: string; readonly note: string }[];
   /** 記分板裡不帶標題：它接在 SEED 那排下面，那一帶本來就沒有小標。 */
   heading?: boolean;
 }) {
   // 點開的那一個。一次只有一個：說明行固定在段落下方，多開就再也分不出哪行在
   // 講哪個標籤（標籤會換行，順序對不上），單開才不必在說明裡重複一次名稱。
   const [picked, setPicked] = useState<string | null>(null);
-  const shown = shownTraits(owned, names);
+  const shown = [
+    ...tags.map((t) => ({ id: t.id, label: t.label, tone: undefined, effect_text: t.note })),
+    ...shownTraits(owned, names),
+  ];
   // 從當下的清單找，而不是記住點下去的那段文字：特性可以在生涯中途消失（受傷
   // 洗掉、負向被覆蓋），留著舊說明會變成一行沒有標籤對應的孤兒。
   const pickedTrait = shown.find((t) => t.id === picked);
@@ -1181,6 +1188,25 @@ function shownTraits(
     .map((id) => traitOf(id))
     .filter((t): t is NonNullable<typeof t> => t !== undefined)
     .map((t) => ({ ...t, label: names.get(t.id) ?? t.name ?? t.id }));
+}
+
+/**
+ * 感情的狀態標籤：已婚或交往中的對象，點開看她的側寫。鹿鼎公兩位都列。單身與
+ * 離婚不列——狀態列講的是「現在身邊是誰」。
+ */
+function relationTags(state: PlayerState): { id: string; label: string; note: string }[] {
+  const love = state.love;
+  if (love.status !== 'married' && love.status !== 'dating') return [];
+  const married = love.status === 'married';
+  const years = married && love.marriedYear !== null ? `結婚 ${Math.max(0, state.year - love.marriedYear)} 年` : '';
+  const kids = married && love.kids > 0 ? `孩子 ${love.kids} 個` : '';
+  return [love.partner, love.partner2]
+    .filter((n): n is string => n !== null)
+    .map((name, i) => ({
+      id: `partner-${i}`,
+      label: `${married ? '已婚' : '交往中'}：${name}`,
+      note: [partnerProfile(name), years, kids].filter((s) => s !== '').join('｜'),
+    }));
 }
 
 /** 負向特性的標籤配色。取自 traits.json 的 tag_styles.negative。 */
@@ -2253,7 +2279,7 @@ function Board({
           同一個 `TraitList`，只是不帶「狀態」小標——這一帶（年薪、SEED、榮譽）
           本來就沒有小標。 */}
       <div id="bd-traits">
-        <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} heading={false} />
+        <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} tags={relationTags(state)} heading={false} />
       </div>
     </div>
   );
@@ -2287,7 +2313,7 @@ function FinaleCard({
   if (section === 'traits')
     return (
       <div className="card">
-        <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} />
+        <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} tags={relationTags(state)} />
       </div>
     );
   if (section === 'career')
