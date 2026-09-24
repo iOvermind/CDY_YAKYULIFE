@@ -73,14 +73,15 @@ function Board({ board }: { board: LadderBoard }) {
         <tbody>
           {board.entries.map((e) => (
             <tr key={`${e.rank}-${e.account}-${e.at}`}>
-              <td style={{ width: '2.5em' }}>{e.rank}</td>
+              {/* 前三名的名次與名字用強調色＋粗體，一眼看得出誰站在頒獎台上。 */}
+              <td style={{ width: '2.5em' }}>{e.rank <= 3 ? <b className="hl">{e.rank}</b> : e.rank}</td>
               {/*
                 **只留球員名。** 帳號接在後面時每一列都撐出表格的寬度，而一排有
                 十幾塊榜，那一截寬度乘十幾倍就是整頁橫著爆出去。要分辨是誰的話
                 滑鼠停在名字上看得到——那是不佔版面的地方。
               */}
               <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }} title={e.account}>
-                {e.name}
+                {e.rank <= 3 ? <b className="hl">{e.name}</b> : e.name}
                 {/*
                   舊規則的紀錄要標出來。榜單是歷史而不是同一把尺——跨版本不保證
                   重現（ADR 0002），所以沒有「用新引擎重算」這條路。
