@@ -779,8 +779,10 @@ const BULLPEN_LADDER: readonly (readonly [PitcherRole, 'closer_line' | 'setup_li
 /**
  * 這一季的投手角色。見 ADR 0005。
  *
- * **體力是先決條件**：撐得住就走先發那條路，撐不住就整組落到牛棚。體力是絕對的
- * 生理條件——撐不了一百五十局就是撐不了，跟同年度有沒有別人更強無關。
+ * **體力是先發的先決條件**：撐不住的人只有牛棚那條路。體力是絕對的生理條件——
+ * 撐不了一百五十局就是撐不了，跟同年度有沒有別人更強無關。撐得住的人**兩條路都
+ * 判**，取構得到的最高那一階（ADR 0052）：體力好不代表只能在輪值與長中繼之間二選
+ * 一，先發評價差一點、球威夠關門的人該去關門。
  *
  * 兩條路各自比對評價與 par 的比值。牛棚三階由高到低比，**沒有一階收得下的人就是
  * 長中繼**——LR 寫成 fallback 而不是再給一條 `< 0.95` 的線，是因為兩條線之間會
@@ -807,16 +809,28 @@ export function pitcherRoleAt(ability: Abilities, par: number, staminaBar: numbe
 
   // 兩條路都比**原始能力**，不比帶著角色折扣的評價。折扣是身價、是升降與留隊那
   // 一側的判斷，拿它跟聯盟 par 比大小等於拿兩把不同的尺量同一件事。
-  if ((ability['sta'] ?? 0) >= staminaBar) {
-    return pitcherStuff(ability, 'SP') >= par * r.starter_line ? 'SP' : 'LR';
-  }
+  if ((ability['sta'] ?? 0) >= staminaBar && pitcherStuff(ability, 'SP') >= par * r.starter_line) return 'SP';
+  return bullpenRoleAt(ability, par) ?? 'LR';
+}
+
+/** 牛棚分構得到的最高一階（CP／SU／MR）。一階都構不到是 null——那是長中繼。 */
+export function bullpenRole(
+  ability: Abilities,
+  level: string,
+  standards: LeagueStandards | null = null,
+): PitcherRole | null {
+  return bullpenRoleAt(ability, leagueStandardOf(standards, level).par);
+}
+
+function bullpenRoleAt(ability: Abilities, par: number): PitcherRole | null {
+  const r = cfg.pitching.role;
   // **牛棚內部用牛棚分**，不是投手評價：問的是「他適不適合關門」而不是「他有多好」
   // ——一局的工作，球威才是那個排序的依據。
   const relief = bullpenScore(ability);
   for (const [role, line] of BULLPEN_LADDER) {
     if (relief >= par * r[line]) return role;
   }
-  return 'LR';
+  return null;
 }
 
 /** 這個角色算先發還是後援。獎項資格與國際賽的出賽結構都只分這兩種。 */

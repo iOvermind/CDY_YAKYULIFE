@@ -893,6 +893,31 @@ describe('投手定位會議', () => {
   const pitcher = (seed: string) =>
     new Game({ ...setup, seed, startPosition: 'P', throws: 'R', bats: 'R' }).start();
 
+  /** ADR 0052：構到先發時，牛棚構得到的最高那階也列出來，選哪個就登錄哪個。 */
+  it('構到先發的長中繼可以改選牛棚', () => {
+    for (let i = 0; i < 200; i++) {
+      const game = pitcher(`role-both-${i}`);
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 20000) {
+        const relief = game.flow.prompt.options.find((o) => o.id.startsWith('role:accept:'));
+        if (relief !== undefined) {
+          const ids = game.flow.prompt.options.map((o) => o.id);
+          expect(ids).toEqual(['role:accept', relief.id, 'role:decline']);
+          expect(game.flow.prompt.options[0]?.label).toBe('改任先發');
+          game.choose(relief.id);
+          const role = relief.id.slice('role:accept:'.length);
+          expect(['CP', 'SU', 'MR']).toContain(role);
+          expect(game.state?.pitcherRole).toBe(role);
+          return;
+        }
+        const pick = defaultPick(game, EFFECTIVE);
+        if (pick === undefined) break;
+        game.choose(pick);
+      }
+    }
+    throw new Error('兩百局都沒有出現先發與牛棚並列的定位會議');
+  });
+
   it('進職業會登錄一次定位，而且不問——他還沒有位置可以留守', () => {
     for (let i = 0; i < 40; i++) {
       const { log } = playRoles(pitcher(`role-reg-${i}`), false);

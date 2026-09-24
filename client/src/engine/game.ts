@@ -231,6 +231,7 @@ import {
   levelOf,
   playSeason,
   pitcherRole,
+  bullpenRole,
   positionName,
   roleRank,
   proBattingLine,
@@ -2215,8 +2216,14 @@ export class Game {
       return;
     }
 
-    // 升遷：在這個定位上拒絕過就不再問。記憶在 #setPitcherRole 裡隨定位變動清空。
-    if (this.#declinedRoles.has(natural)) {
+    // 升遷的選項：構得到的最高那一階，加上構到先發時牛棚那條路的最高一階——
+    // 體力夠的人兩條路都能走，要進輪值還是去關門由他自己選（ADR 0052）。比現在
+    // 低的不列；在那個定位上拒絕過的也不列，記憶在 #setPitcherRole 裡隨定位變動清空。
+    const offers: PitcherRole[] = [natural];
+    const relief = bullpenRole(this.#seasonAbility, pro.level, this.#standards);
+    if (natural === 'SP' && relief !== null && roleRank(relief) > roleRank(current)) offers.push(relief);
+    const open = offers.filter((r) => !this.#declinedRoles.has(r));
+    if (open.length === 0) {
       then();
       return;
     }
@@ -2224,29 +2231,31 @@ export class Game {
       {
         title: '定位會議：教練團想把你放到更吃重的位置',
         options: [
-          {
-            id: 'role:accept',
-            label: `改任${ROLE_NAMES[natural]}`,
-            note: '更吃重的定位，責任也更大',
-            role: 'main',
-          },
+          ...open.map((r, i) => ({
+            // 第一顆沿用舊的 id：存檔是重播日誌，舊局裡的 role:accept 要照樣對得上。
+            id: i === 0 ? 'role:accept' : `role:accept:${r}`,
+            label: `改任${ROLE_NAMES[r]}`,
+            note: r === 'SP' ? '進輪值，一季扛一百多局' : '進牛棚的後段，一局定勝負',
+            ...(i === 0 ? { role: 'main' as const } : {}),
+          })),
           {
             id: 'role:decline',
             label: `留任${ROLE_NAMES[current]}`,
-            note: '這個定位上不再問',
+            note: '這些定位上不再問',
           },
         ],
       },
       (choice) => {
-        if (choice === 'role:accept') {
-          this.#setPitcherRole(natural);
+        const picked = choice === 'role:accept' ? open[0] : open.find((r) => choice === `role:accept:${r}`);
+        if (picked !== undefined) {
+          this.#setPitcherRole(picked);
           this.flow.card(
             'good',
             '定位調整',
-            `牛棚的數字說服了所有人——新球季改任 <b class="hl">${esc(ROLE_NAMES[natural])}</b>。`,
+            `${picked === 'SP' ? '輪值' : '牛棚'}的位置空出來了——新球季改任 <b class="hl">${esc(ROLE_NAMES[picked])}</b>。`,
           );
         } else {
-          this.#declinedRoles.add(natural);
+          for (const r of open) this.#declinedRoles.add(r);
           this.flow.card(
             'info',
             '留任原位',

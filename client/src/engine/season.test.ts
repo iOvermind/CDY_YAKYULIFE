@@ -8,6 +8,7 @@ import {
   intentionalWalksFrom,
   levelOf,
   pitcherRole,
+  bullpenRole,
   roleRank,
   plateAppearances,
   playSeason,
@@ -22,7 +23,7 @@ import {
   offRoster,
   type SeasonContext,
 } from './season.ts';
-import { bullpenScore, pitcherRating, type Abilities, type Rating } from './rating.ts';
+import { bullpenScore, pitcherRating, pitcherStuff, type Abilities, type Rating } from './rating.ts';
 import { World } from './rng.ts';
 
 const KEYS = ['sta','vel','ctl','swp','drp','chg','gim','con','pow','spd','eye','rng','fld','arm','cat'];
@@ -458,6 +459,20 @@ describe('pitcherRole', () => {
 
   it('體力夠但評價不到先發線的人變長中繼', () => {
     expect(role(with_(20, { sta: staMin + 5, ctl: 20, vel: 20, swp: 20, drp: 20 }))).toBe('LR');
+  });
+
+  /** ADR 0052：體力夠的人兩條路都判，先發評價不到、球威夠關門的人去關門。 */
+  it('體力夠但先發評價不到的人，牛棚分夠就進牛棚那一階', () => {
+    const flame = with_(20, { sta: staMin + 5, vel: 90 });
+    expect(pitcherStuff(flame, 'SP')).toBeLessThan(CPBL1.par * cfg.pitching.role.starter_line);
+    expect(role(flame)).toBe(bullpenRole(flame, 'CPBL1'));
+    expect(role(flame)).not.toBe('LR');
+  });
+
+  it('先發與牛棚都構得到時取先發——階梯的最頂端', () => {
+    const ace = with_(CPBL1.par + 20, { sta: staMin + 5 });
+    expect(bullpenRole(ace, 'CPBL1')).toBe('CP');
+    expect(role(ace)).toBe('SP');
   });
 
   it('牛棚由高到低：終結 → 布局 → 中繼', () => {
