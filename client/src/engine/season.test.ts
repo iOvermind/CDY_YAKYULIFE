@@ -250,7 +250,7 @@ describe('plateAppearances', () => {
 });
 
 describe('intentionalWalks', () => {
-  const MLB_PAR = 61;
+  const MLB_PAR = leagues.levels['MLB']!.par;
 
   it('一般球員不會被敬遠', () => {
     expect(intentionalWalks(new World('a'), flat(50), 600, MLB_PAR)).toBe(0);
@@ -288,21 +288,22 @@ describe('intentionalWalks', () => {
     expect(ibb).toBeLessThan(anchor * 1.15 + 1);
   });
 
-  it('比聯盟好一截還不夠——均衡打者要到 d+12 才踩得到線', () => {
-    // 觸發線訂在「均衡打者 d+12」。d+11 仍然是 0，而那正是舊門檻（d+4.5）太低
-    // 的地方：三圍只比聯盟平均高幾分的慢腳打者就拿得到敬遠。
+  it('比聯盟好一截還不夠——均衡打者要到 d+11 才踩得到線', () => {
+    // 觸發線訂在「三圍都約 73」這個**絕對能力**上，不跟著聯盟平均搬（與 ADR 0047
+    // 同一個立場）。大聯盟 par 62 時那是 d+11；d+10 仍然是 0——三圍只比聯盟平均高
+    // 幾分的慢腳打者拿不到敬遠。
+    expect(intentionalWalksFrom(dominanceAt(MLB_PAR + 10, MLB_PAR), 600, () => 0.5)).toBe(0);
     expect(intentionalWalksFrom(dominanceAt(MLB_PAR + 11, MLB_PAR), 600, () => 0.5)).toBe(0);
-    expect(intentionalWalksFrom(dominanceAt(MLB_PAR + 12, MLB_PAR), 600, () => 0.5)).toBe(0);
   });
 
   it('過門檻是從 0 長上去，不是一過線就滿額', () => {
     // 舊版直接把 Dom 取冪，門檻上一格就跳到三十幾支。剛構到線的打者該是個位數。
-    const edge = intentionalWalksFrom(dominanceAt(MLB_PAR + 13, MLB_PAR), 600, () => 0.5);
+    const edge = intentionalWalksFrom(dominanceAt(MLB_PAR + 12, MLB_PAR), 600, () => 0.5);
     expect(edge).toBeGreaterThan(0);
     expect(edge).toBeLessThan(5);
     // 中段仍然離錨點很遠——120 次是留給三圍 80、腳程 20 的那一個人的。
     expect(
-      intentionalWalksFrom(dominanceAt(MLB_PAR + 15, MLB_PAR), 600, () => 0.5),
+      intentionalWalksFrom(dominanceAt(MLB_PAR + 14, MLB_PAR), 600, () => 0.5),
     ).toBeLessThan(120 / 4);
   });
 

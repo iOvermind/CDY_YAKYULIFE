@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awards as cfg } from '../data/index.ts';
+import { awards as cfg, leagues } from '../data/index.ts';
 import type { BattingLine } from './amateurStats.ts';
 import {
   annualAwards,
@@ -120,8 +120,8 @@ describe('winningLine', () => {
   /** 錨點水準的一季就是單項王的門檻——這條線把兩個系統釘在一起。 */
   it('全壘打王的門檻就是「能力 80 的人打一整季」', () => {
     const hr = titleOf('hr_king');
-    // 成績錨點的定義：能力 80 打一整季剛好打到錨點，d = 80 − 61。
-    expect(hr.d).toBe(19);
+    // 成績錨點的定義：能力 80 打一整季剛好打到錨點，d = 80 − 大聯盟 par。
+    expect(hr.d).toBe(80 - leagues.levels['MLB']!.par);
     const line = winningLine(hr, MLB, 0.5)!;
     // 累積型的獎看的是季總量，而能力 80 的人一季被敬遠一百次上下——那些打席不進
     // 打數，所以季總量低於「每 600 打數」的錨點。門檻跟著往下，那是對的。
@@ -134,7 +134,7 @@ describe('winningLine', () => {
   });
 
   it('賽揚的門檻比單項王低兩分——2.2 的球季該拿得到，不是五六季才一次', () => {
-    expect(cfg.pitcher_of_year.d).toBe(17);
+    expect(cfg.pitcher_of_year.d).toBe(80 - leagues.levels['MLB']!.par - 2);
     // 波動的鬆那一端必須放得過 2.2，否則那種球季永遠是擲骰。
     expect(winningLine(cfg.pitcher_of_year, MLB, 0)!).toBeGreaterThan(2.2);
   });

@@ -369,7 +369,7 @@ function weightedShifted(spec: RecordSpec, ability: Abilities, par: number): num
 /**
  * 一格的能力佔比，夾在 `ratio_cap`，下限由 `floor` 決定。
  *
- * 比值的定義是 `(加權平均能力 − par + 61) / 80`——**納入的能力都到 80 就是 1.0，
+ * 比值的定義是 `(加權平均能力 − par + 62) / 80`——**納入的能力都到 80 就是 1.0，
  * 也就是打到錨點**。因此 `divisor` 必然是 `80 × 權重和`、`par_slope` 必然等於
  * 權重和，兩者都不是自由參數（見 season.json 的 records._note）。
  *
