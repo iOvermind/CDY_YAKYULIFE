@@ -810,6 +810,8 @@ export interface AmateurData {
       /** 球隊那幾場之中，這個位置上得了幾場。 */
       readonly batter_share: number;
       readonly starter_share: number;
+      /** 先發投手一屆先發幾場，依名次（冠軍、亞軍、季軍、複賽、預賽）。 */
+      readonly starts_by_rank?: readonly number[];
       readonly reliever_share: number;
       readonly min_games: number;
       /**

@@ -229,8 +229,11 @@ export function tournamentGames(
   side: 'batter' | 'starter' | 'reliever',
 ): number {
   const s = cfg.stats;
+  const at = <T,>(list: readonly T[]) => list[Math.min(Math.max(0, rankIndex), list.length - 1)];
+  // 先發直接照名次查表：賽程沒那麼密集，打進前三名的王牌先發得到三場（issue #29）。
+  if (side === 'starter' && s.starts_by_rank !== undefined) return at(s.starts_by_rank) ?? s.min_games;
   const values = s.games_by_rank.values;
-  const teamGames = values[Math.min(Math.max(0, rankIndex), values.length - 1)] ?? 0;
+  const teamGames = at(values) ?? 0;
   const share =
     side === 'batter' ? s.batter_share : side === 'starter' ? s.starter_share : s.reliever_share;
   return Math.max(s.min_games, Math.round(teamGames * share));

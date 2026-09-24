@@ -247,3 +247,10 @@ describe('代表隊的預期勝率', () => {
     expect(nationalTeamWinPct(amateur.international.stats.par)).toBeCloseTo(0.5, 5);
   });
 });
+
+/** issue #29：國際賽程沒有那麼密集，前三名的先發投手一屆先發得到三場。 */
+describe('國際賽的先發場次', () => {
+  it('冠亞季軍三場、複賽兩場、預賽一場', () => {
+    expect([0, 1, 2, 3, 4].map((r) => tournamentGames(r, 'starter'))).toEqual([3, 3, 3, 2, 1]);
+  });
+});
