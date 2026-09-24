@@ -2444,7 +2444,7 @@ export class Game {
     for (const effect of effects) {
       switch (effect.kind) {
         case 'bonus':
-          lines.push(this.#grantSeasonBonus(effect.ability, effect.points));
+          lines.push(this.#grantSeasonBonus(this.#pickVisible(effect.choices), effect.points));
           break;
         case 'bonus-random':
           lines.push(this.#grantSeasonBonus(this.#randomVisibleAbility(), effect.points));
@@ -2869,6 +2869,16 @@ export class Game {
   }
 
   /** 隨機挑一項這一側實際在用的能力。 */
+  /**
+   * 從候選裡挑一項**在用那一側**的能力。野手交女友不該加到投手的能力上（issue #15）。
+   * 候選全在另一側時退回任一項在用的能力——當季狀態總得落在他用得到的地方。
+   */
+  #pickVisible(choices: readonly AbilityKey[]): AbilityKey {
+    const pool = choices.filter((k) => isSideVisible(k, this.#lockedSide));
+    if (pool.length === 0) return this.#randomVisibleAbility();
+    return pool[this.world.stream('career').int(0, pool.length - 1)] ?? pool[0]!;
+  }
+
   #randomVisibleAbility(): AbilityKey {
     const keys = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide));
     const pool = keys.length > 0 ? keys : ALL_ABILITIES;

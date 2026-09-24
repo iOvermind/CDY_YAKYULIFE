@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { love as cfg } from '../data/index.ts';
-import { newLoveState, type LoveState } from './love.ts';
+import { newLoveState, partnerOf, type LoveState } from './love.ts';
 import {
   loveCheckpoint,
   loveOverseas,
@@ -185,6 +185,8 @@ describe('三人行的兩條路', () => {
       expect(flavour.effects).toHaveLength(1);
       const effect = flavour.effects[0];
       expect(effect?.kind === 'bonus' ? effect.points : 0).toBeLessThan(0);
+      // 交出的是側寫的兩項候選，挑哪一項由驅動端依在用的那一側決定（issue #15）。
+      expect(effect?.kind === 'bonus' ? effect.choices : []).toEqual(partnerOf('何雨蓁')?.abilities);
       return;
     }
     throw new Error('五十顆種子都沒有跑到日常那一步');

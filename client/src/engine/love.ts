@@ -353,16 +353,15 @@ export function partnerTier(name: string | null, axis: 'spending' | 'children' |
 }
 
 /**
- * 感情事件把當季點數加在哪一項能力上。
+ * 這位對象能給的兩項當季狀態（側寫裡的那兩項）。
  *
- * 走對象自己的那兩項——這是側寫裡 `[增加能力]` 的兌現處。名單外的名字（測試造的、
- * 舊存檔留下的）退回設定裡的預設值，不要因為查無此人就整條感情線斷掉。
+ * **挑哪一項不在這裡抽**：得看球員在用哪一側（野手交女友不該加到投手的能力上，
+ * issue #15），而感情不認識「這一側的能力有哪些」——那是驅動端的事（ADR 0050）。
+ * 名單外的名字（舊存檔留下的）退回設定裡的預設值，不要因為查無此人就整條感情線斷掉。
  */
-export function partnerBonusKey(world: World, name: string | null): AbilityKey {
-  const profile = partnerOf(name);
-  const keys = profile?.abilities ?? [];
-  if (keys.length === 0) return cfg.affair.reward.ability as AbilityKey;
-  return keys[world.stream('career').int(0, keys.length - 1)] ?? (cfg.affair.reward.ability as AbilityKey);
+export function partnerBonusKeys(name: string | null): readonly AbilityKey[] {
+  const keys = partnerOf(name)?.abilities ?? [];
+  return keys.length > 0 ? (keys as readonly AbilityKey[]) : [cfg.affair.reward.ability as AbilityKey];
 }
 
 /** 分手或離婚之後的狀態。離過婚的人回不到「單身」。 */

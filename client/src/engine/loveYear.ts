@@ -37,7 +37,7 @@ import {
   earnsConfidante,
   hasPartner,
   isChildhoodSweetheart,
-  partnerBonusKey,
+  partnerBonusKeys,
   partnerOf,
   partnerTier,
   pickPartner,
@@ -54,8 +54,11 @@ import type { World } from './rng.ts';
  * 「隨機扣一項 3 點」，怎麼落地是 `game.ts` 的事。
  */
 export type LoveEffect =
-  /** 當季暫時能力。點數可以是負的（縮頭烏龜每年倒扣）。 */
-  | { readonly kind: 'bonus'; readonly ability: AbilityKey; readonly points: number }
+  /**
+   * 當季暫時能力，加在對象側寫的兩項之一。點數可以是負的（縮頭烏龜每年倒扣）。
+   * 挑哪一項由驅動端抽：只抽球員在用那一側的（issue #15）。
+   */
+  | { readonly kind: 'bonus'; readonly choices: readonly AbilityKey[]; readonly points: number }
   /** 隨機挑一項在用的能力加當季狀態。挑哪一項由驅動端抽——它才知道哪些在用。 */
   | { readonly kind: 'bonus-random'; readonly points: number }
   /** 隨機扣一項在用的能力。 */
@@ -169,23 +172,23 @@ const ask = <T extends { readonly id: LoveAsk['id']; readonly options: readonly 
  * 感情事件給的當季狀態。
  *
  * 鹿鼎公是**兩位各擲各的骰**（各自走自己側寫的那兩項能力），縮頭烏龜則是倒扣。
- * 挑哪一項要抽，所以它必須在這裡發生，順序才不會跑掉。
+ * 挑哪一項由驅動端抽（它才知道哪些能力在用），這裡只交出候選。
  */
-function rewardEffects(world: World, love: LoveState, points: number): readonly LoveEffect[] {
+function rewardEffects(love: LoveState, points: number): readonly LoveEffect[] {
   if (love.open === 'cuckold') {
     return [
       {
         kind: 'bonus',
-        ability: partnerBonusKey(world, love.partner),
+        choices: partnerBonusKeys(love.partner),
         points: -cfg.threesome.cuckold.reward_points,
       },
     ];
   }
   const out: LoveEffect[] = [
-    { kind: 'bonus', ability: partnerBonusKey(world, love.partner), points },
+    { kind: 'bonus', choices: partnerBonusKeys(love.partner), points },
   ];
   if (love.partner2 !== null) {
-    out.push({ kind: 'bonus', ability: partnerBonusKey(world, love.partner2), points });
+    out.push({ kind: 'bonus', choices: partnerBonusKeys(love.partner2), points });
   }
   return out;
 }
@@ -238,7 +241,7 @@ function* singleYear(world: World, love: LoveState, ctx: LoveYearContext): LoveF
       yield tell({ id: 'confess-rejected', partner });
       return;
     }
-    yield* startDating(world, love, partner, true);
+    yield* startDating(love, partner, true);
     return;
   }
 
@@ -252,12 +255,11 @@ function* singleYear(world: World, love: LoveState, ctx: LoveYearContext): LoveF
     yield tell({ id: 'scandal-denied' });
     return;
   }
-  yield* startDating(world, love, partner, false);
+  yield* startDating(love, partner, false);
 }
 
 /** 開始交往。 */
 function* startDating(
-  world: World,
   love: LoveState,
   partner: string,
   fromSchool: boolean,
@@ -271,7 +273,7 @@ function* startDating(
     id: 'dating-started',
     partner,
     fromSchool,
-    effects: [{ kind: 'bonus', ability: partnerBonusKey(world, love.partner), points: 1 }],
+    effects: [{ kind: 'bonus', choices: partnerBonusKeys(love.partner), points: 1 }],
   });
 }
 
@@ -288,7 +290,7 @@ function* datingYear(world: World, love: LoveState, ctx: LoveYearContext): LoveF
     return;
   }
   if (!propose) {
-    yield* datingFlavour(world, love, ctx);
+    yield* datingFlavour(love, ctx);
     return;
   }
 
@@ -297,11 +299,11 @@ function* datingYear(world: World, love: LoveState, ctx: LoveYearContext): LoveF
   // ——沒有這道檢查的話，同一年會出現「劈腿曝光、她提分手」然後立刻「要不要求
   // 婚」，對著一個已經走了的人跪下去。與上面風波那一段同一個守衛。
   if (love.status !== 'dating') return;
-  yield* proposalAsk(world, love, ctx);
+  yield* proposalAsk(love, ctx);
 }
 
 /** 求婚。**十五歲的人不會在主場本壘板後方跪下來**，因此它有職業與年齡的門檻。 */
-function* proposalAsk(world: World, love: LoveState, ctx: LoveYearContext): LoveFlow {
+function* proposalAsk(love: LoveState, ctx: LoveYearContext): LoveFlow {
   const choice = yield ask({
     id: 'proposal',
     options: ['love:propose', 'love:later'],
@@ -329,7 +331,7 @@ function* proposalAsk(world: World, love: LoveState, ctx: LoveYearContext): Love
   const after: LoveEffect[] = isChildhoodSweetheart(love)
     ? [{ kind: 'trait', id: cfg.childhood_sweetheart.trait }]
     : [];
-  yield tell({ id: 'wedding', partner, partner2, effects: rewardEffects(world, love, 2), after });
+  yield tell({ id: 'wedding', partner, partner2, effects: rewardEffects(love, 2), after });
 }
 
 /** 已婚的一年：風波 → 生子 → 外遇或日常。 */
@@ -429,7 +431,7 @@ function* affairOrFlavour(world: World, love: LoveState, ctx: LoveYearContext): 
   const rng = world.stream('career');
   // 鹿鼎公不再收到誘惑——你已經有兩位了，那張卡沒有東西可以拿來誘惑你。
   if (love.open === 'harem' || !rng.chance(cfg.affair.chance)) {
-    yield* datingFlavour(world, love, ctx);
+    yield* datingFlavour(love, ctx);
     return;
   }
 
@@ -443,7 +445,7 @@ function* affairOrFlavour(world: World, love: LoveState, ctx: LoveYearContext): 
   });
 
   if (choice !== 'love:affair') {
-    yield tell({ id: 'affair-declined', effects: rewardEffects(world, love, cfg.affair.reward.refused) });
+    yield tell({ id: 'affair-declined', effects: rewardEffects(love, cfg.affair.reward.refused) });
     return;
   }
 
@@ -455,7 +457,7 @@ function* affairOrFlavour(world: World, love: LoveState, ctx: LoveYearContext): 
       effects: [
         {
           kind: 'bonus',
-          ability: partnerBonusKey(world, love.partner),
+          choices: partnerBonusKeys(love.partner),
           points: cfg.affair.reward.escaped,
         },
       ],
@@ -596,8 +598,8 @@ function* breakup(
 }
 
 /** 平淡但溫暖的一年。感情線多數的年份都是這種。 */
-function* datingFlavour(world: World, love: LoveState, ctx: LoveYearContext): LoveFlow {
-  const effects = rewardEffects(world, love, 1);
+function* datingFlavour(love: LoveState, ctx: LoveYearContext): LoveFlow {
+  const effects = rewardEffects(love, 1);
   const variant: FlavourVariant =
     love.open === 'cuckold'
       ? 'cuckold'

@@ -15,7 +15,7 @@ import {
   injuryRiskModifier,
   isChildhoodSweetheart,
   newLoveState,
-  partnerBonusKey,
+  partnerBonusKeys,
   partnerOf,
   partnerTier,
   pickPartner,
@@ -272,21 +272,19 @@ describe('對象名單', () => {
   });
 
   it('每個名單上的名字都有側寫與兩項加成--洗對象只換風格，不換強弱', () => {
-    const world = new World('profiles');
     for (const name of [...cfg.names.school, ...cfg.names.pro]) {
       const profile = partnerOf(name);
       if (profile === null) throw new Error(`沒有側寫的對象：${name}`);
       expect(profile.desc.length).toBeGreaterThan(0);
       expect(profile.abilities.length).toBe(2);
-      expect(profile.abilities).toContain(partnerBonusKey(world, name));
+      expect(partnerBonusKeys(name)).toEqual(profile.abilities);
     }
   });
 
   it('名單外的名字退回預設加成，感情線不因查無此人而斷掉', () => {
-    const world = new World('profiles');
     expect(partnerOf('查無此人')).toBe(null);
-    expect(partnerBonusKey(world, '查無此人')).toBe(cfg.affair.reward.ability);
-    expect(partnerBonusKey(world, null)).toBe(cfg.affair.reward.ability);
+    expect(partnerBonusKeys('查無此人')).toEqual([cfg.affair.reward.ability]);
+    expect(partnerBonusKeys(null)).toEqual([cfg.affair.reward.ability]);
   });
 
   it('名單被現任耗盡時，退路仍然排除安全名單', () => {
