@@ -388,6 +388,8 @@
       },
       "_lr_note": "長中繼偶爾遞補先發。他佔的是輪值的殘缺那一塊，不是一個完整的位置。",
       "lr_start_share": 0.3,
+      "_lr_no_start_note": "長中繼低於聯盟幾點就不再遞補先發。從 par 起線性收到這裡歸零，par 以上照舊（issue #36）。",
+      "lr_no_start": -6,
       "_reference_games_note": "後援的出賽錨點是照這個球季長度訂的。短季聯盟依比例縮——照抄會讓 120 場的中職出現一年出賽七十場的終結者。",
       "reference_games": 162,
       "relief_games": {

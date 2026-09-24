@@ -517,6 +517,20 @@ describe('proPitchingLine', () => {
     }
   });
 
+  /** 長中繼的先發從 par 線性收到 lr_no_start 歸零（issue #36）。 */
+  it('長中繼低於聯盟 6 點就不再遞補先發', () => {
+    const cut = cfg.pitching.appearances.lr_no_start;
+    const lr = (seed: string, d: number) =>
+      proPitchingLine(new World(seed), with_(50, { sta: 60 }), 'CPBL1', 50 + d, null, { par: 50, usage: { role: 'LR' } });
+    let atPar = 0;
+    for (let i = 0; i < 100; i++) {
+      expect(lr(`lr${i}`, cut).starts).toBe(0);
+      expect(lr(`lr${i}`, cut - 4).starts).toBe(0);
+      atPar += lr(`lr${i}`, 0).starts;
+    }
+    expect(atPar / 100).toBeGreaterThan(3);
+  });
+
   it('純牛棚沒有先發場次，先發沒有救援成功', () => {
     for (let i = 0; i < 100; i++) {
       const rp = pitch(`s${i}`, with_(45, { sta: 25 }), 45);

@@ -1339,6 +1339,8 @@ export interface SeasonData {
       readonly rotation_divisor: { readonly value: number };
       readonly gs_factor: { readonly base: number; readonly per_point: number } & Range;
       readonly lr_start_share: number;
+      /** 長中繼低於聯盟幾點（負數）就不再遞補先發。 */
+      readonly lr_no_start: number;
       /** 後援出賽錨點對應的球季長度。短季聯盟依比例縮。 */
       readonly reference_games: number;
       readonly relief_games: Readonly<

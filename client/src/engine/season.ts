@@ -1088,11 +1088,15 @@ export function proPitchingLine(
     games = starts;
   } else {
     // 長中繼偶爾遞補先發；純牛棚的三階一場都不先發。
+    //
+    // **低於聯盟 lr_no_start 點就不再遞補先發**（issue #36）：從 par 起線性收到那裡
+    // 歸零。輪值缺人時教練找的是牛棚裡最能投的，不是最後一個。
+    const lrFade = clamp(1 - d / app.lr_no_start, 0, 1);
     starts =
-      role === 'LR'
+      role === 'LR' && lrFade > 0
         ? clampInt(
-            Math.round(slots * share * app.lr_start_share) + jit(app.jitter_starts),
-            Math.ceil(slots * app.lr_start_share),
+            Math.round(slots * share * app.lr_start_share * lrFade) + jit(app.jitter_starts),
+            Math.ceil(slots * app.lr_start_share * lrFade),
           )
         : 0;
     const g = app.relief_games[role];
