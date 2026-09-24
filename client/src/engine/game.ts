@@ -4241,8 +4241,9 @@ export class Game {
     const pro = this.#pro;
     if (pro === null) return;
 
-    // FA 問的是「誰想要你」，因此不列比現在更差的舞台。真的沒有人開價，
-    // 那才叫市場冷。
+    // **跳出合約是玩家自己選的路**，所以跨體系那一邊不設水準下限、也不設筆數
+    // 上限：墨聯、澳職與更低的層級都攤在桌上。沒有跳出合約的時候（球團上門挖角、
+    // 母隊續約）照舊不會有更差的舞台來找你。
     //
     // 三份名單攤在同一張桌上，順序是**先自家聯盟、再跨體系**：
     //
@@ -4272,7 +4273,7 @@ export class Game {
       }),
       ...fallbackOffers(this.world, {
         ...this.#transferContext,
-        minPar: leagueStandardOf(this.#standards, pro.level).par,
+        limit: Number.POSITIVE_INFINITY,
         // 借用尋路的名單，但這條路是球團在挑人——外籍加成照收。見 ADR 0012。
         approach: 'recruit',
       }),

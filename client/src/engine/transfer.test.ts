@@ -617,3 +617,39 @@ describe('自由球員的國內市場', () => {
   });
 
 });
+
+/**
+ * 自己跳出合約測試自由市場：跨體系那一邊不設水準下限、也不設筆數上限——從大聯盟
+ * 出來的人選得到墨聯與澳職。以前下限是目前的層級、最多四筆，那兩個永遠排不上。
+ */
+describe('自由市場的跨體系報價', () => {
+  it('大聯盟出來的人，墨聯與澳職都在桌上', () => {
+    const offers = fallbackOffers(new World('fa-open'), {
+      tier: 'none' as const,
+      overall: 70,
+      currentOrg: 'MLB',
+      currentTeam: '某隊',
+      playedOrgs: new Set(['CPBL', 'MLB']),
+      standards: null,
+      approach: 'recruit',
+      limit: Number.POSITIVE_INFINITY,
+    });
+    const orgs = offers.map((o) => o.org);
+    expect(orgs).toContain('LMB');
+    expect(orgs).toContain('ABL');
+  });
+
+  it('沒有跳出合約時照舊：設了下限就不會有更差的舞台', () => {
+    const offers = fallbackOffers(new World('fa-closed'), {
+      tier: 'none' as const,
+      overall: 70,
+      currentOrg: 'MLB',
+      currentTeam: '某隊',
+      playedOrgs: new Set(['CPBL', 'MLB']),
+      standards: null,
+      approach: 'recruit',
+      minPar: 56,
+    });
+    expect(offers.map((o) => o.org)).not.toContain('ABL');
+  });
+});

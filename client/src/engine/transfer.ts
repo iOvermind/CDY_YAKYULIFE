@@ -448,10 +448,13 @@ export interface FallbackContext {
    * 這一項區分了兩種很不一樣的處境：
    *
    * - **被釋出**時不設下限——你已經沒有球隊了，有人要就不錯了。
-   * - **自由球員**時下限是目前的層級。FA 問的是「誰想要你」，端出一堆降級的
-   *   選項只會讓人誤以為那是市場行情；真的沒有人開價，那才叫市場冷。
+   * - **自己跳出合約**測試自由市場時也不設下限：那是玩家自己選的路，墨聯與澳職
+   *   本來就該是桌上的選項——設了下限的話，從大聯盟出來的人一輩子選不到它們。
+   * - 其餘被動的報價（球團上門挖角）照舊只列不比現在差的舞台。
    */
   readonly minPar?: number;
+  /** 最多列幾筆。省略時照 `fallback.max_offers`；自由市場要全部攤開。 */
+  readonly limit?: number;
   /**
    * 只列出落地在該體系**頂級聯盟**的報價。
    *
@@ -522,7 +525,7 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
   const sorted = out.sort(
     (a, b) => leagueStandardOf(ctx.standards, b.level).par - leagueStandardOf(ctx.standards, a.level).par,
   );
-  return keepHomeOrg(sorted, cfg.fallback.max_offers);
+  return keepHomeOrg(sorted, ctx.limit ?? cfg.fallback.max_offers);
 }
 
 /**
