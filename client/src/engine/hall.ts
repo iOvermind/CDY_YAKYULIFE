@@ -12,7 +12,7 @@
  */
 
 import { hallOfFame as cfg } from '../data/index.ts';
-import type { LeagueCareer } from './career.ts';
+import { tierThresholds, type LeagueCareer } from './career.ts';
 import type { World } from './rng.ts';
 
 /** 一個聯盟的票選結果。 */
@@ -70,7 +70,7 @@ export function runBallot(world: World, career: LeagueCareer): BallotResult | nu
 
   // 名人堂帶：入選。差別只在第幾年。
   if (career.scoreTier === 0) {
-    const threshold = cfg.tier_thresholds.values[0] ?? 0;
+    const threshold = tierThresholds(career.org)[0] ?? 0;
     const multiplier = cfg.first_ballot.multiplier[career.org] ?? cfg.first_ballot.default_multiplier;
     const firstBallot = threshold > 0 && career.score >= threshold * multiplier;
     const wait = cfg.first_ballot.wait_if_not_first;

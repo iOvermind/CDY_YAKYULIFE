@@ -510,6 +510,8 @@ export interface HallOfFameData {
     readonly labels: readonly string[];
     /** 四道門檻，由高到低。 */
     readonly values: readonly number[];
+    /** 各聯盟的門檻倍率（短球季聯盟打折）。沒列的是 1。 */
+    readonly by_org?: Readonly<Record<string, number>>;
   };
   readonly award_points: {
     readonly by_code: Readonly<Record<string, number>>;

@@ -11,6 +11,7 @@ import {
   seasonPoints,
   signatureRoles,
   summarizeCareer,
+  tierThresholds,
   tierLabel,
   tierOf,
   type SeasonRecord,
@@ -443,5 +444,23 @@ describe('signatureRoles', () => {
 
   it('沒打過頂級聯盟就沒有代表守位', () => {
     expect(signatureRoles([at('SS', 'CPBL2')])).toEqual({ position: null, pitcherRole: null });
+  });
+});
+
+/** 短球季聯盟的門檻打折（issue #31）：只動門檻，不動分數。 */
+describe('各聯盟的分級門檻', () => {
+  it('澳職與墨聯的門檻打折，其他聯盟共用原本那一組', () => {
+    const base = cfg.tier_thresholds.values;
+    expect(tierThresholds('CPBL')).toEqual(base);
+    expect(tierThresholds('MLB')).toEqual(base);
+    expect(tierThresholds('ABL')[0]).toBeLessThan((base[0] ?? 0) * 0.5);
+    expect(tierThresholds('LMB')[0]).toBeLessThan(base[0] ?? 0);
+    expect(tierThresholds('LMB')[0]).toBeGreaterThan(tierThresholds('ABL')[0] ?? 0);
+  });
+
+  it('同樣的分數在澳職進名人堂，在中職不一定', () => {
+    const score = (tierThresholds('ABL')[0] ?? 0) + 1;
+    expect(tierOf(score, 'ABL')).toBe(0);
+    expect(tierOf(score, 'CPBL')).toBeGreaterThan(0);
   });
 });

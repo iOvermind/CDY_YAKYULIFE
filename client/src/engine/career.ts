@@ -356,13 +356,25 @@ export function evaluateMilestones(
   return { points, reached };
 }
 
-/** 分級：由高到低比對門檻，取第一個達到的。全部沒達到就是最低帶。 */
-export function tierOf(score: number): number {
-  const values = cfg.tier_thresholds.values;
+/**
+ * 分級：由高到低比對門檻，取第一個達到的。全部沒達到就是最低帶。
+ *
+ * `org` 給了的話門檻乘上那個聯盟的倍率：澳職、墨聯的球季短，同一組門檻對它們
+ * 構不到（issue #31）。不給就是共用的那一組（跨聯盟的總評價分用它）。
+ */
+export function tierOf(score: number, org?: string): number {
+  const values = tierThresholds(org);
   for (let i = 0; i < values.length; i++) {
     if (score >= (values[i] ?? Number.POSITIVE_INFINITY)) return i;
   }
   return values.length;
+}
+
+/** 這個聯盟的分級門檻：共用的那一組乘上聯盟倍率（沒列就是 1）。 */
+export function tierThresholds(org?: string): readonly number[] {
+  const t = cfg.tier_thresholds;
+  const scale = org === undefined ? 1 : (t.by_org?.[org] ?? 1);
+  return t.values.map((v) => v * scale);
 }
 
 /**
@@ -497,7 +509,7 @@ export function summarizeCareer(
     const milestones = evaluateMilestones('league', lines.batting, lines.pitching);
 
     const score = sharePoints + awardTotal + milestones.points;
-    const scoreTier = tierOf(score);
+    const scoreTier = tierOf(score, org);
     const tier = applyTierFloors(scoreTier, new Set(own.map((a) => a.code)));
 
     leagueCareers.push({
