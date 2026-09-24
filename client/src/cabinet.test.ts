@@ -44,4 +44,16 @@ describe('成就櫃', () => {
     expect(names('league:MLB')).toEqual(['七彩球衣']);
     expect(names(cfg.categories.trait.name)).toEqual(['魔鬼筋肉人']);
   });
+
+  it('生涯分級歸到那個聯盟的特性底下，只留最高那一級', () => {
+    const sections = cabinetSections([
+      tile('tier:CPBL:2', cfg.categories.trait.name, '中華職棒每日先發級生涯'),
+      tile('tier:CPBL:0', cfg.categories.trait.name, '中華職棒名人堂級生涯'),
+    ]);
+    const league = sections.find((s) => s.key === 'league:CPBL');
+    expect(league?.groups.map((g) => [g.title, g.items.map((i) => i.name)])).toEqual([
+      [cfg.categories.trait.name, ['名人堂級生涯']],
+    ]);
+    expect(league?.points).toBe(20);
+  });
 });

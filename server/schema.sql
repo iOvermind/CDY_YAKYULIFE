@@ -129,3 +129,7 @@ UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait
 UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)墨聯', '\1墨西哥聯盟') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)墨聯';
 UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)澳職', '\1澳洲聯盟') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)澳職';
 UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait:legend:|trait:rainbow:)大聯盟', '\1美國大聯盟') WHERE achievement ~ '^(hall:|trait:legend:|trait:rainbow:)大聯盟';
+
+-- 生涯分級改成每個聯盟一座、歸在特性底下（2026-09-25）：`tier:<org>:<n>`。舊的整段
+-- 生涯一格（`tier:<n>`）刪掉——兩個帳號各一格 10 點，扣掉之後餘額不會變負。
+DELETE FROM achievements WHERE achievement ~ '^tier:[0-9]+$';

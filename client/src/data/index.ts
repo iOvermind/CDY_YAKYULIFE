@@ -424,7 +424,8 @@ export interface AchievementsData {
       readonly default: number;
       readonly by_code: Readonly<Record<string, number>>;
     };
-    readonly tier: { readonly name: string; readonly by_tier: readonly number[] };
+    /** 生涯分級。每個聯盟一座，歸在特性底下，所以沒有自己的分類名。 */
+    readonly tier: { readonly by_tier: readonly number[] };
     readonly hall: { readonly name: string; readonly default: number };
     /** 姻緣。與不同對象結婚各算一項，一律同價。 */
     readonly marriage: { readonly name: string; readonly default: number };

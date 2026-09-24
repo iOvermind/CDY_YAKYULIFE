@@ -26,7 +26,7 @@ const bat = (over: Partial<BattingLine> = {}): BattingLine => ({
 const league = (over: Partial<LeagueCareer> = {}): LeagueCareer =>
   ({
     org: 'CPBL',
-    orgName: '中職',
+    orgName: '中華職棒',
     topLevel: 'CPBL1',
     seasons: 12,
     batting: null,
@@ -216,24 +216,30 @@ describe('獎項', () => {
 });
 
 describe('生涯分級', () => {
-  it('只給最高的那一級，點數是這一級以下每一級的總和', () => {
-    const hof = summary({ bestTier: 0 });
-    const rows = evaluateAchievements(ctx({ summary: hof })).list.filter((a) =>
+  const tiers = (leagues: LeagueCareer[], unlocked: string[] = []) =>
+    evaluateAchievements(ctx({ summary: summary({ leagues }), unlocked: new Set(unlocked) })).newly.filter((a) =>
       a.id.startsWith('tier:'),
     );
-    expect(rows).toHaveLength(1);
-    // 名人堂 = 4+3+2+1+0，階梯累加（見 ADR 0031）。
-    expect(rows[0]?.points).toBe(
-      cfg.categories.tier.by_tier.reduce((sum, v) => sum + v, 0),
-    );
+  const hof = (org: string, orgName: string) => league({ org, orgName, tier: 0, tierLabel: '名人堂' });
+
+  it('每個聯盟各一座，歸在特性底下，名字帶聯盟正名', () => {
+    const rows = tiers([hof('CPBL', '中華職棒'), league({ org: 'MLB', orgName: '美國大聯盟', tier: 1, tierLabel: '明星' })]);
+    expect(rows.map((r) => [r.id, r.name, r.category])).toEqual([
+      ['tier:CPBL:0', '中華職棒名人堂級生涯', cfg.categories.trait.name],
+      ['tier:MLB:1', '美國大聯盟明星級生涯', cfg.categories.trait.name],
+    ]);
   });
 
-  it('最低那一級不給分', () => {
-    const last = cfg.categories.tier.by_tier.length - 1;
-    const rows = evaluateAchievements(ctx({ summary: summary({ bestTier: last }) })).list.filter(
-      (a) => a.id.startsWith('tier:'),
-    );
-    expect(rows).toHaveLength(0);
+  it('逐級累加：替補 1、每日先發 +2、明星 +3、名人堂 +4', () => {
+    const points = (tier: number) => tiers([league({ tier })])[0]?.points ?? 0;
+    expect([points(3), points(2), points(1), points(0)]).toEqual([1, 3, 6, 10]);
+    expect(tiers([league({ tier: 4 })])).toHaveLength(0);
+  });
+
+  it('同一個聯盟已經領過的級只補差額，別的聯盟不受影響', () => {
+    const rows = tiers([hof('CPBL', '中華職棒'), hof('NPB', '日本職棒')], ['tier:CPBL:1']);
+    expect(rows.find((r) => r.id === 'tier:CPBL:0')?.points).toBe(4);
+    expect(rows.find((r) => r.id === 'tier:NPB:0')?.points).toBe(10);
   });
 });
 

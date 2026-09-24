@@ -128,6 +128,11 @@ function traitTile(id: string, resolved: string | undefined): { id: string; name
     : { id: `trait:${id}:${resolved}`, name: resolved };
 }
 
+/** 一個聯盟的生涯分級特性的名字：「中華職棒名人堂級生涯」。 */
+export function tierTraitName(orgName: string, tierLabel: string): string {
+  return `${orgName}${tierLabel}級生涯`;
+}
+
 /**
  * 階梯的點數：跨到第 `index` 階（0 = 最高）就把它與底下每一階的增量全部加起來。
  *
@@ -149,9 +154,10 @@ export function ladderOf(id: string): { readonly key: string; readonly rung: num
   if (parts[0] === 'cum' && parts.length === 4) {
     return { key: parts.slice(0, 3).join(':'), rung: Number(parts[3]) };
   }
-  // 生涯分級的數字愈小愈高階（0 是最強），翻過來才能跟「愈大愈高」對齊。
-  if (parts[0] === 'tier' && parts.length === 2) {
-    return { key: 'tier', rung: -Number(parts[1]) };
+  // 生涯分級（`tier:<org>:<n>`）每個聯盟一座。數字愈小愈高階（0 是名人堂），
+  // 翻過來才能跟「愈大愈高」對齊。
+  if (parts[0] === 'tier' && parts.length === 3) {
+    return { key: parts.slice(0, 2).join(':'), rung: -Number(parts[2]) };
   }
   // 第 N 段人生也是一座階梯：櫃子裡只留最高那一段。
   const life = lifeIndex(id);
@@ -439,18 +445,20 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
     ),
   );
 
-  // ---- 生涯分級。清單上只有最高的那一級，點數是那一級與底下每一級的增量加總，
-  // 同樣只補上一段生涯還沒爬到的那幾級。
-  const prevTier = bestUnlockedRung(ctx.unlocked, 'tier');
-  const takenTier = prevTier === null ? 0 : ladderPoints(c.tier.by_tier, -prevTier);
-  const tierPoints = Math.max(0, ladderPoints(c.tier.by_tier, ctx.summary.bestTier) - takenTier);
-  if (tierPoints > 0) {
-    const label = ctx.summary.representative?.tierLabel ?? '';
+  // ---- 生涯分級：**每個聯盟各一座**，歸在特性底下（「中華職棒名人堂級生涯」）。
+  // 清單上每個聯盟只有最高的那一級，點數是那一級與底下每一級的增量加總（替補 1、
+  // 每日先發 +2、明星 +3、名人堂 +4），同樣只補上一段生涯還沒爬到的那幾級。
+  for (const league of ctx.summary.leagues) {
+    const key = `tier:${league.org}`;
+    const prev = bestUnlockedRung(ctx.unlocked, key);
+    const taken = prev === null ? 0 : ladderPoints(c.tier.by_tier, -prev);
+    const points = Math.max(0, ladderPoints(c.tier.by_tier, league.tier) - taken);
+    if (points <= 0) continue;
     list.push({
-      id: `tier:${ctx.summary.bestTier}`,
-      category: c.tier.name,
-      name: `生涯分級 ${label}`,
-      points: tierPoints,
+      id: `${key}:${league.tier}`,
+      category: c.trait.name,
+      name: tierTraitName(league.orgName, league.tierLabel),
+      points,
     });
   }
 

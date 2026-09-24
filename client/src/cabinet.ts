@@ -60,7 +60,6 @@ const CATEGORY_ORDER: readonly string[] = [
   cfg.categories.international.name,
   cfg.categories.award.name,
   cfg.categories.cumulative.name,
-  cfg.categories.tier.name,
   cfg.categories.hall.name,
   cfg.categories.marriage.name,
   cfg.categories.second_life.name,
@@ -193,6 +192,8 @@ function orgOf(id: string): string | null {
   const parts = id.split(':');
   if (parts[0] === 'cum') return parts[1] === 'career' ? null : (parts[1] ?? null);
   if (parts[0] === 'award') return parts[1] ?? null;
+  // 生涯分級（`tier:<org>`，階梯收斂之後的鍵）：每個聯盟一座。
+  if (parts[0] === 'tier') return parts[1] ?? null;
   // 名人堂的鍵帶的是聯盟**名字**（見 evaluateAchievements），反查回體系代碼。
   if (parts[0] === 'hall') return ORG_BY_LEAGUE_NAME.get(parts[1] ?? '') ?? null;
   // 動態命名的特性帶著聯盟或球隊：◯◯歷史級球星、◯◯先生、◯◯七彩球衣。它們講的

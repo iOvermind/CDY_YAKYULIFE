@@ -11,8 +11,8 @@
  *   七彩球衣每個有門檻的聯盟。
  * - 每個聯盟實際會頒的每一種獎（白金手套只有大聯盟），名字用該聯盟的叫法。
  * - 養成盃賽、青少年國際賽、職業國際賽都開冠軍那一階，職業國際賽另開 MVP。
- * - 累積成績開到 **AP 封頂的那一階**，各聯盟與生涯通算各一份；生涯分級開到名人堂，
- *   每個聯盟的名人堂都開。
+ * - 累積成績開到 **AP 封頂的那一階**，各聯盟與生涯通算各一份；每個聯盟的生涯分級
+ *   開到名人堂級，每個聯盟的名人堂入選也都開。
  * - 每位對象的姻緣、每一條第二人生。
  * - **第 N 段人生不開**——那是走完一段生涯才有的東西。
  */
@@ -133,6 +133,8 @@ export function unlockEverything(unlocked: ReadonlySet<string>): readonly Achiev
       orgName: leagues.top_league_names[org] ?? org,
       batting: league.batting,
       pitching: league.pitching,
+      tier: 0,
+      tierLabel: tierLabel(0),
     })),
     topTotal: { batting: career.batting, pitching: career.pitching },
     bestTier: 0,

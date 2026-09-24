@@ -42,7 +42,8 @@ describe('unlockEverything', () => {
     expect([...ids].some((id) => id.startsWith('cup:'))).toBe(true);
     expect(ids).toContain('intl:中華隊 世界棒球經典賽');
     expect(ids).toContain('intl:mvp:中華隊 世界棒球經典賽 MVP');
-    expect(ids).toContain('tier:0');
+    expect(all.filter((a) => a.id.startsWith('tier:') && a.id.endsWith(':0'))).toHaveLength(6);
+    expect(byId.get('tier:CPBL:0')?.name).toBe('中華職棒名人堂級生涯');
     expect(all.filter((a) => a.id.startsWith('hall:'))).toHaveLength(6);
     expect(all.filter((a) => a.id.startsWith('second_life:'))).toHaveLength(flavor.second_life.stories.length);
   });
