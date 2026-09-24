@@ -1259,6 +1259,14 @@ function batterShares(line: BattingLine, base: Baseline, parts: SharesByPart | n
 /** 相對聯盟平均的指標統一這樣顯示：沒有樣本就畫破折號，不畫 0。 */
 const rel = (v: number | null) => (v === null ? '—' : v);
 
+/**
+ * 率類欄位：**分母是 0 就畫「-」**，不畫 .000 或 0.00——整季報銷的那一年沒有打席、
+ * 沒有局數，那不是「打擊率零」，是沒有打擊率。
+ */
+const noPa = (b: BattingLine) => b.pa === 0;
+const noOuts = (p: PitchingLine) => p.outs === 0;
+const NA = '-';
+
 const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'G', title: '出賽', value: (b) => b.games },
   { key: 'PA', title: '打席', value: (b) => b.pa },
@@ -1274,14 +1282,14 @@ const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'SO', title: '三振', value: (b) => b.so },
   { key: 'SB', title: '盜壘', value: (b) => b.sb },
   { key: 'CS', title: '盜壘刺', value: (b) => b.cs },
-  { key: 'AVG', title: '打擊率', value: (b) => fmtAvg(b.avg) },
-  { key: 'OBP', title: '上壘率', value: (b) => fmtAvg(b.obp) },
-  { key: 'SLG', title: '長打率', value: (b) => fmtAvg(b.slg) },
-  { key: 'OPS', title: '整體攻擊指數', value: (b) => fmtAvg(ops(b)) },
+  { key: 'AVG', title: '打擊率', value: (b) => (noPa(b) ? NA : fmtAvg(b.avg)) },
+  { key: 'OBP', title: '上壘率', value: (b) => (noPa(b) ? NA : fmtAvg(b.obp)) },
+  { key: 'SLG', title: '長打率', value: (b) => (noPa(b) ? NA : fmtAvg(b.slg)) },
+  { key: 'OPS', title: '整體攻擊指數', value: (b) => (noPa(b) ? NA : fmtAvg(ops(b))) },
   { key: 'OPS+', title: '相對聯盟平均的攻擊表現（100 為聯盟平均）', value: (b, base) => rel(opsPlus(b, base)) },
   { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（打擊與守備合計）', value: (b, base, shares) => batterShares(b, base, shares).win.toFixed(1) },
   { key: 'LS', title: '敗戰份額：佔用了出場機會與守備位置卻沒換回勝利的部分', value: (b, base, shares) => batterShares(b, base, shares).loss.toFixed(1) },
-  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base, shares) => fmtAvg(winPct(batterShares(b, base, shares))) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base, shares) => (noPa(b) ? NA : fmtAvg(winPct(batterShares(b, base, shares)))) },
 ];
 
 const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
@@ -1297,14 +1305,14 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'ER', title: '自責分', value: (p) => p.er },
   { key: 'BB', title: '四壞', value: (p) => p.bb },
   { key: 'SO', title: '奪三振', value: (p) => p.so },
-  { key: 'ERA', title: '防禦率', value: (p) => p.era.toFixed(2) },
-  { key: 'WHIP', title: '每局被上壘率', value: (p) => whip(p).toFixed(2) },
-  { key: 'K/9', title: '每九局奪三振', value: (p) => kPerNine(p).toFixed(1) },
-  { key: 'BB/9', title: '每九局四壞', value: (p) => bbPerNine(p).toFixed(1) },
+  { key: 'ERA', title: '防禦率', value: (p) => (noOuts(p) ? NA : p.era.toFixed(2)) },
+  { key: 'WHIP', title: '每局被上壘率', value: (p) => (noOuts(p) ? NA : whip(p).toFixed(2)) },
+  { key: 'K/9', title: '每九局奪三振', value: (p) => (noOuts(p) ? NA : kPerNine(p).toFixed(1)) },
+  { key: 'BB/9', title: '每九局四壞', value: (p) => (noOuts(p) ? NA : bbPerNine(p).toFixed(1)) },
   { key: 'ERA+', title: '相對聯盟平均的防禦率（100 為聯盟平均）', value: (p, base) => rel(eraPlus(p, base)) },
   { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (p, base, shares) => (shares?.pitching ?? pitchingShares(p, base)).win.toFixed(1) },
   { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分', value: (p, base, shares) => (shares?.pitching ?? pitchingShares(p, base)).loss.toFixed(1) },
-  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base, shares) => fmtAvg(winPct(shares?.pitching ?? pitchingShares(p, base))) },
+  { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base, shares) => (noOuts(p) ? NA : fmtAvg(winPct(shares?.pitching ?? pitchingShares(p, base)))) },
 ];
 
 /** 一列通算成績。第一欄是列名（聯盟或「通算」），其餘欄位與生涯年表一致。 */
@@ -1963,6 +1971,16 @@ function cardLines(log: readonly LogEntry[], title: string): CardLine[] {
   return out;
 }
 
+/** 整季沒上場那一年的空白成績列：數字全是 0，率類欄位由欄位定義畫成「-」。 */
+const ZERO_BATTING: BattingLine = {
+  games: 0, starts: 0, pa: 0, ab: 0, runs: 0, hits: 0, double: 0, triple: 0, hr: 0, rbi: 0,
+  bb: 0, ibb: 0, so: 0, sb: 0, cs: 0, hbp: 0, sac: 0, avg: 0, obp: 0, slg: 0,
+};
+const ZERO_PITCHING: PitchingLine = {
+  games: 0, starts: 0, wins: 0, losses: 0, saves: 0, holds: 0, outs: 0, hits: 0, double: 0,
+  triple: 0, runs: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, era: 0,
+};
+
 /** 養成期與職業合成一份年表，依年度排序。 */
 function careerRows(summary: CareerSummary): readonly CareerRow[] {
   const amateurRows: CareerRow[] = summary.amateurSeasons.map((a, i) => ({
@@ -1983,18 +2001,21 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     base: amateurBaseline(),
   }));
 
+  // **整季沒上場的那一年照樣列出來**（開 TJ、整季復健）：出賽 0 場的成績在引擎裡是
+  // null，年表以前就整列消失，看起來像那一年不存在。有定位就補一列 0 的投手成績、
+  // 有守位就補一列 0 的野手成績；不在任何球隊的那一年，球隊欄寫「無」。
   const proRows: CareerRow[] = summary.seasons.map((s, i) => ({
     key: `pro-${s.year}-${s.level}-${i}`,
     year: s.year,
     age: s.age,
-    team: s.team,
+    team: s.team === '' ? '無' : s.team,
     // 頂級聯盟不必註明（那是預設），二軍與小聯盟則只寫層級——聯盟名已經
     // 由同一格的球隊名說完了，「桃園金剛・中職二軍」裡的「中職」是贅字。
     note: s.top === null ? shortLevelName(s.levelName, s.org) : null,
     position: s.position,
     pitcherRole: s.pitcherRole,
-    batting: s.batting,
-    pitching: s.pitching,
+    batting: s.batting ?? (s.pitching === null && s.position !== null ? ZERO_BATTING : null),
+    pitching: s.pitching ?? (s.batting === null && s.pitcherRole !== null ? ZERO_PITCHING : null),
     injured: s.injured,
     defenseRuns: s.defenseRuns,
     shares: s.shares,
