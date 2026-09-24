@@ -5,97 +5,97 @@
   "levels": {
     "CPBL2": {
       "name": "中職二軍",
-      "par": 36,
-      "min": 32,
+      "par": 37,
+      "min": 33,
       "games": 80,
       "org": "CPBL"
     },
     "CPBL1": {
       "name": "中職一軍",
-      "par": 46,
-      "min": 43,
+      "par": 47,
+      "min": 44,
       "games": 120,
       "org": "CPBL",
       "top": "CPBL"
     },
     "NPB2": {
       "name": "日職二軍",
-      "par": 49,
-      "min": 46,
+      "par": 50,
+      "min": 47,
       "games": 100,
       "org": "NPB"
     },
     "NPB1": {
       "name": "日職一軍",
-      "par": 55,
-      "min": 52,
+      "par": 56,
+      "min": 53,
       "games": 143,
       "org": "NPB",
       "top": "NPB"
     },
     "KBO2": {
       "name": "韓職二軍",
-      "par": 42,
-      "min": 38,
+      "par": 43,
+      "min": 39,
       "games": 100,
       "org": "KBO"
     },
     "KBO1": {
       "name": "韓職一軍",
-      "par": 52,
-      "min": 49,
+      "par": 53,
+      "min": 50,
       "games": 144,
       "org": "KBO",
       "top": "KBO"
     },
     "LMB": {
       "name": "墨西哥聯盟",
-      "par": 50,
-      "min": 47,
+      "par": 51,
+      "min": 48,
       "games": 90,
       "org": "LMB",
       "top": "LMB"
     },
     "ABL": {
       "name": "澳洲棒球聯盟",
-      "par": 44,
-      "min": 40,
+      "par": 45,
+      "min": 41,
       "games": 40,
       "org": "ABL",
       "top": "ABL"
     },
     "R": {
       "name": "新人聯盟",
-      "par": 43,
-      "min": 41,
+      "par": 44,
+      "min": 42,
       "games": 55,
       "org": "MLB"
     },
     "A1": {
       "name": "1A",
-      "par": 47,
-      "min": 45,
+      "par": 48,
+      "min": 46,
       "games": 110,
       "org": "MLB"
     },
     "A2": {
       "name": "2A",
-      "par": 51,
-      "min": 49,
+      "par": 52,
+      "min": 50,
       "games": 120,
       "org": "MLB"
     },
     "A3": {
       "name": "3A",
-      "par": 56,
-      "min": 54,
+      "par": 57,
+      "min": 55,
       "games": 130,
       "org": "MLB"
     },
     "MLB": {
       "name": "大聯盟",
-      "par": 61,
-      "min": 58,
+      "par": 62,
+      "min": 59,
       "games": 162,
       "org": "MLB",
       "top": "MLB"

@@ -534,9 +534,12 @@ describe('職業階段的狀態', () => {
     // 這裡的關鍵字必須是流程真的寫得出來的字：降級通知寫「打算把你送回…」，
     // 升級卡片寫「升上中職一軍」。先前這條找的是「下放二軍」——那個字串從來
     // 沒出現過，於是二十顆種子全部 continue，測試空轉了一場也沒斷言到。
+    //
+    // **配點要配好**：點數全丟體力的球員站不上一軍，聯盟平均往上搬一分之後一百二十
+    // 顆種子一次都沒撞見「上去又下來」。
     let checked = 0;
-    for (let i = 0; i < 120; i++) {
-      const game = playToEnd(started({ seed: `split-${i}` }));
+    for (let i = 0; i < 120 && checked < 3; i++) {
+      const game = playWell(started({ seed: `split-${i}` }));
       const log = JSON.stringify(game.flow.log);
       if (!log.includes('送回') || !log.includes('升上中職一軍')) continue;
       checked++;

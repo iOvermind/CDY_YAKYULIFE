@@ -1100,16 +1100,19 @@ describe('後援：機會 × 成功率', () => {
 });
 
 describe('三壘打的曲線', () => {
+  // 曲線是對著大聯盟 par 61 校的；聯盟平均往上搬之後，受試者跟著平移同樣的量，
+  // 量到的仍是同一段曲線（成績只吃「能力 − par」）。
+  const shift = leagues.levels['MLB']!.par - cfg.batting.reference_par;
   const at = (spd: number) => {
     let total = 0;
     const n = 300;
     for (let i = 0; i < n; i++) {
       const l = proBattingLine(
         new World(`3b-${spd}-${i}`),
-        with_(60, { spd, sta: 75 }),
+        with_(60 + shift, { spd: spd + shift, sta: 75 }),
         'CF',
         'MLB',
-        60,
+        60 + shift,
         null,
       );
       total += l.triple;
