@@ -2573,13 +2573,7 @@ export class Game {
     // 會帶著 100% 以上的機率照常擲骰，而不是直接開刀。
     const snapped = (): boolean => {
       if (this.#sevenFists <= 0 || injuryChanceBeforeTalent(this.#healthInputs()) < 100) return false;
-      this.#majorInjuries++;
-      this.#surgery('major');
-      this.flow.card(
-        'bad',
-        '七傷拳',
-        '硬撐到最後，韌帶還是斷了。<b class="dn">這一季報銷，而且這一次沒得選——直接開 TJ</b>。',
-      );
+      this.#sevenFistsBreak('硬撐到最後，韌帶還是斷了。', null);
       return true;
     };
     if (snapped()) return;
@@ -2634,6 +2628,30 @@ export class Game {
     );
   }
 
+  /**
+   * 七傷拳的結局：韌帶斷了。**一律照大傷算**——全能力 −5、可能永久少一顆訓練骰、
+   * 衰退期再抽兩項 −3——然後那一季報銷、強迫開 TJ、七傷拳拿掉。
+   *
+   * `diceLoss` 是那一次傷病已經擲好的「少一顆骰」結果；滿 100% 那條路沒有擲傷病，
+   * 傳 null 就在這裡補擲一次（同一個機率，〈浴火重生〉照樣乘在上面）。
+   */
+  #sevenFistsBreak(opening: string, diceLoss: boolean | null): void {
+    const lines = [opening];
+    const loss = injuryCfg.severity.major.ability_loss.points;
+    lines.push(this.#applyInjuryLoss({ kind: 'major', seasonFactor: 0, loss: { scope: 'all', points: loss }, rehabNextYear: false, diceLoss: false, text: '' }));
+    this.#majorInjuries++;
+    const aged = this.#applyAgedLoss();
+    if (aged !== '') lines.push(aged);
+    const lostDie = diceLoss ?? this.world.stream('health').chance(injuryCfg.severity.major.dice_loss.chance);
+    if (lostDie) {
+      this.#diceLost++;
+      lines.push('身體再也回不到從前的訓練量：<b class="dn">往後每季的自主訓練少一顆骰</b>。');
+    }
+    this.#surgery('major');
+    lines.push('<b class="dn">這一季報銷，而且這一次沒得選——直接開 TJ</b>。');
+    this.flow.card('bad', '七傷拳', lines.filter((l) => l !== '').join('<br>'));
+  }
+
   /** 開 TJ：這一季整季報銷，季末把投手耐力回到八成，七傷拳歸零。 */
   #surgery(kind: 'major' | 'rehab'): void {
     this.#seasonFactor = 0;
@@ -2666,17 +2684,11 @@ export class Game {
       return;
     }
 
-    // **七傷拳期間受傷就是韌帶斷了**：不分大傷小傷，那一季報銷、記一次大傷、強迫開
-    // TJ，七傷拳跟著拿掉——與「天賦前受傷機率滿 100%」那條路是同一個結局。硬撐的人
-    // 手臂早就在抗議，任何一次受傷都不會只是拉傷。
+    // **七傷拳期間受傷就是韌帶斷了**：不分大傷小傷，一律照大傷扣（全能力 −5、訓練骰、
+    // 衰退期再抽兩項），那一季報銷、強迫開 TJ，七傷拳跟著拿掉。開刀是「現在就認賠」；
+    // 不開就是賭，賭輸了付的是大傷的全套代價。
     if (this.#sevenFists > 0) {
-      this.#majorInjuries++;
-      this.#surgery('major');
-      this.flow.card(
-        'bad',
-        '七傷拳',
-        `${esc(result.text)}<br>硬撐的手臂這次真的撐不住了。<b class="dn">這一季報銷，直接開 TJ</b>。`,
-      );
+      this.#sevenFistsBreak(esc(result.text), result.kind === 'major' ? result.diceLoss : null);
       return;
     }
 

@@ -2475,6 +2475,9 @@ describe('TJ 與七傷拳', () => {
       if (asked === 0) continue;
       expect(log).toContain('七傷拳');
       forced = log.includes('直接開 TJ');
+      // 韌帶斷了一律照大傷算：同一張卡上寫著全能力扣點。
+      if (forced) expect(log).toMatch(/直接開 TJ[^"]*|全能力 −\d+[^"]*直接開 TJ/);
+      if (forced) expect(log).toContain('全能力 −');
     }
     expect(forced).toBe(true);
   });
