@@ -19,6 +19,7 @@ const contract = (over: Partial<Contract> = {}): Contract => ({
   years: 3,
   mult: 1,
   extensionOffered: false,
+  postingDeclined: false,
   ...over,
 });
 
@@ -227,6 +228,15 @@ describe('rookieContract', () => {
 
 describe('clubOption', () => {
   const opt = c.control.club_option;
+
+  /**
+   * 「再等等，先打完現有合約」那句話掛在**合約**上，所以行使續約權等於重新開口
+   * ——那正是玩家答應要打完的那張約已經打完了。
+   */
+  it('續約權開出來的是一張乾淨的約：入札沒有被回絕過', () => {
+    expect(clubOption(new World('fresh')).postingDeclined).toBe(false);
+    expect(rookieContract().postingDeclined).toBe(false);
+  });
 
   it('年數落在設定的區間裡，薪資照層級基數不加成', () => {
     for (let i = 0; i < 40; i++) {

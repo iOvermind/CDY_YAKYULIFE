@@ -29,6 +29,16 @@ export interface Contract {
   readonly mult: number;
   /** 母隊是否已經提過延長續約。一張合約只問一次。 */
   readonly extensionOffered: boolean;
+  /**
+   * 這張合約期間，玩家已經回答過「再等等，先打完現有合約」。
+   *
+   * **那句話要算數**：答完之後這張合約剩下的年份不再問入札。它掛在合約上而不是
+   * 球員身上，所以換約、行使續約權、跳槽都會自然歸零——那才是「合約結束」。
+   *
+   * 提了申請卻沒走成不算數（流標、母隊婉拒、自己在最後一刻收回），那些是**沒有
+   * 得到答案**，隔年照問。
+   */
+  readonly postingDeclined: boolean;
 }
 
 /** 傷病史。目前恆為零——傷病系統尚未實作。 */
@@ -210,6 +220,7 @@ export function clubOption(world: World): Contract {
     years: world.stream('career').int(opt.years.min, opt.years.max),
     mult: opt.multiplier,
     extensionOffered: false,
+    postingDeclined: false,
   };
 }
 
@@ -219,6 +230,7 @@ export function rookieContract(): Contract {
     years: cfg.contract.rookie_contract.years,
     mult: cfg.contract.rookie_contract.multiplier,
     extensionOffered: false,
+    postingDeclined: false,
   };
 }
 

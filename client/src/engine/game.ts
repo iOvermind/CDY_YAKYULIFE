@@ -3688,6 +3688,9 @@ export class Game {
         `母隊提前延長續約 · ${pro.team}（合約剩 1 年）`,
         (years, mult) => {
           pro.contract = {
+            // 延長是同一段關係的續篇，不是新的一張約——「先打完現有合約」那句話
+            // 因此照樣算數，入札不會因為延長而重新開口問。
+            ...pro.contract,
             years: pro.contract.years + years,
             mult,
             extensionOffered: true,
@@ -3777,7 +3780,7 @@ export class Game {
           return;
         }
         this.#askTerms(`與 ${pro.team} 續約 · 選擇合約類型`, (years, mult) => {
-          pro.contract = { years, mult, extensionOffered: false };
+          pro.contract = { years, mult, extensionOffered: false, postingDeclined: false };
           this.flow.card(
             'info',
             '續約',
@@ -3859,6 +3862,7 @@ export class Game {
             years: 1,
             mult: seasonCfg.contract.multiplier.by_performance.default,
             extensionOffered: false,
+            postingDeclined: false,
           };
           this.flow.card(
             'bad',
@@ -3891,7 +3895,7 @@ export class Game {
       const picked = offers[Number(choice.split(':')[1])];
       if (picked === undefined) {
         this.#askTerms(`與 ${pro.team} 續約 · 選擇合約類型`, (years, mult) => {
-          pro.contract = { years, mult, extensionOffered: false };
+          pro.contract = { years, mult, extensionOffered: false, postingDeclined: false };
           this.flow.card('info', '續約', `重回 <b class="hl">${esc(pro.team)}</b>。`);
           next();
         });
@@ -3925,7 +3929,7 @@ export class Game {
     pro.team = offer.team;
 
     this.#askTerms(`${offer.team} · 選擇合約類型`, (years, mult) => {
-      pro.contract = { years, mult, extensionOffered: false };
+      pro.contract = { years, mult, extensionOffered: false, postingDeclined: false };
       this.flow.card(
         'gold',
         '轉隊',
@@ -4241,6 +4245,13 @@ export class Game {
       next();
       return;
     }
+    // **「先打完現有合約」那句話要算數。** 答過之後這張合約剩下的年份不再問；
+    // 換約、行使續約權、跳槽都會開一張新的約，那時才重新開口。提了申請卻沒走
+    // 成（流標、母隊婉拒、自己收回）不算數——那些是沒有得到答案，隔年照問。
+    if (pro.contract.postingDeclined) {
+      next();
+      return;
+    }
 
     this.flow.ask(
       {
@@ -4251,11 +4262,17 @@ export class Game {
             label: '提出入札申請',
             note: '母隊收下入札金才會放人｜年資越深越容易點頭',
           },
-          { id: 'posting:wait', label: '再等等，先打完現有合約', role: 'main' },
+          {
+            id: 'posting:wait',
+            label: '再等等，先打完現有合約',
+            note: '這張合約期間不會再問——換約之後才會重新開口',
+            role: 'main',
+          },
         ],
       },
       (choice) => {
         if (choice !== 'posting:ask') {
+          pro.contract = { ...pro.contract, postingDeclined: true };
           next();
           return;
         }
