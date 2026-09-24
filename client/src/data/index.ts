@@ -645,7 +645,9 @@ export interface AwardsData {
   readonly fielding: { readonly list: readonly FieldingAward[] };
   readonly all_star: {
     readonly base: number;
-    readonly per_d: number;
+    /** 曲線的位移：d = −shift 時入選率是 0。 */
+    readonly shift: number;
+    readonly exponent: number;
     readonly clamp: Range;
     readonly popularity_bonus: {
       readonly league: string;

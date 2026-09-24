@@ -328,7 +328,9 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
   // ---- 明星賽
   {
     const a = cfg.all_star;
-    let chance = clamp(a.base + ctx.d * a.per_d, a.clamp.min, a.clamp.max);
+    // 次方曲線：平均水準的人拿得到但不常，強的人陡升上去（見 awards.json 的 _curve_note）。
+    const x = Math.max(0, (ctx.d + a.shift) / a.shift);
+    let chance = clamp(a.base * Math.pow(x, a.exponent), a.clamp.min, a.clamp.max);
     const pop = a.popularity_bonus;
     const popular = ctx.org === pop.league && ctx.team === pop.team;
     if (popular) chance = clamp(chance + pop.add, pop.clamp.min, pop.clamp.max);
