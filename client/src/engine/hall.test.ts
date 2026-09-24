@@ -25,10 +25,33 @@ const career = (over: Partial<LeagueCareer> = {}): LeagueCareer => ({
   milestonePoints: 20,
   score: HOF + 10,
   tier: 0,
+  scoreTier: 0,
   tierLabel: '名人堂',
   milestones: [],
   capTeam: '台中猛瑪',
   ...over,
+});
+
+describe('候選資格', () => {
+  /**
+   * 從前沒有年資門檻：一個只在日職打兩季、62 分的人連續七年入圍日本野球殿堂，
+   * 在中職打一季、33 分的人連續七年入圍中華職棒名人堂。
+   */
+  it('年資不足進不了候選名單：大聯盟 10 季、其他 5 季', () => {
+    expect(runBallot(new World('y'), career({ org: 'MLB', seasons: 9 }))).toBeNull();
+    expect(runBallot(new World('y'), career({ org: 'MLB', seasons: 10 }))?.inducted).toBe(true);
+    expect(runBallot(new World('y'), career({ org: 'NPB', seasons: 4 }))).toBeNull();
+    expect(runBallot(new World('y'), career({ org: 'NPB', seasons: 5 }))?.inducted).toBe(true);
+  });
+
+  /**
+   * 拿過 MVP 的人稱號至少是「明星」——那是保底存在的理由。但入圍看的是分數本身：
+   * 一座獎盃撐不起年年六七成的票。
+   */
+  it('保底只管稱號，入圍看分數本身', () => {
+    const floored = career({ tier: 1, scoreTier: 3, tierLabel: '明星', score: 60 });
+    expect(runBallot(new World('f'), floored)).toBeNull();
+  });
 });
 
 describe('runBallot', () => {
@@ -70,7 +93,7 @@ describe('runBallot', () => {
 
   /** 差一點的人比差很多的人更難受，這是名人堂敘事裡最有重量的一種。 */
   it('明星帶的人年年入圍卻跨不過門檻', () => {
-    const r = runBallot(new World('near'), career({ tier: 1, tierLabel: '明星', score: HOF - 30 }));
+    const r = runBallot(new World('near'), career({ tier: 1, scoreTier: 1, tierLabel: '明星', score: HOF - 30 }));
     expect(r?.inducted).toBe(false);
     expect(r?.ballotYear).toBeGreaterThanOrEqual(cfg.near_miss.tries.min);
     expect(r?.percent).toBeLessThan(cfg.vote_percent.floor);
@@ -79,7 +102,7 @@ describe('runBallot', () => {
 
   it('每日先發以下連候選都進不了——「從來沒被討論過」不該寫成「差一點就上」', () => {
     for (const tier of [2, 3, 4]) {
-      expect(runBallot(new World('low'), career({ tier }))).toBeNull();
+      expect(runBallot(new World('low'), career({ tier, scoreTier: tier }))).toBeNull();
     }
   });
 
@@ -94,7 +117,7 @@ describe('runBallot', () => {
   });
 
   it('美職有名人堂——體系代碼是 MLB，不是層級代碼以外的任何東西', () => {
-    expect(runBallot(new World('x'), career({ org: 'MLB', tier: 0 }))).not.toBeNull();
+    expect(runBallot(new World('x'), career({ org: 'MLB', tier: 0, seasons: 12 }))).not.toBeNull();
   });
 
   it('帽徽帶在結果上', () => {
@@ -119,7 +142,7 @@ describe('runBallots', () => {
   });
 
   it('沒資格的聯盟不會產生結果', () => {
-    const results = runBallots(new World('mix'), [career(), career({ org: 'NPB', tier: 3 })]);
+    const results = runBallots(new World('mix'), [career(), career({ org: 'NPB', tier: 3, scoreTier: 3 })]);
     expect(results).toHaveLength(1);
     expect(results[0]?.org).toBe('CPBL');
   });
@@ -132,6 +155,6 @@ describe('runBallots', () => {
   });
 
   it('全部沒資格時回傳空陣列', () => {
-    expect(runBallots(new World('none'), [career({ tier: 4 })])).toEqual([]);
+    expect(runBallots(new World('none'), [career({ tier: 4, scoreTier: 4 })])).toEqual([]);
   });
 });

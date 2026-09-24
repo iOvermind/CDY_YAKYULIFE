@@ -189,8 +189,16 @@ export interface LeagueCareer {
   readonly milestonePoints: number;
   /** 評價分：以上三者相加。 */
   readonly score: number;
-  /** 分級，0 為名人堂，4 為過客。 */
+  /** 分級，0 為名人堂，4 為過客。**含獎項保底**——這是這段生涯的稱號。 */
   readonly tier: number;
+  /**
+   * 分數本身落在哪一帶，**不含保底**。
+   *
+   * 名人堂票選看這一個：保底處理的是「短而璀璨」的生涯——拿過 MVP 的人沒有人會
+   * 說他不是明星，所以稱號給他；但年年入圍、拿六七成的票要靠整段生涯的份量，
+   * 一座獎盃撐不起來。
+   */
+  readonly scoreTier: number;
   readonly tierLabel: string;
   /** 達成的里程碑敘述。 */
   readonly milestones: readonly string[];
@@ -476,7 +484,8 @@ export function summarizeCareer(
     const milestones = evaluateMilestones('league', lines.batting, lines.pitching);
 
     const score = sharePoints + awardTotal + milestones.points;
-    const tier = applyTierFloors(tierOf(score), new Set(own.map((a) => a.code)));
+    const scoreTier = tierOf(score);
+    const tier = applyTierFloors(scoreTier, new Set(own.map((a) => a.code)));
 
     leagueCareers.push({
       org,
@@ -493,6 +502,7 @@ export function summarizeCareer(
       milestonePoints: milestones.points,
       score,
       tier,
+      scoreTier,
       tierLabel: tierLabel(tier),
       milestones: milestones.reached,
       capTeam: longestTeam(list),

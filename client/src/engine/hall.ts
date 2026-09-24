@@ -44,13 +44,21 @@ function clamp(v: number, lo: number, hi: number): number {
 /**
  * 跑一個聯盟的票選。
  *
- * 沒有資格（分級低於明星）時回傳 null——連候選名單都進不去的人不該產生一行
- * 「落選」的敘述，那會把「從來沒被討論過」寫成「差一點就上」。
+ * 沒有資格時回傳 null——連候選名單都進不去的人不該產生一行「落選」的敘述，那會
+ * 把「從來沒被討論過」寫成「差一點就上」。資格有兩道：
+ *
+ * - **年資**：在這個聯盟的一軍打過 `min_seasons` 個球季（大聯盟 10、其他 5）。
+ * - **分數本身**：看 `scoreTier`（保底前），不是 `tier`（保底後）。拿過 MVP 的人
+ *   稱號照樣是「明星」，但年年入圍要靠整段生涯的份量——一座獎盃撐不起來。
+ *
+ * 從前兩道都沒有，於是一個只在日職打兩季、62 分、拿過一座 MVP 的人連續七年入圍
+ * 日本野球殿堂，最高拿到六成一的票。
  */
 export function runBallot(world: World, career: LeagueCareer): BallotResult | null {
   const rng = world.stream('career');
   const hall = cfg.halls[career.org];
   if (hall === undefined) return null;
+  if (career.seasons < hall.min_seasons) return null;
 
   const base = {
     org: career.org,
@@ -61,7 +69,7 @@ export function runBallot(world: World, career: LeagueCareer): BallotResult | nu
   };
 
   // 名人堂帶：入選。差別只在第幾年。
-  if (career.tier === 0) {
+  if (career.scoreTier === 0) {
     const threshold = cfg.tier_thresholds.values[0] ?? 0;
     const multiplier = cfg.first_ballot.multiplier[career.org] ?? cfg.first_ballot.default_multiplier;
     const firstBallot = threshold > 0 && career.score >= threshold * multiplier;
@@ -87,7 +95,7 @@ export function runBallot(world: World, career: LeagueCareer): BallotResult | nu
   }
 
   // 明星帶：年年入圍，年年差一點。
-  if (career.tier === 1) {
+  if (career.scoreTier === 1) {
     const n = cfg.near_miss;
     const percent = n.pct.min + rng.next() * (n.pct.max - n.pct.min);
     return {

@@ -520,6 +520,8 @@ export interface HallOfFameData {
       {
         readonly name: string;
         readonly wait_years: number;
+        /** 候選資格：在該聯盟一軍打過幾個球季。 */
+        readonly min_seasons: number;
         readonly total_voters: number;
         readonly league: string;
       }
