@@ -1619,6 +1619,8 @@ export interface Trait {
   readonly name: string | null;
   readonly dynamic_name?: boolean;
   readonly effect_text: string;
+  /** 點開狀態時顯示的文案：一句敘述接粗體的效果。資料檔寫死的 HTML。 */
+  readonly desc?: string;
   /** 同一支球隊的年數門檻（mrteam）。 */
   readonly threshold?: number;
   /** 各聯盟的球隊數門檻，超過才觸發（rainbow）。沒列到的聯盟不會觸發。 */
