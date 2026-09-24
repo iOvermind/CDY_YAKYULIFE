@@ -9,6 +9,7 @@ import {
   canRefuseDemotion,
   canRequestPosting,
   domesticFaOffers,
+  curateOffers,
   fallbackOffers,
   hasOverseasFreeAgency,
   landingLevel,
@@ -623,8 +624,8 @@ describe('自由球員的國內市場', () => {
  * 出來的人選得到墨聯與澳職。以前下限是目前的層級、最多四筆，那兩個永遠排不上。
  */
 describe('自由市場的跨體系報價', () => {
-  it('大聯盟出來的人，墨聯與澳職都在桌上', () => {
-    const offers = fallbackOffers(new World('fa-open'), {
+  const candidates = (seed: string) =>
+    fallbackOffers(new World(seed), {
       tier: 'none' as const,
       overall: 70,
       currentOrg: 'MLB',
@@ -634,9 +635,30 @@ describe('自由市場的跨體系報價', () => {
       approach: 'recruit',
       limit: Number.POSITIVE_INFINITY,
     });
-    const orgs = offers.map((o) => o.org);
+
+  it('自由市場的候選不設下限：墨聯與澳職都在候選裡', () => {
+    const orgs = candidates('fa-open').map((o) => o.org);
     expect(orgs).toContain('LMB');
     expect(orgs).toContain('ABL');
+  });
+
+  /**
+   * 擺上桌的最多四筆、每個聯盟一筆；錨點聯盟與最強的聯盟各保一格，其餘隨機——
+   * 墨聯與澳職因此抽得到，不再被強弱排序永遠擠掉。
+   */
+  it('挑出來的最多四筆、每聯盟一筆，錨點與最強的必在，墨聯與澳職抽得到', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      const pool = [...candidates(`fa-${i}`), { org: 'MLB', level: 'MLB' } as never];
+      const picked = curateOffers(new World(`pick-${i}`), pool, 'MLB', null);
+      const orgs = picked.map((o) => o.org);
+      expect(picked.length).toBeLessThanOrEqual(4);
+      expect(new Set(orgs).size).toBe(orgs.length);
+      expect(orgs).toContain('MLB');
+      for (const o of orgs) seen.add(o);
+    }
+    expect(seen).toContain('LMB');
+    expect(seen).toContain('ABL');
   });
 
   it('沒有跳出合約時照舊：設了下限就不會有更差的舞台', () => {

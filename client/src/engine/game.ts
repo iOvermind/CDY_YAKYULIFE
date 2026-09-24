@@ -214,6 +214,7 @@ import {
   overseasBidChance,
   canRefuseDemotion,
   domesticFaOffers,
+  curateOffers,
   fallbackOffers,
   importPremium,
   orgLabel,
@@ -658,10 +659,10 @@ export class Game {
   /** 上一次守位會議看到的野手耐力狀態。掉一階問一次要不要退守；同階與回升不問。 */
   #fielderTierSeen: EnduranceTier = 'full';
   /**
-   * 因為耐力自己退下來的守位。只要狀態沒有回升到退守那一階之上，教練團不會再把他
-   * 推回更吃重的位置——那是他自己選的，不是守備掉下來。
+   * 因為耐力自己退下來的守位。**同一支球隊**要等身體養回充沛，教練團才會再把他推回
+   * 更吃重的位置——那是他自己選的，不是守備掉下來。換了球隊就不算數。
    */
-  #enduranceCap: { readonly position: string; readonly tier: number } | null = null;
+  #enduranceCap: { readonly position: string; readonly team: string } | null = null;
   /** 大傷永久拿走的訓練骰顆數（issue #11）。職業期的基礎骰數扣掉它，最低 1 顆。 */
   #diceLost = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
@@ -2016,7 +2017,14 @@ export class Game {
     const tier = tierOf(pool);
     const worse = tierRank(tier) > tierRank(this.#fielderTierSeen);
     this.#fielderTierSeen = tier;
-    if (this.#enduranceCap !== null && tierRank(tier) < this.#enduranceCap.tier) this.#enduranceCap = null;
+    // 自己退下來的鎖：同一支球隊要等身體養回充沛才解；換了球隊（交易、轉隊、轉聯盟）
+    // 就解——新教練團沒有答應過你什麼。
+    if (
+      this.#enduranceCap !== null &&
+      (tier === 'full' || this.#enduranceCap.team !== this.#pro.team)
+    ) {
+      this.#enduranceCap = null;
+    }
     const target = worse ? this.#stepDownTarget(tier, current, player.startPosition) : null;
     if (target === null) {
       then();
@@ -2035,7 +2043,7 @@ export class Game {
       (choice) => {
         if (choice === 'endurance:move') {
           this.#setPosition(target);
-          this.#enduranceCap = { position: target, tier: tierRank(tier) };
+          this.#enduranceCap = { position: target, team: this.#pro?.team ?? '' };
           this.flow.card('info', '守位調整', `為了多打幾年，新球季改守 <b class="hl">${esc(name)}</b>。`);
         }
         then();
@@ -4265,7 +4273,8 @@ export class Game {
             tier: this.#handednessTier,
             table,
           });
-    const offers = [
+    // 每個聯盟一筆、最多四筆：現在的聯盟與最強的聯盟各保一格，其餘隨機（見 curateOffers）。
+    const offers = curateOffers(this.world, [
       ...domestic,
       ...overseasFaOffers(this.world, {
         ...this.#overseasContext,
@@ -4277,7 +4286,7 @@ export class Game {
         // 借用尋路的名單，但這條路是球團在挑人——外籍加成照收。見 ADR 0012。
         approach: 'recruit',
       }),
-    ];
+    ], levelOf(pro.level).org, this.#standards);
     if (offers.length === 0) {
       this.flow.card(
         'bad',

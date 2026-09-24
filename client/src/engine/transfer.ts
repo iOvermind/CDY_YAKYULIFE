@@ -525,34 +525,51 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
   const sorted = out.sort(
     (a, b) => leagueStandardOf(ctx.standards, b.level).par - leagueStandardOf(ctx.standards, a.level).par,
   );
-  return keepHomeOrg(sorted, ctx.limit ?? cfg.fallback.max_offers);
+  // 自由市場要的是整份名單——它會跟同聯盟的報價併在一起再挑（見 curateOffers）。
+  if (ctx.limit === Number.POSITIVE_INFINITY) return sorted;
+  return curateOffers(world, sorted, cfg.home_org.value, ctx.standards, ctx.limit ?? cfg.fallback.max_offers);
 }
 
 /**
- * 取前 n 筆，但**母國體系永遠佔得到一格**。
+ * 從一份報價名單裡挑出要擺上桌的那幾筆。
  *
- * 排序是依落地層級的 par 由高到低，母國因此是最容易被切掉的那一個——中職一軍
- * 的 par 44 低於墨聯 45、韓職 46、日職 47。扣掉現在所在的體系還有五個候選，
- * `max_offers` 4 剛好會把它擠出去。
+ * **每個聯盟最多一筆、總共最多 `limit` 筆**，而且有兩格是保留的：
  *
- * 但落葉歸根不是「第五好的選項」，它是那條**永遠在的**退路：能被下放的人理論
- * 上進得了中職，而「回台灣先發」對一段生涯的意義不是 par 排得出來的。同樣的
- * 道理已經寫在 `topLevelOnly` 上（不比水準高低，只問哪裡有一軍的位置），這裡
- * 是它的延伸——排序仍然用 par，但不讓 par 把家的門關上。
+ * - **錨點聯盟**一定有一格（有它的報價的話）。自由市場的錨點是現在所在的聯盟——
+ *   合約到期卻只剩海外球團打電話，那不叫自由球員；下放與釋出時錨點是母國（落葉
+ *   歸根是那條永遠在的退路，不是「第五好的選項」）。
+ * - **最強的那個聯盟**一定有一格：符合報價標準的最高舞台不能被抽籤抽掉。
  *
- * 母國沒有進到名單裡（能力不夠、被 `minPar` 濾掉、或人就在母國）時什麼都不做。
+ * 其餘的格子**隨機抽**，不再依強弱排——依強弱排的話，名單一長墨聯與澳職就永遠
+ * 排不上，從大聯盟出來的人一輩子選不到它們。錨點本身就是最強的那個時，剩下的
+ * 全部隨機。擺上桌的順序仍然由強到弱，讀起來比較好比。
  */
-function keepHomeOrg(
-  sorted: readonly TransferOffer[],
-  limit: number,
-): readonly TransferOffer[] {
-  const head = sorted.slice(0, limit);
-  if (limit <= 0) return head;
-  if (head.some((o) => o.org === cfg.home_org.value)) return head;
-  const home = sorted.find((o) => o.org === cfg.home_org.value);
-  if (home === undefined) return head;
-  // 擠掉 par 最低的那一個——它排在最後。
-  return [...head.slice(0, limit - 1), home];
+export function curateOffers<T extends { readonly org: string; readonly level: string }>(
+  world: World,
+  offers: readonly T[],
+  anchorOrg: string,
+  standards: LeagueStandards | null,
+  limit: number = cfg.fallback.max_offers,
+): readonly T[] {
+  const parOf = (o: T) => leagueStandardOf(standards, o.level).par;
+  // 每個聯盟只留一筆：同聯盟裡取最高的那一層（同一層就取先到的）。
+  const perOrg = new Map<string, T>();
+  for (const o of offers) {
+    const kept = perOrg.get(o.org);
+    if (kept === undefined || parOf(o) > parOf(kept)) perOrg.set(o.org, o);
+  }
+  const pool = [...perOrg.values()];
+  if (pool.length === 0 || limit <= 0) return [];
+
+  const picked: T[] = [];
+  const take = (o: T | undefined) => {
+    if (o !== undefined && !picked.includes(o) && picked.length < limit) picked.push(o);
+  };
+  take(perOrg.get(anchorOrg));
+  take([...pool].sort((a, b) => parOf(b) - parOf(a))[0]);
+  const rest = world.stream('career').shuffle(pool.filter((o) => !picked.includes(o)));
+  for (const o of rest) take(o);
+  return picked.sort((a, b) => parOf(b) - parOf(a));
 }
 
 /** 上下文：自由球員在**自己這個體系**裡的市場。 */
