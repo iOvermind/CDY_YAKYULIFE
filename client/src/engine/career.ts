@@ -362,11 +362,14 @@ export function evaluateMilestones(
     // 與成就櫃共用 `ladderTop()`：同一個級距、同一座階梯，門檻與分數都不封頂。
     // **分數的底數不同**：AP 走 `points`，評價分走 `score_points`（省略時沿用
     // `points`）——投手的級距比較粗，而評價分是階數的平方（見 achievements.json）。
-    const { top: highest, points: pts } = ladderTop(
+    const firstRung = cfgRungs.first_rung[scope];
+    const { top: highest } = ladderTop(spec.step, 0, firstRung, value);
+    // 投手的評價分晚幾階才起算（`score_rung_offset`）。**只動分數，不動列出來的
+    // 里程碑**：930 局照樣列「500 局」，只是那一階不加評價分。AP 也不受影響。
+    const { points: pts } = ladderTop(
       spec.step,
       spec.score_points ?? spec.points,
-      // 投手的評價分晚幾階才起算（`score_rung_offset`），AP 不受影響。
-      cfgRungs.first_rung[scope] + (spec.score_rung_offset ?? 0),
+      firstRung + (spec.score_rung_offset ?? 0),
       value,
     );
     points += pts;

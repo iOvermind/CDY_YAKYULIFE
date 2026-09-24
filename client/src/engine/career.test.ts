@@ -176,11 +176,15 @@ describe('里程碑', () => {
     expect(r.reached.some((s) => s.includes('安打'))).toBe(false);
   });
 
-  /** 投手的評價分晚三階起算：一般輪值順手摸到的 150 勝、1500 局不算歷史閥值。 */
-  it('投手的里程碑從 200 勝、2000K、2000 局起算', () => {
+  /**
+   * 投手的評價分晚三階起算：一般輪值順手摸到的 150 勝、1500 局不加分。
+   * 但里程碑照樣列出來——930 局的人看得到「500 局」。
+   */
+  it('投手的評價分從 200 勝、2000K、2000 局起算，里程碑照舊從第一階列', () => {
     const mid = evaluateMilestones('league', null, pitch({ wins: 199, so: 1999, outs: 1999 * 3, saves: 199, holds: 199 }));
     expect(mid.points).toBe(0);
-    expect(mid.reached).toEqual([]);
+    expect(mid.reached).toContain('150 勝投');
+    expect(evaluateMilestones('league', null, pitch({ outs: 930 * 3 })).reached).toContain('500 投球局數');
     const two = evaluateMilestones('league', null, pitch({ wins: 200 }));
     expect(two.points).toBeGreaterThan(0);
     expect(two.reached).toContain('200 勝投');
