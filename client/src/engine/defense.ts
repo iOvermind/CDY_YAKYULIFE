@@ -138,15 +138,21 @@ export function canPlay(
   return defenseMark(defenseScore(ability, position), line) >= positions.defense_score.demotion_line;
 }
 
-/** 這個守位屬於哪一條移防光譜。捕手自成一路。 */
-function scanListFor(position: string): readonly string[] {
+/**
+ * 這名球員走哪一條移防光譜——看**起始守位**，不看現在站哪裡（issue #24）。
+ *
+ * 一壘同時在內野與外野兩條光譜的尾端，只看「現在站哪裡」決定不了他該走哪一條：
+ * 中外野手被移到一壘之後會被當成內野手，再也回不去外野。所以光譜跟著他的出身：
+ * 外野手是外野 → 一壘 → DH、內野手是內野 → 一壘 → DH、捕手是捕手 → 一壘 → DH
+ * （捕手本身另外處理，見 `assignPosition`）。守位不定（UTIL）與投手出身的人兩條都走，
+ * 依守備責任由重到輕排——「守位不定」的特色就是哪裡都能去。
+ */
+export function spectrumOf(startPosition: string): readonly string[] {
   const order = positions.scan_order;
-  if (order.IF.includes(position)) return order.IF;
-  if (order.OF.includes(position)) return order.OF;
-  // 捕手守不動時往內野走——蹲不了就去守一壘，這是最常見的去處。
-  if (position === 'C') return order.IF;
-  // 指定打擊要回到場上，兩條光譜都掃：他當初是從哪一邊來的已經不重要了。
-  return [...order.IF, ...order.OF];
+  if (startPosition === 'C') return ['1B'];
+  if (order.OF.includes(startPosition) && startPosition !== '1B') return order.OF;
+  if (order.IF.includes(startPosition)) return order.IF;
+  return [...new Set([...order.IF, ...order.OF])].sort((a, b) => rankOf(a) - rankOf(b));
 }
 
 /**
@@ -213,7 +219,7 @@ export function assignPosition(options: {
 
   // 守不了的位置直接不進掃描，而不是掃到了再擋——擋在後面的話「守備追上來了」
   // 那條訊息會先組出來，玩家會收到一張把他改守游擊的卡片。
-  const list = scanListFor(current ?? options.startPosition).filter(
+  const list = spectrumOf(options.startPosition).filter(
     (p) => !blockedByHand(options.throws, p),
   );
   let picked: string | null = null;

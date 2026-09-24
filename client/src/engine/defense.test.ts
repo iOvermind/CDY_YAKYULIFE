@@ -9,6 +9,7 @@ import {
   positionAverage,
   positionLabel,
   judgingAverage,
+  spectrumOf,
   DH,
 } from './defense.ts';
 import { advanceStandards, initStandards, leagueStandardOf } from './league.ts';
@@ -441,5 +442,36 @@ describe('positionLabel', () => {
   it('說得出中文名', () => {
     expect(positionLabel('SS')).toBe('游擊手');
     expect(positionLabel(DH)).toBe('指定打擊');
+  });
+});
+
+/**
+ * 移防光譜跟著起始守位走（issue #24）。一壘在內野與外野兩條光譜的尾端，以前只看
+ * 「現在站哪裡」，中外野手被移到一壘之後就被當成內野手，再也回不去外野。
+ */
+describe('spectrumOf', () => {
+  it('外野出身走外野、內野出身走內野、捕手只剩一壘', () => {
+    expect(spectrumOf('CF')).toEqual(positions.scan_order.OF);
+    expect(spectrumOf('SS')).toEqual(positions.scan_order.IF);
+    expect(spectrumOf('1B')).toEqual(positions.scan_order.IF);
+    expect(spectrumOf('C')).toEqual(['1B']);
+  });
+
+  it('守位不定兩條都走，依守備責任由重到輕', () => {
+    const both = spectrumOf('UTIL');
+    for (const p of [...positions.scan_order.IF, ...positions.scan_order.OF]) expect(both).toContain(p);
+    expect(both[both.length - 1]).toBe('1B');
+  });
+
+  it('中外野手被移到一壘之後，守備練回來升的是外野', () => {
+    const r = assignPosition({
+      level: 'CPBL1',
+      age: 28,
+      ability: glove(80, 80, 80),
+      current: '1B',
+      startPosition: 'CF',
+    });
+    expect(positions.scan_order.OF).toContain(r.position);
+    expect(['SS', '2B', '3B']).not.toContain(r.position);
   });
 });
