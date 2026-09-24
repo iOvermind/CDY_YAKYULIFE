@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# 清空資料庫並重建結構。
+# 清掉遊戲進度並重建結構，**保留帳號**。
 #
 #     ./reset-db.sh          問過一次才動手
 #     ./reset-db.sh -y       不問（給腳本或自動化用）
 #
-# **這會清掉這台服務上所有人的帳號、成就、AP 與生涯紀錄，不可復原。** 動手之前
-# 會先把現有的筆數印出來，讓你確認自己清的是哪一台。
+# **這會清掉這台服務上所有人的成就、AP、天賦、生涯紀錄與天梯，不可復原。帳號保留**
+# ——玩家照原本的帳號密碼登入，從零開始。動手之前會先把現有的筆數印出來，讓你確認
+# 自己清的是哪一台。
 #
 # 清庫不是部署腳本的子指令，所以它自己一個檔案：`./deploy.sh` 只建 image，容器
 # 的起停交給管理介面，而這個是「把資料倒掉」——三件事互不相干，混在一個入口裡
@@ -52,13 +53,14 @@ if ! psql -c "select
     (select count(*) from users)        as 帳號,
     (select count(*) from careers)      as 生涯,
     (select count(*) from achievements) as 成就,
-    (select count(*) from talents)      as 天賦;" 2>/dev/null; then
+    (select count(*) from talents)      as 天賦,
+    (select count(*) from ladder_rows)  as 天梯;" 2>/dev/null; then
   warn '（讀不到那幾張表，可能還沒建立過或已經清空——照樣可以往下跑。）'
 fi
 
 # ── 問一次 ────────────────────────────────────────────────
 if [ "$ASSUME_YES" != true ]; then
-  warn '這會清掉上面所有的帳號、成就、AP 與生涯紀錄，無法復原。'
+  warn '這會清掉所有人的成就、AP、天賦、生涯紀錄與天梯，無法復原。帳號會保留。'
   # 讀不到輸入（管線、cron、CI）要講清楚是怎麼回事。不講的話它只會安靜地結束，
   # 而「沒有清成功」與「清完了」在畫面上會長得一模一樣。
   if ! read -r -p '確定要清掉嗎？輸入 yes 繼續：' answer; then
@@ -70,7 +72,7 @@ fi
 # ── 清 ────────────────────────────────────────────────────
 # 兩步都要：reset.sql 只 DROP，不建。少了第二步，服務要等下一次重啟跑
 # schema.sql 才活得過來——而那中間任何一個請求都會踩到不存在的表。
-say '清空資料表……'
+say '清空成就、天賦、生涯與天梯（保留帳號）……'
 psqlf < server/reset.sql > /dev/null
 say '重建結構……'
 psqlf < server/schema.sql > /dev/null
@@ -80,4 +82,5 @@ psql -c "select
     (select count(*) from users)        as 帳號,
     (select count(*) from careers)      as 生涯,
     (select count(*) from achievements) as 成就,
-    (select count(*) from talents)      as 天賦;"
+    (select count(*) from talents)      as 天賦,
+    (select count(*) from ladder_rows)  as 天梯;"
