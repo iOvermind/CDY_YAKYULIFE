@@ -1321,6 +1321,8 @@ export interface SeasonData {
       readonly jitter: number;
       /** 體力係數的彎度。局數的錨點定在體力 80。 */
       readonly exponent: number;
+      /** 局數吃的「體力」的加權：體力加上四個球系，淨和是 1。 */
+      readonly weights: Readonly<Record<string, number>>;
     };
     /**
      * 勝敗、救援與中繼。**全部由成績推導，沒有一格直接看能力。**
@@ -1392,7 +1394,8 @@ export interface SeasonData {
         readonly floor_anchor: number;
         readonly range_anchor: number;
         readonly per: number;
-        readonly ability: string;
+        /** 「控球」的加權：控球加上會多丟壞球的球系（負權重），除以淨和。 */
+        readonly weights: Readonly<Record<string, number>>;
         readonly reference: number;
         readonly span: number;
         /** 控球缺口的彎度。小於 1 是凹的——缺口才剛出現就已經看得到保送。 */

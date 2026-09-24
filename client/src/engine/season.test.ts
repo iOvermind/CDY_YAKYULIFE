@@ -1282,3 +1282,38 @@ describe('捕手的速度', () => {
     expect(per(totals('1B', 8), 'sb')).toBeLessThan(per(totals('1B', 0), 'sb'));
   });
 });
+
+/**
+ * 球系寫進局數、三振、保送（issue #10）。每一條只動一個球系，其他能力不動。
+ */
+describe('球系影響局數、三振與保送', () => {
+  const sum = (ability: Abilities) => {
+    let outs = 0, so = 0, bb = 0;
+    for (let i = 0; i < 200; i++) {
+      const l = proPitchingLine(new World(`fam-${i}`), ability, 'MLB', 65, null, {
+        teamWinRate: 0.5,
+        usage: { role: 'SP' },
+      });
+      outs += l.outs; so += l.so; bb += l.bb;
+    }
+    return { outs, so9: (so * 27) / outs, bb9: (bb * 27) / outs };
+  };
+  const base = with_(25, { sta: 65, vel: 65, ctl: 65, swp: 50, drp: 50, chg: 50, gim: 50 });
+
+  it('變速與縱向吃得下更多局，橫向與特殊吃得少', () => {
+    const soft = sum({ ...base, chg: 75, drp: 75 });
+    const sharp = sum({ ...base, swp: 75, gim: 75 });
+    expect(soft.outs).toBeGreaterThan(sum(base).outs);
+    expect(sharp.outs).toBeLessThan(sum(base).outs);
+  });
+
+  it('縱向與特殊讓人打不好，不是讓人揮空：三振變少', () => {
+    expect(sum({ ...base, drp: 75 }).so9).toBeLessThan(sum(base).so9);
+    expect(sum({ ...base, gim: 75 }).so9).toBeLessThan(sum(base).so9);
+  });
+
+  it('橫向與特殊常丟在好球帶外面：保送變多', () => {
+    expect(sum({ ...base, swp: 75 }).bb9).toBeGreaterThan(sum(base).bb9);
+    expect(sum({ ...base, gim: 75 }).bb9).toBeGreaterThan(sum(base).bb9);
+  });
+});

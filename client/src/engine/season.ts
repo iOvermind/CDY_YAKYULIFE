@@ -815,6 +815,22 @@ function pitcherRatio(value: number, par: number, floor = 0): number {
   return Math.min(p.ratio_cap, Math.max(floor, adj / p.ability_divisor));
 }
 
+/**
+ * 加權平均的能力：`Σ 權重 × 能力 ÷ Σ 權重`。
+ *
+ * 除以淨和，所以**所有能力一樣時就是那個值本身**——球系寫進局數與保送（issue #10）
+ * 之後，四系一樣強的投手結果不變，聯盟基準與 ERA+ 分母都不必重校。
+ */
+function weightedAbility(ability: Abilities, weights: Readonly<Record<string, number>>): number {
+  let sum = 0;
+  let net = 0;
+  for (const [key, w] of Object.entries(weights)) {
+    sum += (ability[key] ?? 0) * w;
+    net += w;
+  }
+  return net === 0 ? 0 : sum / net;
+}
+
 /** 被打出來的一組事件。自責分由它推導，勝敗再由自責分推導。 */
 interface AllowedEvents {
   readonly hits: number;
@@ -881,7 +897,8 @@ function allowedEvents(
     nonHr - triple,
   );
 
-  const ctlAdj = (ability['ctl'] ?? 0) - (par - p.reference_par);
+  // 「控球」是加權平均：橫向與特殊是負權重，那兩系的球本來就常丟在好球帶外面。
+  const ctlAdj = weightedAbility(ability, rec.bb.weights) - (par - p.reference_par);
   // **次方小於 1，曲線是凹的。** 控球的缺口才剛出現就已經看得到保送，往後每差一
   // 分只再多一點——現實裡的保送率就是這個形狀，中間水準的投手離「幾乎不保送」比
   // 線性式子想像的遠得多。兩端釘死：缺口 0 仍然是地板，缺口滿檔仍然是上限。
@@ -1084,8 +1101,10 @@ export function proPitchingLine(
   // **體力係數也吃一個次方。** 局數的錨點（先發 260 局）定在「體力 80」上，而那條
   // 線一搬，par 水準的投手就會少投 6% ——那不是這次要改的東西。次方把 par 那一點
   // 接回原值，兩端仍然釘死：體力 80 是 1.0，底下是 stamina.floor。
+  //
+  // 「體力」是加權平均：變速與縱向讓他吃得下更多局，橫向與特殊反過來。
   const staminaRatio = Math.pow(
-    pitcherRatio(ability['sta'] ?? 0, par, stamina.floor),
+    pitcherRatio(weightedAbility(ability, p.innings.weights), par, stamina.floor),
     p.innings.exponent ?? 1,
   );
   const ipRaw =
