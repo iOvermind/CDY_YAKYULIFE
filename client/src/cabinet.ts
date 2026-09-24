@@ -63,6 +63,7 @@ const CATEGORY_ORDER: readonly string[] = [
   cfg.categories.tier.name,
   cfg.categories.hall.name,
   cfg.categories.marriage.name,
+  cfg.categories.second_life.name,
   cfg.first_career_bonus.name,
 ];
 

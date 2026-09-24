@@ -1296,8 +1296,10 @@ describe('引退與結算', () => {
       if (!rejected) continue;
       const t = titles(game);
       expect(t).toContain('球員生涯結束');
-      // 二十歲出頭離開棒球，一定走得到第二人生
-      expect(t).toContain('第二人生');
+      // 二十歲出頭離開棒球，一定走得到第二人生，走上的那條路就是一項成就（issue #39）
+      const story = t.find((x) => x.startsWith('第二人生：'))?.slice('第二人生：'.length);
+      expect(story).toBeDefined();
+      expect(game.score()?.achievements.newly.map((a) => a.id)).toContain(`second_life:${story}`);
       expect(game.summary?.leagues).toEqual([]);
       return;
     }

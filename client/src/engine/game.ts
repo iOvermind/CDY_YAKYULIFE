@@ -635,6 +635,8 @@ export class Game {
   #seasonShares: SeasonRecord['shares'] | null = null;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
+  /** 走上的第二人生（故事的 title），成就看它。沒走到是 null。 */
+  #secondLifeTitle: string | null = null;
   /**
    * 這一季的傷勢種類，寫進當年的 SeasonRecord。
    *
@@ -948,6 +950,7 @@ export class Game {
         halls: this.#ballots.filter((b) => b.inducted).map((b) => b.leagueName),
         firstCareer: progress.firstCareer,
         spouses: this.#love.spouses,
+        secondLife: this.#secondLifeTitle,
         unlocked: progress.unlocked,
       }),
       // 跨聯盟跨守位那一列的薪水是生涯淨收入——扣掉離婚分走的與旅外安家費。
@@ -5242,9 +5245,12 @@ export class Game {
     this.#retireScene(summary);
     this.#hallOfFame(ballots);
     this.#settlementTraits(summary, ballots);
+    // 第二人生走哪條路要在成就之前抽好——那條路本身就是一項成就（issue #39）。
+    // 故事卡照舊排在最後，那是這段生涯的收尾。
+    const secondLife = this.#pickSecondLife();
     this.#achievementCard();
     this.#fanBoard(summary);
-    this.#secondLife();
+    this.#secondLife(secondLife);
 
     // 收尾的三塊：狀態、生涯年表、榮譽榜。引退之後右欄那塊面板整個消失——這三者
     // 是這段生涯的結論，結論屬於敘事的結尾，不是常駐的儀表板；而且「最近一季」
@@ -5633,18 +5639,24 @@ export class Game {
     );
   }
 
-  /** 太早離開棒球的人，走向棒球之外的第二人生。 */
-  #secondLife(): void {
-    if (this.#age >= seasonCfg.retirement.second_life_max_age) return;
+  /** 太早離開棒球的人走上哪一條路。沒走到第二人生是 null。 */
+  #pickSecondLife(): (typeof flavor.second_life.stories)[number] | null {
+    if (this.#age >= seasonCfg.retirement.second_life_max_age) return null;
     const stories = flavor.second_life.stories;
-    if (stories.length === 0) return;
+    if (stories.length === 0) return null;
+    const story = stories[this.world.stream('career').int(0, stories.length - 1)] ?? null;
+    this.#secondLifeTitle = story?.title ?? null;
+    return story;
+  }
 
+  /** 太早離開棒球的人，走向棒球之外的第二人生。 */
+  #secondLife(story: (typeof flavor.second_life.stories)[number] | null): void {
+    if (story === null) return;
     const name = this.#player?.name ?? '';
-    const story = stories[this.world.stream('career').int(0, stories.length - 1)] ?? '';
     this.flow.card(
       'gold',
-      '第二人生',
-      `${esc(story.replace(/\{n\}/g, name))}<br><br>` +
+      `第二人生：${story.title}`,
+      `${esc(story.text.replace(/\{n\}/g, name))}<br><br>` +
         `<span class="sub">${esc(flavor.second_life.closing.replace(/\{n\}/g, name))}</span>`,
     );
   }

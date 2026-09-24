@@ -428,6 +428,8 @@ export interface AchievementsData {
     readonly hall: { readonly name: string; readonly default: number };
     /** 姻緣。與不同對象結婚各算一項，一律同價。 */
     readonly marriage: { readonly name: string; readonly default: number };
+    /** 第二人生。25 歲前離開棒球，走上哪一條路就是哪一格。 */
+    readonly second_life: { readonly name: string; readonly default: number };
     readonly cumulative: {
       readonly name: string;
       /** 各範圍從第幾階起算。生涯的第一階就是聯盟的第二階，級距不變。 */
@@ -500,7 +502,11 @@ export interface FlavorData {
   readonly retire_scenes: Readonly<
     Record<string, string | Readonly<Record<string, string | Readonly<Record<string, string>>>>>
   >;
-  readonly second_life: { readonly closing: string; readonly stories: readonly string[] };
+  readonly second_life: {
+    readonly closing: string;
+    /** `title` 同時是成就名（issue #39）。 */
+    readonly stories: readonly { readonly title: string; readonly text: string }[];
+  };
 }
 
 export interface HallOfFameData {

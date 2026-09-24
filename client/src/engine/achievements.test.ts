@@ -70,6 +70,7 @@ const ctx = (over: Partial<AchievementContext> = {}): AchievementContext => ({
   halls: [],
   firstCareer: false,
   spouses: [],
+  secondLife: null,
   unlocked: new Set<string>(),
   ...over,
 });
@@ -424,5 +425,28 @@ describe('第 N 段人生', () => {
       expect(r.points).toBe(LIFE);
       unlocked = new Set([...unlocked, ...r.newly.map((a) => a.id)]);
     }
+  });
+});
+
+/** 第二人生：走上哪一條路就是哪一格，每格 3 AP（issue #39）。 */
+describe('第二人生', () => {
+  it('走上的那條路是一項成就', () => {
+    const got = evaluateAchievements(ctx({ secondLife: '滿壘早餐店' }));
+    const row = got.list.find((a) => a.id === 'second_life:滿壘早餐店');
+    expect(row?.name).toBe('滿壘早餐店');
+    expect(row?.category).toBe('第二人生');
+    expect(row?.points).toBe(3);
+    expect(got.newly).toContainEqual(row);
+  });
+
+  it('同一條路走第二次不再給點', () => {
+    const got = evaluateAchievements(
+      ctx({ secondLife: '打火英雄', unlocked: new Set(['second_life:打火英雄']) }),
+    );
+    expect(got.newly.some((a) => a.id === 'second_life:打火英雄')).toBe(false);
+  });
+
+  it('沒走到第二人生就沒有這一格', () => {
+    expect(evaluateAchievements(ctx()).list.some((a) => a.id.startsWith('second_life:'))).toBe(false);
   });
 });

@@ -88,6 +88,8 @@ export interface AchievementContext {
    * 一項，娶到不同的人才會長出新的一格。
    */
   readonly spouses: readonly string[];
+  /** 這一段走上的第二人生（故事的 title）。沒走到第二人生是 null。 */
+  readonly secondLife: string | null;
   /**
    * 已經領過 AP 的成就 id。
    *
@@ -469,6 +471,16 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
       category: c.marriage.name,
       name: spouse,
       points: c.marriage.default,
+    });
+  }
+
+  // ---- 第二人生。一條路一格，id 掛故事名，跨局自動去重。
+  if (ctx.secondLife !== null) {
+    list.push({
+      id: `second_life:${ctx.secondLife}`,
+      category: c.second_life.name,
+      name: ctx.secondLife,
+      points: c.second_life.default,
     });
   }
 
