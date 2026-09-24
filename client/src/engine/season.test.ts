@@ -995,10 +995,23 @@ describe('投手的勝敗由成績與球隊推導', () => {
     expect(bad.unbeaten).toBe(0);
   });
 
-  it('聯盟平均的投手在五成隊接近勝敗各半', () => {
+  /**
+   * 靶心是 45%，不是五成（issue #7）：ERA+ 100 上下的先發以前在實戰裡勝率六成多
+   * ——球隊勝率被玩家自己的貢獻推高，平均水準的投手不該再順手吃到好看的勝敗。
+   * 決定率同時釘在現實的 .70，所以是「少贏一點、多輸一點」，不是只多輸。
+   */
+  it('聯盟平均的投手在五成隊，勝率約 45%、決定率約 .70', () => {
     const par = leagues.levels['MLB']!.par;
-    const even = totals(par, 0.5, 'even');
-    expect(Math.abs(even.w - even.l)).toBeLessThan(3);
+    let w = 0, l = 0, gs = 0;
+    for (let i = 0; i < 400; i++) {
+      const p = line(`wl-even-${i}`, par, 0.5);
+      if (p.starts < 20) continue;
+      w += p.wins; l += p.losses; gs += p.starts;
+    }
+    expect(w / (w + l)).toBeGreaterThan(0.42);
+    expect(w / (w + l)).toBeLessThan(0.48);
+    expect((w + l) / gs).toBeGreaterThan(0.66);
+    expect((w + l) / gs).toBeLessThan(0.74);
   });
 
   it('勝敗加起來不會超過出賽數', () => {
