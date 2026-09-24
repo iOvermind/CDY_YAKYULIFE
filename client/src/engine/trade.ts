@@ -118,6 +118,9 @@ export function splitBatting(line: BattingLine, ratio: number): readonly [Battin
   return [build(first), build(second)];
 }
 
+/** 一次出賽最多換到的決定。搬移時從後面往前搬——中繼最不像「那一場的主角」。 */
+const DECISIONS = ['holds', 'saves', 'losses', 'wins'] as const;
+
 /** 投球成績的切分。出局數是整數的原子單位，切起來精確。 */
 export function splitPitching(
   line: ProPitchingLine,
@@ -152,6 +155,24 @@ export function splitPitching(
     first[key] = c[0];
     second[key] = c[1];
   }
+
+  // **各欄分開四捨五入會讓一段的決定數超過那一段的出賽**：九場拆成 5／4，救援
+  // 九次也拆成 5／4、中繼一次拆成 1／0，前半段就是 G5 5SV 1HLD。整季本來就守得住
+  // 「先發 ≤ 出賽」「勝敗救援中繼 ≤ 出賽」，所以哪一段超出，就把超出的量搬到另一段
+  // ——總數不變，另一段也不可能因此超出。
+  const settle = (from: Record<string, number>, to: Record<string, number>): void => {
+    const move = (key: string, n: number): number => {
+      const k = Math.min(n, from[key] ?? 0);
+      from[key] = (from[key] ?? 0) - k;
+      to[key] = (to[key] ?? 0) + k;
+      return n - k;
+    };
+    move('starts', Math.max(0, (from['starts'] ?? 0) - (from['games'] ?? 0)));
+    let over = DECISIONS.reduce((n, k) => n + (from[k] ?? 0), 0) - (from['games'] ?? 0);
+    for (const key of DECISIONS) if (over > 0) over = move(key, over);
+  };
+  settle(first, second);
+  settle(second, first);
 
   const build = (c: Record<string, number>): ProPitchingLine => ({
     role: line.role,

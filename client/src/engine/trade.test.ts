@@ -164,6 +164,26 @@ describe('成績的切分', () => {
     }
   });
 
+  /**
+   * 各欄分開四捨五入的時候，一段的決定數曾經超過那一段的出賽：九場拆成 5／4、
+   * 救援九次拆成 5／4、中繼一次拆成 1／0，前半段就是 G5 5SV 1HLD。
+   */
+  it('拆開之後每一段的決定數都不超過出賽、先發也不超過出賽', () => {
+    const closer = { ...pitching, games: 9, starts: 0, wins: 0, losses: 0, saves: 8, holds: 1 };
+    for (const r of [0.05, 0.3, 0.45, 0.55, 0.7, 0.95]) {
+      for (const part of splitPitching(closer, r)) {
+        expect(part.wins + part.losses + part.saves + part.holds).toBeLessThanOrEqual(part.games);
+      }
+    }
+    const starter = { ...pitching, games: 7, starts: 7, wins: 3, losses: 3, saves: 0, holds: 0 };
+    for (const r of [0.05, 0.3, 0.45, 0.55, 0.7, 0.95]) {
+      for (const part of splitPitching(starter, r)) {
+        expect(part.starts).toBeLessThanOrEqual(part.games);
+        expect(part.wins + part.losses).toBeLessThanOrEqual(part.games);
+      }
+    }
+  });
+
   it('率用自己那一段的分母重算，不沿用全季', () => {
     const [a, b] = splitBatting(batting, 0.5);
     expect(a.avg).toBeCloseTo(a.hits / a.ab, 10);
