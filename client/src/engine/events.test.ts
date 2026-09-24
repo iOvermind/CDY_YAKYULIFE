@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_ABILITIES, PITCH_FAMILIES } from '../data/index.ts';
+import { ALL_ABILITIES, events, PITCH_FAMILIES } from '../data/index.ts';
 import {
   drawEvent,
   eventPool,
@@ -358,6 +358,30 @@ describe('事件卡只動得了這位球員練得到的能力（ADR 0022）', ()
     expect(eventPool(ctx({ side: 'pitcher', professional: true })).map((e) => e.id)).toContain(
       'event_45',
     );
+  });
+
+  /**
+   * issue #16：整面都被裁光的結果以前印了卡卻什麼都沒發生。現在同樣的點數與正負
+   * 落在他自己那一側的隨機一項。
+   */
+  it('整面被裁光的結果轉成自己那一側的隨機能力', () => {
+    for (let i = 0; i < 40; i++) {
+      // event_45 雷射近視手術：兩面都只動選球——純投手一項都練不到。
+      const r = resolveFor(`p${i}`, 'event_45', 'normal', { side: 'pitcher', abilities: PITCHER }, PITCHER, PITCH_FAMILIES);
+      expect(r.deltas.length).toBeGreaterThan(0);
+      for (const d of r.deltas) expect(PITCHER).toContain(d.key);
+      for (const d of r.deltas) expect(Math.sign(d.points)).toBe(r.good ? 1 : -1);
+    }
+  });
+
+  it('資料裡沒有沒實作的效果鍵', () => {
+    const known = new Set([...ALL_ABILITIES, 'inj', 'rand', 'pitch', 'suspension', 'income', 'ban', 'yips', 'tj_countdown', 'clutch']);
+    const cards = (events as unknown as { events: readonly { id: string; good_effects?: object; bad_effects?: object }[] }).events;
+    for (const e of cards) {
+      for (const fx of [e.good_effects, e.bad_effects]) {
+        for (const key of Object.keys(fx ?? {})) expect(known, `${e.id} 的 ${key}`).toContain(key);
+      }
+    }
   });
 
   it('兩側都在的人（UTIL／二刀流）兩邊的牌都抽得到', () => {

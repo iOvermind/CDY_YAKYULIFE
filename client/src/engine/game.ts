@@ -604,6 +604,10 @@ export class Game {
   #catcherSeasons = 0;
   /** 生涯大傷次數。帕瓦諾的解鎖條件與合約年限都看它。 */
   #majorInjuries = 0;
+  /** 這一季被禁賽的場數（事件卡）。在球季開打時從出賽係數裡扣掉，用完歸零。 */
+  #suspendedGames = 0;
+  /** 被聯盟永久逐出（事件卡「組頭接觸」）。生涯當場結束、不進名人堂票選。 */
+  #banned = false;
   /** 大傷永久拿走的訓練骰顆數（issue #11）。職業期的基礎骰數扣掉它，最低 1 顆。 */
   #diceLost = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
@@ -1287,6 +1291,8 @@ export class Game {
       },
       (choice) => {
         this.#resolveEventCard(event, choice.slice('event:'.length) as EventMode);
+        // 被逐出棒球界的人沒有下一張卡了——生涯已經在上一行結束。
+        if (this.#banned) return;
         this.#drawEventCard(remaining - 1);
       },
     );
@@ -1337,9 +1343,40 @@ export class Game {
       lines.push(`本季受傷機率 <span class="dn">+${pct(outcome.injury)}%</span>`);
     }
 
-    // 非能力的特殊效果目前只實作觸發特性；禁賽、聲望等要等對應系統做出來。
+    // 非能力的特殊效果（issue #16：以前禁賽、聲望、逐出都印了卡卻什麼也沒發生）。
     for (const key of Object.keys(outcome.special).sort()) {
-      if (key === 'yips' || key === 'clutch') this.#traits.add(key);
+      const value = outcome.special[key];
+      if (key === 'yips' || key === 'clutch') {
+        if (this.#traits.has(key)) continue;
+        this.#traits.add(key);
+        const name = traitName(key);
+        lines.push(`取得特性<b class="${key === 'yips' ? 'dn' : 'hl'}">〈${esc(name)}〉</b>`);
+      } else if (key === 'income' && typeof value === 'number' && this.#pro !== null) {
+        // 代言與罰款：當季年薪的百分比。養成期沒有年薪，這一格落空，交給下面的保底。
+        const amount = Math.round((this.#seasonSalary * value) / 100);
+        if (amount === 0) continue;
+        this.#earnings += amount;
+        lines.push(
+          amount > 0
+            ? `代言收入 <span class="up">+${fmtMoney(amount)}</span>`
+            : `聯盟罰款 <span class="dn">−${fmtMoney(-amount)}</span>`,
+        );
+      } else if (key === 'suspension' && typeof value === 'number' && this.#pro !== null) {
+        this.#suspendedGames += value;
+        lines.push(`禁賽 <span class="dn">${value} 場</span>`);
+      } else if (key === 'ban' && value === true && this.#pro !== null) {
+        this.#banned = true;
+      }
+    }
+
+    // **不留沒有作用的卡**：上面全部落空的話（養成期沒有年薪可罰、大心臟早就有了），
+    // 照結果的好壞給在用那一側隨機一項 ±1。
+    if (!this.#banned && lines.length === 0) {
+      const key = this.#randomVisibleAbility();
+      const before = this.#ability[key] ?? 0;
+      if (outcome.good) this.#applyPoints(key, 1, { silent: true });
+      else this.#applyPenalty(key, 1);
+      lines.push(`${esc(abilities.abilities[key] ?? key)} ${this.#deltaNote(key, outcome.good ? 1 : -1, before)}`);
     }
 
     const tag = mode === 'safe' ? '（保守應對）' : mode === 'bold' ? '（全力一搏）' : '';
@@ -1354,6 +1391,13 @@ export class Game {
       `事件卡｜${event.name}${tag}`,
       `${esc(outcome.text)}。${verdict}<br>${lines.join('｜') || '（沒有明顯的變化）'}`,
     );
+
+    // 永久逐出：這一年剩下的步驟（健康、球季、國家隊）全部不再發生，名人堂也不必
+    // 票選——被逐出的人沒有資格。
+    if (this.#banned) {
+      this.flow.abort();
+      this.#retire(`${this.#year} 年被聯盟永久逐出棒球界`);
+    }
   }
 
   /** 季初的自主訓練：擲骰，逐顆分配。 */
@@ -2099,6 +2143,9 @@ export class Game {
     // 三個階段共用的登錄守位（ADR 0037）。出賽勞損與守備分吃的都是這個位置——
     // 它只在守位會議上改變，因此勞損不會因為守位每年重算而漂移。
     const position = this.#fieldPosition ?? DH;
+    // 禁賽 N 場：這一季的出賽量少掉那一截。用完歸零——禁賽不會跟到明年。
+    const suspension = Math.max(0, 1 - this.#suspendedGames / levelOf(pro.level).games);
+    this.#suspendedGames = 0;
     const line = playSeason(this.world, {
       level: pro.level,
       // 當季暫時能力：感情等非成長性的獎勵只抬高這一季（ADR 0006）。打擊、投球
@@ -2115,8 +2162,8 @@ export class Game {
       pitcherRole: this.#pitcherRole,
       // 輪值線掛在球隊戰力上——在爛隊當先發、去強隊只能進牛棚。
       teamWinRate: this.#league?.get(pro.team)?.winRate ?? null,
-      // 傷病的結果。乘的是出賽量，不是事後把數據打折。
-      seasonFactor: this.#seasonFactor,
+      // 傷病與禁賽的結果。乘的是出賽量，不是事後把數據打折。
+      seasonFactor: this.#seasonFactor * suspension,
       catcherSeasons: this.#catcherSeasons,
     });
 
@@ -4782,7 +4829,8 @@ export class Game {
 
     // **票選只跑一次，結果存下來。** 它會消耗抽取，跑第二次得到的得票年與得票率
     // 就不是玩家看到的那一份了；而結算（score()）也要知道誰進了名人堂。
-    this.#ballots = summary.leagues.length > 0 ? runBallots(this.world, summary.leagues) : [];
+    this.#ballots =
+      summary.leagues.length > 0 && !this.#banned ? runBallots(this.world, summary.leagues) : [];
     const ballots = this.#ballots;
     this.#retireScene(summary);
     this.#hallOfFame(ballots);

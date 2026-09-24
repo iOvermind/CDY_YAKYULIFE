@@ -235,7 +235,7 @@ const SPECIAL_KEYS = new Set([
   'rand',
   'pitch',
   'suspension',
-  'respect',
+  'income',
   'ban',
   'yips',
   'tj_countdown',
@@ -265,6 +265,8 @@ export function resolveEvent(
   const ceilingEffects = (good ? event.good_ceiling : event.bad_ceiling) ?? {};
 
   const deltas: AbilityDelta[] = [];
+  /** 他練不到而被裁掉的能力點。整面都被裁光時轉成他自己那一側的隨機能力。 */
+  const filtered: number[] = [];
   const special: Record<string, number | boolean> = {};
   let injury = 0;
   // 事件卡動不了他練不到的能力——正負兩側一律如此。野手被加控球是無感的獎勵，
@@ -299,7 +301,10 @@ export function resolveEvent(
       special[key] = raw;
       continue;
     }
-    if (allowed !== null && !allowed.has(key)) continue;
+    if (allowed !== null && !allowed.has(key)) {
+      filtered.push(raw);
+      continue;
+    }
     deltas.push({ key, points: scale(raw, factor) });
   }
 
@@ -309,6 +314,14 @@ export function resolveEvent(
     if (raw === undefined) continue;
     if (allowed !== null && !allowed.has(key)) continue;
     ceilings.push({ key, points: scale(raw, factor) });
+  }
+
+  // **整面都被裁光的卡不能什麼都沒發生**（issue #16）：同樣的點數與正負，落在他自己
+  // 那一側的隨機一項——等於 rand。沒有違反「動不了他練不到的能力」：落點是他練得到的。
+  const nothing =
+    deltas.length === 0 && ceilings.length === 0 && injury === 0 && Object.keys(special).length === 0;
+  if (nothing) {
+    for (const raw of filtered) deltas.push({ key: rng.pick(applicableAbilities), points: scale(raw, factor) });
   }
 
   return {

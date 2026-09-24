@@ -24,7 +24,7 @@
     "pitch": "隨機挑一個該投手會的球系（swp/drp/chg/gim），加減指定點數。取代舊版直接加減 brk 的做法——球系拆開後，「新的握法找到了」本來就是精進其中某一顆球。非投手抽到帶此鍵的事件時應視為無效果。",
     "inj": "受傷機率增加指定百分點",
     "suspension": "禁賽場次",
-    "respect": "聲望增減",
+    "income": "收入增減：當季年薪的百分比（代言、罰款）。養成期沒有年薪，這一格落空",
     "ban": "永久逐出棒球界",
     "yips": "觸發「失憶症」特性",
     "tj_countdown": "TJ 量表直接推進指定級距",
@@ -321,33 +321,23 @@
       "for": "PRO",
       "weight": 5,
       "good_text": "藥效發作變超人，各種數據破表，而且沒被抓到",
-      "bad_text": "靠背，尿檢沒過！被聯盟禁賽，名聲臭到爆",
+      "bad_text": "靠背，尿檢沒過！被聯盟禁賽 50 場、罰款，代言全部解約",
       "good_effects": {
         "pow": 5,
         "sta": 5,
         "vel": 3
       },
-      "bad_effects": {
-        "suspension": 50,
-        "respect": -100,
-        "con": -5
-      }
+      "bad_effects": {"suspension": 50, "income": -10, "con": -5}
     },
     {
       "id": "event_19",
       "name": "條通酒店的危險茶會 (組頭接觸)",
       "for": "PRO",
       "weight": 2,
-      "good_text": "果斷拒絕加舉報，獲得聯盟狂讚，心智昇華",
+      "good_text": "果斷拒絕加舉報，獲得聯盟狂讚、形象代言找上門，心智昇華",
       "bad_text": "拿了不該拿的錢，東窗事發被永久逐出棒球界",
-      "good_effects": {
-        "clutch": 1,
-        "respect": 50
-      },
-      "bad_effects": {
-        "ban": true,
-        "respect": -999
-      }
+      "good_effects": {"clutch": 1, "income": 5},
+      "bad_effects": {"ban": true}
     },
     {
       "id": "event_20",
@@ -373,9 +363,7 @@
       "weight": 30,
       "good_text": "牙咬著撐過賽季，保住先發，真是條硬漢",
       "bad_text": "硬撐結果韌帶啪一聲斷了，準備開TJ",
-      "good_effects": {
-        "respect": 10
-      },
+      "good_effects": {"sta": 1},
       "bad_effects": {
         "tj_countdown": 1,
         "inj": 50
@@ -461,14 +449,8 @@
       "for": "PRO",
       "good_text": "搞笑圈粉無數，當作另類放鬆療癒",
       "bad_text": "玩破關遊戲不小心扭到腳，靠背被教練罵死",
-      "good_effects": {
-        "respect": 10,
-        "sta": 2
-      },
-      "bad_effects": {
-        "inj": 15,
-        "respect": -5
-      }
+      "good_effects": {"income": 5, "sta": 2},
+      "bad_effects": {"inj": 15}
     },
     {
       "id": "event_28",
@@ -480,10 +462,7 @@
         "clutch": 1,
         "eye": 2
       },
-      "bad_effects": {
-        "sta": -2,
-        "respect": -5
-      }
+      "bad_effects": {"sta": -2, "income": -3}
     },
     {
       "id": "event_29",
@@ -507,16 +486,10 @@
       "id": "event_30",
       "name": "清空板凳的無差別大亂鬥",
       "for": "*",
-      "good_text": "帶起全隊氣勢，打架沒輸過，硬漢形象大增",
+      "good_text": "帶起全隊氣勢，打架沒輸過，硬漢形象接到代言",
       "bad_text": "被偷貓一拳，禁賽休養還要付罰款",
-      "good_effects": {
-        "pow": 2,
-        "respect": 5
-      },
-      "bad_effects": {
-        "suspension": 3,
-        "inj": 10
-      }
+      "good_effects": {"pow": 2, "income": 3},
+      "bad_effects": {"suspension": 3, "inj": 10, "income": -2}
     },
     {
       "id": "event_31",
@@ -524,10 +497,7 @@
       "for": "PRO",
       "good_text": "談到肥約，無後顧之憂專心打球",
       "bad_text": "遇到雷包經紀人，合約亂七八糟影響心情",
-      "good_effects": {
-        "sta": 2,
-        "respect": 10
-      },
+      "good_effects": {"sta": 2, "income": 5},
       "bad_effects": {
         "sta": -2
       }
@@ -567,14 +537,11 @@
       "name": "跟眼幹裁判對噴",
       "for": "*",
       "good_text": "爭取到關鍵判決，氣勢大振",
-      "bad_text": "被趕出場，還吃下聯盟重罰，超衰",
+      "bad_text": "被趕出場，還吃下聯盟禁賽 5 場加罰款，超衰",
       "good_effects": {
         "clutch": 1
       },
-      "bad_effects": {
-        "suspension": 1,
-        "respect": -5
-      }
+      "bad_effects": {"suspension": 5, "income": -3}
     },
     {
       "id": "event_35",
@@ -625,12 +592,9 @@
       "name": "國家隊血汗徵召",
       "for": "PRO",
       "weight": 5,
-      "good_text": "披上國家隊戰袍大放異彩，經驗值狂飆",
+      "good_text": "披上國家隊戰袍大放異彩，經驗值狂飆、代言跟著來",
       "bad_text": "為國捐軀操勞過度，回母隊直接報銷",
-      "good_effects": {
-        "rand": 3,
-        "respect": 30
-      },
+      "good_effects": {"rand": 3, "income": 3},
       "bad_effects": {
         "sta": -3,
         "inj": 25
@@ -774,10 +738,7 @@
       "good_effects": {
         "sta": 2
       },
-      "bad_effects": {
-        "sta": -3,
-        "respect": -20
-      }
+      "bad_effects": {"sta": -3, "income": -5}
     }
   ]
 }

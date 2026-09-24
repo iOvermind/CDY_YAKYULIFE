@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abilities, amateur, leagues, love, season as seasonData } from '../data/index.ts';
+import { abilities, amateur, events as eventsData, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ALL_ABILITIES } from '../data/index.ts';
 import { Game, type GameSetup } from './game.ts';
@@ -2389,5 +2389,34 @@ describe('逐季的年薪與簽約金', () => {
       return;
     }
     throw new Error('二十局都沒有人打滿三季職業');
+  });
+});
+
+/**
+ * 組頭接觸失敗是**真的**永久逐出（issue #16）：以前只印了一張卡，下一季照打。
+ * 這張卡權重 2、很少抽到，所以測試把它調成必抽、兩面都是逐出，打完再還原。
+ */
+describe('永久逐出', () => {
+  it('被逐出之後生涯當場結束，不進名人堂票選', () => {
+    type Card = { id: string; weight?: number | undefined; good_effects: object; bad_effects: object };
+    const cards = (eventsData as unknown as { events: Card[] }).events;
+    const card = cards.find((c) => c.id === 'event_19')!;
+    const saved = { weight: card.weight, good: card.good_effects };
+    card.weight = 1e9;
+    card.good_effects = { ban: true };
+    try {
+      const game = playWell(started({ seed: 'banned', startPosition: 'SS' }));
+      const log = JSON.stringify(game.flow.log);
+      expect(log).toContain('永久逐出棒球界');
+      expect(game.flow.finished).toBe(true);
+      // 被逐出的那一年之後沒有任何球季。
+      const last = game.summary?.seasons.at(-1);
+      const bannedYear = Number(/(\d{4}) 年被聯盟永久逐出/.exec(log)?.[1]);
+      expect(last === undefined || last.year < bannedYear).toBe(true);
+      expect(log).not.toContain('名人堂票選');
+    } finally {
+      card.weight = saved.weight;
+      card.good_effects = saved.good;
+    }
   });
 });
