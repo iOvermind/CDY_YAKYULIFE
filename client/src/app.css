@@ -637,11 +637,15 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
 /* 天梯的第三層選項：一排四顆，多的用拖的。按鈕寬度算成「四顆剛好塞滿」，容器自己
    橫向捲動——滑鼠按住拖（Ladder.tsx 的 useDragScroll），觸控是原生捲動。樣式與
    .seg 的按鈕一致。捲軸藏起來：那一排只有四格寬，一條捲軸會佔掉按鈕近三分之一的高度。 */
+/* **兩端各留 1px。** 按鈕寬度剛好是四等分，容器寬度或捲動位置落在小數像素上時，
+   最右邊那顆的右框線會被容器的 overflow 裁掉（點一下重繪又冒出來）。左右 padding
+   加一個 1px 的尾巴，框線永遠有地方畫；寬度扣掉那 2px，四顆仍然剛好塞滿。 */
 .seg-scroll{display:flex;gap:8px;overflow-x:auto;cursor:grab;scrollbar-width:none;
-  -webkit-overflow-scrolling:touch;margin-bottom:12px}
+  -webkit-overflow-scrolling:touch;margin-bottom:12px;padding:0 1px}
+.seg-scroll::after{content:'';flex:0 0 1px}
 .seg-scroll::-webkit-scrollbar{display:none}
 .seg-scroll:active{cursor:grabbing}
-.seg-scroll>button{flex:0 0 calc((100% - 24px) / 4);background:var(--panel);border:1px solid var(--edge);
+.seg-scroll>button{box-sizing:border-box;flex:0 0 calc((100% - 26px) / 4);background:var(--panel);border:1px solid var(--edge);
   border-radius:var(--r);color:var(--dim);font-family:var(--sans);font-size:14.5px;font-weight:700;
   padding:11px 4px;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg-scroll>button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}
