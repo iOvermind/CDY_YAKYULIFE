@@ -587,6 +587,8 @@ export interface LeaderAward {
    * （能力 75），因此「拿到單項王」等於「打出錨點水準的一季」。
    */
   readonly d?: number;
+  /** 份額型門檻線的倍率。MVP 用它把只算打擊的線墊高一點；沒寫就是 1。 */
+  readonly line_scale?: number;
   /** 累積型的門檻，以 reference_games 場的聯盟為準。 */
   readonly base?: number;
   /** 那條線的年度波動。低於下緣一定拿不到，高於上緣一定拿得到。 */

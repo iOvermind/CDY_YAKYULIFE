@@ -191,7 +191,7 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
     //
     // 球員那一側仍然吃三本帳（MVP 的 stat 是 win_shares），所以守得好的野手與
     // 二刀流照樣佔便宜，那是對的：MVP 本來就該把守備與投球算進去。
-    return shares.win * swing;
+    return shares.win * (award.line_scale ?? 1) * swing;
   }
 
   // 累積型：門檻線就是「那個等級的球員在這個聯盟打這麼多場，會累積到多少」。

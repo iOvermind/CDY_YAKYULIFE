@@ -147,8 +147,13 @@ describe('winningLine', () => {
   it('MVP 的門檻只算打擊那一本——指定打擊也要構得到', () => {
     // 線曾經用守備補回去，於是變成「守備中庸的野手打滿整季」；而 OPS 高到能爭
     // MVP 的打者幾乎都被守位光譜推到一壘或指定打擊，守備份額接近 0。
+    // 線是打擊那一本墊高一成（line_scale），而不是把守備整段補回去（約 ×1.3）：
+    // 比年度最佳打者難一點——球員那一側吃三本帳——但指定打擊仍構得到。
     const line = winningLine(cfg.mvp, MLB, 0.5)!;
-    expect(line).toBe(winningLine(cfg.batter_of_year, MLB, 0.5)!);
+    const batter = winningLine(cfg.batter_of_year, MLB, 0.5)!;
+    expect(line).toBeCloseTo(batter * (cfg.mvp.line_scale ?? 1), 10);
+    expect(line).toBeGreaterThan(batter);
+    expect(line).toBeLessThan(batter * 1.2);
   });
 });
 
