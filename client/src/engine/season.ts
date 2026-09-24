@@ -246,7 +246,15 @@ export function staThresholdForLeague(
 /** 教練信任度：打不好會被下放替補，打得好會被塞滿出賽。 */
 export function trustFactor(overall: number, par: number): number {
   const t = cfg.playing_time.trust_factor;
-  return clamp(t.base + (overall - par) * t.per_point, t.min, t.max);
+  const d = overall - par;
+  if (d >= 0) return clamp(t.base + d * t.per_point, t.min, t.max);
+  // 低於平均那一側是 1.5 次方：一開始緩降、然後劇烈降，d = −span 落到 min（issue #14）。
+  return Math.max(t.min, t.base - (t.base - t.min) * belowCurve(d, t.below));
+}
+
+/** 低於聯盟平均那一側的進度：0 在 par，1 在 −span 以下，中間走 exponent 次方。 */
+function belowCurve(d: number, spec: { readonly span: number; readonly exponent: number }): number {
+  return Math.pow(Math.min(1, -d / spec.span), spec.exponent);
 }
 
 /**
@@ -294,7 +302,7 @@ export function plateAppearances(
 
   // 先發那幾場站棒次決定的次數，替補那幾場站的少得多——代打通常就是一個打席。
   const perGame = paPerGame(overall, par);
-  const perBench = cfg.batting.bench_pa_per_game.value;
+  const perBench = benchPaPerGame(overall - par);
 
   const mult = pt.pa_noise.min + rng.next() * (pt.pa_noise.max - pt.pa_noise.min);
   const abs = (starts + bench) / pt.pa_absolute_noise_divisor.value;
@@ -316,7 +324,20 @@ export function plateAppearances(
  */
 export function startShare(overall: number, par: number): number {
   const s = cfg.batting.start_share;
-  return clamp(s.at_par + (overall - par) * s.per_point, s.min, s.max);
+  const d = overall - par;
+  if (d >= 0) return clamp(s.at_par + d * s.per_point, s.min, s.max);
+  // 與出賽係數同一個形狀：跟不上的人上場的那幾場也全是替補（issue #14）。
+  return Math.max(s.min, s.at_par * (1 - belowCurve(d, s.below)));
+}
+
+/**
+ * 替補上場那一場站幾次打擊區。低於聯盟平均時線性降下去：代跑、守備替補、垃圾
+ * 時間——那種上場不一定輪得到打擊（issue #14）。
+ */
+export function benchPaPerGame(d: number): number {
+  const b = cfg.batting.bench_pa_per_game;
+  if (d >= 0) return b.value;
+  return b.value - (b.value - b.at_floor) * Math.min(1, -d / b.span);
 }
 
 /**

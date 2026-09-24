@@ -17,6 +17,8 @@ import {
   staminaFactor,
   fullSeasonSta,
   trustFactor,
+  startShare,
+  benchPaPerGame,
   offRoster,
   type SeasonContext,
 } from './season.ts';
@@ -199,6 +201,28 @@ describe('trustFactor', () => {
   it('不會超出上下限', () => {
     expect(trustFactor(200, 50)).toBe(cfg.playing_time.trust_factor.max);
     expect(trustFactor(0, 50)).toBe(cfg.playing_time.trust_factor.min);
+  });
+
+  /**
+   * issue #14：d = −10 還打得到八九十場的年代，一軍的板凳上坐的是主力。低於平均
+   * 那一側改成 1.5 次方——一開始緩降、然後劇烈降，d = −8 只剩一成。
+   */
+  it('低於平均先緩後陡，d = −8 只剩一成', () => {
+    const t = cfg.playing_time.trust_factor;
+    const at = (d: number) => trustFactor(50 + d, 50);
+    expect(at(-8)).toBeCloseTo(t.min, 10);
+    expect(at(-10)).toBe(t.min);
+    // 先緩後陡：前兩分掉得比後兩分少。
+    expect(at(0) - at(-2)).toBeLessThan(at(-6) - at(-8));
+    for (let d = 0; d > -8; d--) expect(at(d - 1)).toBeLessThan(at(d));
+  });
+
+  it('跟不上的人上場的那幾場全是替補，替補打席也跟著變少', () => {
+    expect(startShare(42, 50)).toBe(0);
+    expect(startShare(50, 50)).toBeCloseTo(cfg.batting.start_share.at_par);
+    expect(benchPaPerGame(0)).toBe(cfg.batting.bench_pa_per_game.value);
+    expect(benchPaPerGame(-8)).toBeCloseTo(cfg.batting.bench_pa_per_game.at_floor);
+    expect(benchPaPerGame(-12)).toBeCloseTo(cfg.batting.bench_pa_per_game.at_floor);
   });
 });
 
@@ -567,10 +591,10 @@ describe('proPitchingLine', () => {
 });
 
 describe('offRoster', () => {
-  it('觸底點正是 trustFactor 的 min 落點——不是另外手調的數字', () => {
+  it('斷崖之前是 min 那一段板凳，不是直接從主力掉到 0 場', () => {
     const t = cfg.playing_time.trust_factor;
-    const atCut = t.base + t.cut_d * t.per_point;
-    expect(atCut).toBeCloseTo(t.min, 10);
+    expect(t.cut_d).toBeLessThan(-t.below.span);
+    expect(trustFactor(50 + t.cut_d, 50)).toBe(t.min);
   });
 
   it('斷崖兩側：剛好在線上仍在名單，掉下去就是 0 場', () => {

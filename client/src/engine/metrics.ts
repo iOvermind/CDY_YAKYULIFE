@@ -17,6 +17,7 @@ import {
   eraAt,
   intentionalWalksFrom,
   levelOf,
+  benchPaPerGame,
   startShare,
 } from './season.ts';
 
@@ -142,7 +143,7 @@ export function proPaAt(d: number, leagueGames: number): number {
   // **出賽不等於先發**：替補上場那幾場只站一次多打擊區。門檻線也得照這個形狀
   // 算，否則邊緣球員的假想打席會比他真的站得到的多出一大截。
   const share = startShare(d, 0);
-  return (share * per + (1 - share) * cfg.batting.bench_pa_per_game.value) * leagueGames;
+  return (share * per + (1 - share) * benchPaPerGame(d)) * leagueGames;
 }
 
 

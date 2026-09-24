@@ -1212,7 +1212,9 @@ export interface SeasonData {
     readonly trust_factor: {
       readonly base: number;
       readonly per_point: number;
-      /** 落到這個能力差以下就完全不出賽。等於 min 觸底的那一點。 */
+      /** 低於聯盟平均那一側的曲線：d = −span 時落到 min，彎度是 exponent。 */
+      readonly below: { readonly span: number; readonly exponent: number };
+      /** 落到這個能力差以下就完全不出賽。 */
       readonly cut_d: number;
     } & Range;
     readonly position_factor: Readonly<Record<string, number>>;
@@ -1252,9 +1254,14 @@ export interface SeasonData {
       readonly max_loss: number;
     };
     /** 有上場的那些場次裡，幾場是先發。 */
-    readonly start_share: { readonly at_par: number; readonly per_point: number } & Range;
-    /** 替補上場那幾場站幾次打擊區。 */
-    readonly bench_pa_per_game: { readonly value: number };
+    readonly start_share: {
+      readonly at_par: number;
+      readonly per_point: number;
+      /** 低於聯盟平均那一側的曲線：d = −span 時降到 0。 */
+      readonly below: { readonly span: number; readonly exponent: number };
+    } & Range;
+    /** 替補上場那幾場站幾次打擊區。低於聯盟平均時線性降到 at_floor。 */
+    readonly bench_pa_per_game: { readonly value: number; readonly at_floor: number; readonly span: number };
     readonly hbp_rate: { readonly value: number; readonly jitter: number };
     readonly sac_rate: { readonly value: number; readonly jitter: number };
     /** 紀錄錨定的每一格。鍵寫死，才不會打錯一個字就靜靜地少算一項。 */
