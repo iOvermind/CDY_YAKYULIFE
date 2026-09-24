@@ -48,6 +48,8 @@ const season = (over: Partial<SeasonRecord> = {}): SeasonRecord => ({
   difficulty: 1,
   top: 'CPBL',
   seasonFactor: 1,
+  salary: 0,
+  bonus: 0,
   ...over,
 });
 

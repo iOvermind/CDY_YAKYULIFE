@@ -2358,3 +2358,33 @@ describe('結算（score）', () => {
     expect(game.score()).toEqual(game.score());
   });
 });
+
+describe('逐季的年薪與簽約金', () => {
+  /**
+   * 天梯要比「各聯盟球團付了多少」，那需要逐季存下來——總收入只有一個數字，拆不出
+   * 單季與聯盟，而且混了離婚分走的財產與旅外安家費。
+   */
+  it('每一季都記著實領的年薪', () => {
+    for (let i = 0; i < 20; i++) {
+      const seasons = playWell(started({ seed: `pay-${i}` })).summary?.seasons ?? [];
+      if (seasons.length === 0) continue;
+      for (const r of seasons) expect(r.salary, `${r.year} ${r.level}`).toBeGreaterThan(0);
+      return;
+    }
+    throw new Error('二十局都沒有人打進職業');
+  });
+
+  it('選秀的簽約金記在第一季上，之後沒有換東家就不會再有', () => {
+    for (let i = 0; i < 20; i++) {
+      const game = playWell(started({ seed: `bonus-${i}` }));
+      const seasons = game.summary?.seasons ?? [];
+      if (seasons.length < 3) continue;
+      expect(seasons[0]?.bonus).toBeGreaterThan(0);
+      // 同一個體系、同一支球隊一路打下來的年份，不會憑空多出簽約金。
+      const sameTeam = seasons.filter((r, idx) => idx > 0 && r.team === seasons[idx - 1]?.team);
+      for (const r of sameTeam) expect(r.bonus, `${r.year}`).toBe(0);
+      return;
+    }
+    throw new Error('二十局都沒有人打滿三季職業');
+  });
+});

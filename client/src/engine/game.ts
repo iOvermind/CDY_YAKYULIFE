@@ -785,6 +785,13 @@ export class Game {
    * （ROADMAP 階段三的「神獸殿堂」）。
    */
   #earnings = 0;
+  /**
+   * 簽下之後、還沒打出第一季的簽約金（萬元）。
+   *
+   * 簽約金在簽約的當下入帳（`#earnings`），但它要記在**下一段紀錄**上：那是新東家
+   * 付的錢，該算進新東家的聯盟，而新東家的第一季要等到明年才打。
+   */
+  #pendingBonus = 0;
   /** 上一年說過的聯盟風向。用來避免同一句話年年重複。 */
   #lastStandardsNote: string | null = null;
   /**
@@ -1602,6 +1609,7 @@ export class Game {
           return;
         }
         this.#earnings += picked.bonus;
+        this.#pendingBonus += picked.bonus;
         this.#playedOrgs.add(picked.org);
         this.flow.card(
           'gold',
@@ -1642,6 +1650,7 @@ export class Game {
             : '先從二軍出發。'),
       );
       this.#earnings += result.bonus;
+      this.#pendingBonus += result.bonus;
       this.flow.push(() => this.#professionalStart(result.level ?? '', result.team ?? ''));
     };
 
@@ -2110,7 +2119,7 @@ export class Game {
     const salary = this.#seasonSalary;
     this.#earnings += salary;
 
-    const stints = this.#recordStints(line.batting, line.pitching, def);
+    const stints = this.#recordStints(line.batting, line.pitching, def, salary);
     // 上季勝率：這一年所有分段的份額加總。季中轉隊的人不能只算後半段。
     this.#lastWinPct = winPct(
       sumShares(
@@ -3257,13 +3266,14 @@ export class Game {
     batting: BattingLine | null,
     pitching: ProPitchingLine | null,
     defense: number,
+    salary: number,
   ): readonly SeasonRecord[] {
     const pro = this.#pro;
     if (pro === null) return [];
 
     const from = pro.tradedFrom;
     if (from === null) {
-      this.#recordSeason(batting, pitching, defense, pro.team);
+      this.#recordSeason(batting, pitching, defense, pro.team, salary);
       const one = this.#seasons.at(-1);
       return one === undefined ? [] : [one];
     }
@@ -3272,9 +3282,12 @@ export class Game {
     const bat = batting === null ? null : splitBatting(batting, ratio);
     const pit = pitching === null ? null : splitPitching(pitching, ratio);
     const d1 = Math.round(defense * ratio);
+    // 年薪照同一個比例拆：合約跟著人走，前半季與後半季各付各的。相減而不是各自
+    // 四捨五入，兩段加起來才精確等於全年。
+    const s1 = Math.round(salary * ratio);
 
-    this.#recordSeason(bat?.[0] ?? null, pit?.[0] ?? null, d1, from);
-    this.#recordSeason(bat?.[1] ?? null, pit?.[1] ?? null, defense - d1, pro.team);
+    this.#recordSeason(bat?.[0] ?? null, pit?.[0] ?? null, d1, from, s1);
+    this.#recordSeason(bat?.[1] ?? null, pit?.[1] ?? null, defense - d1, pro.team, salary - s1);
     return this.#seasons.slice(-2);
   }
 
@@ -3289,10 +3302,15 @@ export class Game {
     pitching: ProPitchingLine | null,
     defense: number,
     team: string,
+    salary: number,
   ): void {
     const pro = this.#pro;
     if (pro === null) return;
     const info = levelOf(pro.level);
+    // 暫存的簽約金記在簽下之後的第一段上——季中被交易的那一年，它屬於開季時的
+    // 那一隊，也就是第一段。
+    const bonus = this.#pendingBonus;
+    this.#pendingBonus = 0;
     const now = leagueStandardOf(this.#standards, pro.level);
     const baseline = proBaseline(pro.level);
     // 球隊戰績決定兩本帳怎麼切——0 勝的球隊沒有勝利份額可分。二軍沒有聯盟
@@ -3351,6 +3369,8 @@ export class Game {
       difficulty: difficultyOf(now.par),
       top: info.top ?? null,
       seasonFactor: this.#seasonFactor,
+      salary,
+      bonus,
     });
 
     // 記分板的「最近一季」要的是同一份數字。三本帳**分開帶**——野手表取打擊加
@@ -3926,6 +3946,7 @@ export class Game {
 
     const from = pro.team;
     this.#earnings += offer.bonus;
+    this.#pendingBonus += offer.bonus;
     pro.team = offer.team;
 
     this.#askTerms(`${offer.team} · 選擇合約類型`, (years, mult) => {
@@ -4138,6 +4159,7 @@ export class Game {
     if (pro === null) return;
 
     this.#earnings += offer.bonus;
+    this.#pendingBonus += offer.bonus;
     this.#playedOrgs.add(offer.org);
 
     pro.level = offer.level;
