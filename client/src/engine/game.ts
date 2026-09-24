@@ -2666,6 +2666,20 @@ export class Game {
       return;
     }
 
+    // **七傷拳期間受傷就是韌帶斷了**：不分大傷小傷，那一季報銷、記一次大傷、強迫開
+    // TJ，七傷拳跟著拿掉——與「天賦前受傷機率滿 100%」那條路是同一個結局。硬撐的人
+    // 手臂早就在抗議，任何一次受傷都不會只是拉傷。
+    if (this.#sevenFists > 0) {
+      this.#majorInjuries++;
+      this.#surgery('major');
+      this.flow.card(
+        'bad',
+        '七傷拳',
+        `${esc(result.text)}<br>硬撐的手臂這次真的撐不住了。<b class="dn">這一季報銷，直接開 TJ</b>。`,
+      );
+      return;
+    }
+
     const lines = [esc(result.text)];
     lines.push(this.#applyInjuryLoss(result));
 

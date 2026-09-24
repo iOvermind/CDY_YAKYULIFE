@@ -124,28 +124,31 @@ const START: LadderQuery = { org: ALL, position: ALL, kind: 'total' };
  */
 function useDragScroll() {
   const ref = useRef<HTMLDivElement | null>(null);
-  const holding = useRef(false);
   const dragged = useRef(false);
-  const from = useRef({ x: 0, left: 0 });
 
+  /**
+   * 按下之後**在整個視窗上**聽移動與放開：只要滑鼠沒放就一直拖得動，拖出那一排也
+   * 不會斷。以前掛在那一排自己身上，指標一離開那一排（onPointerLeave）就結束拖曳。
+   * 仍然不抓指標——抓了的話 click 會落在容器上，按鈕就點不下去了。
+   */
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse' || ref.current === null) return;
-    holding.current = true;
-    dragged.current = false;
-    from.current = { x: e.clientX, left: ref.current.scrollLeft };
-  };
-
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const el = ref.current;
-    if (!holding.current || el === null) return;
-    const dx = e.clientX - from.current.x;
-    if (Math.abs(dx) > 4) dragged.current = true;
-    if (dragged.current) el.scrollLeft = from.current.left - dx;
-  };
-
-  /** 放開、移出那一排、或系統收走指標，都算結束。 */
-  const stop = () => {
-    holding.current = false;
+    if (e.pointerType !== 'mouse' || el === null) return;
+    dragged.current = false;
+    const from = { x: e.clientX, left: el.scrollLeft };
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - from.x;
+      if (Math.abs(dx) > 4) dragged.current = true;
+      if (dragged.current) el.scrollLeft = from.left - dx;
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
   };
 
   return {
@@ -159,13 +162,7 @@ function useDragScroll() {
       dragged.current = false;
       return was;
     },
-    handlers: {
-      onPointerDown,
-      onPointerMove,
-      onPointerUp: stop,
-      onPointerLeave: stop,
-      onPointerCancel: stop,
-    },
+    handlers: { onPointerDown },
   };
 }
 
