@@ -4190,7 +4190,10 @@ export class Game {
     // 選擇**。規則歸 contract.ts，這裡只決定要不要把它講給玩家聽——非頂級層級不
     // 發卡片，那一層的續約不是一件事（ADR 0025）。
     if (!top || !eligible) {
-      pro.contract = clubOption(this.world);
+      // 球團行使續約權是**同一段關係的延續**，不是球員坐下來談的新約——「先打完現有
+      // 合約」那句話因此照樣算數。以前這裡開一張全新的約，掌控期裡每一兩年就默默
+      // 重設一次，回絕過的入札（申請旅美）又被問回來。
+      pro.contract = { ...clubOption(this.world), postingDeclined: pro.contract.postingDeclined };
       if (top) {
         this.flow.card(
           'info',
@@ -4724,14 +4727,15 @@ export class Game {
       return;
     }
 
+    const words = this.#postingWords();
     this.flow.ask(
       {
-        title: `你的能力已經站得上${orgLabel(target)}。要向球團提出入札申請嗎？`,
+        title: `你的能力已經站得上${orgLabel(target)}。要向球團${words.ask}嗎？`,
         options: [
           {
             id: 'posting:ask',
-            label: '提出入札申請',
-            note: '母隊收下入札金才會放人｜年資越深越容易點頭',
+            label: words.ask,
+            note: `母隊收下${words.fee}才會放人｜年資越深越容易點頭`,
           },
           {
             id: 'posting:wait',
@@ -4752,6 +4756,17 @@ export class Game {
     );
   }
 
+  /**
+   * 旅美那一問的用語。**入札是日職的制度名稱**，韓職那一問叫「申請旅美」——流程
+   * 一樣（母隊點頭、競標、流標），只是說法不能套用日本的。
+   */
+  #postingWords(): { readonly noun: string; readonly ask: string; readonly fee: string; readonly listed: string } {
+    const org = this.#pro === null ? '' : levelOf(this.#pro.level).org;
+    return org === 'NPB'
+      ? { noun: '入札', ask: '提出入札申請', fee: '入札金', listed: '掛上入札名單' }
+      : { noun: '旅美申請', ask: '申請旅美', fee: '轉隊費', listed: '挑戰大聯盟' };
+  }
+
   /** 母隊的答覆與競標結果。 */
   #postingResult(target: string, next: () => void): void {
     const pro = this.#pro;
@@ -4760,13 +4775,14 @@ export class Game {
       return;
     }
 
+    const words = this.#postingWords();
     // 先問有沒有人要——入札金是簽約金的倍數，沒有報價就沒有金額可談。
     const bids = postingBids(this.world, this.#overseasContext);
     if (bids.length === 0) {
       this.flow.card(
         'bad',
-        '入札流標',
-        `球團同意把你掛上入札名單，但競標期結束時<b class="dn">沒有任何球團出價</b>。` +
+        `${words.noun}流標`,
+        `球團同意讓你${words.listed}，但競標期結束時<b class="dn">沒有任何球團出價</b>。` +
           `<br><span class="sub">${esc(orgLabel(target))}要的是可以養的年輕人，而你已經不是了。</span>`,
       );
       next();
@@ -4780,7 +4796,7 @@ export class Game {
       this.flow.card(
         'bad',
         '球團的答覆',
-        `球團婉拒了你的入札申請——<b class="dn">再打幾年，我們就放你走</b>。` +
+        `球團婉拒了你的${words.noun}——<b class="dn">再打幾年，我們就放你走</b>。` +
           `<br><span class="sub">服務年資 ${pro.serviceYears} 年。待得越久，球團越沒有理由留你。</span>`,
       );
       next();
@@ -4789,14 +4805,14 @@ export class Game {
 
     this.flow.card(
       'gold',
-      '入札成立',
-      `球團同意掛牌，入札金 <b class="hl">${fmtMoney(fee)}</b> 進了母隊口袋。` +
+      `${words.noun}成立`,
+      `球團同意放人，${words.fee} <b class="hl">${fmtMoney(fee)}</b> 進了母隊口袋。` +
         `<br>${esc(orgLabel(target))}遞出了報價——`,
     );
 
     this.flow.ask(
       {
-        title: '入札 · 選擇你的新東家',
+        title: `${words.noun} · 選擇你的新東家`,
         options: [
           ...bids.map((b, i) => ({
             id: `posting:${i}`,
@@ -4814,7 +4830,7 @@ export class Game {
           return;
         }
         // 入札不必付買斷——母隊拿到的入札金就是對價。
-        this.#moveTo(picked, '入札成功');
+        this.#moveTo(picked, `${words.noun}成功`);
         next();
       },
     );
