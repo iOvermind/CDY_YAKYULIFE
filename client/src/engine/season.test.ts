@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leagues, season as cfg } from '../data/index.ts';
 import {
+  catcherSpeedFactor,
   dominanceAt,
   gamesPlayed,
   intentionalWalks,
@@ -1238,5 +1239,46 @@ describe('投手四壞的曲線', () => {
   it('控球 80 以上仍然踩在地板上', () => {
     expect(at(80, 'MLB')).toBeLessThan(1);
     expect(at(85, 'MLB')).toBeLessThan(1);
+  });
+});
+
+/**
+ * 捕手打擊時的速度打折（issue #8）：配球不會隨年紀衰退，代價是腿。
+ */
+describe('捕手的速度', () => {
+  it('蹲捕的季度打五折，不管蹲了幾季', () => {
+    expect(catcherSpeedFactor('C', 0)).toBe(0.5);
+    expect(catcherSpeedFactor('C', 15)).toBe(0.5);
+  });
+
+  it('改守別的位置之後，每蹲過一季扣 5%，最多扣到跟蹲著一樣', () => {
+    expect(catcherSpeedFactor('1B', 0)).toBe(1);
+    expect(catcherSpeedFactor('1B', 8)).toBeCloseTo(0.6);
+    expect(catcherSpeedFactor('DH', 10)).toBeCloseTo(0.5);
+    expect(catcherSpeedFactor('DH', 14)).toBeCloseTo(0.5);
+  });
+
+  const totals = (position: string, catcherSeasons: number) => {
+    let triple = 0, sb = 0, hits = 0, pa = 0;
+    for (let i = 0; i < 150; i++) {
+      const l = proBattingLine(new World(`cspd-${i}`), flat(70), position, 'MLB', 70, null, { catcherSeasons });
+      triple += l.triple; sb += l.sb; hits += l.hits; pa += l.pa;
+    }
+    return { triple, sb, hits, pa };
+  };
+
+  // 捕手的出賽本來就比較少（勞損），所以比的是每個打席的產出。
+  const per = (t: ReturnType<typeof totals>, k: 'triple' | 'sb' | 'hits') => t[k] / t.pa;
+
+  it('同一個人蹲捕時，每個打席的三壘打與盜壘明顯變少', () => {
+    const c = totals('C', 0);
+    const fb = totals('1B', 0);
+    expect(per(c, 'triple')).toBeLessThan(per(fb, 'triple') * 0.6);
+    expect(per(c, 'sb')).toBeLessThan(per(fb, 'sb') * 0.6);
+    expect(per(c, 'hits')).toBeLessThan(per(fb, 'hits'));
+  });
+
+  it('蹲過的年資帶到一壘：比從沒蹲過的一壘手慢', () => {
+    expect(per(totals('1B', 8), 'sb')).toBeLessThan(per(totals('1B', 0), 'sb'));
   });
 });

@@ -596,6 +596,11 @@ export class Game {
    * 小傷有時候只扣一點點，係數看起來跟健康年沒兩樣，但那一年他確實是帶傷的。
    */
   #seasonInjury: 'minor' | 'major' | 'rehab' | null = null;
+  /**
+   * 生涯蹲過幾季捕手：職業球季登錄捕手就算，整季復健不算（他沒蹲）。改守別的
+   * 位置之後，打擊時的速度照這個數字打折（issue #8，見 `catcherSpeedFactor`）。
+   */
+  #catcherSeasons = 0;
   /** 生涯大傷次數。帕瓦諾的解鎖條件與合約年限都看它。 */
   #majorInjuries = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
@@ -2097,6 +2102,7 @@ export class Game {
       teamWinRate: this.#league?.get(pro.team)?.winRate ?? null,
       // 傷病的結果。乘的是出賽量，不是事後把數據打折。
       seasonFactor: this.#seasonFactor,
+      catcherSeasons: this.#catcherSeasons,
     });
 
     this.#seasonBatting = line.batting;
@@ -2121,6 +2127,8 @@ export class Game {
     this.#earnings += salary;
 
     const stints = this.#recordStints(line.batting, line.pitching, def, salary);
+    // 這一季算不算蹲了一季捕手：在打完之後才記，這一季本身照「蹲捕中」打折。
+    if (this.#fieldPosition === 'C' && this.#seasonInjury !== 'rehab') this.#catcherSeasons++;
     // 上季勝率：這一年所有分段的份額加總。季中轉隊的人不能只算後半段。
     this.#lastWinPct = winPct(
       sumShares(
@@ -3102,7 +3110,7 @@ export class Game {
         level,
         sides.batting,
         this.#standards,
-        { appearances: games, par },
+        { appearances: games, par, catcherSeasons: this.#catcherSeasons },
       );
       this.#intlBatting = addBatting(this.#intlBatting, line);
       tourneyBatting = line;

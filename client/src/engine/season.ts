@@ -96,6 +96,8 @@ export interface SeasonContext {
    * 數據（打擊率、防禦率）不受影響，累積型數據才會少。
    */
   readonly seasonFactor: number;
+  /** 生涯蹲過幾季捕手，見 `catcherSpeedFactor`。沒給就是 0。 */
+  readonly catcherSeasons?: number;
 }
 
 /**
@@ -478,6 +480,20 @@ export interface BattingLineOptions extends LineOptions {
    * 乘完再四捨五入就是 0。
    */
   readonly appearances?: number;
+  /** 生涯蹲過幾季捕手，見 `catcherSpeedFactor`。沒給就是 0。 */
+  readonly catcherSeasons?: number;
+}
+
+/**
+ * 打擊時速度打幾折（issue #8）。
+ *
+ * 蹲捕的季度直接打 `catching` 折；改守別的位置之後，每蹲過一季扣 `per_season`，
+ * 最多扣 `max_loss`。**只進成績的計算**——能力表上的速度不動，守備範圍也不吃它。
+ */
+export function catcherSpeedFactor(position: string, catcherSeasons: number): number {
+  const c = cfg.batting.catcher_speed;
+  if (position === 'C') return c.catching;
+  return 1 - Math.min(c.max_loss, c.per_season * Math.max(0, catcherSeasons));
 }
 
 /**
@@ -672,7 +688,7 @@ export function proBattingLine(
   standards: LeagueStandards | null = null,
   options: BattingLineOptions = {},
 ): ProBattingLine {
-  const { seasonFactor = 1, appearances, par: parOverride } = options;
+  const { seasonFactor = 1, appearances, par: parOverride, catcherSeasons = 0 } = options;
   const rng = world.stream('season');
   const b = cfg.batting;
   // **par 要能被覆寫。** 國際賽借用聯盟層級來換算場次，但對手的水準是賽會自己的
@@ -700,7 +716,11 @@ export function proBattingLine(
   const bench = games - starts;
   const pa = plateAppearances(world, starts, bench, overall, par);
 
-  const core = battingCore(ability, par, pa, noise, jit, (n) =>
+  // 速度打折只進成績這一格——出賽與打席看的是評價，不是腿。敬遠的恐懼值本來就
+  // 不看速度，照舊吃原本那份。
+  const speed = catcherSpeedFactor(position, catcherSeasons);
+  const hitting = speed === 1 ? ability : { ...ability, spd: (ability['spd'] ?? 0) * speed };
+  const core = battingCore(hitting, par, pa, noise, jit, (n) =>
     intentionalWalks(world, ability, n, par),
   );
   return { games, starts, ...core };
@@ -1254,6 +1274,7 @@ export function playSeason(world: World, ctx: SeasonContext): SeasonLine {
     asBatter
       ? proBattingLine(world, ctx.ability, ctx.position, ctx.level, sides.batting, ctx.standards, {
           seasonFactor: ctx.seasonFactor,
+          catcherSeasons: ctx.catcherSeasons ?? 0,
         })
       : null,
   );

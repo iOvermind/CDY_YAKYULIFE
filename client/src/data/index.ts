@@ -1238,6 +1238,15 @@ export interface SeasonData {
     readonly reference_par: number;
     /** 能力佔比的上限。留 5% 給打破紀錄的怪物。 */
     readonly ratio_cap: number;
+    /** 捕手打擊時的速度打折（issue #8）。 */
+    readonly catcher_speed: {
+      /** 蹲捕的季度乘這個數。 */
+      readonly catching: number;
+      /** 改守別的位置之後，每蹲過一季扣這麼多。 */
+      readonly per_season: number;
+      /** 最多扣這麼多。 */
+      readonly max_loss: number;
+    };
     /** 有上場的那些場次裡，幾場是先發。 */
     readonly start_share: { readonly at_par: number; readonly per_point: number } & Range;
     /** 替補上場那幾場站幾次打擊區。 */
