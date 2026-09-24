@@ -927,8 +927,19 @@ function allowedEvents(
   // 就讓聯盟平均那一端接回原本的缺口 .35。觸身球走同一條路。
   const ctlGap = clamp((rec.bb.reference - ctlAdj) / rec.bb.span, 0, 1);
   const wildness = Math.pow(ctlGap, rec.bb.exponent ?? 1);
+  // 四壞吃自己的噪音區間（issue #33）：錨點抬高之後把波動放大，運氣好的年份仍然
+  // 摸得到低保送。傳進來的 noise() 已經套過全域區間，換算回 0–1 的位置再套這一格
+  // 的——同一顆骰子落在同一個相對位置，eraAt 傳的常數 1 因此仍是區間正中央。
+  const spread = p.noise.max - p.noise.min;
+  const bbNoise = (() => {
+    const n = noise();
+    const own = rec.bb.noise;
+    if (own === undefined) return n;
+    const at = spread === 0 ? 0.5 : (n - p.noise.min) / spread;
+    return own.min + at * (own.max - own.min);
+  })();
   const bb = clampInt(
-    Math.round((rec.bb.floor_anchor + rec.bb.range_anchor * wildness) * volume(rec.bb.per) * noise()) +
+    Math.round((rec.bb.floor_anchor + rec.bb.range_anchor * wildness) * volume(rec.bb.per) * bbNoise) +
       jit(rec.bb.jitter),
     Math.round(ip * rec.bb.cap_per_inning),
   );

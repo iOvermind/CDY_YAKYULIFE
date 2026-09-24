@@ -1426,6 +1426,8 @@ export interface SeasonData {
         readonly weights: Readonly<Record<string, number>>;
         readonly reference: number;
         readonly span: number;
+        /** 這一格自己的噪音區間。省略時照 pitching.noise。 */
+        readonly noise?: Range;
         /** 控球缺口的彎度。小於 1 是凹的——缺口才剛出現就已經看得到保送。 */
         readonly exponent: number;
         readonly cap_per_inning: number;
