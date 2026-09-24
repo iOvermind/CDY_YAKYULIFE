@@ -32,6 +32,7 @@
       "rainbow"
     ],
     "negative": [
+      "seven_fists",
       "glass",
       "scum",
       "cuckold",
@@ -395,6 +396,14 @@
         "NPB": 5,
         "MLB": 5
       }
+    },
+    {
+      "id": "seven_fists",
+      "tone": "bad",
+      "rules_complete": true,
+      "name": "七傷拳",
+      "effect_text": "耐力耗盡卻不開 TJ：每撐一季受傷機率再累加，投球能力跟著掉；天賦前的受傷機率滿 100% 就報銷並強迫開刀。開完 TJ 就消失。",
+      "desc": "手臂早就在抗議了，你選擇打針上場。<b class=\"dn\">每撐一季受傷機率再往上加，投球能力一路往下掉</b>；天賦乘算之前的受傷機率一到 100%，那一季報銷、強迫開 TJ。開完刀這個狀態才會消失。"
     },
     {
       "id": "glass",

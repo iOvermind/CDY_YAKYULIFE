@@ -984,7 +984,7 @@ function StatsPanel({ state }: { state: PlayerState }) {
         shares={state.seasonShares}
         defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
       />
-      <TraitList traits={state.traits} names={state.traitNames} />
+      <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} />
     </div>
   );
 }
@@ -1099,10 +1099,13 @@ function HonorBoard({
 function TraitList({
   traits: owned,
   names,
+  notes,
   heading = true,
 }: {
   traits: ReadonlySet<string>;
   names: ReadonlyMap<string, string>;
+  /** 特性的即時註記（例如七傷拳現在加了多少受傷機率），接在說明後面。 */
+  notes?: ReadonlyMap<string, string>;
   /** 記分板裡不帶標題：它接在 SEED 那排下面，那一帶本來就沒有小標。 */
   heading?: boolean;
 }) {
@@ -1112,7 +1115,10 @@ function TraitList({
   const shown = shownTraits(owned, names);
   // 從當下的清單找，而不是記住點下去的那段文字：特性可以在生涯中途消失（受傷
   // 洗掉、負向被覆蓋），留著舊說明會變成一行沒有標籤對應的孤兒。
-  const note = shown.find((t) => t.id === picked)?.effect_text ?? null;
+  const pickedTrait = shown.find((t) => t.id === picked);
+  const extra = picked === null ? undefined : notes?.get(picked);
+  const note =
+    pickedTrait === undefined ? null : extra === undefined ? pickedTrait.effect_text : `${pickedTrait.effect_text}｜${extra}`;
 
   return (
     <>
@@ -2230,7 +2236,6 @@ function Board({
           <span className="lamp on" title="投手的耐力：投球局數扣在這裡；耗盡要開 TJ">
             <i />
             手臂 {state.endurance.pitcher}
-            {state.endurance.sevenFists && '・七傷拳'}
           </span>
         )}
         {state.honors.length > 0 && (
@@ -2248,7 +2253,7 @@ function Board({
           同一個 `TraitList`，只是不帶「狀態」小標——這一帶（年薪、SEED、榮譽）
           本來就沒有小標。 */}
       <div id="bd-traits">
-        <TraitList traits={state.traits} names={state.traitNames} heading={false} />
+        <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} heading={false} />
       </div>
     </div>
   );
@@ -2282,7 +2287,7 @@ function FinaleCard({
   if (section === 'traits')
     return (
       <div className="card">
-        <TraitList traits={state.traits} names={state.traitNames} />
+        <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} />
       </div>
     );
   if (section === 'career')

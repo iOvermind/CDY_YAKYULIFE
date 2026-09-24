@@ -443,6 +443,11 @@ export interface PlayerState {
   /** 守位的中文名。 */
   readonly positionName: string | null;
   /**
+   * 特性的即時註記：點開特性時接在說明後面。現在只有七傷拳——它累加的受傷機率
+   * 每一季都在變，寫死在說明裡的數字會過期。
+   */
+  readonly traitNotes: ReadonlyMap<string, string>;
+  /**
    * 身體狀態（ADR 0051）：耐力的狀態字，**不給數字**。只列他用得到的那一池——純投手
    * 沒有野手那一格，純野手沒有投手那一格。職業期之前是 null。
    */
@@ -652,6 +657,8 @@ export class Game {
   #endurance: { fielder: EndurancePool; pitcher: EndurancePool } | null = null;
   /** 七傷拳撐了幾季。0 是沒有；開了 TJ 就歸零。 */
   #sevenFists = 0;
+  /** 生涯掛過七傷拳。開完 TJ 狀態會拿掉，但成就照算——那一段是真的撐過來的。 */
+  #sevenFistsEver = false;
   /** 生涯開過幾次 TJ。合約年限看它。 */
   #tjSurgeries = 0;
   /** 這一季是 TJ 的復健季：季末把投手耐力回到上限的八成。 */
@@ -934,7 +941,8 @@ export class Game {
       achievements: evaluateAchievements({
         summary,
         awards: this.#awards,
-        traits: this.#traits,
+        // 七傷拳開完刀就拿掉了，但撐過的那幾季照樣算一項成就。
+        traits: this.#sevenFistsEver ? new Set([...this.#traits, 'seven_fists']) : this.#traits,
         traitNames: this.#traitNames,
         honors: this.#honors,
         halls: this.#ballots.filter((b) => b.inducted).map((b) => b.leagueName),
@@ -998,6 +1006,11 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: signature.position,
       positionName: signature.position === null ? null : positionLabel(signature.position),
+      traitNotes: new Map(
+        this.#sevenFists > 0
+          ? [['seven_fists', `目前額外受傷機率 +${pct(sevenFistsRisk(this.#sevenFists, this.#traits.has('rubber')))}%`]]
+          : [],
+      ),
       endurance:
         this.#endurance === null || this.#pro === null
           ? null
@@ -2607,6 +2620,8 @@ export class Game {
           return;
         }
         this.#sevenFists++;
+        this.#traits.add('seven_fists');
+        this.#sevenFistsEver = true;
         if (snapped()) return;
         this.flow.card(
           'bad',
@@ -2626,6 +2641,7 @@ export class Game {
     this.#seasonInjury = kind;
     this.#tjSurgeries++;
     this.#sevenFists = 0;
+    this.#traits.delete('seven_fists');
     this.#tjRehab = true;
   }
 
