@@ -1400,10 +1400,10 @@ export class Game {
     const after = { fielder: tierOf(fielder), pitcher: tierOf(pitcher) };
     const sides: string[] = [];
     if (this.#playsField && after.fielder !== before.fielder) {
-      sides.push(`${this.#pitches ? '野手的' : ''}身體：<b class="${tierRank(after.fielder) > tierRank(before.fielder) ? 'dn' : 'hl'}">${tierName(after.fielder)}</b>`);
+      sides.push(`${this.#pitches ? '野手的' : ''}身體：${tierName(after.fielder)}`);
     }
     if (this.#pitches && after.pitcher !== before.pitcher) {
-      sides.push(`${this.#playsField ? '投手的' : ''}手臂：<b class="${tierRank(after.pitcher) > tierRank(before.pitcher) ? 'dn' : 'hl'}">${tierName(after.pitcher)}</b>`);
+      sides.push(`${this.#playsField ? '投手的' : ''}手臂：${tierName(after.pitcher)}`);
     }
     if (sides.length > 0 || lines.length > 0) {
       const worse =
@@ -1433,9 +1433,8 @@ export class Game {
     }
     if (hit.length === 0) return [];
     this.#settleCarry();
-    return [
-      `${side === 'fielder' ? '腿與手套跟不上了' : '七傷拳的代價'}：<b class="dn">${hit.join('、')}</b>`,
-    ];
+    // 與年齡衰退的卡同一個寫法：純文字、以「｜」分隔，不加粗不上色。
+    return [`${side === 'fielder' ? '腿與手套跟不上了。' : '七傷拳的代價。'}${hit.join('｜')}`];
   }
 
   /** 解算事件卡並套用結果。 */
