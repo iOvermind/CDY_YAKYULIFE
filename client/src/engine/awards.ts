@@ -94,6 +94,8 @@ export interface AwardContext {
    * 明星賽看它：在明星賽前就傷退或被禁賽的人不會入選（issue #37）。
    */
   readonly availability: number;
+  /** 有〈全台主場〉：明星賽入選率另外加 `all_star.home_faith.add` 個百分點，不論效力哪一隊。 */
+  readonly homeFaith: boolean;
 }
 
 /**
@@ -359,6 +361,9 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
     const pop = a.popularity_bonus;
     const popular = ctx.org === pop.league && ctx.team === pop.team;
     if (popular) chance = clamp(chance + pop.add, pop.clamp.min, pop.clamp.max);
+    // 〈全台主場〉：主場的信仰就是票投得最多的那個人。與台中猛瑪的人氣加成疊加，
+    // 上限跟它同一條。
+    if (ctx.homeFaith) chance = clamp(chance + a.home_faith.add, pop.clamp.min, pop.clamp.max);
     // 照擲一次再判斷在不在場：缺席不改變後面其他獎的抽籤順序。
     if (rng.chance(chance) && present) {
       const byPopularity = popular && ctx.d < pop.flag_below_d;

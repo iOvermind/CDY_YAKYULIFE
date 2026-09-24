@@ -198,6 +198,11 @@
       "min": 3,
       "max": 92
     },
+    "home_faith": {
+      "_note": "〈全台主場〉：明星賽入選率另外加這麼多個百分點，不論效力哪一隊；與台中猛瑪的人氣加成疊加，上限同 popularity_bonus.clamp（2026-09-25）。",
+      "trait": "goldcloth",
+      "add": 20
+    },
     "popularity_bonus": {
       "league": "CPBL",
       "team": "台中猛瑪",

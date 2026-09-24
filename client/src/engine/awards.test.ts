@@ -56,6 +56,7 @@ const ctx = (over: Partial<AwardContext> = {}): AwardContext => ({
   battingWinShares: 5,
   pitchingWinShares: 3,
   availability: 1,
+  homeFaith: false,
   ...over,
 });
 
@@ -304,6 +305,13 @@ describe('明星賽', () => {
     expect(rate({ ...star, availability: 0 }, 'all_star')).toBe(0);
     expect(rate({ ...star, availability: 0.4 }, 'all_star')).toBe(0);
     expect(rate({ ...star, availability: 0.6 }, 'all_star')).toBeGreaterThan(0.9);
+  });
+
+  /** 〈全台主場〉：不論效力哪一隊，入選率 +20 個百分點（2026-09-25）。 */
+  it('全台主場讓入選率多 20 個百分點', () => {
+    const plain = rate({ d: 0 }, 'all_star', 2000);
+    const home = rate({ d: 0, homeFaith: true }, 'all_star', 2000);
+    expect(home - plain).toBeCloseTo(cfg.all_star.home_faith.add / 100, 1);
   });
 
   it('缺席不改變其他獎的抽籤', () => {

@@ -510,6 +510,8 @@ export function summarizeCareer(
   amateurSeasons: readonly AmateurSeasonRecord[] = [],
   internationalScore = 0,
   internationalSeasons: readonly InternationalRecord[] = [],
+  /** 特性帶來的評價分倍率（〈重案組之虎〉×1.05）。各聯盟與總評價分都乘。 */
+  scoreMultiplier = 1,
 ): CareerSummary {
   // ---- 頂級聯盟：各算一份
   const byTop = new Map<string, SeasonRecord[]>();
@@ -544,7 +546,7 @@ export function summarizeCareer(
 
     const raw = sharePoints + awardTotal + milestones.points;
     const deduction = tenureDeduction(org, seasonCount(list), raw);
-    const score = raw - deduction;
+    const score = (raw - deduction) * scoreMultiplier;
     const scoreTier = tierOf(score, org);
     const tier = applyTierFloors(scoreTier, new Set(own.map((a) => a.code)));
 
@@ -606,10 +608,11 @@ export function summarizeCareer(
   const amateurTitlePoints = amateurTitles * awardPoints(awardsCfg.championship.code);
 
   const totalScore =
-    leagueCareers.reduce((sum, l) => sum + l.sharePoints + l.awardPoints, 0) +
-    careerMilestones.points +
-    amateurTitlePoints +
-    internationalScore;
+    (leagueCareers.reduce((sum, l) => sum + l.sharePoints + l.awardPoints, 0) +
+      careerMilestones.points +
+      amateurTitlePoints +
+      internationalScore) *
+    scoreMultiplier;
 
   const representative = pickRepresentative(leagueCareers, records);
 

@@ -528,6 +528,8 @@ export interface FlavorData {
 
 export interface HallOfFameData {
   readonly difficulty: { readonly baseline_par: number; readonly exponent: number };
+  /** 〈重案組之虎〉的評價分倍率。 */
+  readonly franchise_bonus: { readonly trait: string; readonly multiplier: number };
   /** 年資未滿的級距扣分：每日→明星那段與明星以上那段，每少一季各扣多少。 */
   readonly short_tenure: {
     readonly full_seasons: number;
@@ -685,6 +687,8 @@ export interface AwardsData {
     /** 出賽係數低於它就不入選明星賽。 */
     readonly min_availability: number;
     readonly clamp: Range;
+    /** 〈全台主場〉的明星賽加成（百分點）。 */
+    readonly home_faith: { readonly trait: string; readonly add: number };
     readonly popularity_bonus: {
       readonly league: string;
       readonly team: string;
@@ -1514,6 +1518,8 @@ export interface SeasonData {
   readonly aging: {
     readonly peak_start: number;
     readonly peak_end: number;
+    /** 〈斷水流〉：衰退延後幾年、衰退量乘多少。 */
+    readonly disc: { readonly trait: string; readonly delay_years: number; readonly decline_multiplier: number };
     readonly growth: {
       readonly points: Range;
       /** 守備天賦買來的額外成長機率，平常是 0。到巔峰結束為止每季一次。 */
@@ -1608,6 +1614,8 @@ export interface SeasonData {
       };
       readonly trade_refuse_penalty: { readonly value: number };
       readonly trait_modifiers: {
+        /** 〈全台主場〉：每一份合約的年薪再乘這個。 */
+        readonly goldcloth: number;
         readonly franchise_min: number;
         readonly cancer_max: number;
         readonly cancer_no_offer_chance: number;

@@ -265,6 +265,14 @@ describe('summarizeCareer', () => {
     expect(s.topTotal.batting?.games).toBe(season().batting?.games);
   });
 
+  /** 〈重案組之虎〉：各聯盟與總評價分都 ×1.05（2026-09-25）。 */
+  it('評價分倍率乘在每個聯盟與總分上', () => {
+    const plain = summarizeCareer([season()], []);
+    const tiger = summarizeCareer([season()], [], 0, [], 0, [], 1.05);
+    expect(tiger.leagues[0]?.score).toBeCloseTo((plain.leagues[0]?.score ?? 0) * 1.05, 9);
+    expect(tiger.totalScore).toBeCloseTo(plain.totalScore * 1.05, 9);
+  });
+
   it('沒打過國際賽就沒有通算', () => {
     const s = summarizeCareer([season()], []);
     expect(s.internationalTotal.batting).toBeNull();

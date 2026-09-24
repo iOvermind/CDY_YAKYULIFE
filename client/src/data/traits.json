@@ -118,11 +118,11 @@
     {
       "id": "goldcloth",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "全台主場",
-      "effect_text": "效力台中猛瑪滿十年，主場的信仰",
-      "desc": "洲際球場的應援你閉著眼睛都跟得上節拍。十年猛瑪，看台上的黃色是為你染的——<b class=\"hl\">效力台中猛瑪滿十年，主場的信仰</b>。",
-      "trigger_note": "在台中猛瑪效力滿 10 年"
+      "effect_text": "明星賽入選率 +20%，每一份合約年薪 ×1.2",
+      "desc": "洲際球場的應援你閉著眼睛都跟得上節拍，看台上的顏色是為你染的——<b class=\"hl\">明星賽入選率 +20%，每一份合約年薪 ×1.2</b>。主場的信仰。",
+      "_unlock_note": "取得：〈主場鄉親的窒息愛魔咒〉的好結果。"
     },
     {
       "id": "mrteam",
@@ -164,10 +164,11 @@
     {
       "id": "iron",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "魔鬼筋肉人",
       "effect_text": "基礎受傷機率 10%（常人 15%）",
-      "desc": "被觸身球砸到，你揉一揉就小跑步上一壘；隊醫翻開病歷，那一頁還是空白的——<b class=\"hl\">基礎受傷機率 10%（常人 15%）</b>，但照樣會老、照樣得練體力。"
+      "desc": "被觸身球砸到，你揉一揉就小跑步上一壘；隊醫翻開病歷，那一頁還是空白的——<b class=\"hl\">基礎受傷機率 10%（常人 15%）</b>，但照樣會老、照樣得練體力。",
+      "_unlock_note": "取得：〈網路酸民雞歪炎上〉的好結果。"
     },
     {
       "id": "late",
@@ -183,39 +184,9 @@
       "tone": "good",
       "rules_complete": true,
       "name": "斷水流",
-      "effect_text": "衰退曲線整體延後兩年",
-      "desc": "其實董事會這次請我從日本回來，是要我重組中心。我認為啊，重訓室是世界上最強的鍛練了。所以我覺得訓練中心裡面，應該就只有重訓室的存在，其他應該廢除：<b class=\"hl\">衰退曲線延後兩年</b>，你的巔峰期更長。",
-      "conditions": {
-        "operator": "AND",
-        "rules": [
-          {
-            "path": "age",
-            "op": "<",
-            "val": 25
-          },
-          {
-            "path": "cntSaveWin",
-            "op": ">=",
-            "val": 15
-          },
-          {
-            "path": "love.caught",
-            "op": "==",
-            "val": 0
-          },
-          {
-            "path": "cntSnack",
-            "op": "<",
-            "val": 5
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "decline_delay",
-          "val": 2
-        }
-      ]
+      "effect_text": "年齡衰退往後延一年，衰退量 ×0.9",
+      "desc": "其實董事會這次請我從日本回來，是要我重組中心。我認為啊，重訓室是世界上最強的鍛練了。所以我覺得訓練中心裡面，應該就只有重訓室的存在，其他應該廢除：<b class=\"hl\">年齡衰退往後延一年，衰退量 ×0.9</b>，你的巔峰期更長。",
+      "_unlock_note": "取得：〈跟眼幹裁判對噴〉的好結果。"
     },
     {
       "id": "academy",
@@ -237,10 +208,11 @@
     {
       "id": "franchise",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "重案組之虎",
-      "effect_text": "母隊續約年薪係數固定 ≥×1.2，引退評價加成",
-      "desc": "球團比誰都清楚，少了你這座城市的球迷會怎麼樣——<b class=\"hl\">母隊續約年薪係數固定 ≥×1.2，引退評價加成</b>。"
+      "effect_text": "續約年薪係數保底 ×1.2、不會被交易，生涯評價分 +5%",
+      "desc": "球團比誰都清楚，少了你這座城市的球迷會怎麼樣——<b class=\"hl\">續約年薪係數保底 ×1.2、不會被交易，生涯評價分 +5%</b>。",
+      "_unlock_note": "取得：〈條通酒店的危險茶會〉的好結果。"
     },
     {
       "id": "clutch",
@@ -296,24 +268,9 @@
       "tone": "good",
       "rules_complete": true,
       "name": "黯然銷魂飯",
-      "effect_text": "季初自動擲 1 顆骰，加在專精的能力上",
-      "desc": "去了中國廚藝訓練學院，連續三年，把所有汗水都澆在同一個工具上——<b class=\"hl\">季初擲骰永久多 1 顆</b>。專精者的複利。",
-      "conditions": {
-        "operator": "AND",
-        "rules": [
-          {
-            "path": "samePick",
-            "op": ">=",
-            "val": 3
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "modify_season_dice",
-          "val": 1
-        }
-      ]
+      "effect_text": "季初多擲 1 顆骰，自動加在最有發展潛力的能力上",
+      "desc": "去了中國廚藝訓練學院，連續三年，把所有汗水都澆在同一個工具上——<b class=\"hl\">季初多擲 1 顆骰，自動加在最有發展潛力的能力上</b>（已經練到頂就換下一項）。專精者的複利。",
+      "_unlock_note": "取得：〈休賽季德州撲克狂熱〉的好結果。"
     },
     {
       "id": "switch_pitcher",

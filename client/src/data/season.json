@@ -758,6 +758,12 @@
     "_note": "年齡曲線。巔峰前緩升、巔峰後遞減，衰退幅度隨年齡加速。這裡只處理自然老化——傷病與事件另計。",
     "peak_start": 26,
     "peak_end": 30,
+    "_disc_note": "〈斷水流〉（2026-09-25）：衰退往後延 delay_years 年（巔峰多撐一年），開始衰退之後每年的衰退量再 ×decline_multiplier。",
+    "disc": {
+      "trait": "disc",
+      "delay_years": 1,
+      "decline_multiplier": 0.9
+    },
     "growth": {
       "_note": "巔峰之前每季自然成長的點數（在訓練骰之外）。",
       "points": {
@@ -1012,8 +1018,8 @@
         "value": 0.85
       },
       "trait_modifiers": {
-        "_note": "特性對續約條件的影響。重案組之虎保底、烏鴉設上限。",
-        "_pending_note": "這兩個特性目前不會被授予（見 ROADMAP 的 24 個待做特性），因此暫時不會觸發。",
+        "_note": "特性對續約條件的影響。重案組之虎保底、烏鴉設上限、全台主場每一份合約再 ×goldcloth。",
+        "goldcloth": 1.2,
         "franchise_min": 1.2,
         "cancer_max": 0.95,
         "cancer_no_offer_chance": 45

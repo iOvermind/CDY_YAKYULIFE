@@ -33,6 +33,18 @@ export function salaryFor(level: string, d: number): number {
 }
 
 /**
+ * 合約係數與特性乘上去之後的年薪。
+ *
+ * **只在頂級聯盟乘**：二軍與小聯盟是固定薪，那裡沒有談判可言（ADR 0025）。**不低於
+ * 那一層的底薪**：係數再差，球團也不能開出比聯盟規定更低的價。
+ */
+export function contractSalary(level: string, base: number, multiplier: number): number {
+  const spec = leagues.salary.levels[level];
+  if (spec === undefined || leagues.levels[level]?.top === undefined) return base;
+  return Math.max(spec.base, Math.round(base * multiplier));
+}
+
+/**
  * 入札金：母隊放人的對價，由承接的球團支付。
  *
  * 它與球員拿到的簽約金是**兩筆不同的錢**——入札金進母隊的口袋，簽約金進球員

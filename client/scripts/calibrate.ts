@@ -842,6 +842,7 @@ function awardsAtD(
     battingWinShares: batting.win,
     pitchingWinShares: 0,
     availability: 1,
+    homeFaith: false,
   }).map((a) => a.code);
 }
 
@@ -937,6 +938,7 @@ function reportAwardRates(): void {
           battingWinShares: batting.win,
           pitchingWinShares: 0,
           availability: 1,
+          homeFaith: false,
         })) {
           tally.set(a.code, (tally.get(a.code) ?? 0) + 1);
         }

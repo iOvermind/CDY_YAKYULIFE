@@ -236,6 +236,7 @@ export function applyAging(
   ability: Abilities,
   age: number,
   ceilingBonus: Readonly<Record<string, number>> = {},
+  traits: ReadonlySet<string> = new Set(),
 ): AgingResult {
   const rng = world.stream('growth');
   const a = cfg.aging;
@@ -260,10 +261,15 @@ export function applyAging(
     return { ability: next as Abilities, changes, phase: 'growth' };
   }
 
-  if (age <= a.peak_end) return { ability: next as Abilities, changes, phase: 'peak' };
+  // 〈斷水流〉：巔峰多撐幾年，開始掉之後每年也掉得少一點。
+  const disc = traits.has(a.disc.trait);
+  const peakEnd = a.peak_end + (disc ? a.disc.delay_years : 0);
+  if (age <= peakEnd) return { ability: next as Abilities, changes, phase: 'peak' };
 
-  const yearsPast = age - a.peak_end;
-  const total = Math.min(a.decline.max, a.decline.base + yearsPast * a.decline.per_year_after_peak);
+  const yearsPast = age - peakEnd;
+  const total =
+    Math.min(a.decline.max, a.decline.base + yearsPast * a.decline.per_year_after_peak) *
+    (disc ? a.disc.decline_multiplier : 1);
   const fast = new Set(a.decline.speed_first.fast);
   const slow = new Set(a.decline.speed_first.slow);
 

@@ -253,6 +253,22 @@ describe('applyAging', () => {
     expect(r.changes.size).toBe(0);
   });
 
+  /** 〈斷水流〉：衰退往後延一年，開始掉之後每年掉 ×0.9（2026-09-25）。 */
+  it('斷水流讓巔峰多撐一年，之後掉得比較少', () => {
+    const disc = new Set(['disc']);
+    const first = cfg.aging.peak_end + 1;
+    expect(age('d', first).phase).toBe('decline');
+    expect(applyAging(new World('d'), flat(50), first, {}, disc).phase).toBe('peak');
+    let plain = 0;
+    let slow = 0;
+    for (let i = 0; i < 300; i++) {
+      plain += sum(flat(50)) - sum(age(`d${i}`, first + 3).ability);
+      slow += sum(flat(50)) - sum(applyAging(new World(`d${i}`), flat(50), first + 4, {}, disc).ability);
+    }
+    // 延後一年的同一個衰退階段，量是一般人的九成。
+    expect(slow / plain).toBeCloseTo(cfg.aging.disc.decline_multiplier, 1);
+  });
+
   describe('守備天賦的額外成長', () => {
     const FIELDING = abilities.display_groups.members.fielding ?? [];
 

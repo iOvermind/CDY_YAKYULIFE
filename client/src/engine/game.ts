@@ -133,6 +133,7 @@ import {
   growthCurve,
   hardCap,
   raiseCeiling,
+  rollOneDie,
   rollTrainingDice,
   train,
   untrain,
@@ -209,7 +210,7 @@ import {
   refusalReleaseChance,
   shouldRetire,
 } from './pro.ts';
-import { fmtMoney, postingFee, salaryFor } from './salary.ts';
+import { contractSalary, fmtMoney, postingFee, salaryFor } from './salary.ts';
 import {
   amateurOverseasOffers,
   canRequestPosting,
@@ -1087,15 +1088,31 @@ export class Game {
   }
 
   /**
-   * 這一季的年薪。
+   * 這一季的年薪：層級薪資表 × 合約的年薪係數 × 特性。
    *
    * d 值用**當年**的 par 算——聯盟水準逐年浮動，用基準值會讓弱年的薪水虛高。
+   *
+   * **合約係數以前只印在談約選項上，實際年薪沒乘它**（2026-09-25 修正）：長約與短約
+   * 在錢上沒有差別，重案組之虎的保底、烏鴉的上限、否決交易的折扣也全都沒有作用。
    */
   get #seasonSalary(): number {
     const pro = this.#pro;
     if (pro === null) return 0;
+    return contractSalary(pro.level, this.#baseSalary, this.#salaryMultiplier(pro.contract.mult));
+  }
+
+  /** 只看層級與實力的年薪，不含合約係數。轉會比較「那邊開不開得出更好的價」用它。 */
+  get #baseSalary(): number {
+    const pro = this.#pro;
+    if (pro === null) return 0;
     const d = (this.rating?.overall ?? 0) - leagueStandardOf(this.#standards, pro.level).par;
     return salaryFor(pro.level, d);
+  }
+
+  /** 合約係數再乘上特性（〈全台主場〉每一份合約 ×1.2）。 */
+  #salaryMultiplier(contractMult: number): number {
+    const home = seasonCfg.contract.multiplier.trait_modifiers;
+    return contractMult * (this.#traits.has('goldcloth') ? home.goldcloth : 1);
   }
 
   /**
@@ -1593,6 +1610,24 @@ export class Game {
     }
   }
 
+  /**
+   * 〈黯然銷魂飯〉：季初另外擲一顆骰，自動加在**最有發展潛力**的能力——潛力（上限）
+   * 最高的那一項；已經練到 80 或練到頂的就換下一項。只看正在用的那一側。回傳要接在
+   * 季初訓練卡後面的那一句；沒有這個特性就是空字串。
+   */
+  #comboDie(): string {
+    if (!this.#traits.has('combo')) return '';
+    const max = abilities.scale.max;
+    const target = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#activeSide))
+      .filter((k) => (this.#ability[k] ?? 0) < Math.min(max, this.#ceilingOf(k)))
+      .reduce<AbilityKey | null>((best, k) => (best === null || this.#ceilingOf(k) > this.#ceilingOf(best) ? k : best), null);
+    const v = rollOneDie(this.world, this.#traits);
+    if (target === null) return '';
+    const before = this.#ability[target] ?? 0;
+    this.#applyPoints(target, v, { silent: true });
+    return `<br>黯然銷魂飯：只練一招，多擲的 <b class="hl">${v}</b> 點全給了${esc(abilities.abilities[target] ?? target)}（${this.#deltaNote(target, v, before)}）。`;
+  }
+
   /** 季初的自主訓練：擲骰，逐顆分配。 */
   #springTraining(): void {
     // 上一季的冠軍在這裡兌現，兌現後即清空——加成只延續一季。
@@ -1609,6 +1644,7 @@ export class Game {
     if (bonus > 0) {
       msg += `<br>去年的國際賽冠軍帶來更好的訓練資源與眼界，多擲 <b class="hl">${bonus}</b> 顆骰。`;
     }
+    msg += this.#comboDie();
     this.flow.card('info', '季初訓練', msg);
 
     // 〈高手高手高高手〉：養成期累計擲出夠多的 6（這裡只在養成期跑，職業期走
@@ -2415,6 +2451,7 @@ export class Game {
     if (bonus > 0) {
       msg += `<br>去年的國際賽冠軍帶來更好的訓練資源與眼界，多擲 <b class="hl">${bonus}</b> 顆骰。`;
     }
+    msg += this.#comboDie();
     this.flow.card('info', '季初訓練', msg);
 
     // 與養成期同理：必須 unshift，否則配點會跑到球季之後。
@@ -3973,6 +4010,7 @@ export class Game {
       battingWinShares: this.#seasons.at(-1)?.shares.batting.win ?? 0,
       pitchingWinShares: this.#seasons.at(-1)?.shares.pitching.win ?? 0,
       availability,
+      homeFaith: this.#traits.has(awardsCfg.all_star.home_faith.trait),
     });
     if (won.length === 0) return;
 
@@ -4095,7 +4133,7 @@ export class Game {
     this.#lateBloom(levelOf(pro.level).top !== undefined && this.#seasonFactor > 0);
 
     // ---- 老化
-    const aging = applyAging(this.world, this.#ability, this.#age, this.#ceilingBonus);
+    const aging = applyAging(this.world, this.#ability, this.#age, this.#ceilingBonus, this.#traits);
     this.#ability = { ...aging.ability };
     // 能力值降下來之後，那一級的成本跟著變便宜——存著的點數可能已經夠用了。
     this.#settleCarry();
@@ -4546,7 +4584,7 @@ export class Game {
       options.push({
         id: 'term:long',
         label: `長約（${terms.longYears} 年）`,
-        note: `年薪係數 ×${terms.longMult.toFixed(2)}，約 ${fmtMoney(Math.round(base * terms.longMult))}／年｜穩定保障`,
+        note: `年薪係數 ×${terms.longMult.toFixed(2)}，約 ${fmtMoney(contractSalary(pro.level, base, this.#salaryMultiplier(terms.longMult)))}／年｜穩定保障`,
         role: 'main',
       });
     }
@@ -4554,7 +4592,7 @@ export class Game {
       id: 'term:short',
       label: `短約（${terms.shortYears} 年）`,
       note:
-        `年薪係數 ×${terms.shortMult.toFixed(2)}，約 ${fmtMoney(Math.round(base * terms.shortMult))}／年｜` +
+        `年薪係數 ×${terms.shortMult.toFixed(2)}，約 ${fmtMoney(contractSalary(pro.level, base, this.#salaryMultiplier(terms.shortMult)))}／年｜` +
         (terms.longEligible ? '賭下次身價' : '以你目前的年齡與成績，球團只願提供短約'),
       role: terms.longEligible ? 'warn' : 'main',
     });
@@ -4590,7 +4628,8 @@ export class Game {
       currentTeam: pro?.team ?? '',
       playedOrgs: this.#playedOrgs,
       standards: this.#standards,
-      salary: this.#seasonSalary,
+      // 比的是層級與實力開得出的價，合約係數是這邊簽約談出來的，那邊還沒談。
+      salary: this.#baseSalary,
       servedYears: this.#orgYears,
     };
   }
@@ -5275,6 +5314,7 @@ export class Game {
       this.#amateurSeasons,
       this.#intlScore,
       this.#intlSeasons,
+      this.#traits.has(hallOfFame.franchise_bonus.trait) ? hallOfFame.franchise_bonus.multiplier : 1,
     );
     this.#summary = summary;
 

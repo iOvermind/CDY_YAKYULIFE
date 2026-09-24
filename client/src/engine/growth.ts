@@ -323,6 +323,14 @@ export function rollTrainingDice(
   return { values, sixes };
 }
 
+/** 擲一顆訓練骰，骰面規則與季初訓練相同（〈肝帝〉的最低點數、〈高手高手高高手〉的權重）。 */
+export function rollOneDie(world: World, traits: ReadonlySet<string>): number {
+  const rng = world.stream('growth');
+  const min = Math.min(6, Math.max(1, abilities.training_dice.min_face));
+  const weights = pickFaceWeights(traits, min);
+  return weights === null ? rng.int(min, 6) : Number(rng.weighted(weights));
+}
+
 /**
  * 上一季**國際賽**奪冠帶來的額外骰數。
  *

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { leagues } from '../data/index.ts';
-import { fmtMoney, fmtMoneyShort, postingFee, salaryFor } from './salary.ts';
+import { contractSalary, fmtMoney, fmtMoneyShort, postingFee, salaryFor } from './salary.ts';
 
 describe('salaryFor', () => {
   it('與聯盟同水準時就是基礎年薪', () => {
@@ -99,5 +99,18 @@ describe('金額顯示', () => {
   it('簡短版超過一億只留一位小數', () => {
     expect(fmtMoneyShort(114200)).toBe('11.4 億');
     expect(fmtMoneyShort(3300)).toBe('3,300 萬');
+  });
+});
+
+/** 合約係數在 2026-09-25 才真的乘進年薪：只在頂級聯盟、不低於底薪。 */
+describe('contractSalary', () => {
+  const base = leagues.salary.levels['CPBL1']!.base;
+  it('頂級聯盟乘係數，但不低於那一層的底薪', () => {
+    expect(contractSalary('CPBL1', 1000, 1.2)).toBe(1200);
+    expect(contractSalary('CPBL1', base, 0.8)).toBe(base);
+  });
+
+  it('二軍是固定薪，不乘係數', () => {
+    expect(contractSalary('CPBL2', 84, 1.2)).toBe(84);
   });
 });
