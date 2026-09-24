@@ -803,13 +803,19 @@ export function overseasFaOffers(
  * 路口」。
  *
  * 門檻看的是綜合能力的**絕對值**，不是相對聯盟的 d 值——十八歲的業餘球員沒有
- * 所屬聯盟可以相對。落地層級也寫死在資料裡，不走 `landingLevel()`：那條規則
- * 問的是「他現在打得動哪一層」，而育成合約問的是「他值不值得養」，十八歲的人
- * 本來就打不動一軍，那不是拒絕他的理由。
+ * 所屬聯盟可以相對。
+ *
+ * **落地層級是地板與實力取高。** 資料裡的 `level` 是地板：育成合約問的是「他
+ * 值不值得養」，十八歲的人本來就打不動一軍，那不是拒絕他的理由。但能力夠的人
+ * 不必從最底層磨——`landingLevel()` 問的是「他現在打得動哪一層」，而且吃外籍
+ * 加成（海外球團簽的是外籍球員），兩者取高：打得動 3A 就從 3A 出發、打得動日職
+ * 一軍就直接上一軍。
  */
 export function amateurOverseasOffers(
   world: World,
   overall: number,
+  standards: LeagueStandards | null = null,
+  tier: HandednessTier = 'none',
 ): readonly (TransferOffer & { readonly label: string; readonly note: string })[] {
   const cfg = amateur.amateur_overseas;
   const out: (TransferOffer & { label: string; note: string })[] = [];
@@ -820,9 +826,11 @@ export function amateurOverseasOffers(
     const count = world.stream('career').int(cfg.offers.min, cfg.offers.max);
     if (overall < path.min_overall) continue;
 
-    const upgrade = path.level_upgrade;
-    const level =
-      upgrade !== undefined && overall >= upgrade.min_overall ? upgrade.level : path.level;
+    const level = higherLevel(
+      path.org,
+      path.level,
+      landingLevel(path.org, overall, standards, 0, 'recruit', tier),
+    );
     const base =
       path.signing_bonus.base +
       Math.max(0, overall - path.min_overall) * path.signing_bonus.per_point_over;
@@ -853,6 +861,13 @@ export function amateurOverseasOffers(
     }
   }
   return out;
+}
+
+/** 同一個體系裡兩個層級取高。`null` 代表「哪一層都站不上」，那就是地板。 */
+function higherLevel(org: string, floor: string, candidate: string | null): string {
+  if (candidate === null) return floor;
+  const path = pathOf(org);
+  return path.indexOf(candidate) > path.indexOf(floor) ? candidate : floor;
 }
 
 /**

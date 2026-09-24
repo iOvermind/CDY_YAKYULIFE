@@ -838,29 +838,10 @@ describe('生涯次數統計', () => {
 });
 
 describe('國際賽年表', () => {
-  it('職業期的每一屆都留下年份、賽事名與名次', () => {
-    // 職業期被徵召是少數事件（實測 400 局裡約 5 局），掃描範圍要夠大。
-    //
-    // **這個數字會隨平衡改動漂移**：任何動到成長或事件卡的改動都會重新洗牌，
-    // 哪幾顆種子撞得到那條路徑。掃到第 187 顆才第一次撞見，所以範圍留了兩倍餘裕。
-    for (let i = 0; i < 400; i++) {
-      const game = playWell(started({ seed: `q-${i}` }));
-      const rows = game.summary?.internationalSeasons ?? [];
-      if (rows.length === 0) continue;
-      for (const r of rows) {
-        expect(r.year).toBeGreaterThan(0);
-        expect(r.tournament.length).toBeGreaterThan(0);
-        expect(r.rank.length).toBeGreaterThan(0);
-        expect(r.batting !== null || r.pitching !== null).toBe(true);
-      }
-      // 徵召次數含養成期那幾屆，逐屆紀錄只收職業——所以是不多於，不是等於。
-      expect(rows.length).toBeLessThanOrEqual(game.state?.counts.internationalCaps ?? -1);
-      return;
-    }
-    throw new Error('四百局都沒有人在職業期被徵召過');
-    // 四百段生涯跑不完預設的五秒。掃描範圍是這條測試的本體——職業期被徵召本來
-    // 就罕見——所以放寬時限，不縮掃描。
-  }, 60_000);
+  // 「職業期的每一屆都留下年份、賽事名與名次」搬到 scripts/guardrail.test.ts：
+  // 它要的是一段會被國家隊徵召的職業生涯，而這裡的 playWell 一年練不到那個水準
+  // ——兩百局才撞得到一次，任何一筆平衡改動都能把它洗到一千局都撞不到。護欄那
+  // 一百二十局用的是校準的 balanced 策略，約 6% 的生涯被徵召過，而且早就跑完了。
 
   it('養成期的國際賽不進這一份——它併在該年的養成列裡', () => {
     for (let i = 0; i < 20; i++) {

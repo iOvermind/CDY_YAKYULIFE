@@ -296,28 +296,45 @@ describe('高中畢業的旅外報價', () => {
     amateurOverseasOffers(new World(seed), overall);
 
   it('門檻看綜合能力的絕對值——十八歲的人沒有所屬聯盟可以相對', () => {
-    expect(offers(npb.min_overall - 1)).toHaveLength(0);
+    expect(offers(npb.min_overall - 1).some((o) => o.org === 'NPB')).toBe(false);
     expect(offers(npb.min_overall).some((o) => o.org === 'NPB')).toBe(true);
     expect(offers(milb.min_overall - 1).some((o) => o.org === 'MLB')).toBe(false);
     expect(offers(milb.min_overall).some((o) => o.org === 'MLB')).toBe(true);
   });
 
-  it('落地層級寫死在資料裡，不走 landingLevel', () => {
-    // 十八歲的人本來就打不動一軍，那不是拒絕他的理由。
+  it('打不動任何一層的人照樣從地板起步——十八歲打不動一軍不是拒絕他的理由', () => {
+    expect(landingLevel('NPB', npb.min_overall, null)).toBeNull();
     for (const o of offers(npb.min_overall).filter((x) => x.org === 'NPB')) {
       expect(o.level).toBe(npb.level);
     }
-    expect(landingLevel('NPB', npb.min_overall, null)).toBeNull();
   });
 
-  it('能力夠好的旅美直接從 1A 起跳', () => {
-    const up = milb.level_upgrade!;
-    for (const o of offers(up.min_overall - 1).filter((x) => x.org === 'MLB')) {
-      expect(o.level).toBe(milb.level);
+  /**
+   * **能直接上就直接上**，而且吃外籍加成：海外球團簽的是外籍球員，他得明顯強過
+   * 本土的替代人選。所以落點是「地板」與 `landingLevel()` 取高。
+   */
+  it('能力夠的人直接從打得動的那一層出發', () => {
+    const premium = leagues.transfer.import_premium.value;
+    const npb1 = leagues.levels['NPB1']!.min + premium;
+    expect(offers(npb1 - 1).find((o) => o.org === 'NPB')?.level).toBe('NPB2');
+    expect(offers(npb1).find((o) => o.org === 'NPB')?.level).toBe('NPB1');
+
+    const kbo1 = leagues.levels['KBO1']!.min + premium;
+    expect(offers(kbo1 - 1).find((o) => o.org === 'KBO')?.level).toBe('KBO2');
+    expect(offers(kbo1).find((o) => o.org === 'KBO')?.level).toBe('KBO1');
+
+    // 旅美一路往上：夠格就 2A、3A，甚至直接上大聯盟。
+    for (const level of ['A2', 'A3', 'MLB']) {
+      const bar = leagues.levels[level]!.min + premium;
+      expect(offers(bar).find((o) => o.org === 'MLB')?.level).toBe(level);
     }
-    for (const o of offers(up.min_overall).filter((x) => x.org === 'MLB')) {
-      expect(o.level).toBe(up.level);
-    }
+  });
+
+  it('旅韓的門檻就是韓職二軍的實力', () => {
+    const kbo = cfg.paths.find((p) => p.org === 'KBO')!;
+    expect(kbo.level).toBe('KBO2');
+    expect(offers(kbo.min_overall - 1).some((o) => o.org === 'KBO')).toBe(false);
+    expect(offers(kbo.min_overall).some((o) => o.org === 'KBO')).toBe(true);
   });
 
   it('簽約金隨超出門檻的幅度上升', () => {

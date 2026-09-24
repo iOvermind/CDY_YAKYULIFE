@@ -1544,7 +1544,7 @@ export class Game {
    */
   #crossroads(): void {
     const overall = this.rating?.overall ?? 0;
-    const offers = amateurOverseasOffers(this.world, overall);
+    const offers = amateurOverseasOffers(this.world, overall, this.#standards, this.#handednessTier);
     if (offers.length === 0) {
       this.flow.push(() => this.#draft());
       return;

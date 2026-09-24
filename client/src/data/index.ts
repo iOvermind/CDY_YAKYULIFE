@@ -834,8 +834,8 @@ export interface AmateurData {
       readonly min_overall: number;
       readonly label: string;
       readonly note: string;
+      /** 落地的**地板**。能力夠的人照 `landingLevel()` 往上跳，見 amateur.json。 */
       readonly level: string;
-      readonly level_upgrade?: { readonly min_overall: number; readonly level: string };
       readonly signing_bonus: { readonly base: number; readonly per_point_over: number };
     }[];
   };

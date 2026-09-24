@@ -218,6 +218,32 @@ describe('平衡護欄', () => {
 });
 
 /**
+ * 職業期的國際賽年表。
+ *
+ * 從 game.test.ts 搬來：那邊的 playWell 一年練不到國家隊的水準，兩百局才撞得到
+ * 一次，任何一筆平衡改動都能把它洗到一千局都撞不到（加一條旅韓的路口就發生了）。
+ * 這裡的一百二十局用的是校準的 balanced 策略，約 6% 的生涯被徵召過。
+ */
+describe('國際賽年表', () => {
+  const called = summaries.filter((s) => s.internationalSeasons.length > 0);
+
+  it('一百二十局裡有人在職業期被徵召過', () => {
+    expect(called.length).toBeGreaterThan(0);
+  });
+
+  it('職業期的每一屆都留下年份、賽事名與名次', () => {
+    for (const s of called) {
+      for (const r of s.internationalSeasons) {
+        expect(r.year).toBeGreaterThan(0);
+        expect(r.tournament.length).toBeGreaterThan(0);
+        expect(r.rank.length).toBeGreaterThan(0);
+        expect(r.batting !== null || r.pitching !== null).toBe(true);
+      }
+    }
+  });
+});
+
+/**
  * 總冠軍的取得率。
  *
  * **它是隊數的倒數，不是一個獨立的旋鈕**：全聯盟的奪冠機率加起來是 1，所以六隊
