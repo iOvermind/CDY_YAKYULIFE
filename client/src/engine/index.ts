@@ -30,3 +30,6 @@ export {
 
 // ---- 天賦的價錢與層數上限。AP 的帳由伺服器算，因此它需要這兩個（ADR 0007）
 export { costOf, maxLevelOf } from './overlay.ts';
+
+// ---- 管理腳本 unlock-all.sh：一個帳號拿得到的全部成就。走正式的結算路徑，不另寫清單
+export { unlockEverything } from './unlockAll.ts';
