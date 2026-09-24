@@ -1116,7 +1116,7 @@ function TraitList({
   // 點開的那一個。一次只有一個：說明行固定在段落下方，多開就再也分不出哪行在
   // 講哪個標籤（標籤會換行，順序對不上），單開才不必在說明裡重複一次名稱。
   const [picked, setPicked] = useState<string | null>(null);
-  const shown = [
+  const shown: { id: string; label: string; tone: string | undefined; effect_text: string; desc?: string }[] = [
     ...tags.map((t) => ({ id: t.id, label: t.label, tone: undefined, effect_text: t.note })),
     ...shownTraits(owned, names),
   ];
@@ -1124,6 +1124,9 @@ function TraitList({
   // 洗掉、負向被覆蓋），留著舊說明會變成一行沒有標籤對應的孤兒。
   const pickedTrait = shown.find((t) => t.id === picked);
   const extra = picked === null ? undefined : notes?.get(picked);
+  // 點開顯示**文案**（traits.json 的 desc：一句敘述＋粗體的效果）；沒有文案的退回
+  // 效果說明。文案是資料檔寫死的 HTML，不含任何玩家輸入。
+  const noteHtml = pickedTrait?.desc;
   const note =
     pickedTrait === undefined ? null : extra === undefined ? pickedTrait.effect_text : `${pickedTrait.effect_text}｜${extra}`;
 
@@ -1160,9 +1163,14 @@ function TraitList({
           {/* 說明不做浮層：這塊所在的位置（記分板、結算卡）都在會捲動或會被裁切
               的容器裡，浮層要嘛被裁掉、要嘛得改用 fixed 自己算座標並在捲動時
               重算。就地展開沒有這些問題，而 effect_text 最長也才 39 字。 */}
-          <p className={`tag-note${note === null ? ' hint' : ''}`}>
-            {note ?? '點特性看說明'}
-          </p>
+          {noteHtml !== undefined ? (
+            <p className="tag-note">
+              <span dangerouslySetInnerHTML={{ __html: noteHtml }} />
+              {extra !== undefined && `｜${extra}`}
+            </p>
+          ) : (
+            <p className={`tag-note${note === null ? ' hint' : ''}`}>{note ?? '點特性看說明'}</p>
+          )}
         </>
       )}
     </>
@@ -1181,7 +1189,7 @@ function TraitList({
 function shownTraits(
   owned: ReadonlySet<string>,
   names: ReadonlyMap<string, string>,
-): { id: string; label: string; tone: string | undefined; effect_text: string }[] {
+): { id: string; label: string; tone: string | undefined; effect_text: string; desc?: string }[] {
   const order = [...traitsData.categories.positive, ...traitsData.categories.negative];
   return order
     .filter((id) => owned.has(id))
@@ -1204,7 +1212,7 @@ function relationTags(state: PlayerState): { id: string; label: string; note: st
     .filter((n): n is string => n !== null)
     .map((name, i) => ({
       id: `partner-${i}`,
-      label: `${married ? '已婚' : '交往中'}：${name}`,
+      label: `${married ? '已婚' : '交往'}：${name}`,
       note: [partnerProfile(name), years, kids].filter((s) => s !== '').join('｜'),
     }));
 }

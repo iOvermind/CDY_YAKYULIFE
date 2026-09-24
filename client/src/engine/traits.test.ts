@@ -94,3 +94,13 @@ describe('特性顯示', () => {
     for (const id of state?.traitNames.keys() ?? []) expect(state?.traits.has(id)).toBe(true);
   });
 });
+
+/** 點開狀態顯示的是文案（desc）。每一個特性都要有，而且效果要用粗體寫進去。 */
+describe('特性的文案', () => {
+  it('每一個特性都有文案，文案裡用粗體寫出效果', () => {
+    for (const t of traitsData.traits) {
+      expect(t.desc, `${t.id} 沒有文案`).toBeTruthy();
+      expect(t.desc, `${t.id} 的文案沒有粗體的效果`).toMatch(/<b class="(hl|dn)">/);
+    }
+  });
+});
