@@ -887,6 +887,7 @@ function PageNav({ page, go }: { page: number; go: (i: number) => void }) {
  * 2. **監看容器與內容的尺寸變化**。光在 entries 變動時捲一次不夠：卡片的高度
  *    要等字體與換行定案才算得出來，那發生在這一次 effect 之後，捲到的會是舊
  *    高度。動作區長出選項把事件流壓矮也是同一類——那不會觸發捲動事件。
+ *    但尺寸變化只在玩家原本就停在底部時才追——見 `atBottom`。
  */
 function EventLog({
   entries,
@@ -908,16 +909,33 @@ function EventLog({
     el.scrollTop = el.scrollHeight - el.clientHeight;
   };
 
-  useLayoutEffect(pin, [entries.length]);
+  // 玩家上一次停下來時是不是在底部。尺寸變化只在這時候追到底：往上捲回去點開
+  // 結算裡的狀態說明，說明展開也是尺寸變化，不該把人拖回今晚打老虎（issue #35）。
+  // 程式自己捲到底送出的捲動事件算出來也是「在底部」，所以不會卡住。
+  const atBottom = useRef(true);
+
+  useLayoutEffect(() => {
+    atBottom.current = true;
+    pin();
+  }, [entries.length]);
 
   useEffect(() => {
     const el = ref.current;
     const inner = innerRef.current;
     if (el === null || inner === null) return;
-    const observer = new ResizeObserver(pin);
+    const onScroll = () => {
+      atBottom.current = el.scrollHeight - el.clientHeight - el.scrollTop < 8;
+    };
+    const observer = new ResizeObserver(() => {
+      if (atBottom.current) pin();
+    });
+    el.addEventListener('scroll', onScroll, { passive: true });
     observer.observe(el);
     observer.observe(inner);
-    return () => observer.disconnect();
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+    };
   }, []);
 
   return (
