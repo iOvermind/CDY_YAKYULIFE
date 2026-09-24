@@ -10,7 +10,7 @@ import { lifeIndex } from './achievements.ts';
 import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
 import { roleRank } from './season.ts';
-import { EVENT_STREAK_FOR_CLUTCH } from './events.ts';
+import { BOLD_WINS_FOR_CLUTCH, EVENT_STREAK_FOR_THIEF } from './events.ts';
 
 const setup: GameSetup = {
   seed: 'test-seed',
@@ -2557,16 +2557,30 @@ describe('特性的取得條件', () => {
   type Card = { kind: string; tone?: string; title?: string; body?: string };
   const cards = (game: Game) => game.flow.log.filter((e) => e.kind === 'card') as Card[];
 
-  it('今晚打老虎：事件卡連續 6 次好結果', () => {
+  it('今晚打老虎：全力一搏累計成功 6 次，不必連續', () => {
     for (let i = 0; i < 60; i++) {
-      const log = cards(playCareer(`streak-${i}`, 'SS'));
-      const at = log.findIndex((c) => (c.body ?? '').includes('張事件卡全身而退'));
+      const log = cards(playCareer(`boldwin-${i}`, 'SS'));
+      const at = log.findIndex((c) => (c.body ?? '').includes('次賭贏——取得特性'));
       if (at < 0) continue;
-      const events = log.slice(0, at + 1).filter((c) => (c.title ?? '').startsWith('事件卡｜'));
-      expect(events.slice(-EVENT_STREAK_FOR_CLUTCH).every((c) => c.tone === 'good')).toBe(true);
+      const wins = log
+        .slice(0, at + 1)
+        .filter((c) => (c.title ?? '').startsWith('事件卡｜') && (c.title ?? '').includes('（全力一搏）') && c.tone === 'good');
+      expect(wins).toHaveLength(BOLD_WINS_FOR_CLUTCH);
       return;
     }
-    throw new Error('六十局都沒有靠連勝拿到今晚打老虎');
+    throw new Error('六十局都沒有靠全力一搏拿到今晚打老虎');
+  });
+
+  it('何金銀：事件卡連續 6 次壞結果', () => {
+    for (let i = 0; i < 60; i++) {
+      const log = cards(playCareer(`thief-${i}`, 'SS'));
+      const at = log.findIndex((c) => (c.body ?? '').includes('張事件卡全部搞砸'));
+      if (at < 0) continue;
+      const events = log.slice(0, at + 1).filter((c) => (c.title ?? '').startsWith('事件卡｜'));
+      expect(events.slice(-EVENT_STREAK_FOR_THIEF).every((c) => c.tone === 'bad')).toBe(true);
+      return;
+    }
+    throw new Error('六十局都沒有人拿到何金銀');
   });
 
   it('高手高手高高手：養成期累計擲出 6 顆 6，在選秀之前拿到', () => {

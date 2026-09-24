@@ -28,6 +28,8 @@ export interface GameEvent {
   readonly bad_ceiling?: Readonly<Record<AbilityKey, number>>;
   /** 抽取權重；未指定時視為 100，即常見事件。 */
   readonly weight?: number;
+  /** 只有全力一搏的好結果才給的效果鍵（例如心理醫生那張卡的〈今晚打老虎〉）。 */
+  readonly bold_only?: readonly string[];
 }
 
 interface EventsData {
@@ -39,7 +41,10 @@ interface EventsData {
     readonly clutch_bold: { readonly good: number; readonly bad: number };
   };
   readonly injury_magnitude: Readonly<Record<string, number>>;
-  readonly clutch_streak: { readonly value: number };
+  readonly clutch_bold_wins: { readonly value: number };
+  readonly thief_streak: { readonly value: number };
+  readonly cancer_bold_fails: { readonly value: number };
+  readonly distract: { readonly endorsement_weight: number; readonly threshold: number };
   readonly good_result_chance: {
     readonly base: number;
     /** 〈今晚打老虎〉加在基底上的百分點。 */
@@ -63,8 +68,14 @@ interface EventsData {
 
 const data = eventsJson as unknown as EventsData;
 
-/** 事件卡連續成功幾次取得〈今晚打老虎〉。 */
-export const EVENT_STREAK_FOR_CLUTCH = data.clutch_streak.value;
+/** 全力一搏累計成功幾次取得〈今晚打老虎〉。 */
+export const BOLD_WINS_FOR_CLUTCH = data.clutch_bold_wins.value;
+/** 事件卡連續失敗幾次取得〈何金銀〉。 */
+export const EVENT_STREAK_FOR_THIEF = data.thief_streak.value;
+/** 全力一搏累計失敗幾次取得〈烏鴉〉。 */
+export const BOLD_FAILS_FOR_CANCER = data.cancer_bold_fails.value;
+/** 〈外務纏身〉：代言次數的權重與門檻。 */
+export const DISTRACT = data.distract;
 
 /**
  * 這個階段每年抽幾張事件卡。
@@ -235,9 +246,19 @@ export interface EventOutcome {
  * 事件卡好結果直接給的特性。卡片寫 `"<特性 id>": 1`，呼叫端照這份名單發特性。
  *
  * 〈今晚打老虎〉原本六張卡都給，太容易拿（2026-09-25）；現在一張卡一個特性，
- * 老虎另外有「事件卡連續成功 6 次」那條路。〈巧克力〉是壞結果給的。
+ * 老虎另外有「全力一搏累計成功 6 次」那條路。〈巧克力〉是壞結果給的。
  */
-export const EVENT_TRAIT_KEYS: readonly string[] = ['yips', 'clutch', 'franchise', 'goldcloth', 'iron', 'combo', 'disc'];
+export const EVENT_TRAIT_KEYS: readonly string[] = [
+  'yips',
+  'clutch',
+  'franchise',
+  'goldcloth',
+  'iron',
+  'combo',
+  'disc',
+  'cancer',
+  'onetool',
+];
 
 /** 已知的特殊效果鍵。其餘鍵一律視為能力代碼。 */
 const SPECIAL_KEYS = new Set([

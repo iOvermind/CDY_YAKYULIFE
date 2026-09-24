@@ -34,7 +34,9 @@
     "goldcloth": "取得〈全台主場〉",
     "iron": "取得〈魔鬼筋肉人〉",
     "combo": "取得〈黯然銷魂飯〉",
-    "disc": "取得〈斷水流〉"
+    "disc": "取得〈斷水流〉",
+    "cancer": "取得〈烏鴉〉",
+    "onetool": "取得〈善良之槍〉"
   },
   "_ceiling_note": "事件另可帶 good_ceiling / bad_ceiling 欄位，提升或降低指定能力的上限。它與 good_effects 是**不同的東西**：effects 直接加減能力值，ceiling 只移動天花板，點數仍要自己練上去。每項能力的上限提升最多累積 abilities.json 的 scale.max_ceiling_bonus 點。",
   "magnitude": {
@@ -55,8 +57,21 @@
     "bold": 16,
     "_clutch_note": "今晚打老虎不再減輕全力一搏的受傷（2026-09-25）：它給的是膽識與上檔，不是鐵打的身體。"
   },
-  "clutch_streak": {
-    "_note": "〈今晚打老虎〉的取得條件：事件卡**連續**抽到好結果這麼多次。整段生涯一條連勝，不限應對方式，壞結果歸零。另一條路是〈跟心理醫生大吐苦水〉的好結果。",
+  "thief_streak": {
+    "_note": "〈何金銀〉的取得條件：事件卡**連續**抽到壞結果這麼多次，不限應對方式。整段生涯一條連敗，抽到好結果就歸零。",
+    "value": 6
+  },
+  "cancer_bold_fails": {
+    "_note": "〈烏鴉〉的取得條件之一：全力一搏累計失敗這麼多次（賭輸就掀桌）。另一條路是〈跟總教練當眾翻臉〉的好結果。",
+    "value": 8
+  },
+  "distract": {
+    "_note": "〈外務纏身〉的取得條件：代言次數 × endorsement_weight + 外遇次數（含沒被抓到的）≥ threshold。代言次數是事件卡好結果帶代言收入（income > 0）的次數。",
+    "endorsement_weight": 0.5,
+    "threshold": 4
+  },
+  "clutch_bold_wins": {
+    "_note": "〈今晚打老虎〉的取得條件：全力一搏**累計**成功這麼多次，不必連續（2026-09-25）。原本是「事件卡連續 6 次好結果、不限應對方式」，但只選保守的人（成功率 70%）有 96% 拿得到，又變成人手一個。另一條路是在〈跟心理醫生大吐苦水〉全力一搏賭贏。",
     "value": 6
   },
   "good_result_chance": {
@@ -644,6 +659,8 @@
       "good_text": "解開內心死結，大心臟養成完畢",
       "bad_text": "心理師太爛，聊完反而覺得人生沒希望",
       "good_effects": {"clutch": 1, "eye": 2, "recover": 3},
+      "_bold_only_note": "〈今晚打老虎〉只給全力一搏賭贏的人——選照常、保守的好結果照樣拿選球與耐力，但大心臟得自己賭出來（2026-09-25）。",
+      "bold_only": ["clutch"],
       "bad_effects": {
         "sta": -2
       }
@@ -741,6 +758,20 @@
         "sta": 2
       },
       "bad_effects": {"sta": -3, "income": -5}
+    },
+    {
+      "id": "event_49",
+      "name": "跟總教練當眾翻臉",
+      "for": "PRO",
+      "weight": 5,
+      "good_text": "當眾拍桌，總教練當場退讓——你贏了這一仗，但休息室從此記住你了",
+      "bad_text": "吵輸了，被打入冷宮，只在最關鍵的時候才叫你的名字",
+      "good_effects": {
+        "cancer": 1
+      },
+      "bad_effects": {
+        "onetool": 1
+      }
     }
   ]
 }

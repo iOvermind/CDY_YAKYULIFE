@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "_source": "承接原 traits.json（7 筆宣告式規則），其餘 20 筆的名稱、分類與效果文案抽取自 index_legacy.html TRAIT_KEYS / TRAIT_N / TRAIT_FX / traitName() / traitTagStyle()",
-  "_completeness_note": "本檔目前是**混合狀態**，這是刻意的，不是漏抽：rules_complete 為 true 的 7 筆帶有可執行的 conditions / effects；為 false 的 20 筆只有名稱、分類與效果文案，其觸發條件仍散在 index_legacy.html 的流程程式碼裡，尚未資料化。原因是現階段不做 Rules Engine（公式形狀留在程式碼）。要判斷一筆能不能被規則引擎執行，一律看 rules_complete，不要靠有沒有 conditions 欄位推測。",
+  "_completeness_note": "rules_complete 為 true 表示取得條件與效果都已經在程式裡實作（2026-09-25 盤點過一次）；取得條件寫在各筆的 _unlock_note。conditions／effects 那種宣告式規則已經不用了，一律刪掉，避免跟程式裡的實作各說各話。",
   "_naming_note": "combo 在原 traits.json 寫作「無巧不工」，但 index_legacy.html:612 為「黯然銷魂飯」。後者是成語的正確寫法，此處採用之。",
   "categories": {
     "_note": "顯示順序即此處的陣列順序。",
@@ -24,7 +24,6 @@
       "clutch",
       "phoenix",
       "rubber",
-      "onetool",
       "smallschool",
       "grinder",
       "combo",
@@ -40,7 +39,8 @@
       "distract",
       "cancer",
       "ambience",
-      "thief"
+      "thief",
+      "onetool"
     ]
   },
   "dynamic_names": {
@@ -109,7 +109,7 @@
     {
       "id": "taiwan",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "Team Taiwan",
       "effect_text": "國際賽徵召超過 5 次的國家隊常客",
       "desc": "只要國旗升起，打擊區裡站的就是你。體育署的公文比球團的合約還準時——<b class=\"hl\">國際賽徵召超過 5 次的國家隊常客</b>。",
@@ -147,7 +147,7 @@
     {
       "id": "confidante",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "啦啦隊殺手",
       "effect_text": "紅粉知己遍佈，情場的隱藏稱號",
       "desc": "每一隊的啦啦隊休息室都流傳著你的名字，而你一段也沒有留下來——<b class=\"hl\">紅粉知己遍佈，情場的隱藏稱號</b>。"
@@ -191,7 +191,7 @@
     {
       "id": "academy",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "逃學威龍",
       "effect_text": "25 歲前受傷率 −5%、季初擲骰期望值提升",
       "desc": "二十五歲以前有人幫你排睡眠、排飲食、排重訓，連逃課都有體能教練在門口等——<b class=\"hl\">25 歲前受傷率 −5%、季初擲骰期望值提升</b>。",
@@ -200,7 +200,7 @@
     {
       "id": "intlace",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "東亞功夫",
       "effect_text": "國際賽不增加受傷風險，每次徵召能力點保底 +2",
       "desc": "一披上國家隊的戰袍你就像換了一個人，國際賽的疲勞在你身上找不到落腳處——<b class=\"hl\">國際賽不增加受傷風險，每次徵召能力點保底 +2</b>。"
@@ -221,15 +221,16 @@
       "name": "今晚打老虎",
       "effect_text": "事件卡成功率 +10%；全力一搏成功時效果翻倍、失敗時懲罰減輕；國際賽 MVP 機率加倍，球隊奪冠機率 ×1.2",
       "desc": "經歷了無數次的豪賭，你的心態堅毅無比，再大的場面也不會讓你心驚膽跳。從此以後，賭得更多，得到更多，輸得更少——<b class=\"hl\">事件卡成功率 +10%；全力一搏成功時效果翻倍、失敗時懲罰減輕；國際賽 MVP 機率加倍，季後賽更容易贏（球隊奪冠機率 ×1.2）</b>。",
-      "_unlock_note": "取得：事件卡連續抽到 6 次好結果（整段生涯一條連勝，不限應對方式，壞結果歸零），或〈跟心理醫生大吐苦水〉的好結果。見 events.json 的 clutch_streak。"
+      "_unlock_note": "取得：全力一搏累計成功 6 次（不必連續），或在〈跟心理醫生大吐苦水〉全力一搏賭贏。見 events.json 的 clutch_bold_wins。"
     },
     {
       "id": "phoenix",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "浴火鳳凰",
       "effect_text": "帕瓦諾懲罰解除，受傷率恢復正常",
-      "desc": "開過刀、復健過、被說過這輩子完了。你回來了，而且比以前更硬——<b class=\"hl\">帕瓦諾懲罰解除，受傷率恢復正常</b>。"
+      "desc": "開過刀、復健過、被說過這輩子完了。你回來了，而且比以前更硬——<b class=\"hl\">帕瓦諾懲罰解除，受傷率恢復正常</b>。",
+      "_unlock_note": "取得：有〈帕瓦諾〉的人連續 3 季沒受傷，帕瓦諾拿掉、換成浴火鳳凰。見 injury.json 的 phoenix。"
     },
     {
       "id": "rubber",
@@ -241,16 +242,17 @@
     },
     {
       "id": "onetool",
-      "tone": "good",
-      "rules_complete": false,
+      "tone": "bad",
+      "rules_complete": true,
       "name": "善良之槍",
-      "effect_text": "只剩一項武器的替補奇兵，出賽數銳減",
-      "desc": "你只剩一招，但那一招全聯盟都怕。總教練只在最關鍵的時候叫你的名字——<b class=\"hl\">只剩一項武器的替補奇兵，出賽數銳減</b>。"
+      "effect_text": "被打入冷宮，出賽量減半，直到換隊",
+      "desc": "你只剩一招，但總教練不想看到你。只有在最關鍵的時候，他才會叫你的名字——<b class=\"dn\">出賽量減半，直到換隊為止</b>。",
+      "_unlock_note": "取得：〈跟總教練當眾翻臉〉的壞結果。換隊（交易、轉隊、自由球員）時解除。見 injury.json 的 onetool。"
     },
     {
       "id": "smallschool",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "國產凌凌漆",
       "effect_text": "小學校出身，站上頂級舞台",
       "desc": "你的學校連專用球場都沒有，現在你站在全國轉播的鏡頭前——<b class=\"hl\">小學校出身，站上頂級舞台</b>。"
@@ -258,7 +260,7 @@
     {
       "id": "grinder",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "包龍星",
       "effect_text": "平庸天賦，靠汗水熬成的生涯",
       "desc": "天分只是平均，汗水不是。你用每一個清晨把自己熬進了職業——<b class=\"hl\">平庸天賦，靠汗水熬成的生涯</b>。"
@@ -307,7 +309,7 @@
     {
       "id": "glass",
       "tone": "bad",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "帕瓦諾",
       "effect_text": "痛痛人，基礎受傷機率 40%（常人 15%）",
       "desc": "你打個噴嚏，隊醫就先拿出冰袋——<b class=\"dn\">基礎受傷機率 40%（常人 15%）</b>，練滿體力也只能從這裡往下扣。"
@@ -315,7 +317,7 @@
     {
       "id": "rogue_king",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "鹿鼎公",
       "effect_text": "兩位對象同時在你身邊，每年的感情回報與生子各擲各的",
       "desc": "一個家、兩位她，你是全聯盟最會排行程的人——<b class=\"hl\">兩位對象同時在你身邊，每年的感情回報與生子各擲各的</b>。"
@@ -323,7 +325,7 @@
     {
       "id": "cuckold",
       "tone": "bad",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "縮頭烏龜",
       "effect_text": "你留下來了，每年的感情事件改成倒扣狀態，而且這段關係走不掉。至於孩子⋯⋯",
       "desc": "有些事情，裝作沒看到比較好過——<b class=\"dn\">每年的感情事件改成倒扣狀態，而且這段關係走不掉</b>。至於孩子⋯⋯"
@@ -331,7 +333,7 @@
     {
       "id": "scum",
       "tone": "bad",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "花樣年華",
       "effect_text": "有老婆的人就不要亂來，每次外遇被抓到，全能力 −5",
       "desc": "有老婆的人就不要亂來——<b class=\"dn\">每次外遇被抓到，全能力 −5</b>。"
@@ -339,10 +341,11 @@
     {
       "id": "yips",
       "tone": "bad",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "巧克力",
       "effect_text": "打球時撞到腦袋，只會變張三。系統評價 −3，升上更高層級或奪得年度獎項可解除",
-      "desc": "打球時撞到腦袋，只會變張三——<b class=\"dn\">系統評價 −3</b>，升上更高層級或奪得年度獎項可解除。"
+      "desc": "打球時撞到腦袋，只會變張三——<b class=\"dn\">系統評價 −3</b>，升上更高層級或奪得年度獎項可解除。",
+      "_unlock_note": "取得：事件卡的壞結果。升上更高層級或拿下年度獎項時解除。"
     },
     {
       "id": "distract",
@@ -351,33 +354,7 @@
       "name": "外務纏身",
       "effect_text": "季初擲骰永久 −1 顆（最低 2 顆）",
       "desc": "通告、代言、社群媒體佔據了你太多心神，休賽季很久沒有完整專注在棒球上——<b class=\"dn\">季初擲骰永久 −1 顆</b>（最低 2 顆）。",
-      "conditions": {
-        "operator": "AND",
-        "rules": [
-          {
-            "path": "traits.disc",
-            "op": "==",
-            "val": false
-          },
-          {
-            "path": "love.affairs_and_caught_and_snack",
-            "op": ">=",
-            "val": 4
-          },
-          {
-            "path": "love.affairs_and_caught",
-            "op": ">=",
-            "val": 1
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "modify_season_dice",
-          "val": -1,
-          "min": 2
-        }
-      ]
+      "_unlock_note": "取得：代言次數 × 0.5 + 外遇次數（含沒被抓到的）≥ 4。代言是事件卡好結果帶代言收入的那幾張。見 events.json 的 distract。"
     },
     {
       "id": "cancer",
@@ -386,36 +363,12 @@
       "name": "烏鴉",
       "effect_text": "季中被交易機率大增、續約條件惡化",
       "desc": "教練受夠了你沒事就掀桌，比起成績，球團現在更想清理休息室的氣氛——<b class=\"dn\">季中被交易機率大增、續約條件惡化</b>。",
-      "conditions": {
-        "operator": "OR",
-        "rules": [
-          {
-            "path": "cntBoldFail",
-            "op": ">=",
-            "val": 10
-          },
-          {
-            "path": "traits.scum",
-            "op": "==",
-            "val": true
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "increase_trade_chance",
-          "val": true
-        },
-        {
-          "type": "worsen_contract_terms",
-          "val": true
-        }
-      ]
+      "_unlock_note": "取得：全力一搏累計失敗 8 次，或〈跟總教練當眾翻臉〉的好結果。見 events.json 的 cancer_bold_fails。"
     },
     {
       "id": "ambience",
       "tone": "bad",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "我不是針對你",
       "effect_text": "認為所有隊友都是垃圾，轉隊機率永久提高",
       "desc": "我不是針對你，我是說在座的各位都是垃圾——<b class=\"dn\">轉隊機率永久提高</b>。"
@@ -425,29 +378,9 @@
       "tone": "bad",
       "rules_complete": true,
       "name": "何金銀",
-      "effect_text": "事件卡失敗率永久 +10%",
-      "desc": "做什麼事情都失敗，一事無成。球迷開始在社群叫你「何金銀」——<b class=\"dn\">事件卡失敗率永久 +10%</b>，這個名聲跟著你到退休。",
-      "conditions": {
-        "operator": "AND",
-        "rules": [
-          {
-            "path": "demotionRefused",
-            "op": "==",
-            "val": true
-          },
-          {
-            "path": "lastD_vs_expected",
-            "op": "<",
-            "val": 0
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "modify_event_fail_rate",
-          "val": 10
-        }
-      ]
+      "effect_text": "事件卡成功率永久 −10%",
+      "desc": "做什麼事情都失敗，一事無成。球迷開始在社群叫你「何金銀」——<b class=\"dn\">事件卡成功率永久 −10%</b>，這個名聲跟著你到退休。",
+      "_unlock_note": "取得：事件卡連續抽到 6 次壞結果（抽到好結果就歸零）。見 events.json 的 thief_streak。"
     },
     {
       "id": "two_way",

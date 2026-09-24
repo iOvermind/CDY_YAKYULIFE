@@ -53,7 +53,10 @@ import { canRejectOffer, qualifiesAsTwoWay, runDraft, TWO_WAY_TRAIT } from './dr
 import {
   cardsPerYear,
   drawEvent,
-  EVENT_STREAK_FOR_CLUTCH,
+  BOLD_FAILS_FOR_CANCER,
+  BOLD_WINS_FOR_CLUTCH,
+  DISTRACT,
+  EVENT_STREAK_FOR_THIEF,
   EVENT_TRAIT_KEYS,
   resolveEvent,
   successChances,
@@ -640,10 +643,24 @@ export class Game {
   #seasonShares: SeasonRecord['shares'] | null = null;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
-  /** 事件卡連續抽到好結果的次數。壞結果歸零，跨季累計。 */
-  #eventStreak = 0;
+  /** 全力一搏累計成功的次數。〈今晚打老虎〉看它。 */
+  #boldWins = 0;
   /** 養成期累計擲出的 6。〈高手高手高高手〉看它。 */
   #amateurSixes = 0;
+  /** 事件卡連續抽到壞結果的次數。〈何金銀〉看它。 */
+  #eventFailStreak = 0;
+  /** 全力一搏累計失敗的次數。〈烏鴉〉看它。 */
+  #boldFails = 0;
+  /** 事件卡代言（好結果帶代言收入）的次數。〈外務纏身〉看它。 */
+  #endorsements = 0;
+  /** 〈善良之槍〉是在哪一隊拿到的；換了隊就解除。 */
+  #onetoolTeam: string | null = null;
+  /** 有〈帕瓦諾〉之後連續沒受傷的季數。〈浴火鳳凰〉看它。 */
+  #glassHealthy = 0;
+  /** 帕瓦諾、善良之槍拿掉之後，成就照樣算——跟七傷拳同一個處理。 */
+  #glassEver = false;
+  #onetoolEver = false;
+  #yipsEver = false;
   /** 〈十里坡劍神〉：頂級聯盟、有出賽的季末綜合能力，連續的那一段。斷掉就清空。 */
   #lateBloomRun: number[] = [];
   /** 〈十里坡劍神〉加在抽到的潛力上的點數，量表內（最多到 80）。 */
@@ -957,7 +974,14 @@ export class Game {
         summary,
         awards: this.#awards,
         // 七傷拳開完刀就拿掉了，但撐過的那幾季照樣算一項成就。
-        traits: this.#sevenFistsEver ? new Set([...this.#traits, 'seven_fists']) : this.#traits,
+        // 七傷拳、帕瓦諾、善良之槍、巧克力拿掉之後，撐過的那段照樣算一項成就。
+        traits: new Set([
+          ...this.#traits,
+          ...(this.#sevenFistsEver ? ['seven_fists'] : []),
+          ...(this.#glassEver ? ['glass'] : []),
+          ...(this.#onetoolEver ? ['onetool'] : []),
+          ...(this.#yipsEver ? ['yips'] : []),
+        ]),
         traitNames: this.#traitNames,
         honors: this.#honors,
         halls: this.#ballots.filter((b) => b.inducted).map((b) => b.leagueName),
@@ -1536,9 +1560,13 @@ export class Game {
       const value = outcome.special[key];
       if (EVENT_TRAIT_KEYS.includes(key)) {
         if (this.#traits.has(key)) continue;
+        if (mode !== 'bold' && (event.bold_only ?? []).includes(key)) continue;
         this.#traits.add(key);
+        // 〈善良之槍〉只到換隊為止：記下是在哪一隊被打入冷宮的。
+        if (key === 'onetool') this.#onetoolTeam = this.#pro?.team ?? null;
         const name = traitName(key);
-        lines.push(`取得特性<b class="${key === 'yips' ? 'dn' : 'hl'}">〈${esc(name)}〉</b>`);
+        const bad = traitOf(key)?.tone === 'bad';
+        lines.push(`取得特性<b class="${bad ? 'dn' : 'hl'}">〈${esc(name)}〉</b>`);
       } else if (key === 'income' && typeof value === 'number' && this.#pro !== null) {
         // 代言與罰款：當季年薪的百分比。養成期沒有年薪，這一格落空，交給下面的保底。
         const amount = Math.round((this.#seasonSalary * value) / 100);
@@ -1571,13 +1599,30 @@ export class Game {
       }
     }
 
-    // 〈今晚打老虎〉的另一條路：事件卡**連續**抽到好結果。整段生涯一條連勝，不限
-    // 應對方式，壞結果歸零（2026-09-25）。
-    this.#eventStreak = outcome.good ? this.#eventStreak + 1 : 0;
-    if (this.#eventStreak >= EVENT_STREAK_FOR_CLUTCH && !this.#traits.has('clutch')) {
+    // 〈今晚打老虎〉的另一條路：全力一搏**累計**成功夠多次，不必連續（2026-09-25）。
+    // 躲在保守裡練不出大心臟——只選保守的人以前 96% 拿得到。
+    if (mode === 'bold' && outcome.good) this.#boldWins++;
+    if (this.#boldWins >= BOLD_WINS_FOR_CLUTCH && !this.#traits.has('clutch')) {
       this.#traits.add('clutch');
-      lines.push(`連續 ${this.#eventStreak} 張事件卡全身而退——取得特性<b class="hl">〈${esc(traitName('clutch'))}〉</b>`);
+      lines.push(`全力一搏第 ${this.#boldWins} 次賭贏——取得特性<b class="hl">〈${esc(traitName('clutch'))}〉</b>`);
     }
+    // 〈何金銀〉是它的反面：連續抽到壞結果，好結果歸零。
+    this.#eventFailStreak = outcome.good ? 0 : this.#eventFailStreak + 1;
+    if (this.#eventFailStreak >= EVENT_STREAK_FOR_THIEF && !this.#traits.has('thief')) {
+      this.#traits.add('thief');
+      lines.push(`連續 ${this.#eventFailStreak} 張事件卡全部搞砸——取得特性<b class="dn">〈${esc(traitName('thief'))}〉</b>`);
+    }
+    // 〈烏鴉〉：全力一搏累計輸夠多次，賭輸就掀桌。
+    if (mode === 'bold' && !outcome.good) this.#boldFails++;
+    if (this.#boldFails >= BOLD_FAILS_FOR_CANCER && !this.#traits.has('cancer')) {
+      this.#traits.add('cancer');
+      lines.push(`全力一搏第 ${this.#boldFails} 次失敗，你又掀了桌——取得特性<b class="dn">〈${esc(traitName('cancer'))}〉</b>`);
+    }
+    // 〈外務纏身〉：代言接多了。代言是好結果帶代言收入的那幾張卡。
+    const income = outcome.special['income'];
+    if (outcome.good && typeof income === 'number' && income > 0) this.#endorsements++;
+    const distract = this.#checkDistract();
+    if (distract !== '') lines.push(distract);
 
     // **不留沒有作用的卡**：上面全部落空的話（養成期沒有年薪可罰、大心臟早就有了），
     // 照結果的好壞給在用那一側隨機一項 ±1。
@@ -1626,6 +1671,26 @@ export class Game {
     const before = this.#ability[target] ?? 0;
     this.#applyPoints(target, v, { silent: true });
     return `<br>黯然銷魂飯：只練一招，多擲的 <b class="hl">${v}</b> 點全給了${esc(abilities.abilities[target] ?? target)}（${this.#deltaNote(target, v, before)}）。`;
+  }
+
+  /**
+   * 〈巧克力〉的解除：升上更高層級或拿下年度獎項。回傳要接在卡片後面的那一句；
+   * 身上沒有就是空字串。成就照樣留著——撞到頭那件事發生過。
+   */
+  #cureYips(why: string): string {
+    if (!this.#traits.has('yips')) return '';
+    this.#traits.delete('yips');
+    this.#yipsEver = true;
+    return `<br>${esc(why)}，腦袋裡那團霧散了——<b class="hl">〈${esc(traitName('yips'))}〉解除</b>。`;
+  }
+
+  /** 〈外務纏身〉：代言次數 × 0.5 + 外遇次數到門檻就取得。回傳要接在卡片上的那一句。 */
+  #checkDistract(): string {
+    if (this.#traits.has('distract')) return '';
+    const load = this.#endorsements * DISTRACT.endorsement_weight + this.#love.affairs;
+    if (load < DISTRACT.threshold) return '';
+    this.#traits.add('distract');
+    return `通告、代言、還有不該有的約會，把休賽季塞滿了——取得特性<b class="dn">〈${esc(traitName('distract'))}〉</b>`;
   }
 
   /** 季初的自主訓練：擲骰，逐顆分配。 */
@@ -2473,6 +2538,7 @@ export class Game {
     // 它只在守位會議上改變，因此勞損不會因為守位每年重算而漂移。
     const position = this.#fieldPosition ?? DH;
     // 禁賽 N 場：這一季的出賽量少掉那一截。用完歸零——禁賽不會跟到明年。
+    this.#onetoolCheck();
     const suspension = Math.max(0, 1 - this.#suspendedGames / levelOf(pro.level).games);
     this.#suspendedGames = 0;
     const line = playSeason(this.world, {
@@ -2492,7 +2558,8 @@ export class Game {
       // 輪值線掛在球隊戰力上——在爛隊當先發、去強隊只能進牛棚。
       teamWinRate: this.#league?.get(pro.team)?.winRate ?? null,
       // 傷病與禁賽的結果。乘的是出賽量，不是事後把數據打折。
-      seasonFactor: this.#seasonFactor * suspension,
+      // 〈善良之槍〉：被打入冷宮，出賽量再打折，直到換隊。
+      seasonFactor: this.#seasonFactor * suspension * (this.#traits.has(injuryCfg.onetool.trait) ? injuryCfg.onetool.season_factor : 1),
       catcherSeasons: this.#catcherSeasons,
     });
 
@@ -2806,7 +2873,13 @@ export class Game {
         'glass',
         '生涯第二次大傷。從此傷病如影隨形——<b class="dn">往後每季的受傷機率都有一個下限</b>。',
       );
-    } else if (result.kind === 'major' && this.#majorInjuries >= 2 && !this.#traits.has('glass')) {
+    } else if (
+      result.kind === 'major' &&
+      this.#majorInjuries >= 2 &&
+      !this.#traits.has('glass') &&
+      // 浴火鳳凰已經從帕瓦諾走出來了，不再貼回去。
+      !this.#traits.has(injuryCfg.phoenix.trait)
+    ) {
       // 32 歲以後的大傷是歲月的損耗，不是體質問題。
       this.flow.card(
         'info',
@@ -3026,6 +3099,9 @@ export class Game {
           break;
       }
     }
+    // 外遇次數在 loveYear 裡累加——〈外務纏身〉看代言與外遇的合計。
+    const distract = this.#checkDistract();
+    if (distract !== '') lines.push(distract);
     return lines;
   }
 
@@ -4013,6 +4089,8 @@ export class Game {
       homeFaith: this.#traits.has(awardsCfg.all_star.home_faith.trait),
     });
     if (won.length === 0) return;
+    const cured = this.#cureYips('拿下年度獎項');
+    if (cured !== '') this.flow.card('good', '巧克力解除', cured.replace(/^<br>/, ''));
 
     this.#awards.push(...won);
     const orgName = leagues.top_league_names[info.org] ?? info.org;
@@ -4131,6 +4209,7 @@ export class Game {
     }
 
     this.#lateBloom(levelOf(pro.level).top !== undefined && this.#seasonFactor > 0);
+    this.#phoenix();
 
     // ---- 老化
     const aging = applyAging(this.world, this.#ability, this.#age, this.#ceilingBonus, this.#traits);
@@ -4202,7 +4281,7 @@ export class Game {
         this.flow.card(
           top ? 'gold' : 'good',
           `升上${to.name}`,
-          `${esc(move.reason)}，被叫上<b class="hl">${esc(to.name)}</b>。`,
+          `${esc(move.reason)}，被叫上<b class="hl">${esc(to.name)}</b>。` + this.#cureYips('升上更高的層級'),
         );
       }
       pro.level = move.level;
@@ -5757,6 +5836,38 @@ export class Game {
       `${cfg.seasons} 季裡綜合能力從 ${before} 爬到 ${overall}。長年的沉潛終於開花結果——` +
         `<b class="hl">所有能力的潛力 +${cfg.potential}、能力 +${cfg.ability}</b>。`,
     );
+  }
+
+  /**
+   * 〈浴火鳳凰〉：有〈帕瓦諾〉的人連續 `healthy_seasons` 季沒受傷，帕瓦諾拿掉、換成
+   * 浴火鳳凰。帕瓦諾的成就照樣留著——那是這一生發生過的事。
+   */
+  #phoenix(): void {
+    if (!this.#traits.has('glass')) {
+      this.#glassHealthy = 0;
+      return;
+    }
+    this.#glassHealthy = this.#seasonInjury === null ? this.#glassHealthy + 1 : 0;
+    if (this.#glassHealthy < injuryCfg.phoenix.healthy_seasons) return;
+    this.#traits.delete('glass');
+    this.#glassEver = true;
+    this.#unlockTrait(
+      injuryCfg.phoenix.trait,
+      `帶著帕瓦諾的名聲，連續 ${this.#glassHealthy} 季沒進過傷兵名單。你回來了，而且比以前更硬——` +
+        '<b class="hl">帕瓦諾解除，受傷率恢復正常</b>。',
+    );
+  }
+
+  /**
+   * 〈善良之槍〉只到換隊為止。季初檢查一次：球隊換了就解除。
+   */
+  #onetoolCheck(): void {
+    const pro = this.#pro;
+    if (!this.#traits.has('onetool') || pro === null || pro.team === this.#onetoolTeam) return;
+    this.#traits.delete('onetool');
+    this.#onetoolEver = true;
+    this.#onetoolTeam = null;
+    this.flow.card('good', '重獲重用', `換到${esc(pro.team)}，新的總教練不管過去那些事——<b class="hl">〈${esc(traitName('onetool'))}〉解除</b>，你又有位置了。`);
   }
 
   /** 太早離開棒球的人走上哪一條路。沒走到第二人生是 null。 */
