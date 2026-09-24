@@ -49,7 +49,7 @@ import {
   winPct,
 } from '../src/engine/metrics.ts';
 import { abilitySpread, zQuantile } from '../src/engine/rivalPool.ts';
-import { defenseScore, type Abilities } from '../src/engine/rating.ts';
+import { defenseMark, defenseScore, rate, type Abilities } from '../src/engine/rating.ts';
 import { World } from '../src/engine/rng.ts';
 import { playSeason } from '../src/engine/season.ts';
 
@@ -795,6 +795,19 @@ function uniformAbility(value: number): Abilities {
  * 用 `annualAwards` 而不是自己比對 `winningLine`，是為了不讓校準跟正式路徑分岔：
  * 資格閘、投打分流、球隊勝率校正全都在那支函式裡，重寫一份遲早會對不起來。
  */
+/**
+ * 一個純野手打一季要的 SeasonContext。校準裡三處都用它——以前三處各寫一份舊介面
+ * （`better`、`overall`），`playSeason` 改了之後三處一起壞，而 scripts/ 不在型別
+ * 檢查的範圍裡，沒有人發現。
+ */
+function fielderSeason(level: string, ability: Abilities, position: string) {
+  return {
+    level, ability, position, scoringPosition: position,
+    rating: rate(ability, { position }), lockedSide: 'fielder' as const, twoWay: false,
+    standards: null, pitcherRole: null, teamWinRate: null, seasonFactor: 1,
+  };
+}
+
 /** 造一個能力 par+d 的野手，讓他在該聯盟打一季，回傳他拿到的獎。 */
 function awardsAtD(
   world: World,
@@ -807,17 +820,13 @@ function awardsAtD(
   const POS = 'CF';
   const overall = info.par + d;
   const ability = uniformAbility(overall);
-  const line = playSeason(world, {
-    level, ability, position: POS, overall, better: 'fielder', twoWay: false,
-    standards: null,
-  });
+  const line = playSeason(world, fielderSeason(level, ability, POS));
   if (line.batting === null) return [];
 
   const batting = battingShares(line.batting, proBaseline(level), null);
   const average = positionAverage(POS, level, null);
   const fielding = average === null ? null : fieldingShares({
-    defenseScore: defenseScore(ability, POS),
-    positionAverage: average,
+    defenseMark: defenseMark(defenseScore(ability, POS), average),
     positionShare: fieldingResponsibility(POS),
     leagueGames: info.games,
     gamesShare: line.batting.games / info.games,
@@ -831,6 +840,7 @@ function awardsAtD(
     fieldingWinPct: fielding === null ? null : winPct(fielding),
     winShares: batting.win + (fielding?.win ?? 0),
     battingWinShares: batting.win,
+    pitchingWinShares: 0,
   }).map((a) => a.code);
 }
 
@@ -904,17 +914,13 @@ function reportAwardRates(): void {
       const tally = new Map<string, number>();
 
       for (let i = 0; i < SAMPLES; i++) {
-        const line = playSeason(world, {
-          level, ability, position: POS, overall, better: 'fielder', twoWay: false,
-          standards: null,
-        });
+        const line = playSeason(world, fielderSeason(level, ability, POS));
         if (line.batting === null) continue;
 
         const batting = battingShares(line.batting, proBaseline(level), null);
         const average = positionAverage(POS, level, null);
         const fielding = average === null ? null : fieldingShares({
-          defenseScore: defenseScore(ability, POS),
-          positionAverage: average,
+          defenseMark: defenseMark(defenseScore(ability, POS), average),
           positionShare: fieldingResponsibility(POS),
           leagueGames: info.games,
           gamesShare: line.batting.games / info.games,
@@ -928,6 +934,7 @@ function reportAwardRates(): void {
           fieldingWinPct: fielding === null ? null : winPct(fielding),
           winShares: batting.win + (fielding?.win ?? 0),
           battingWinShares: batting.win,
+          pitchingWinShares: 0,
         })) {
           tally.set(a.code, (tally.get(a.code) ?? 0) + 1);
         }
@@ -993,15 +1000,7 @@ function difficultyGroup(label: string, SAMPLES: number, absolute: boolean): voi
     const world = new World(`difficulty-${level}`);
     let raw = 0;
     for (let i = 0; i < SAMPLES; i++) {
-      const line = playSeason(world, {
-        level,
-        ability,
-        position: 'CF',
-        overall,
-        better: 'fielder',
-        twoWay: false,
-        standards: null,
-      });
+      const line = playSeason(world, fielderSeason(level, ability, 'CF'));
       if (line.batting === null) continue;
       // 看的是**勝利份額**，不是責任額——責任額只是出賽量的換算，每場一定
       // 相等，量它等於量行事曆。「弱聯盟虛胖」講的是勝利份額。

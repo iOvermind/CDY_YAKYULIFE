@@ -3901,6 +3901,7 @@ export class Game {
       })(),
       // 年度最佳打者只看打擊那一段——守備有金手套，投球有最佳投手。
       battingWinShares: this.#seasons.at(-1)?.shares.batting.win ?? 0,
+      pitchingWinShares: this.#seasons.at(-1)?.shares.pitching.win ?? 0,
     });
     if (won.length === 0) return;
 
@@ -5294,7 +5295,8 @@ export class Game {
       const detail =
         `份額 ${l.sharePoints.toFixed(1)}` +
         `${l.awardPoints > 0 ? `＋榮譽 ${l.awardPoints.toFixed(1)}` : ''}` +
-        `${l.milestonePoints > 0 ? `＋里程碑 ${l.milestonePoints.toFixed(1)}` : ''}`;
+        `${l.milestonePoints > 0 ? `＋里程碑 ${l.milestonePoints.toFixed(1)}` : ''}` +
+        `${l.tenureDeduction > 0 ? `－年資未滿 ${l.tenureDeduction.toFixed(1)}` : ''}`;
       return (
         `<b class="hl">${esc(l.orgName)}${esc(l.tierLabel)}</b>` +
         `　評價分 <b class="hl">${Math.round(l.score)}</b>（${detail}）` +

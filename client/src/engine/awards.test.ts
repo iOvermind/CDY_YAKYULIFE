@@ -54,6 +54,7 @@ const ctx = (over: Partial<AwardContext> = {}): AwardContext => ({
   fieldingWinPct: 0.5,
   winShares: 8,
   battingWinShares: 5,
+  pitchingWinShares: 3,
   ...over,
 });
 
@@ -130,13 +131,13 @@ describe('winningLine', () => {
   });
 
   it('防禦率的門檻低於聯盟平均——越低越好', () => {
-    expect(winningLine(cfg.pitcher_of_year, CPBL, 0.5)!).toBeLessThan(BASE.era);
+    expect(winningLine(titleOf('era_king'), CPBL, 0.5)!).toBeLessThan(BASE.era);
   });
 
   it('賽揚的門檻比單項王低兩分——2.2 的球季該拿得到，不是五六季才一次', () => {
-    expect(cfg.pitcher_of_year.d).toBe(80 - leagues.levels['MLB']!.par - 2);
+    expect(titleOf('era_king').d).toBe(80 - leagues.levels['MLB']!.par - 2);
     // 波動的鬆那一端必須放得過 2.2，否則那種球季永遠是擲骰。
-    expect(winningLine(cfg.pitcher_of_year, MLB, 0)!).toBeGreaterThan(2.2);
+    expect(winningLine(titleOf('era_king'), MLB, 0)!).toBeGreaterThan(2.2);
   });
 
   it('年度最佳打者有門檻線——少了 d 的話這個獎永遠沒有人拿得到', () => {
@@ -217,8 +218,8 @@ describe('單項王', () => {
   });
 });
 
-describe('年度最佳投手', () => {
-  const a = cfg.pitcher_of_year;
+describe('防禦率王', () => {
+  const a = titleOf('era_king');
   const lineAt = (roll: number) => winningLine(a, CPBL, roll)!;
 
   /**
@@ -230,18 +231,18 @@ describe('年度最佳投手', () => {
   it('限先發——牛棚拿不到', () => {
     const era = lineAt(0) - 0.5;
     expect(
-      rate({ pitching: pit({ era, outs: 600 }), role: 'SP', batting: null }, 'pitcher_of_year'),
+      rate({ pitching: pit({ era, outs: 600 }), role: 'SP', batting: null }, 'era_king'),
     ).toBeGreaterThan(0.9);
     for (const role of ['CP', 'SU', 'MR', 'LR'] as const) {
       expect(
-        rate({ pitching: pit({ role, era, outs: 600 }), role, batting: null }, 'pitcher_of_year'),
+        rate({ pitching: pit({ role, era, outs: 600 }), role, batting: null }, 'era_king'),
       ).toBe(0);
     }
   });
 
   it('局數不足該聯盟場次就沒有資格', () => {
     expect(
-      rate({ pitching: pit({ era: 1.5, outs: 240 }), role: 'SP', batting: null }, 'pitcher_of_year'),
+      rate({ pitching: pit({ era: 1.5, outs: 240 }), role: 'SP', batting: null }, 'era_king'),
     ).toBe(0);
   });
 
@@ -253,7 +254,7 @@ describe('年度最佳投手', () => {
     expect(
       rate(
         { pitching: pit({ era: lineAt(0) + 0.3, outs: 600 }), role: 'SP', batting: null },
-        'pitcher_of_year',
+        'era_king',
       ),
     ).toBe(0);
   });
@@ -262,6 +263,26 @@ describe('年度最佳投手', () => {
     expect(lineAt(1)).toBeLessThan(lineAt(0));
   });
 });
+/**
+ * 年度最佳投手看投球勝利份額（與年度最佳打者對稱）。它曾經只看防禦率，於是跟
+ * 防禦率王是同一座獎。
+ */
+describe('年度最佳投手', () => {
+  const line = winningLine(cfg.pitcher_of_year, MLB, 0.5)!;
+
+  it('門檻線是投球份額，份額夠高的先發拿得到、不夠的拿不到', () => {
+    expect(line).toBeGreaterThan(5);
+    const ace = { pitching: pit({ era: 2.0, outs: 700 }), role: 'SP' as const, batting: null, leagueGames: 162, level: 'MLB' };
+    expect(rate({ ...ace, pitchingWinShares: line * 1.3 }, 'pitcher_of_year')).toBe(1);
+    expect(rate({ ...ace, pitchingWinShares: line * 0.7 }, 'pitcher_of_year')).toBe(0);
+  });
+
+  it('牛棚拿不到', () => {
+    const cp = { pitching: pit({ role: 'CP', era: 1.0, outs: 700 }), role: 'CP' as const, batting: null, leagueGames: 162, level: 'MLB' };
+    expect(rate({ ...cp, pitchingWinShares: line * 2 }, 'pitcher_of_year')).toBe(0);
+  });
+});
+
 
 describe('明星賽', () => {
   it('d 值越高入選率越高', () => {

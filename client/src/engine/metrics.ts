@@ -452,7 +452,12 @@ export function lossPenalty(
   level: string,
   standards: LeagueStandards | null = null,
 ): number {
-  const p0 = replacementWinPct(side, level, standards);
+  // **投打共用打者那一條替代勝率。** 投手自己的那條（.459）幾乎貼著聯盟平均：比 par
+  // 低 3 分對得分是 −19%，對防禦率只有 +8.6%，於是同樣 .546 的勝率，投手每一份責任
+  // 額只淨得 0.161、打者 0.248——十四季 ERA+ 115 的大聯盟先發因此只是替補。兩側用
+  // 同一個零點，同樣的勝率才換得到同樣的評價。
+  void side;
+  const p0 = replacementWinPct('batting', level, standards);
   if (p0 >= 1) return Number.POSITIVE_INFINITY;
   return p0 / (1 - p0);
 }

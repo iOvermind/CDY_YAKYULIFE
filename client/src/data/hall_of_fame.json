@@ -32,10 +32,10 @@
       "過客"
     ],
     "values": [
-      838,
-      632,
-      453,
-      131
+      744,
+      510,
+      279,
+      82
     ],
     "by_org": {
       "ABL": 0.34,
@@ -43,53 +43,24 @@
     },
     "_by_org_note": "**短球季聯盟的門檻打折**（issue #31）。澳職一季 40 場、墨聯 90 場，一季的份額只有中職（120 場，這組門檻主要就是對著它校的）的三分之一與四分之三，照同一組門檻的話，澳職 19 季 105 勝、ERA+ 184 的投手只拿得到明星。折數照 (162÷場次)×√(par÷62) 相對中職的比例：澳職 3.45÷1.18 → ×0.34、墨聯 1.63÷1.18 → ×0.72。**只動門檻不動分數**——評價分照樣是同一把尺，榜上的數字不變；其他聯盟不必重新校準。"
   },
+  "short_tenure": {
+    "_note": "**年資未滿的級距扣分**（2026-09-24）。大聯盟以外的聯盟，在那裡打不滿 full_seasons 季的人，評價分落在高段的部分打折——**像稅率級距**：每日先發以下那一段不扣；每日先發到明星那一段，每少一季扣 star_band_per_season；明星以上那一段，每少一季扣 hall_band_per_season。一季打出年度最佳的人拿得到那季的分，但拿不到一段生涯才該有的名份。",
+    "full_seasons": 10,
+    "exempt": ["MLB"],
+    "star_band_per_season": 0.05,
+    "hall_band_per_season": 0.1
+  },
   "award_points": {
     "_note": "榮譽的加分，單位與勝利份額相同（WS 當量）。刻意壓低到佔評價分的 15–25%——份額已經涵蓋了表現，再為「那年拿了 MVP」加一大筆等於同一份表現算兩次。榮譽剩下的價值是同儕與時代的認可，它該影響邊緣案例的入選與否，不該主導排序。",
-    "by_code": {
-      "mvp": 10,
-      "pitcher_of_year": 8,
-      "rookie_of_year": 3,
-      "batting_king": 3,
-      "hr_king": 3,
-      "rbi_king": 3,
-      "obp_king": 2.5,
-      "steal_king": 2,
-      "strikeout_king": 3,
-      "save_king": 3,
-      "gold_glove": 3,
-      "defense_king": 2,
-      "all_star": 0.35,
-      "championship": 2
-    },
+    "by_code": {"mvp": 7.0, "pitcher_of_year": 5.6, "rookie_of_year": 2.1, "batting_king": 2.1, "hr_king": 2.1, "rbi_king": 2.1, "obp_king": 1.75, "steal_king": 1.4, "strikeout_king": 2.1, "save_king": 2.1, "gold_glove": 2.1, "defense_king": 1.4, "all_star": 0.245, "championship": 1.4, "era_king": 2.1, "wins_king": 2.1},
     "_championship_note": "所屬球隊奪冠（by_code 的 championship）。冠軍是九個人的事，因此給得比個人獎項輕——在明星賽之上、單項王之下。養成期的盃賽冠軍用同一個價錢：冠軍就是冠軍，差別在它只進總評價分，不屬於任何職業聯盟。",
     "default": 0
   },
   "tier_floors": {
     "_note": "獎項保底：拿過這些獎的人，分級至少到某一帶。這個機制在份額尺度下比在 legacy 的累積量尺度下更重要——它處理的正是「短而璀璨」的生涯，那種人的累積份額不高，但沒有人會說他不是明星球員。",
     "_calibration_finding": "保底規則會**主導**分級分佈，因此獎項的取得率與分級門檻必須一起校準。曾經的狀況：上壘王有 64.8% 的生涯拿過、MVP 25.3%，明星帶因此佔到 23.6%（目標 8%）。改用「當年門檻線 ± 波動」的判定模型並調整 MVP 的 d 值門檻之後，取得率降到 MVP 5.9%、打擊王 13.3%、上壘王 12.6%，分級分佈也隨之收斂。**明星帶超標時要先看獎項取得率，不是先調門檻。**",
-    "rules": [
-      {
-        "codes": [
-          "mvp",
-          "pitcher_of_year"
-        ],
-        "min_tier": 1
-      },
-      {
-        "codes": [
-          "batting_king",
-          "hr_king",
-          "rbi_king",
-          "obp_king",
-          "steal_king",
-          "strikeout_king",
-          "save_king",
-          "gold_glove",
-          "defense_king"
-        ],
-        "min_tier": 2
-      }
-    ]
+    "_removed_note": "**保底規則已拿掉**（2026-09-24）：獎項不再保證分級，只加評價分（award_points）。保底讓每日先發膨脹到五成——金手套與守備王有六成與五成的生涯拿過——而投手拿不到那兩座，於是同樣的生涯野手比投手高一帶。規則陣列留空，機制本身保留。",
+    "rules": []
   },
   "halls": {
     "CPBL": {

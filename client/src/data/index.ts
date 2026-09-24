@@ -505,6 +505,13 @@ export interface FlavorData {
 
 export interface HallOfFameData {
   readonly difficulty: { readonly baseline_par: number; readonly exponent: number };
+  /** 年資未滿的級距扣分：每日→明星那段與明星以上那段，每少一季各扣多少。 */
+  readonly short_tenure: {
+    readonly full_seasons: number;
+    readonly exempt: readonly string[];
+    readonly star_band_per_season: number;
+    readonly hall_band_per_season: number;
+  };
   readonly tier_thresholds: {
     /** 五帶的名稱，由高到低。 */
     readonly labels: readonly string[];
@@ -589,6 +596,8 @@ export interface LeaderAward {
    * （能力 75），因此「拿到單項王」等於「打出錨點水準的一季」。
    */
   readonly d?: number;
+  /** 投球份額型的門檻線：那個投手每一場球隊比賽投幾局。 */
+  readonly ip_per_game?: number;
   /** 份額型門檻線的倍率。MVP 用它把只算打擊的線墊高一點；沒寫就是 1。 */
   readonly line_scale?: number;
   /** 累積型的門檻，以 reference_games 場的聯盟為準。 */

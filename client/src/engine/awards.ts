@@ -25,6 +25,7 @@ import { awards as cfg, type FieldingAward, type LeaderAward } from '../data/ind
 import { innings, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import {
   battingShares,
+  pitchingShares,
   proBaseline,
   proBaselineAt,
   proLineAt,
@@ -32,7 +33,7 @@ import {
   type Baseline,
 } from './metrics.ts';
 import type { World } from './rng.ts';
-import { levelOf, type PitcherRole } from './season.ts';
+import { eraAt, levelOf, type PitcherRole } from './season.ts';
 
 /**
  * 一座獎。
@@ -79,6 +80,8 @@ export interface AwardContext {
   readonly winShares: number;
   /** 只有打擊那一段的勝利份額。年度最佳打者看它。 */
   readonly battingWinShares: number;
+  /** 這一季投球那一本的勝利份額。年度最佳投手看它。 */
+  readonly pitchingWinShares: number;
   /**
    * 當年這個層級的能力離散度，單位與 d 值相同。「聯盟第一名」型的門檻由它推導。
    *
@@ -174,6 +177,16 @@ export function winningLine(award: LeaderAward, at: LineInput, roll: number): nu
     return average + (target - average) * swing;
   }
 
+  if (award.kind === 'shares' && award.stat === 'pitching_win_shares') {
+    if (d === undefined) return null;
+    // 年度最佳投手：比聯盟平均高 d 分的先發投滿一季的投球勝利份額。局數寫在資料裡
+    // （每場球隊比賽幾局），防禦率照成績模型的 eraAt——與 ERA+ 的分母同一組公式。
+    const par = levelOf(level).par;
+    const ip = games * (award.ip_per_game ?? 1.35);
+    const line = { outs: Math.round(ip * 3), era: eraAt(d, par) } as PitchingLine;
+    return pitchingShares(line, proBaseline(level), null, 'SP').win * (award.line_scale ?? 1) * swing;
+  }
+
   if (award.kind === 'shares') {
     if (d === undefined) return null;
     // **聯盟真尺**：門檻線吃該層級的 par，同一座獎全聯盟同一條線。個人的上限
@@ -239,6 +252,10 @@ function statValue(ctx: AwardContext, stat: string): number | null {
       return ctx.winShares;
     case 'batting_win_shares':
       return ctx.battingWinShares;
+    case 'pitching_win_shares':
+      return ctx.pitchingWinShares;
+    case 'w':
+      return p?.wins ?? null;
     default:
       return null;
   }

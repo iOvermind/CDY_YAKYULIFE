@@ -23,6 +23,7 @@ const career = (over: Partial<LeagueCareer> = {}): LeagueCareer => ({
   sharePoints: 120,
   awardPoints: 40,
   milestonePoints: 20,
+  tenureDeduction: 0,
   score: HOF + 10,
   tier: 0,
   scoreTier: 0,

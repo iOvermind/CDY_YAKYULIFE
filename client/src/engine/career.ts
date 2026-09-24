@@ -200,7 +200,9 @@ export interface LeagueCareer {
   readonly sharePoints: number;
   readonly awardPoints: number;
   readonly milestonePoints: number;
-  /** 評價分：以上三者相加。 */
+  /** 年資未滿的級距扣分（見 tenureDeduction）。0 表示沒扣。 */
+  readonly tenureDeduction: number;
+  /** 評價分：以上三者相加，再扣掉年資未滿的級距扣分。 */
   readonly score: number;
   /** 分級，0 為名人堂，4 為過客。**含獎項保底**——這是這段生涯的稱號。 */
   readonly tier: number;
@@ -307,6 +309,25 @@ export function seasonPoints(record: SeasonRecord): number {
     record.shares.pitching.win - record.lossPenalty.pitching * record.shares.pitching.loss +
     record.shares.fielding.win - record.lossPenalty.fielding * record.shares.fielding.loss;
   return net * record.difficulty;
+}
+
+/**
+ * 年資未滿的級距扣分（像稅率級距）。回傳扣掉的分數，0 表示不扣。
+ *
+ * 大聯盟以外的聯盟，在那裡打不滿 `full_seasons` 季的人：評價分落在每日先發以下的
+ * 那一段不動；每日先發到明星那一段，每少一季扣 `star_band_per_season`；明星以上的
+ * 那一段，每少一季扣 `hall_band_per_season`。門檻用這個聯盟自己的那一組。
+ */
+export function tenureDeduction(org: string, seasons: number, score: number): number {
+  const t = cfg.short_tenure;
+  if (t.exempt.includes(org)) return 0;
+  const short = Math.max(0, t.full_seasons - seasons);
+  if (short === 0) return 0;
+  const [, star = Infinity, daily = Infinity] = tierThresholds(org);
+  const starBand = Math.max(0, Math.min(score, star) - daily);
+  const hallBand = Math.max(0, score - star);
+  const rate = (per: number) => Math.min(1, per * short);
+  return starBand * rate(t.star_band_per_season) + hallBand * rate(t.hall_band_per_season);
 }
 
 /** 這座獎值多少分。 */
@@ -508,7 +529,9 @@ export function summarizeCareer(
 
     const milestones = evaluateMilestones('league', lines.batting, lines.pitching);
 
-    const score = sharePoints + awardTotal + milestones.points;
+    const raw = sharePoints + awardTotal + milestones.points;
+    const deduction = tenureDeduction(org, seasonCount(list), raw);
+    const score = raw - deduction;
     const scoreTier = tierOf(score, org);
     const tier = applyTierFloors(scoreTier, new Set(own.map((a) => a.code)));
 
@@ -525,6 +548,7 @@ export function summarizeCareer(
       sharePoints,
       awardPoints: awardTotal,
       milestonePoints: milestones.points,
+      tenureDeduction: deduction,
       score,
       tier,
       scoreTier,

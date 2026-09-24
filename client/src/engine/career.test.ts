@@ -11,6 +11,7 @@ import {
   seasonPoints,
   signatureRoles,
   summarizeCareer,
+  tenureDeduction,
   tierThresholds,
   tierLabel,
   tierOf,
@@ -197,13 +198,14 @@ describe('分級', () => {
     expect(tierLabel(0)).toBe('名人堂');
   });
 
-  it('拿過 MVP 的人至少是明星——處理的是短而璀璨的生涯', () => {
-    expect(applyTierFloors(4, new Set(['mvp']))).toBe(1);
-    expect(applyTierFloors(4, new Set(['pitcher_of_year']))).toBe(1);
-  });
-
-  it('拿過單項王的人至少是每日先發', () => {
-    expect(applyTierFloors(4, new Set(['hr_king']))).toBe(2);
+  /**
+   * 保底拿掉了（2026-09-24）：獎項只加評價分，不再保證分級。保底讓每日先發膨脹到
+   * 五成，而投手拿不到金手套與守備王，同樣的生涯野手比投手高一帶。
+   */
+  it('獎項不再保證分級——MVP、單項王、金手套都一樣', () => {
+    for (const code of ['mvp', 'pitcher_of_year', 'hr_king', 'gold_glove', 'defense_king']) {
+      expect(applyTierFloors(4, new Set([code]))).toBe(4);
+    }
   });
 
   it('保底不會把已經更高的分級往下拉', () => {
@@ -462,5 +464,30 @@ describe('各聯盟的分級門檻', () => {
     const score = (tierThresholds('ABL')[0] ?? 0) + 1;
     expect(tierOf(score, 'ABL')).toBe(0);
     expect(tierOf(score, 'CPBL')).toBeGreaterThan(0);
+  });
+});
+
+/** 年資未滿的級距扣分：像稅率級距，每日以下不扣、每日→明星輕扣、明星以上重扣。 */
+describe('tenureDeduction', () => {
+  const [hall = 0, star = 0, daily = 0] = tierThresholds('CPBL');
+
+  it('大聯盟與滿十季的人不扣', () => {
+    expect(tenureDeduction('MLB', 3, hall + 100)).toBe(0);
+    expect(tenureDeduction('CPBL', 10, hall + 100)).toBe(0);
+  });
+
+  it('每日先發以下那一段不扣', () => {
+    expect(tenureDeduction('CPBL', 5, daily)).toBe(0);
+  });
+
+  it('明星以上那一段扣得比每日→明星那一段重', () => {
+    // 少 4 季：每日→明星那段扣 20%、明星以上那段扣 40%。
+    const d = tenureDeduction('CPBL', 6, star + 100);
+    expect(d).toBeCloseTo((star - daily) * 0.2 + 100 * 0.4, 6);
+  });
+
+  it('墨聯、澳職用自己打過折的門檻', () => {
+    const [, lmbStar = 0, lmbDaily = 0] = tierThresholds('LMB');
+    expect(tenureDeduction('LMB', 9, lmbStar)).toBeCloseTo((lmbStar - lmbDaily) * 0.05, 6);
   });
 });
