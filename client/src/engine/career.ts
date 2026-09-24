@@ -16,7 +16,7 @@
  * 本模組是純函式，不抽亂數。名人堂票選要擲骰，因此在 `hall.ts`。
  */
 
-import { achievements, awards as awardsCfg, hallOfFame as cfg, leagues } from '../data/index.ts';
+import { achievements, awards as awardsCfg, hallOfFame as cfg, ladder as ladderCfg, leagues } from '../data/index.ts';
 import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { ladderTop, rungName } from './achievements.ts';
 import type { PitcherRole } from './season.ts';
@@ -606,4 +606,38 @@ function pickRepresentative(
   return (
     [...tied].sort((a, b) => b.seasons - a.seasons || parOf(b.org) - parOf(a.org))[0] ?? null
   );
+}
+
+/**
+ * 生涯的代表守位與代表定位：**頂級聯盟**裡守過最多季的那一個（issue #25）。
+ *
+ * 引退之後姓名旁那個標籤問的是「他是什麼樣的球員」，不是「他最後一年站哪裡」——
+ * 十八年游擊、最後兩年一壘的人是游擊手。二軍與小聯盟不算：沒人管你在小聯盟守了
+ * 幾場游擊。同樣多季時取守備價值高的（野手照天梯的守位順序，捕手最重），投手同理
+ * （先發、終結、布局、中繼、長中繼）。沒打過頂級聯盟的人回傳 null，呼叫端照舊用
+ * 最後一年的。
+ */
+export function signatureRoles(seasons: readonly SeasonRecord[]): {
+  readonly position: string | null;
+  readonly pitcherRole: PitcherRole | null;
+} {
+  const top = seasons.filter((s) => leagues.levels[s.level]?.top !== undefined);
+  const pick = <T extends string>(values: readonly (T | null)[], order: readonly string[]): T | null => {
+    const count = new Map<T, number>();
+    for (const v of values) if (v !== null) count.set(v, (count.get(v) ?? 0) + 1);
+    let best: T | null = null;
+    for (const [v, n] of count) {
+      const b = best === null ? -1 : (count.get(best) ?? 0);
+      const rank = (x: T) => {
+        const i = order.indexOf(x);
+        return i < 0 ? order.length : i;
+      };
+      if (n > b || (n === b && best !== null && rank(v) < rank(best))) best = v;
+    }
+    return best;
+  };
+  return {
+    position: pick(top.map((s) => s.position), ladderCfg.positions.fielding),
+    pitcherRole: pick(top.map((s) => s.pitcherRole), ladderCfg.positions.pitching),
+  };
 }

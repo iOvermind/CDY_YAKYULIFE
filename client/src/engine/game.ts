@@ -79,6 +79,7 @@ import {
 } from './contract.ts';
 import {
   difficultyOf,
+  signatureRoles,
   summarizeCareer,
   type CareerSummary,
   type SeasonRecord,
@@ -892,6 +893,17 @@ export class Game {
   /** 目前的球員狀態。流程開始前為 null。 */
   get state(): PlayerState | null {
     if (this.#player === null) return null;
+    // 引退之後姓名旁的標籤寫**代表守位**：頂級聯盟守過最多季的那一個（issue #25）。
+    // 生涯還在走的時候寫現在的登錄——那才是玩家做決定時要看的。
+    const current = {
+      position: this.#fieldPosition,
+      pitcherRole: this.#pro === null ? amateurRole(this.#stage, this.#ability) : this.#pitcherRole,
+    };
+    const career = this.#retiredFrom === null ? null : signatureRoles(this.#seasons);
+    const signature = {
+      position: career?.position ?? current.position,
+      pitcherRole: career?.pitcherRole ?? current.pitcherRole,
+    };
     return {
       origin: this.#player,
       ability: this.#ability,
@@ -925,15 +937,15 @@ export class Game {
         ALL_ABILITIES.map((key) => [key, this.#ceilingOf(key)]),
       ) as Record<AbilityKey, number>,
       injuryRisk: this.#injuryRisk,
-      position: this.#fieldPosition,
-      positionName: this.#fieldPosition === null ? null : positionLabel(this.#fieldPosition),
+      position: signature.position,
+      positionName: signature.position === null ? null : positionLabel(signature.position),
       // 職業期是**已登錄的**定位，不是現算的。與守位同一個立場：它在定位會議
       // 上決定，之後整季不變——現算會讓玩家拒絕過的升遷在畫面上偷偷生效。
       //
       // 養成期沒有定位會議，因此是**現算的**：學生球隊的位置不是誰宣告的，是
       // 體力與球威當下的樣子（見 amateurRole）。點下體力越過該階段的 par，
       // 記分板上的標籤當場從牛棚跳進輪值——那個即時回饋正是玩家需要的資訊。
-      pitcherRole: this.#pro === null ? amateurRole(this.#stage, this.#ability) : this.#pitcherRole,
+      pitcherRole: signature.pitcherRole,
       playsField: this.#playsField,
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,

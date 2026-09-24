@@ -9,6 +9,7 @@ import {
   difficultyOf,
   evaluateMilestones,
   seasonPoints,
+  signatureRoles,
   summarizeCareer,
   tierLabel,
   tierOf,
@@ -411,5 +412,36 @@ describe('總冠軍的歸屬', () => {
     expect(two.leagues[0]!.awardPoints).toBeCloseTo(none.leagues[0]!.awardPoints);
     expect(two.amateurTitlePoints).toBeCloseTo(2 * awardPoints('championship'));
     expect(two.totalScore - none.totalScore).toBeCloseTo(two.amateurTitlePoints);
+  });
+});
+
+/** 引退後的代表守位（issue #25）。 */
+describe('signatureRoles', () => {
+  const at = (position: string | null, level = 'CPBL1', pitcherRole: SeasonRecord['pitcherRole'] = null) =>
+    season({ position, level, pitcherRole });
+
+  it('頂級聯盟守過最多季的那一個，不是最後一年', () => {
+    const seasons = [...Array(6).fill(at('SS')), at('1B'), at('1B')];
+    expect(signatureRoles(seasons).position).toBe('SS');
+  });
+
+  it('同樣多季取守備價值高的', () => {
+    expect(signatureRoles([at('1B'), at('1B'), at('SS'), at('SS')]).position).toBe('SS');
+    expect(signatureRoles([at('LF'), at('CF')]).position).toBe('CF');
+  });
+
+  it('二軍與小聯盟不算', () => {
+    const seasons = [...Array(5).fill(at('SS', 'CPBL2')), at('3B'), at('3B')];
+    expect(signatureRoles(seasons).position).toBe('3B');
+  });
+
+  it('投手定位同理', () => {
+    const seasons = [...Array(10).fill(at(null, 'MLB', 'SP')), at(null, 'MLB', 'LR'), at(null, 'MLB', 'LR')];
+    expect(signatureRoles(seasons).pitcherRole).toBe('SP');
+    expect(signatureRoles([at(null, 'MLB', 'CP'), at(null, 'MLB', 'SP')]).pitcherRole).toBe('SP');
+  });
+
+  it('沒打過頂級聯盟就沒有代表守位', () => {
+    expect(signatureRoles([at('SS', 'CPBL2')])).toEqual({ position: null, pitcherRole: null });
   });
 });
