@@ -155,10 +155,11 @@
     {
       "id": "genius",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "高手高手高高手",
-      "effect_text": "訓練骰永久 4 點起，事件卡好結果機率 65%",
-      "desc": "高手高手高高手，別人練一年的東西你看一眼就會——<b class=\"hl\">訓練骰永久 4 點起，事件卡好結果機率 65%</b>。"
+      "effect_text": "訓練骰擲出 4～6 點的機率提高兩成，1～3 點相對減少",
+      "desc": "高手高手高高手，別人練一年的東西你看一眼就會——<b class=\"hl\">訓練骰擲出 4～6 點的機率提高兩成，1～3 點相對減少</b>。",
+      "_unlock_note": "取得：養成期（國中、高中）累計擲出 6 顆 6。見 abilities.json 的 training_dice.genius_sixes。"
     },
     {
       "id": "iron",
@@ -173,49 +174,9 @@
       "tone": "good",
       "rules_complete": true,
       "name": "十里坡劍神",
-      "effect_text": "訓練骰永久 3 點起，事件卡好結果機率 65%",
-      "desc": "長年的沉潛與摸索終於開花結果，你的棒球人生下半場才正要開始——<b class=\"hl\">季初擲骰進階至「3~6」</b>，基礎受傷率下降。",
-      "conditions": {
-        "operator": "AND",
-        "rules": [
-          {
-            "path": "traits.genius",
-            "op": "==",
-            "val": false
-          },
-          {
-            "path": "ovr",
-            "op": "<",
-            "val": 47
-          },
-          {
-            "path": "age",
-            "op": ">=",
-            "val": 25
-          },
-          {
-            "path": "age",
-            "op": "<",
-            "val": 32
-          },
-          {
-            "path": "last_gain",
-            "op": ">=",
-            "val": 16
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "modify_dice_range",
-          "min": 3,
-          "max": 6
-        },
-        {
-          "type": "modify_base_injury_rate",
-          "val": -10
-        }
-      ]
+      "effect_text": "取得時所有能力的潛力上限 +5、所有能力 +1（皆不超過 80）",
+      "desc": "長年的沉潛與摸索終於開花結果，你的棒球人生下半場才正要開始——<b class=\"hl\">所有能力的潛力上限 +5、所有能力 +1（皆不超過 80）</b>。",
+      "_unlock_note": "取得：在頂級聯盟連續 6 季，綜合能力累計上升 8 以上。見 abilities.json 的 late_bloom。"
     },
     {
       "id": "disc",
@@ -286,45 +247,9 @@
       "tone": "good",
       "rules_complete": true,
       "name": "今晚打老虎",
-      "effect_text": "所有應對成功率天才級；全力一搏不受懲罰、成功幅度加倍、失敗不加重、受傷風險降級",
-      "desc": "經歷了無數次的豪賭，你的心態堅毅無比，無論甚麼事情都不可能讓你心驚膽跳，從此以後，賭得更多，得到更多，輸得更少。——<b class=\"hl\">事件的成功率全面提升至天才級；「全力一搏」另外免除成功率懲罰、成功幅度加倍、失敗幅度不加重、受傷風險降到普通級</b>，總冠軍與國際賽 MVP 機率提升。",
-      "conditions": {
-        "operator": "AND",
-        "rules": [
-          {
-            "path": "age",
-            "op": "<",
-            "val": 25
-          },
-          {
-            "path": "cntBoldWin",
-            "op": ">=",
-            "val": 7
-          }
-        ]
-      },
-      "effects": [
-        {
-          "type": "modify_bold_success_rate",
-          "val": "genius"
-        },
-        {
-          "type": "modify_bold_reward",
-          "val": 4
-        },
-        {
-          "type": "modify_bold_penalty",
-          "val": -2
-        },
-        {
-          "type": "modify_bold_inj_risk",
-          "val": "normal"
-        },
-        {
-          "type": "increase_champ_mvp_chance",
-          "val": true
-        }
-      ]
+      "effect_text": "事件卡成功率 +10%；全力一搏成功時效果翻倍、失敗時懲罰減輕；國際賽 MVP 機率加倍，球隊奪冠機率 ×1.2",
+      "desc": "經歷了無數次的豪賭，你的心態堅毅無比，再大的場面也不會讓你心驚膽跳。從此以後，賭得更多，得到更多，輸得更少——<b class=\"hl\">事件卡成功率 +10%；全力一搏成功時效果翻倍、失敗時懲罰減輕；國際賽 MVP 機率加倍，季後賽更容易贏（球隊奪冠機率 ×1.2）</b>。",
+      "_unlock_note": "取得：事件卡連續抽到 6 次好結果（整段生涯一條連勝，不限應對方式，壞結果歸零），或〈跟心理醫生大吐苦水〉的好結果。見 events.json 的 clutch_streak。"
     },
     {
       "id": "phoenix",

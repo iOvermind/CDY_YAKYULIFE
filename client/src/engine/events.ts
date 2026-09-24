@@ -39,10 +39,11 @@ interface EventsData {
     readonly clutch_bold: { readonly good: number; readonly bad: number };
   };
   readonly injury_magnitude: Readonly<Record<string, number>>;
+  readonly clutch_streak: { readonly value: number };
   readonly good_result_chance: {
     readonly base: number;
-    readonly boosted: number;
-    readonly boost_traits: readonly string[];
+    /** 〈今晚打老虎〉加在基底上的百分點。 */
+    readonly clutch_bonus: { readonly trait: string; readonly add_percent: number };
     readonly fail_penalty: { readonly trait: string; readonly add_fail_percent: number };
     /** 天賦「天選之人」的乘算層，平常是 1。 */
     readonly talent_multiplier: number;
@@ -50,7 +51,6 @@ interface EventsData {
       readonly safe: number;
       readonly normal: number;
       readonly bold: number;
-      readonly bold_immune_trait: string;
       /** 天賦「梭哈」的乘算層，只乘豪賭，平常是 1。 */
       readonly bold_multiplier: number;
       readonly cap: number;
@@ -62,6 +62,9 @@ interface EventsData {
 }
 
 const data = eventsJson as unknown as EventsData;
+
+/** 事件卡連續成功幾次取得〈今晚打老虎〉。 */
+export const EVENT_STREAK_FOR_CLUTCH = data.clutch_streak.value;
 
 /**
  * 這個階段每年抽幾張事件卡。
@@ -175,16 +178,16 @@ export function successChances(traits: ReadonlySet<string>): Record<EventMode, n
   const cfg = data.good_result_chance;
   const mod = cfg.mode_modifier;
 
-  let base = cfg.boost_traits.some((t) => traits.has(t)) ? cfg.boosted : cfg.base;
+  let base = cfg.base;
+  if (traits.has(cfg.clutch_bonus.trait)) base += cfg.clutch_bonus.add_percent;
   if (traits.has(cfg.fail_penalty.trait)) base -= cfg.fail_penalty.add_fail_percent;
 
-  const boldPenalty = traits.has(mod.bold_immune_trait) ? 0 : mod.bold;
   const talent = cfg.talent_multiplier;
   const settle = (v: number): number => Math.min(mod.cap, Math.round(v));
   return {
     safe: settle((base + mod.safe) * talent),
     normal: settle((base + mod.normal) * talent),
-    bold: settle((base + boldPenalty) * talent * mod.bold_multiplier),
+    bold: settle((base + mod.bold) * talent * mod.bold_multiplier),
   };
 }
 
@@ -202,8 +205,7 @@ export function magnitudeFactor(
 }
 
 /** 這次應對造成的受傷機率增幅。 */
-export function injuryMagnitude(mode: EventMode, traits: ReadonlySet<string>): number {
-  if (mode === 'bold' && traits.has('clutch')) return data.injury_magnitude['clutch_bold'] ?? 0;
+export function injuryMagnitude(mode: EventMode): number {
   return data.injury_magnitude[mode] ?? 0;
 }
 
@@ -229,6 +231,14 @@ export interface EventOutcome {
   readonly special: Readonly<Record<string, number | boolean>>;
 }
 
+/**
+ * 事件卡好結果直接給的特性。卡片寫 `"<特性 id>": 1`，呼叫端照這份名單發特性。
+ *
+ * 〈今晚打老虎〉原本六張卡都給，太容易拿（2026-09-25）；現在一張卡一個特性，
+ * 老虎另外有「事件卡連續成功 6 次」那條路。〈巧克力〉是壞結果給的。
+ */
+export const EVENT_TRAIT_KEYS: readonly string[] = ['yips', 'clutch', 'franchise', 'goldcloth', 'iron', 'combo', 'disc'];
+
 /** 已知的特殊效果鍵。其餘鍵一律視為能力代碼。 */
 const SPECIAL_KEYS = new Set([
   'inj',
@@ -240,7 +250,8 @@ const SPECIAL_KEYS = new Set([
   'yips',
   'tj_countdown',
   'recover',
-  'clutch',
+  // 事件卡給的特性（見 EVENT_TRAIT_KEYS）。
+  ...EVENT_TRAIT_KEYS,
 ]);
 
 /**
@@ -280,7 +291,7 @@ export function resolveEvent(
     if (raw === undefined) continue;
 
     if (key === 'inj') {
-      injury = injuryMagnitude(mode, ctx.traits);
+      injury = injuryMagnitude(mode);
       continue;
     }
     if (typeof raw === 'boolean') {

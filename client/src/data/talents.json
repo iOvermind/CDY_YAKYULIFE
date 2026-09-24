@@ -96,7 +96,7 @@
           "effect_text": "訓練骰的最小點數提高到 2",
           "effects": [
             {
-              "path": "abilities.training_dice.faces.default.min",
+              "path": "abilities.training_dice.min_face",
               "op": "set",
               "value": 2,
               "max": 6
@@ -108,7 +108,7 @@
           "effect_text": "訓練骰的最小點數提高到 3",
           "effects": [
             {
-              "path": "abilities.training_dice.faces.default.min",
+              "path": "abilities.training_dice.min_face",
               "op": "set",
               "value": 3,
               "max": 6

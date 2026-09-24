@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_ABILITIES, events, PITCH_FAMILIES } from '../data/index.ts';
 import {
+  EVENT_TRAIT_KEYS,
   drawEvent,
   eventPool,
   injuryMagnitude,
@@ -98,11 +99,10 @@ describe('successChances', () => {
     expect(c.normal).toBeGreaterThan(c.bold);
   });
 
-  it('高手高手高高手提升全部三種應對的成功率', () => {
+  it('只有今晚打老虎加事件卡成功率——高手高手高高手、十里坡劍神不再有這個加成', () => {
     const plain = successChances(new Set());
-    const genius = successChances(new Set(['genius']));
-    expect(genius.normal).toBeGreaterThan(plain.normal);
-    expect(genius.bold).toBeGreaterThan(plain.bold);
+    expect(successChances(new Set(['genius']))).toEqual(plain);
+    expect(successChances(new Set(['late']))).toEqual(plain);
   });
 
   it('何金銀降低成功率', () => {
@@ -111,24 +111,19 @@ describe('successChances', () => {
     );
   });
 
-  it('今晚打老虎讓豪賭不再有懲罰——那正是這個特性的意義', () => {
-    const clutch = successChances(new Set(['clutch']));
-    expect(clutch.bold).toBe(clutch.normal);
-  });
-
-  it('保守的成功率有上限，不會逼近必勝', () => {
-    expect(successChances(new Set(['genius'])).safe).toBeLessThanOrEqual(95);
-  });
-
-  it('三種應對的數字：一般人 35/50/70，天才級 50/65/85', () => {
+  it('三種應對的數字：一般人 35/50/70，今晚打老虎各 +10、全力一搏照樣扣 15', () => {
     expect(successChances(new Set())).toEqual({ bold: 35, normal: 50, safe: 70 });
-    expect(successChances(new Set(['genius']))).toEqual({ bold: 50, normal: 65, safe: 85 });
+    expect(successChances(new Set(['clutch']))).toEqual({ bold: 45, normal: 60, safe: 80 });
+    expect(successChances(new Set(['clutch', 'thief']))).toEqual(successChances(new Set()));
   });
 
-  it('今晚打老虎的豪賭不會高過照常——豁免只是讓它齊平，不是讓它更划算', () => {
-    const clutch = successChances(new Set(['clutch']));
-    expect(clutch.bold).toBeLessThanOrEqual(clutch.normal);
-    expect(clutch).toEqual({ bold: 65, normal: 65, safe: 85 });
+  it('保守的成功率有上限，天賦乘上去也不會逼近必勝', () => {
+    const revert = applyTalents({ fortune: 3 });
+    try {
+      expect(successChances(new Set(['clutch'])).safe).toBeLessThanOrEqual(95);
+    } finally {
+      revert();
+    }
   });
 
   it('成功率一律是整數——天賦的乘算層會跑出 68.9 與 77.00000000000001 那種數字，而它會原樣印在選項上', () => {
@@ -171,16 +166,9 @@ describe('magnitudeFactor', () => {
 });
 
 describe('injuryMagnitude', () => {
-  it('冒的險越大受傷風險越高', () => {
-    const t = new Set<string>();
-    expect(injuryMagnitude('bold', t)).toBeGreaterThan(injuryMagnitude('normal', t));
-    expect(injuryMagnitude('normal', t)).toBeGreaterThan(injuryMagnitude('safe', t));
-  });
-
-  it('今晚打老虎把豪賭的受傷風險降到普通級', () => {
-    expect(injuryMagnitude('bold', new Set(['clutch']))).toBe(
-      injuryMagnitude('normal', new Set()),
-    );
+  it('冒的險越大受傷風險越高——今晚打老虎也一樣', () => {
+    expect(injuryMagnitude('bold')).toBeGreaterThan(injuryMagnitude('normal'));
+    expect(injuryMagnitude('normal')).toBeGreaterThan(injuryMagnitude('safe'));
   });
 });
 
@@ -247,7 +235,7 @@ describe('resolveEvent', () => {
     for (let i = 0; i < 200; i++) {
       const r = resolve(`s${i}`, 'event_8', 'bold');
       if (!r.good) {
-        expect(r.injury).toBe(injuryMagnitude('bold', new Set()));
+        expect(r.injury).toBe(injuryMagnitude('bold'));
         return;
       }
     }
@@ -375,7 +363,7 @@ describe('事件卡只動得了這位球員練得到的能力（ADR 0022）', ()
   });
 
   it('資料裡沒有沒實作的效果鍵', () => {
-    const known = new Set([...ALL_ABILITIES, 'inj', 'rand', 'pitch', 'suspension', 'income', 'ban', 'yips', 'tj_countdown', 'recover', 'clutch']);
+    const known = new Set([...ALL_ABILITIES, 'inj', 'rand', 'pitch', 'suspension', 'income', 'ban', 'tj_countdown', 'recover', ...EVENT_TRAIT_KEYS]);
     const cards = (events as unknown as { events: readonly { id: string; good_effects?: object; bad_effects?: object }[] }).events;
     for (const e of cards) {
       for (const fx of [e.good_effects, e.bad_effects]) {

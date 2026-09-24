@@ -191,6 +191,12 @@ export interface AbilitiesData {
       readonly per_step: number;
     };
   };
+  readonly late_bloom: {
+    readonly seasons: number;
+    readonly rise: number;
+    readonly potential: number;
+    readonly ability: number;
+  };
   readonly training_dice: {
     /** 鍵為骰數，值為相對權重。 */
     readonly count_weights: Readonly<Record<string, number>>;
@@ -198,7 +204,12 @@ export interface AbilitiesData {
     readonly min_count: number;
     /** 天賦買來的固定骰數，平常是 0。不吃 min_count，傷缺的球季照給。 */
     readonly bonus_count: number;
-    readonly faces: Readonly<Record<string, Range>>;
+    /** 骰子的最低點數，平常是 1（天賦〈肝帝〉會改它）。 */
+    readonly min_face: number;
+    /** 骰面 1～6 的權重，依特性取用；沒有命中就是公平骰。 */
+    readonly faces: Readonly<Record<string, readonly number[]>>;
+    /** 養成期累計擲出幾顆 6 取得〈高手高手高高手〉。 */
+    readonly genius_sixes: number;
     readonly count_modifiers: Readonly<
       Record<string, { readonly delta: number; readonly chance?: number }>
     >;
@@ -1632,6 +1643,8 @@ export interface SeasonData {
     readonly championship: {
       /** 勝率的次方。機率沒有上下限——它是勝率的結果。 */
       readonly exponent: number;
+      /** 〈今晚打老虎〉：所屬球隊的奪冠權重倍率。 */
+      readonly clutch: { readonly trait: string; readonly multiplier: number };
     };
   };
   readonly pro_dice: {

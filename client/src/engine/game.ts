@@ -53,6 +53,8 @@ import { canRejectOffer, qualifiesAsTwoWay, runDraft, TWO_WAY_TRAIT } from './dr
 import {
   cardsPerYear,
   drawEvent,
+  EVENT_STREAK_FOR_CLUTCH,
+  EVENT_TRAIT_KEYS,
   resolveEvent,
   successChances,
   type EventContext,
@@ -254,6 +256,7 @@ import {
   championshipOdds,
   initLeague,
   pickChampion,
+  championshipBoost,
   playerEffect,
   teamNick,
   type LeagueTable,
@@ -636,6 +639,14 @@ export class Game {
   #seasonShares: SeasonRecord['shares'] | null = null;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
+  /** 事件卡連續抽到好結果的次數。壞結果歸零，跨季累計。 */
+  #eventStreak = 0;
+  /** 養成期累計擲出的 6。〈高手高手高高手〉看它。 */
+  #amateurSixes = 0;
+  /** 〈十里坡劍神〉：頂級聯盟、有出賽的季末綜合能力，連續的那一段。斷掉就清空。 */
+  #lateBloomRun: number[] = [];
+  /** 〈十里坡劍神〉加在抽到的潛力上的點數，量表內（最多到 80）。 */
+  #potentialBonus: Record<string, number> = {};
   /** 走上的第二人生（故事的 title），成就看它。沒走到是 null。 */
   #secondLifeTitle: string | null = null;
   /**
@@ -1056,7 +1067,10 @@ export class Game {
       team: pro.team,
       year: pro.year,
       winRate: this.#league?.get(pro.team)?.winRate ?? 0,
-      championshipOdds: this.#league === null ? 0 : championshipOdds(this.#league, pro.team),
+      championshipOdds:
+        this.#league === null
+          ? 0
+          : championshipOdds(this.#league, pro.team, championshipBoost(pro.team, this.#traits)),
       position: this.#position,
       positionName: this.#position === null ? null : positionLabel(this.#position),
       defenseRuns: this.#defenseRuns[pro.level] ?? 0,
@@ -1503,7 +1517,7 @@ export class Game {
     // 非能力的特殊效果（issue #16：以前禁賽、聲望、逐出都印了卡卻什麼也沒發生）。
     for (const key of Object.keys(outcome.special).sort()) {
       const value = outcome.special[key];
-      if (key === 'yips' || key === 'clutch') {
+      if (EVENT_TRAIT_KEYS.includes(key)) {
         if (this.#traits.has(key)) continue;
         this.#traits.add(key);
         const name = traitName(key);
@@ -1538,6 +1552,14 @@ export class Game {
         };
         lines.push('<span class="up">身體恢復了一些</span>');
       }
+    }
+
+    // 〈今晚打老虎〉的另一條路：事件卡**連續**抽到好結果。整段生涯一條連勝，不限
+    // 應對方式，壞結果歸零（2026-09-25）。
+    this.#eventStreak = outcome.good ? this.#eventStreak + 1 : 0;
+    if (this.#eventStreak >= EVENT_STREAK_FOR_CLUTCH && !this.#traits.has('clutch')) {
+      this.#traits.add('clutch');
+      lines.push(`連續 ${this.#eventStreak} 張事件卡全身而退——取得特性<b class="hl">〈${esc(traitName('clutch'))}〉</b>`);
     }
 
     // **不留沒有作用的卡**：上面全部落空的話（養成期沒有年薪可罰、大心臟早就有了），
@@ -1588,6 +1610,16 @@ export class Game {
       msg += `<br>去年的國際賽冠軍帶來更好的訓練資源與眼界，多擲 <b class="hl">${bonus}</b> 顆骰。`;
     }
     this.flow.card('info', '季初訓練', msg);
+
+    // 〈高手高手高高手〉：養成期累計擲出夠多的 6（這裡只在養成期跑，職業期走
+    // #proSpringTraining）。
+    this.#amateurSixes += dice.sixes;
+    if (this.#amateurSixes >= abilities.training_dice.genius_sixes) {
+      this.#unlockTrait(
+        'genius',
+        `養成期已經擲出 ${this.#amateurSixes} 顆 6——別人練一年的東西，你看一眼就會。`,
+      );
+    }
 
     // 每一顆骰都是一次選擇——重播日誌因此記下「哪顆骰加在哪」。
     // 必須 unshift 而非 push：佇列裡已經排著本年度後續的步驟，push 會讓分配
@@ -3981,7 +4013,8 @@ export class Game {
     const table = this.#league;
     if (pro === null || table === null) return;
 
-    const champion = pickChampion(this.world, table);
+    // 〈今晚打老虎〉：季後賽撐得住，所屬球隊的奪冠權重 ×1.2。
+    const champion = pickChampion(this.world, table, championshipBoost(pro.team, this.#traits));
     if (champion === null) return;
 
     const info = levelOf(pro.level);
@@ -4058,6 +4091,8 @@ export class Game {
         playerEffect: playerEffect(this.rating?.overall ?? 0, par),
       });
     }
+
+    this.#lateBloom(levelOf(pro.level).top !== undefined && this.#seasonFactor > 0);
 
     // ---- 老化
     const aging = applyAging(this.world, this.#ability, this.#age, this.#ceilingBonus);
@@ -5648,6 +5683,42 @@ export class Game {
     );
   }
 
+  /**
+   * 〈十里坡劍神〉：在頂級聯盟連續打了 `seasons` 季，這一季季末的綜合能力比
+   * `seasons` 季前的季末多 `rise` 以上。沒在頂級聯盟、或整季沒出賽，就從頭算。
+   *
+   * 門檻刻意高（6 季 +8，沒點成長天賦的 200 局實測一個都沒有）：成長天賦本來就
+   * 讓人一年比一年強，門檻壓低等於點了天賦就自動送一個（2026-09-25）。
+   *
+   * 取得的當下兌現一次：每項能力的潛力 +5、能力值 +1，都不超過量表上限 80。能力
+   * 值是直接加，不經蓄力槽——那是「開竅」，不是練出來的。
+   */
+  #lateBloom(countable: boolean): void {
+    const cfg = abilities.late_bloom;
+    const overall = this.rating?.overall ?? 0;
+    if (!countable) {
+      this.#lateBloomRun = [];
+      return;
+    }
+    this.#lateBloomRun.push(overall);
+    const run = this.#lateBloomRun;
+    const before = run[run.length - 1 - cfg.seasons];
+    if (before === undefined || overall - before < cfg.rise || this.#traits.has('late')) return;
+
+    const max = abilities.scale.max;
+    for (const key of ALL_ABILITIES) {
+      this.#potentialBonus[key] = (this.#potentialBonus[key] ?? 0) + cfg.potential;
+      const v = this.#ability[key] ?? 0;
+      if (v < max) this.#ability[key] = Math.min(max, v + cfg.ability);
+    }
+    this.#settleCarry();
+    this.#unlockTrait(
+      'late',
+      `${cfg.seasons} 季裡綜合能力從 ${before} 爬到 ${overall}。長年的沉潛終於開花結果——` +
+        `<b class="hl">所有能力的潛力 +${cfg.potential}、能力 +${cfg.ability}</b>。`,
+    );
+  }
+
   /** 太早離開棒球的人走上哪一條路。沒走到第二人生是 null。 */
   #pickSecondLife(): (typeof flavor.second_life.stories)[number] | null {
     if (this.#age >= seasonCfg.retirement.second_life_max_age) return null;
@@ -5940,7 +6011,10 @@ export class Game {
     // 在量表**之內**移動，加起來最多 80；只有事件卡提升的那一項有資格把量表
     // 本身頂過 80（hardCap 同樣只認它）。最後一項平常是 0，由設定覆蓋層寫入
     // （見 ADR 0007）。
-    const inScale = Math.min(abilities.scale.max, base + abilities.talent_bonus.ceiling);
+    const inScale = Math.min(
+      abilities.scale.max,
+      base + abilities.talent_bonus.ceiling + (this.#potentialBonus[key] ?? 0),
+    );
     return inScale + (this.#ceilingBonus[key] ?? 0);
   }
 

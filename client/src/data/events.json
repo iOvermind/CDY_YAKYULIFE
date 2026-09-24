@@ -29,7 +29,12 @@
     "yips": "觸發「失憶症」特性",
     "tj_countdown": "投手耐力直接扣掉上限的 tj_countdown × 15%（韌帶受損，見 season.json 的 endurance.events）",
     "recover": "休養：野手與投手兩池耐力各回上限的指定百分比",
-    "clutch": "觸發「大心臟」特性"
+    "clutch": "取得〈今晚打老虎〉",
+    "franchise": "取得〈重案組之虎〉",
+    "goldcloth": "取得〈全台主場〉",
+    "iron": "取得〈魔鬼筋肉人〉",
+    "combo": "取得〈黯然銷魂飯〉",
+    "disc": "取得〈斷水流〉"
   },
   "_ceiling_note": "事件另可帶 good_ceiling / bad_ceiling 欄位，提升或降低指定能力的上限。它與 good_effects 是**不同的東西**：effects 直接加減能力值，ceiling 只移動天花板，點數仍要自己練上去。每項能力的上限提升最多累積 abilities.json 的 scale.max_ceiling_bonus 點。",
   "magnitude": {
@@ -38,7 +43,7 @@
     "normal": 1,
     "bold": 1.5,
     "clutch_bold": {
-      "_note": "大心臟：豪賭的上檔更高、下檔更軟。",
+      "_note": "今晚打老虎：全力一搏的上檔更高、下檔更軟（一般人兩邊都是 ×1.5）。",
       "good": 2,
       "bad": 1
     }
@@ -48,18 +53,20 @@
     "safe": 8,
     "normal": 12,
     "bold": 16,
-    "clutch_bold": 12
+    "_clutch_note": "今晚打老虎不再減輕全力一搏的受傷（2026-09-25）：它給的是膽識與上檔，不是鐵打的身體。"
+  },
+  "clutch_streak": {
+    "_note": "〈今晚打老虎〉的取得條件：事件卡**連續**抽到好結果這麼多次。整段生涯一條連勝，不限應對方式，壞結果歸零。另一條路是〈跟心理醫生大吐苦水〉的好結果。",
+    "value": 6
   },
   "good_result_chance": {
-    "_note": "抽到好結果的機率（百分比）。命中任一 boost_traits 即提升；thief（薪水小倫）另外增加失敗率。這裡是**基底**，畫面上的三個數字是它加上 mode_modifier 之後的結果：一般人 35／50／70，天才級 50／65／85。",
+    "_note": "抽到好結果的機率（百分比）。這裡是**基底**，畫面上的三個數字是它加上 mode_modifier 之後的結果：一般人 70／50／35，有〈今晚打老虎〉80／60／45，有〈何金銀〉60／40／25。",
     "base": 50,
-    "_boosted_note": "天才級的基底，展開來是 50／65／85。原本是 70（55／70／90），拉低 5 點是為了收住今晚打老虎——它的豪賭不吃 -15 的懲罰，基底越高，那一格越接近「沒有代價的全力一搏」。現在它是 65／65／85：豪賭與照常齊平，不會更高。",
-    "boosted": 65,
-    "boost_traits": [
-      "genius",
-      "late",
-      "clutch"
-    ],
+    "_clutch_note": "〈今晚打老虎〉加在基底上的百分點（2026-09-25）。以前它與〈高手高手高高手〉〈十里坡劍神〉共用一個「天才級」基底 65，而且全力一搏不吃懲罰；現在只剩它有事件卡加成，全力一搏照樣扣 15。",
+    "clutch_bonus": {
+      "trait": "clutch",
+      "add_percent": 10
+    },
     "fail_penalty": {
       "trait": "thief",
       "add_fail_percent": 10
@@ -67,12 +74,11 @@
     "_talent_note": "天賦「天選之人」的乘算層（見 ADR 0033）。**平常是 1**，三種應對方式都乘得到，套在特性加減之後、`cap` 之前——因此天賦不會把人推破上限。",
     "talent_multiplier": 1,
     "mode_modifier": {
-      "_note": "應對方式對成功率的增減。豪賭的懲罰對大心臟無效——那正是那個特性的意義。",
+      "_note": "應對方式對成功率的增減。",
       "_bold_talent_note": "天賦「梭哈」的乘算層（見 ADR 0033）。**平常是 1**，只乘豪賭那一格：那個天賦買的是敢賭的膽識，不是全面的好運。",
       "safe": 20,
       "normal": 0,
       "bold": -15,
-      "bold_immune_trait": "clutch",
       "bold_multiplier": 1,
       "_cap_note": "三種應對方式**都**夾在這裡。以前只有保守那一格夾，因為只有它加得上去；天賦上線之後每一格都可能被乘破 100，所以一起夾。",
       "cap": 95
@@ -335,9 +341,9 @@
       "name": "條通酒店的危險茶會 (組頭接觸)",
       "for": "PRO",
       "weight": 2,
-      "good_text": "果斷拒絕加舉報，獲得聯盟狂讚、形象代言找上門，心智昇華",
+      "good_text": "果斷拒絕加舉報，聯盟狂讚、代言找上門，球團從此把你當成這座城市的招牌",
       "bad_text": "拿了不該拿的錢，東窗事發被永久逐出棒球界",
-      "good_effects": {"clutch": 1, "income": 5},
+      "good_effects": {"franchise": 1, "income": 5},
       "bad_effects": {"ban": true}
     },
     {
@@ -390,10 +396,10 @@
       "id": "event_23",
       "name": "網路酸民雞歪炎上",
       "for": "*",
-      "good_text": "酸言酸語當作耳邊風，心理素質更強大了",
+      "good_text": "被酸身材走樣，一怒之下把重訓當飯吃，練出一身鋼筋鐵骨",
       "bad_text": "越看越走心，帶著情緒上場表現大走鐘",
       "good_effects": {
-        "clutch": 1
+        "iron": 1
       },
       "bad_effects": {
         "rand": -2,
@@ -457,10 +463,10 @@
       "id": "event_28",
       "name": "休賽季德州撲克狂熱",
       "for": "*",
-      "good_text": "練就面不改色的撲克臉，場上更加沉穩",
+      "good_text": "牌桌上學會一件事：把全部籌碼押在最有把握的那一手。從此只練一招",
       "bad_text": "輸到見骨，心神不寧整天想翻本",
       "good_effects": {
-        "clutch": 1,
+        "combo": 1,
         "eye": 2
       },
       "bad_effects": {"sta": -2, "income": -3}
@@ -537,10 +543,10 @@
       "id": "event_34",
       "name": "跟眼幹裁判對噴",
       "for": "*",
-      "good_text": "爭取到關鍵判決，氣勢大振",
+      "good_text": "吵贏的那一刻想通了：老將靠的不是腿，是氣勢",
       "bad_text": "被趕出場，還吃下聯盟禁賽 5 場加罰款，超衰",
       "good_effects": {
-        "clutch": 1
+        "disc": 1
       },
       "bad_effects": {"suspension": 5, "income": -3}
     },
@@ -675,10 +681,10 @@
       "id": "event_44",
       "name": "主場鄉親的窒息愛魔咒",
       "for": "*",
-      "good_text": "破除魔咒，成為主場鄉親眼中的神仙",
+      "good_text": "破除魔咒，主場鄉親從此把你當成信仰",
       "bad_text": "在鄉親父老面前狂吃癟，壓力山大",
       "good_effects": {
-        "clutch": 1,
+        "goldcloth": 1,
         "rng": 2
       },
       "bad_effects": {

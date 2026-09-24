@@ -408,22 +408,24 @@ describe('rollTrainingDice', () => {
     }
   });
 
-  it('高手高手高高手的骰面下限被墊高', () => {
-    const genius = new Set(['genius']);
-    for (let i = 0; i < 200; i++) {
-      for (const v of roll(`s${i}`, genius).values) {
-        expect(v).toBeGreaterThanOrEqual(abilities.training_dice.faces['genius']?.min ?? 0);
+  /** 4、5、6 各 ×1.2、1、2、3 各 ×0.8：還是會擲出 1，只是比較少（2026-09-25）。 */
+  it('高手高手高高手擲出 4～6 的機率各是兩成，1～3 各約 13.3%', () => {
+    const counts = [0, 0, 0, 0, 0, 0];
+    let n = 0;
+    for (let i = 0; i < 3000; i++) {
+      for (const v of roll(`g${i}`, new Set(['genius'])).values) {
+        counts[v - 1]!++;
+        n++;
       }
     }
+    for (let f = 0; f < 3; f++) expect(counts[f]! / n).toBeCloseTo(0.8 / 6, 1);
+    for (let f = 3; f < 6; f++) expect(counts[f]! / n).toBeCloseTo(1.2 / 6, 1);
+    expect(counts[0]).toBeGreaterThan(0);
   });
 
-  it('高手高手高高手優先於十里坡劍神——兩者同時擁有時用高手高手高高手的區間', () => {
-    const both = new Set(['genius', 'late']);
-    const geniusMin = abilities.training_dice.faces['genius']?.min ?? 0;
-    for (let i = 0; i < 200; i++) {
-      for (const v of roll(`s${i}`, both).values) {
-        expect(v).toBeGreaterThanOrEqual(geniusMin);
-      }
+  it('十里坡劍神不再動骰面', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(roll(`s${i}`, new Set(['late'])).values).toEqual(roll(`s${i}`).values);
     }
   });
 
@@ -457,14 +459,16 @@ describe('rollTrainingDice', () => {
     }
   });
 
-  it('baseCount 仍吃特性的骰面——職業期不會把墊高的下限弄丟', () => {
-    const genius = abilities.training_dice.faces['genius'];
-    const boosted = new Set(['genius']);
-    for (let i = 0; i < 50; i++) {
-      for (const v of roll(`s${i}`, boosted, { baseCount: 4 }).values) {
-        expect(v).toBeGreaterThanOrEqual(genius?.min ?? 1);
+  it('baseCount 仍吃特性的骰面——職業期照樣是加權骰', () => {
+    let high = 0;
+    let n = 0;
+    for (let i = 0; i < 2000; i++) {
+      for (const v of roll(`p${i}`, new Set(['genius']), { baseCount: 4 }).values) {
+        if (v >= 4) high++;
+        n++;
       }
     }
+    expect(high / n).toBeCloseTo(0.6, 1);
   });
 
   it('只消耗 growth 流，不動其他流', () => {

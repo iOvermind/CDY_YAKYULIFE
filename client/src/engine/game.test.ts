@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BALANCED_FIELDER, playCareer } from '../../scripts/harness.ts';
 import { abilities, achievements as achievementsData, amateur, events as eventsData, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ALL_ABILITIES } from '../data/index.ts';
@@ -9,6 +10,7 @@ import { lifeIndex } from './achievements.ts';
 import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
 import { roleRank } from './season.ts';
+import { EVENT_STREAK_FOR_CLUTCH } from './events.ts';
 
 const setup: GameSetup = {
   seed: 'test-seed',
@@ -1832,6 +1834,7 @@ describe('合約', () => {
       }).start();
       let guard = 0;
       let took = false;
+      let rotate = 0;
       while (game.flow.prompt !== null && guard++ < 8000) {
         const prompt = game.flow.prompt;
         const ids = prompt.options.map((o) => o.id);
@@ -1845,7 +1848,7 @@ describe('合約', () => {
         }
         const pick =
           prompt.options.find((o) => o.id === 'retire:stay' && o.disabled !== true)?.id ??
-          defaultPick(game, EFFECTIVE);
+          defaultPick(game, [...BALANCED_FIELDER.slice(rotate++ % BALANCED_FIELDER.length), ...BALANCED_FIELDER]);
         if (pick === undefined) break;
         game.choose(pick);
       }
@@ -2069,7 +2072,9 @@ describe('下放與換體系', () => {
     let seen = 0;
     // 掃到第幾顆才撞見「降級通知」會隨平衡改動漂移，範圍留寬一點。
     for (let i = 0; i < 200; i++) {
-      const game = playToEnd(started({ seed: `demote-why-${i}` }));
+      // 配點要配好才走得到一軍、才有得下放（〈今晚打老虎〉不再人手一個之後，
+      // 只配第一項的自動玩家一輩子待在二軍）。
+      const game = playCareer(`demote-why-${i}`, 'SS');
       for (const entry of game.flow.log) {
         if (entry.kind !== 'card') continue;
         if ((entry.title ?? '') !== '降級通知') continue;
@@ -2140,7 +2145,7 @@ describe('下放與換體系', () => {
   it('升級卡片報實際的層級，不是一律寫「升上一軍」', () => {
     let seen = 0;
     for (let i = 0; i < 200; i++) {
-      const game = playToEnd(started({ seed: `promote-${i}` }));
+      const game = playCareer(`promote-${i}`, 'SS');
       for (const entry of game.flow.log) {
         if (entry.kind !== 'card') continue;
         const title = entry.title ?? '';
@@ -2543,6 +2548,63 @@ describe('耐力退守', () => {
       expect(seen).toBe(true);
     } finally {
       Object.assign(table, saved);
+    }
+  });
+});
+
+/** 2026-09-25 重做的三個特性：取得條件都要真的接上。 */
+describe('特性的取得條件', () => {
+  type Card = { kind: string; tone?: string; title?: string; body?: string };
+  const cards = (game: Game) => game.flow.log.filter((e) => e.kind === 'card') as Card[];
+
+  it('今晚打老虎：事件卡連續 6 次好結果', () => {
+    for (let i = 0; i < 60; i++) {
+      const log = cards(playCareer(`streak-${i}`, 'SS'));
+      const at = log.findIndex((c) => (c.body ?? '').includes('張事件卡全身而退'));
+      if (at < 0) continue;
+      const events = log.slice(0, at + 1).filter((c) => (c.title ?? '').startsWith('事件卡｜'));
+      expect(events.slice(-EVENT_STREAK_FOR_CLUTCH).every((c) => c.tone === 'good')).toBe(true);
+      return;
+    }
+    throw new Error('六十局都沒有靠連勝拿到今晚打老虎');
+  });
+
+  it('高手高手高高手：養成期累計擲出 6 顆 6，在選秀之前拿到', () => {
+    for (let i = 0; i < 60; i++) {
+      const log = cards(playCareer(`genius-${i}`, 'SS'));
+      const at = log.findIndex((c) => c.title === '隱藏特性：高手高手高高手');
+      if (at < 0) continue;
+      let sixes = 0;
+      for (const c of log.slice(0, at)) {
+        const m = (c.title === '季初訓練' ? (c.body ?? '') : '').match(/其中 (\d+) 顆是高標值/);
+        if (m) sixes += Number(m[1]);
+      }
+      expect(sixes).toBeGreaterThanOrEqual(abilities.training_dice.genius_sixes);
+      expect(log.slice(0, at).some((c) => (c.title ?? '').includes('選秀'))).toBe(false);
+      return;
+    }
+    throw new Error('六十局都沒有人拿到高手高手高高手');
+  });
+
+  it('十里坡劍神：頂級聯盟裡綜合能力累計上升夠多，取得當下能力 +1、潛力 +5', () => {
+    // 正式門檻（6 季 +8）不點天賦幾乎摸不到，這裡把門檻放低只為了走到那段程式。
+    const cfg = abilities.late_bloom as { seasons: number; rise: number };
+    const saved = { ...cfg };
+    cfg.seasons = 1;
+    cfg.rise = 0;
+    try {
+      for (let i = 0; i < 40; i++) {
+        const game = playCareer(`late-${i}`, 'SS');
+        const log = cards(game);
+        const card = log.find((c) => c.title === '隱藏特性：十里坡劍神');
+        if (card === undefined) continue;
+        expect(card.body).toContain(`潛力 +${abilities.late_bloom.potential}`);
+        expect(game.state?.traits.has('late')).toBe(true);
+        return;
+      }
+      throw new Error('四十局都沒有人拿到十里坡劍神');
+    } finally {
+      Object.assign(cfg, saved);
     }
   });
 });

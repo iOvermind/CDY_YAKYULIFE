@@ -124,8 +124,20 @@ export function playerEffect(overall: number, par: number): number {
  * 取指數放大強隊的優勢：短期賽制有運氣成分，但一支勝率七成的球隊本來就該
  * 明顯比五成的容易奪冠，線性換算會把這個差距抹平。
  */
-export function championshipOdds(table: LeagueTable, team: string): number {
-  return championshipOddsOf(table).get(team) ?? 0;
+export function championshipOdds(table: LeagueTable, team: string, boost: ChampionshipBoost | null = null): number {
+  return championshipOddsOf(table, boost).get(team) ?? 0;
+}
+
+/** 某一隊的奪冠權重再乘一個倍率（〈今晚打老虎〉）。其他隊照比例分掉剩下的。 */
+export interface ChampionshipBoost {
+  readonly team: string;
+  readonly multiplier: number;
+}
+
+/** 玩家的特性帶來的奪冠加成；沒有就是 null。 */
+export function championshipBoost(team: string, traits: ReadonlySet<string>): ChampionshipBoost | null {
+  const c = cfg.team_strength.championship.clutch;
+  return traits.has(c.trait) ? { team, multiplier: c.multiplier } : null;
 }
 
 /**
@@ -143,15 +155,20 @@ export function championshipOdds(table: LeagueTable, team: string): number {
  * 的硬邊決定——一支 .700 的球隊配五支 .300 的，它在中職拿到 57%，而那正是那種年份
  * 該有的樣子。
  */
-export function championshipOddsOf(table: LeagueTable): ReadonlyMap<string, number> {
+export function championshipOddsOf(
+  table: LeagueTable,
+  boost: ChampionshipBoost | null = null,
+): ReadonlyMap<string, number> {
   const c = cfg.team_strength.championship;
   const out = new Map<string, number>();
   if (table.size === 0) return out;
 
+  const weight = (name: string, winRate: number): number =>
+    Math.pow(winRate, c.exponent) * (boost !== null && boost.team === name ? boost.multiplier : 1);
   let total = 0;
-  for (const t of table.values()) total += Math.pow(t.winRate, c.exponent);
+  for (const [name, t] of table) total += weight(name, t.winRate);
   if (total === 0) return out;
-  for (const [name, t] of table) out.set(name, Math.pow(t.winRate, c.exponent) / total);
+  for (const [name, t] of table) out.set(name, weight(name, t.winRate) / total);
   return out;
 }
 
@@ -164,8 +181,12 @@ export function championshipOddsOf(table: LeagueTable): ReadonlyMap<string, numb
  *
  * 走 career 子序列——誰奪冠是世界狀態，與球員個人的成績同層以上。
  */
-export function pickChampion(world: World, table: LeagueTable): string | null {
-  const odds = championshipOddsOf(table);
+export function pickChampion(
+  world: World,
+  table: LeagueTable,
+  boost: ChampionshipBoost | null = null,
+): string | null {
+  const odds = championshipOddsOf(table, boost);
   if (odds.size === 0) return null;
 
   const roll = world.stream('career').next();

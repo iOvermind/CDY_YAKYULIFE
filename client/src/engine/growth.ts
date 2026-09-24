@@ -269,8 +269,8 @@ export interface TrainingDice {
 /**
  * 擲季初的自主訓練骰。
  *
- * 骰數依權重抽，再套用特性修正；每顆骰的點數區間也依特性而異——高手高手高高手與大器
- * 晚成的下限被墊高，因此期望值更好。傷缺整季時骰數固定為最低值。
+ * 骰數依權重抽，再套用特性修正；每顆骰的點數權重也依特性而異——高手高手高高手擲出
+ * 4～6 的機會比較多。傷缺整季時骰數固定為最低值。
  *
  * 職業期走同一條路，只是把基礎骰數換成 `baseCount`（球季佔滿時間，骰數比養成
  * 期少）——特性的骰面、天賦買來的骰數、奪冠加成在兩段生涯裡都照樣生效。
@@ -310,11 +310,13 @@ export function rollTrainingDice(
   // 天賦買來的骰數。理由同上：那是玩家帶進場的東西，不是那一季的境遇。
   count += Math.max(0, cfg.bonus_count);
 
-  const face = pickFaceRange(traits);
+  const min = Math.min(6, Math.max(1, cfg.min_face));
+  const weights = pickFaceWeights(traits, min);
   const values: number[] = [];
   let sixes = 0;
   for (let i = 0; i < count; i++) {
-    const v = rng.int(face.min, face.max);
+    // 公平骰照舊擲整數；加權的骰面走 weighted，鍵就是點數。
+    const v = weights === null ? rng.int(min, 6) : Number(rng.weighted(weights));
     values.push(v);
     if (v === 6) sixes++;
   }
@@ -338,15 +340,17 @@ export function championshipDice(kinds: readonly string[]): number {
   return best;
 }
 
-/** 依特性取骰面區間；命中第一個即採用，都沒有則用 default。 */
-function pickFaceRange(traits: ReadonlySet<string>) {
+/**
+ * 依特性取骰面權重（點數 → 權重）；命中第一個即採用，都沒有就是公平骰（null）。
+ * 比 `min` 小的骰面拿掉——〈肝帝〉墊高的最低點數照樣算數。
+ */
+function pickFaceWeights(traits: ReadonlySet<string>, min: number): Record<string, number> | null {
   const faces = abilities.training_dice.faces;
   for (const trait of Object.keys(faces).sort()) {
-    if (trait === 'default') continue;
-    const range = faces[trait];
-    if (range !== undefined && traits.has(trait)) return range;
+    if (trait.startsWith('_')) continue;
+    const w = faces[trait];
+    if (w === undefined || !traits.has(trait)) continue;
+    return Object.fromEntries(w.flatMap((v, i) => (i + 1 >= min ? [[String(i + 1), v]] : [])));
   }
-  const fallback = faces['default'];
-  if (fallback === undefined) throw new Error('training_dice.faces 缺少 default');
-  return fallback;
+  return null;
 }

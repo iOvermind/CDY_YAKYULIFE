@@ -3,6 +3,7 @@ import { season as cfg, teams as teamsData } from '../data/index.ts';
 import {
   advanceLeague,
   averageChampionshipOdds,
+  championshipBoost,
   championshipOdds,
   fmtWinRate,
   initLeague,
@@ -257,5 +258,25 @@ describe('隊名代表詞', () => {
     expect(teamNick('布里斯本亡命之徒')).toBe('亡命之徒');
     expect(teamNick('猶加敦百獸王')).toBe('百獸王');
     expect(teamNick('台中猛瑪')).toBe('猛瑪');
+  });
+});
+
+/** 〈今晚打老虎〉：所屬球隊的奪冠權重 ×1.2，其他隊照比例分掉剩下的。 */
+describe('今晚打老虎的奪冠加成', () => {
+  it('權重 ×1.2 再算佔比，總和仍是 1', () => {
+    const table = init('a');
+    const team = CPBL[0]!.name;
+    const boost = championshipBoost(team, new Set(['clutch']));
+    expect(boost).toEqual({ team, multiplier: cfg.team_strength.championship.clutch.multiplier });
+    const p = championshipOdds(table, team);
+    const q = championshipOdds(table, team, boost);
+    expect(q).toBeCloseTo((1.2 * p) / (1 + 0.2 * p), 12);
+    let total = 0;
+    for (const t of table.values()) total += championshipOdds(table, t.name, boost);
+    expect(total).toBeCloseTo(1, 12);
+  });
+
+  it('沒有這個特性就沒有加成', () => {
+    expect(championshipBoost('任何一隊', new Set())).toBeNull();
   });
 });

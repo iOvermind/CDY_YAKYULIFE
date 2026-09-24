@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ladder, leagues } from '../data/index.ts';
-import { Game, type GameSetup } from './game.ts';
+import { playCareer } from '../../scripts/harness.ts';
+import type { Game, GameSetup } from './game.ts';
 import { seasonPoints } from './career.ts';
 import { ALL, ladderRows, type LadderRow } from './ladder.ts';
 
@@ -12,24 +13,9 @@ const setup: GameSetup = {
   bats: 'R',
 };
 
-/** 打完一整段生涯。配點投進真正影響評價的能力，不然點數全進體力。 */
+/** 打完一整段生涯。配點走校準用的均衡玩家——只配一兩項的人走不到一軍。 */
 function play(seed: string): Game {
-  const game = new Game({ ...setup, seed }).start();
-  let guard = 0;
-  while (game.flow.prompt !== null && guard++ < 8000) {
-    const usable = game.flow.prompt.options.filter(
-      (o) => o.disabled !== true && o.id !== 'alloc:undo',
-    );
-    const pick =
-      ['con', 'pow', 'eye', 'spd', 'rng', 'fld']
-        .map((k) => usable.find((o) => o.id === `alloc:${k}`))
-        .find((o) => o !== undefined) ??
-      usable.find((o) => o.id === 'alloc:confirm') ??
-      usable[0];
-    if (pick === undefined) break;
-    game.choose(pick.id);
-  }
-  return game;
+  return playCareer(seed, setup.startPosition, setup.name);
 }
 
 /** 一段生涯的組合列，外加它的淨收入（跨聯盟跨守位那一列的薪水）。 */
