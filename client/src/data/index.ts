@@ -1455,7 +1455,11 @@ export interface SeasonData {
       /** 拒絕下放後的釋出：先把倖存率乘上這個倍數再擲。 */
       readonly refuse_survival_multiplier: { readonly value: number };
     };
-    readonly release: { readonly grace_years: number; readonly margin: number };
+    /** 最低層級的釋出：d 由低到高的分級機率，以及剛到的前幾季不放。 */
+    readonly release: {
+      readonly tiers: readonly { readonly d: number; readonly chance: number }[];
+      readonly rookie_seasons: number;
+    };
   };
   readonly aging: {
     readonly peak_start: number;

@@ -188,19 +188,29 @@ describe('evaluateMovement', () => {
     }
   });
 
-  it('寬限期內不會被戰力外——新人不該第一季就被釋出', () => {
+  it('剛到最底層的第一季不會被戰力外——球團至少會看一季', () => {
     for (let i = 0; i < 200; i++) {
       expect(move(`s${i}`, 'CPBL2', 10, 0).movement).not.toBe('release');
-      expect(move(`s${i}`, 'CPBL2', 10, cfg.movement.release.grace_years - 1).movement).not.toBe(
-        'release',
-      );
     }
   });
 
-  it('撐過寬限期仍達不到最低標準就是戰力外', () => {
-    const m = move('a', 'CPBL2', CPBL2.min - cfg.movement.release.margin - 5, 3);
-    expect(m.movement).toBe('release');
-    expect(m.level).toBeNull();
+  /** 釋出看 d 分級的機率，不是一條硬線（issue #1）。 */
+  it('差得越多越容易被放掉，平均以上的人不會', () => {
+    const at = (d: number) => rateOf((s) => move(s, 'CPBL2', CPBL2.par + d, 3).movement === 'release');
+    expect(at(0)).toBe(0);
+    expect(at(-2)).toBe(0);
+    const [t3, t5, t7] = [at(-3), at(-5), at(-8)];
+    expect(t3).toBeGreaterThan(0.15);
+    expect(t3).toBeLessThan(t5);
+    expect(t5).toBeLessThan(t7);
+    expect(t7).toBeGreaterThan(0.8);
+  });
+
+  it('被放掉的時候沒有下一站', () => {
+    const released = Array.from({ length: 50 }, (_, i) => move(`r${i}`, 'CPBL2', CPBL2.par - 10, 3)).find(
+      (m) => m.movement === 'release',
+    );
+    expect(released?.level).toBeNull();
   });
 
   it('先問升級再問降級——已達上層門檻的人不該在同一輪被放掉', () => {
@@ -506,15 +516,23 @@ describe('衰退的下限', () => {
 
 describe('慣用手的順風', () => {
   it('戰力外的下限跟著個人尺走——同樣的能力，左手撐得比較久', () => {
-    const at = (tier: 'none' | 'switch') =>
-      evaluateMovement(new World('release'), {
-        level: pathOf('CPBL')[0]!,
-        overall: leagues.levels[pathOf('CPBL')[0]!]!.min - 8,
-        yearsAtBottom: 99,
-        tier,
-      });
-    expect(at('none').movement).toBe('release');
-    expect(at('switch').movement).not.toBe('release');
+    // 釋出是機率（issue #1），所以比的是釋出率：個人尺把平均線往下搬，同樣的能力
+    // 對左右開投的人是比較小的落差。
+    const level = pathOf('CPBL')[0]!;
+    const rate = (tier: 'none' | 'switch') => {
+      let n = 0;
+      for (let i = 0; i < 300; i++) {
+        const m = evaluateMovement(new World(`release-${i}`), {
+          level,
+          overall: leagues.levels[level]!.par - 6,
+          yearsAtBottom: 99,
+          tier,
+        });
+        if (m.movement === 'release') n++;
+      }
+      return n / 300;
+    };
+    expect(rate('switch')).toBeLessThan(rate('none'));
   });
 });
 
