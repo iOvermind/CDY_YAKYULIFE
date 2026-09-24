@@ -1,7 +1,7 @@
 /**
  * 天梯。
  *
- * **四個選單挑一格，再看一整面欄位**：我的／所有玩家 × 聯盟／跨聯盟 × 累計／單季
+ * **四顆按鈕挑一格，再看一整面欄位**：我的／所有玩家 × 聯盟／跨聯盟 × 累計／單季
  * × 守位／跨守位。守位選單同時決定畫哪幾張表——跨守位畫野手、投手與共通三張，
  * 野手守位只畫野手與共通，投手定位只畫投手與共通。共通那一張是份額、評價分、
  * 薪水：整個球員的數字，不分投打。
@@ -12,7 +12,7 @@
  * 見 [ADR 0038](../../docs/adr/0038-one-hosted-service-and-the-ladder-trusts-the-replay.md)。
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { LadderBoard, LadderQuery, LadderResponse } from './api/contract.ts';
 import type { Account } from './useAccount.ts';
 import { ladder as ladderCfg, leagues, positions as positionsCfg } from './data/index.ts';
@@ -114,6 +114,68 @@ const SIDES: readonly { readonly side: LadderBoard['side']; readonly title: stri
 
 const START: LadderQuery = { org: ALL, position: ALL, kind: 'total' };
 
+/**
+ * 滑鼠按住拖曳來橫向捲動。觸控是原生捲動，不必處理。
+ *
+ * **點擊必須照樣有效**：移動超過 4px 才算拖曳，而且不抓指標（setPointerCapture）
+ * ——抓了的話 click 會落在容器上而不是按鈕上，整排就只剩拖得動、點不下去。拖過
+ * 的那一次 click 由呼叫端用 `wasDrag()` 丟掉。
+ */
+function useDragScroll() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const holding = useRef(false);
+  const dragged = useRef(false);
+  const from = useRef({ x: 0, left: 0 });
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || ref.current === null) return;
+    holding.current = true;
+    dragged.current = false;
+    from.current = { x: e.clientX, left: ref.current.scrollLeft };
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!holding.current || el === null) return;
+    const dx = e.clientX - from.current.x;
+    if (Math.abs(dx) > 4) dragged.current = true;
+    if (dragged.current) el.scrollLeft = from.current.left - dx;
+  };
+
+  /** 放開、移出那一排、或系統收走指標，都算結束。 */
+  const stop = () => {
+    holding.current = false;
+  };
+
+  return {
+    ref,
+    /**
+     * 這一次 click 是不是拖出來的。**讀一次就清掉**——不清的話旗標會留到下一次，
+     * 用鍵盤 Enter 按按鈕不經過 pointerdown，那一次就會被上一次的拖曳吃掉。
+     */
+    wasDrag: () => {
+      const was = dragged.current;
+      dragged.current = false;
+      return was;
+    },
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: stop,
+      onPointerLeave: stop,
+      onPointerCancel: stop,
+    },
+  };
+}
+
+/** 四顆篩選按鈕。展開的是哪一顆，null 是全部收起。 */
+type Filter = 'who' | 'org' | 'kind' | 'position';
+
+interface Choice {
+  readonly value: string;
+  readonly label: string;
+}
+
 /** 去重並保留第一次出現的順序——伺服器給的清單已經排好了。 */
 function unique(values: readonly string[]): readonly string[] {
   return [...new Set(values)];
@@ -130,6 +192,8 @@ export function Ladder({ account }: { account: Account }) {
    * 要是跟著不畫，每換一次選項整排就閃一次。
    */
   const [combos, setCombos] = useState<readonly LadderQuery[]>([]);
+  const [open, setOpen] = useState<Filter | null>(null);
+  const drag = useDragScroll();
 
   useEffect(() => {
     let live = true;
@@ -205,44 +269,81 @@ export function Ladder({ account }: { account: Account }) {
     });
   }
 
+  const positionLabel = (p: string) => (p === ALL ? '跨守位' : `${p} ${positionName(p)}`);
+
+  /** 每一顆按鈕：現在的值、第三層的選項、選了之後做什麼。 */
+  const filters: Record<Filter, { current: string; choices: readonly Choice[]; pick: (v: string) => void }> = {
+    who: {
+      current: self ? 'self' : 'all',
+      choices: [
+        { value: 'self', label: '我的生涯' },
+        { value: 'all', label: '所有玩家' },
+      ],
+      pick: (v) => setSelf(v === 'self'),
+    },
+    org: {
+      current: query.org,
+      choices: (orgs.length > 0 ? orgs : [ALL]).map((o) => ({ value: o, label: orgName(o) })),
+      pick: pickOrg,
+    },
+    kind: {
+      current: query.kind,
+      choices: [
+        { value: 'total', label: '累計' },
+        { value: 'best', label: '單季' },
+      ],
+      pick: (v) => setQuery({ ...query, kind: v === 'best' ? 'best' : 'total' }),
+    },
+    position: {
+      current: query.position,
+      choices: (positions.length > 0 ? positions : [ALL]).map((p) => ({ value: p, label: positionLabel(p) })),
+      pick: (v) => setQuery({ ...query, position: v }),
+    },
+  };
+
+  const labelOf = (f: Filter) =>
+    filters[f].choices.find((c) => c.value === filters[f].current)?.label ?? filters[f].current;
+
+  const opened = open === null ? null : filters[open];
+
   return (
     <>
-      <div className="ladder-filters">
-        <select
-          aria-label="誰的生涯"
-          value={self ? 'self' : 'all'}
-          onChange={(e) => setSelf(e.target.value === 'self')}
-        >
-          <option value="self">我的生涯</option>
-          <option value="all">所有玩家</option>
-        </select>
-        <select aria-label="聯盟" value={query.org} onChange={(e) => pickOrg(e.target.value)}>
-          {(orgs.length > 0 ? orgs : [ALL]).map((o) => (
-            <option key={o} value={o}>
-              {orgName(o)}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="累計或單季"
-          value={query.kind}
-          onChange={(e) => setQuery({ ...query, kind: e.target.value === 'best' ? 'best' : 'total' })}
-        >
-          <option value="total">累計</option>
-          <option value="best">單季</option>
-        </select>
-        <select
-          aria-label="守位"
-          value={query.position}
-          onChange={(e) => setQuery({ ...query, position: e.target.value })}
-        >
-          {(positions.length > 0 ? positions : [ALL]).map((p) => (
-            <option key={p} value={p}>
-              {p === ALL ? '跨守位' : `${p} ${positionName(p)}`}
-            </option>
-          ))}
-        </select>
+      {/* 第二層：跟上面的分頁同一個樣式，只寫目前的值。按一下展開第三層，再按一下收起。 */}
+      <div className="seg" style={{ marginBottom: 8 }}>
+        {(['who', 'org', 'kind', 'position'] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            className={open === f ? 'on' : undefined}
+            aria-expanded={open === f}
+            onClick={() => setOpen(open === f ? null : f)}
+          >
+            {labelOf(f)}
+          </button>
+        ))}
       </div>
+      {/*
+        第三層：一排四顆，多的左右滑（滑鼠按住拖、觸控原生捲動）。選了就收起。
+        只列選項，不另加標題——展開的是哪一顆，第二層那顆亮著就看得出來。
+      */}
+      {opened !== null && (
+        <div className="seg-scroll" ref={drag.ref} {...drag.handlers}>
+          {opened.choices.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={c.value === opened.current ? 'on' : undefined}
+              onClick={() => {
+                if (drag.wasDrag()) return;
+                opened.pick(c.value);
+                setOpen(null);
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
       {boards()}
     </>
   );
