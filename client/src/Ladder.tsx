@@ -62,7 +62,11 @@ function fmt(value: number, side: LadderBoard['side'], key: string): string {
   return column.digits === 3 && value < 1 ? text.slice(1) : text;
 }
 
-function Board({ board }: { board: LadderBoard }) {
+/**
+ * 一塊榜。`single` 是單季最佳：一列就是一季，「1 季」那一欄每列都一樣，
+ * 不必寫（issue #38）。
+ */
+function Board({ board, single }: { board: LadderBoard; single: boolean }) {
   const column = columnOf(board.side, board.column);
   if (column === undefined) return null;
 
@@ -92,9 +96,11 @@ function Board({ board }: { board: LadderBoard }) {
                   </span>
                 )}
               </td>
-              <td style={{ width: '4em' }} title="這個組合內的球季數">
-                {e.seasons} 季
-              </td>
+              {!single && (
+                <td style={{ width: '4em' }} title="這個組合內的球季數">
+                  {e.seasons} 季
+                </td>
+              )}
               <td style={{ textAlign: 'right', width: '6em' }}>
                 <b className="hl">{fmt(e.value, board.side, board.column)}</b>
               </td>
@@ -259,7 +265,7 @@ export function Ladder({ account }: { account: Account }) {
           <h4>{title}</h4>
           <div className="ladder-grid">
             {list.map((b) => (
-              <Board key={b.column} board={b} />
+              <Board key={b.column} board={b} single={query.kind === 'best'} />
             ))}
           </div>
         </section>
