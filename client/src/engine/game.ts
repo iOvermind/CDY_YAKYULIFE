@@ -2498,7 +2498,7 @@ export class Game {
     } else {
       this.flow.card('info', `${levelOf(pro.level).name} 球季成績`, parts.join('<br>'));
     }
-    this.#annualAwards(line.batting, line.pitching);
+    this.#annualAwards(line.batting, line.pitching, this.#seasonFactor * suspension);
     this.#championship();
   }
 
@@ -3876,7 +3876,7 @@ export class Game {
    * 把名稱寫進去重的榮譽清單供顯示（見 #addHonor 的說明：清單是「他做到過
    * 什麼」，次數要看結構化紀錄）。
    */
-  #annualAwards(batting: BattingLine | null, pitching: ProPitchingLine | null): void {
+  #annualAwards(batting: BattingLine | null, pitching: ProPitchingLine | null, availability: number): void {
     const pro = this.#pro;
     if (pro === null) return;
     const info = levelOf(pro.level);
@@ -3928,6 +3928,7 @@ export class Game {
       // 年度最佳打者只看打擊那一段——守備有金手套，投球有最佳投手。
       battingWinShares: this.#seasons.at(-1)?.shares.batting.win ?? 0,
       pitchingWinShares: this.#seasons.at(-1)?.shares.pitching.win ?? 0,
+      availability,
     });
     if (won.length === 0) return;
 

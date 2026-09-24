@@ -659,6 +659,8 @@ export interface AwardsData {
     /** 曲線的位移：d = −shift 時入選率是 0。 */
     readonly shift: number;
     readonly exponent: number;
+    /** 出賽係數低於它就不入選明星賽。 */
+    readonly min_availability: number;
     readonly clamp: Range;
     readonly popularity_bonus: {
       readonly league: string;

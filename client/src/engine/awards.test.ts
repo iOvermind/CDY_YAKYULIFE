@@ -55,6 +55,7 @@ const ctx = (over: Partial<AwardContext> = {}): AwardContext => ({
   winShares: 8,
   battingWinShares: 5,
   pitchingWinShares: 3,
+  availability: 1,
   ...over,
 });
 
@@ -294,6 +295,24 @@ describe('明星賽', () => {
     expect(rate({ d: 0, org: pop.league, team: pop.team }, 'all_star')).toBeGreaterThan(
       rate({ d: 0, team: '某隊' }, 'all_star'),
     );
+  });
+
+  /** 要打到明星賽前（issue #37）：整季報銷、人氣球團也一樣進不去。 */
+  it('沒打到球季中段的人不入選', () => {
+    const pop = cfg.all_star.popularity_bonus;
+    const star = { d: 20, org: pop.league, team: pop.team };
+    expect(rate({ ...star, availability: 0 }, 'all_star')).toBe(0);
+    expect(rate({ ...star, availability: 0.4 }, 'all_star')).toBe(0);
+    expect(rate({ ...star, availability: 0.6 }, 'all_star')).toBeGreaterThan(0.9);
+  });
+
+  it('缺席不改變其他獎的抽籤', () => {
+    const strip = (xs: readonly { code: string }[]) => xs.filter((a) => a.code !== 'all_star');
+    for (let i = 0; i < 50; i++) {
+      expect(strip(annualAwards(new World(`as-${i}`), ctx({ d: 15, availability: 0 })))).toEqual(
+        strip(annualAwards(new World(`as-${i}`), ctx({ d: 15 }))),
+      );
+    }
   });
 });
 

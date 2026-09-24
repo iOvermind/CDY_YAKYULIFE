@@ -191,6 +191,8 @@
     "base": 18,
     "shift": 10,
     "exponent": 2,
+    "_min_availability_note": "明星賽要打到球季中段：這一季的出賽係數（傷病 × 禁賽）低於這個比例就不入選（issue #37）。整季報銷、復健年、開完 TJ 那一年都是 0。",
+    "min_availability": 0.5,
     "_curve_note": "入選率 = base × ((d + shift) ÷ shift)^exponent，再夾在 clamp。**次方讓斜率變陡**：聯盟平均（d = 0）18%、d+5 約 40%、d+10 約 72%、d+15 以上貼到 92%；d ≤ −5 幾乎進不去。舊的直線（28% + 每分 7%）讓平均水準的人每季都有近三成機率，九成的生涯都進過明星賽。",
     "clamp": {
       "min": 3,
