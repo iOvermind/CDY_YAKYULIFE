@@ -130,6 +130,18 @@ export class FakeDb implements Queryable {
         .filter((a) => a.user_id === String(v[0]))
         .sort((a, b) => b.unlocked_at.getTime() - a.unlocked_at.getTime());
     }
+    if (s.startsWith('SELECT COUNT(DISTINCT user_id) AS players FROM achievements')) {
+      return [{ players: new Set(this.achievements.map((a) => a.user_id)).size }];
+    }
+    if (s.startsWith('SELECT achievement, COUNT(DISTINCT user_id) AS holders FROM achievements')) {
+      const holders = new Map<string, Set<string>>();
+      for (const a of this.achievements) {
+        const set = holders.get(a.achievement) ?? new Set<string>();
+        set.add(a.user_id);
+        holders.set(a.achievement, set);
+      }
+      return [...holders].map(([achievement, set]) => ({ achievement, holders: set.size }));
+    }
     if (s.startsWith('SELECT COALESCE(SUM(points)')) {
       const earned = this.achievements
         .filter((a) => a.user_id === String(v[0]))

@@ -3,11 +3,16 @@ import { achievements as cfg, amateur } from '../data/index.ts';
 import type { BattingLine } from './amateurStats.ts';
 import {
   evaluateAchievements,
+  lifeIndex,
   ladderAp,
   ladderTop,
   type AchievementContext,
 } from './achievements.ts';
 import { joinName } from './naming.ts';
+
+/** 人生那一格每一段都會有（第 N 段人生），量別的成就時先把它濾掉。 */
+const others = <T extends { readonly id: string }>(xs: readonly T[]): T[] => xs.filter((a) => lifeIndex(a.id) === null);
+const LIFE = cfg.first_career_bonus.points;
 import { evaluateMilestones, type CareerSummary, type LeagueCareer } from './career.ts';
 
 const NONE = { win: 0, loss: 0 };
@@ -170,8 +175,9 @@ describe('同一項成就只給一次 AP', () => {
     );
     // 這一生做到的事還是要看得到。
     expect(again.list).toHaveLength(first.list.length);
-    expect(again.newly).toHaveLength(0);
-    expect(again.points).toBe(0);
+    // 只剩「第 2 段人生」那一階是新的——人生每一段都給。
+    expect(others(again.newly)).toHaveLength(0);
+    expect(again.points).toBe(LIFE);
   });
 });
 
@@ -235,7 +241,7 @@ describe('姻緣', () => {
     const got = evaluateAchievements(ctx({ spouses: ['王小美', '陳大文'] }));
     const rows = got.list.filter((a) => a.id.startsWith('marriage:'));
     expect(rows).toHaveLength(2);
-    expect(got.points).toBe(cfg.categories.marriage.default * 2);
+    expect(got.points).toBe(cfg.categories.marriage.default * 2 + LIFE);
   });
 
   it('id 掛名字不掛年份——跨局娶到同一個人不再給點', () => {
@@ -247,8 +253,8 @@ describe('姻緣', () => {
     );
     // 兩段婚姻都看得到，但只有新的那一位給 AP。
     expect(again.list.filter((a) => a.id.startsWith('marriage:'))).toHaveLength(2);
-    expect(again.newly.map((a) => a.name)).toEqual(['陳大文']);
-    expect(again.points).toBe(cfg.categories.marriage.default);
+    expect(others(again.newly).map((a) => a.name)).toEqual(['陳大文']);
+    expect(again.points).toBe(cfg.categories.marriage.default + LIFE);
   });
 });
 
@@ -273,7 +279,7 @@ describe('特性', () => {
         unlocked: new Set(rows.map((a) => a.id)),
       }),
     );
-    expect(other.newly.map((a) => a.name)).toEqual(['日職歷史級球星']);
+    expect(others(other.newly).map((a) => a.name)).toEqual(['日職歷史級球星']);
   });
 
   it('固定名字的特性照舊掛 id', () => {
@@ -289,7 +295,7 @@ describe('名人堂', () => {
     const got = evaluateAchievements(ctx({ halls: ['中職', '日職'] }));
     const rows = got.list.filter((a) => a.id.startsWith('hall:'));
     expect(rows).toHaveLength(2);
-    expect(got.points).toBe(cfg.categories.hall.default * 2);
+    expect(got.points).toBe(cfg.categories.hall.default * 2 + LIFE);
   });
 });
 
@@ -392,5 +398,31 @@ describe('AP 那一份：線性且封頂', () => {
 
   it('級距必須為正', () => {
     expect(() => ladderAp(0, pts, 1, cap, 100)).toThrow();
+  });
+});
+
+/** 人生是一條不封頂的階梯：每走完一段多一階，每階都給 AP。 */
+describe('第 N 段人生', () => {
+  it('第一段沿用 first_career，之後依已解鎖的階數往上加', () => {
+    const first = evaluateAchievements(ctx({}));
+    const life1 = first.list.find((a) => lifeIndex(a.id) !== null);
+    expect(life1?.id).toBe('first_career');
+    expect(life1?.name).toBe('第 1 段人生');
+
+    const third = evaluateAchievements(ctx({ unlocked: new Set(['first_career', 'life:2']) }));
+    const life3 = third.newly.find((a) => lifeIndex(a.id) !== null);
+    expect(life3?.id).toBe('life:3');
+    expect(life3?.name).toBe('第 3 段人生');
+    expect(life3?.points).toBe(LIFE);
+  });
+
+  it('解鎖完別的成就之後，每一段仍然拿得到人生那一階的 AP', () => {
+    const first = evaluateAchievements(ctx({ halls: ['中職'] }));
+    let unlocked = new Set(first.list.map((a) => a.id));
+    for (let i = 0; i < 5; i++) {
+      const r = evaluateAchievements(ctx({ halls: ['中職'], unlocked }));
+      expect(r.points).toBe(LIFE);
+      unlocked = new Set([...unlocked, ...r.newly.map((a) => a.id)]);
+    }
   });
 });

@@ -29,6 +29,7 @@ import type {
 import { hashPassword, newCareerId, verifyPassword } from './auth.ts';
 import {
   achievementsOf,
+  rarityOf,
   balanceOf,
   createUser,
   findUser,
@@ -52,7 +53,11 @@ function spentOn(levels: Record<string, number>): number {
 
 export async function meOf(user: UserRow): Promise<Me> {
   const levels = await talentsOf(user.id);
-  const achievements = await achievementsOf(user.id);
+  const rarity = await rarityOf();
+  const achievements = (await achievementsOf(user.id)).map((a) => {
+    const r = rarity.get(a.id);
+    return r === undefined ? a : { ...a, rarity: r };
+  });
   const { ap, earned } = await balanceOf(user.id, spentOn(levels));
   return {
     account: user.account,

@@ -34,6 +34,24 @@ export interface Achievement {
   readonly points: number;
 }
 
+/** 第一段人生的成就 id（沿用舊名，已領過的帳號照樣算第一階）。 */
+export const FIRST_LIFE = 'first_career';
+/** 第二段以後的成就 id 前綴：`life:2`、`life:3`…… */
+export const LIFE_PREFIX = 'life:';
+
+/** 第 n 段人生的顯示名稱。 */
+export function lifeName(n: number): string {
+  return `第 ${n} 段人生`;
+}
+
+/** 這個 id 是第幾段人生；不是人生那一格就回 null。 */
+export function lifeIndex(id: string): number | null {
+  if (id === FIRST_LIFE) return 1;
+  if (!id.startsWith(LIFE_PREFIX)) return null;
+  const n = Number(id.slice(LIFE_PREFIX.length));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 /** 一次結算的成就總表。 */
 export interface AchievementResult {
   /** 這一局達成的全部成就。顯示用——玩家要看得到自己這一生做到了什麼。 */
@@ -133,6 +151,9 @@ export function ladderOf(id: string): { readonly key: string; readonly rung: num
   if (parts[0] === 'tier' && parts.length === 2) {
     return { key: 'tier', rung: -Number(parts[1]) };
   }
+  // 第 N 段人生也是一座階梯：櫃子裡只留最高那一段。
+  const life = lifeIndex(id);
+  if (life !== null) return { key: 'life', rung: life };
   return { key: id, rung: 0 };
 }
 
@@ -451,12 +472,18 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
     });
   }
 
-  // ---- 第一段人生
-  if (ctx.firstCareer) {
+  // ---- 第 N 段人生：每走完一段就多一階，每階都給 AP，沒有上限。
+  //
+  // 別的成就同一項只給一次，十段左右就解鎖完了，之後幾乎斷炊；這一條是解鎖完之後
+  // 仍然有的保底收入。第幾段從已解鎖過的階數推出來——第一段沿用舊的 `first_career`
+  // 這個 id，已經領過的帳號照樣算第一階。
+  {
+    const lives = [...ctx.unlocked].filter((id) => id === FIRST_LIFE || id.startsWith(LIFE_PREFIX)).length;
+    const n = lives + 1;
     list.push({
-      id: 'first_career',
+      id: n === 1 ? FIRST_LIFE : `${LIFE_PREFIX}${n}`,
       category: cfg.first_career_bonus.name,
-      name: cfg.first_career_bonus.name,
+      name: lifeName(n),
       points: cfg.first_career_bonus.points,
     });
   }

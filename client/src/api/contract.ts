@@ -24,6 +24,11 @@ export interface UnlockedAchievement {
   readonly points: number;
   /** 解鎖的**真實時間**（ISO 字串），不是局內年份——局內時間是循環的。 */
   readonly at: string;
+  /**
+   * 稀有率（百分比，0–100）：這台服務上拿過這項成就的玩家 ÷ 打完過至少一段生涯的
+   * 玩家。伺服器算不出來（例如沒有任何玩家）時省略。
+   */
+  readonly rarity?: number;
 }
 
 /** 目前登入的玩家。未登入時整個物件是 null。 */

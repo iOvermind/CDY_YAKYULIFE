@@ -34,6 +34,8 @@ export interface AchievementTile {
   readonly points: number;
   /** 最高階是什麼時候拿到的。 */
   readonly at: string;
+  /** 最高那一階的稀有率（百分比）。伺服器沒給就沒有。 */
+  readonly rarity?: number;
 }
 
 /** 成就櫃需要的最小形狀——伺服器的 `UnlockedAchievement` 正好是它的超集。 */
@@ -43,6 +45,7 @@ interface UnlockedLike {
   readonly category: string;
   readonly points: number;
   readonly at: string;
+  readonly rarity?: number;
 }
 
 /**
@@ -102,7 +105,14 @@ export function cabinetTiles(unlocked: readonly UnlockedLike[]): readonly Achiev
     }
     best.set(key, {
       rung,
-      tile: { id: key, category: a.category, name: a.name, points, at: a.at },
+      tile: {
+        id: key,
+        category: a.category,
+        name: a.name,
+        points,
+        at: a.at,
+        ...(a.rarity === undefined ? {} : { rarity: a.rarity }),
+      },
     });
   }
 

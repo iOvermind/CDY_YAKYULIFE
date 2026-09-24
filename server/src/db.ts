@@ -111,6 +111,22 @@ export async function achievementsOf(userId: string): Promise<UnlockedAchievemen
 }
 
 /**
+ * 各項成就的稀有率（百分比）。分母是**打完過至少一段生涯**的玩家——也就是成就表
+ * 裡出現過的帳號；只註冊沒玩過的人不算，否則每一項成就都會被灌成很稀有。
+ */
+export async function rarityOf(): Promise<ReadonlyMap<string, number>> {
+  const players = await pool.query<{ players: string | number }>(
+    `SELECT COUNT(DISTINCT user_id) AS players FROM achievements`,
+  );
+  const total = Number(players.rows[0]?.players ?? 0);
+  if (total === 0) return new Map();
+  const { rows } = await pool.query<{ achievement: string; holders: string | number }>(
+    `SELECT achievement, COUNT(DISTINCT user_id) AS holders FROM achievements GROUP BY achievement`,
+  );
+  return new Map(rows.map((r) => [r.achievement, (Number(r.holders) / total) * 100]));
+}
+
+/**
  * AP 餘額。
  *
  * **算出來的，不是存出來的**：賺到的總和減去買天賦花掉的。存一個餘額欄位的話，

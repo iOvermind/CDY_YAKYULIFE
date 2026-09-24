@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { abilities, amateur, events as eventsData, leagues, love, season as seasonData } from '../data/index.ts';
+import { abilities, achievements as achievementsData, amateur, events as eventsData, leagues, love, season as seasonData } from '../data/index.ts';
 import { stageOf } from './amateur.ts';
 import { ALL_ABILITIES } from '../data/index.ts';
 import { Game, type GameSetup } from './game.ts';
 import { ENGINE_VERSION } from './version.ts';
 import { ALL } from './ladder.ts';
+import { lifeIndex } from './achievements.ts';
 import { discountedPotential, handednessTier } from './handedness.ts';
 import { joinName } from './naming.ts';
 import { roleRank } from './season.ts';
@@ -2349,11 +2350,12 @@ describe('結算（score）', () => {
       firstCareer: false,
       unlocked: new Set(first.achievements.list.map((a) => a.id)),
     });
-    expect(again?.achievements.newly).toEqual([]);
-    expect(again?.achievements.points).toBe(0);
-    // 清單本身是同一批（「第一段人生」那一項除外，它只在第一段給）。
+    // 只剩人生那一階是新的（第 2 段人生）——那一條每一段都給。
+    const notLife = (xs: readonly { id: string }[]) => xs.filter((a) => lifeIndex(a.id) === null);
+    expect(notLife(again?.achievements.newly ?? [])).toEqual([]);
+    expect(again?.achievements.points).toBe(achievementsData.first_career_bonus.points);
     const ids = new Set(first.achievements.list.map((a) => a.id));
-    for (const a of again?.achievements.list ?? []) expect(ids.has(a.id)).toBe(true);
+    for (const a of notLife(again?.achievements.list ?? [])) expect(ids.has(a.id)).toBe(true);
   });
 
   it('同一段生涯結算兩次結果相同——結算本身不消耗抽取', () => {

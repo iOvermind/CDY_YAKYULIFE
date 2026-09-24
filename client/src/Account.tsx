@@ -291,7 +291,11 @@ function AchievementList({ me }: { me: Me }) {
                   {g.items.map((a) => (
                     <li
                       key={a.id}
-                      title={`+${String(a.points)} AP · ${DATE.format(new Date(a.at))}`}
+                      title={
+                        `+${String(a.points)} AP` +
+                        (a.rarity === undefined ? '' : `｜稀有率 ${a.rarity.toFixed(2)}%`) +
+                        ` · ${DATE.format(new Date(a.at))}`
+                      }
                     >
                       {a.name}
                     </li>

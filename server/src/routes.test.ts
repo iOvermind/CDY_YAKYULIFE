@@ -13,6 +13,7 @@ import { beforeEach, describe, it } from 'node:test';
 import { useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
 import { ALL, Game, isPitcherRole, type ReplayLog } from '../../client/src/engine/index.ts';
+import { achievements as achievementsData } from '../../client/src/data/index.ts';
 import {
   finishCareer,
   HttpError,
@@ -291,7 +292,7 @@ describe('結算', () => {
     assert.equal(result.verified, true);
   });
 
-  it('同一項成就只給一次 AP——第二段生涯不會重複入帳', async () => {
+  it('同一項成就只給一次 AP——第二段生涯只多「第 2 段人生」那一階', async () => {
     const user = await register('Overmind', 'hunter2');
 
     const first = await finishCareer(user, (await startCareer(user)).careerId, {
@@ -305,9 +306,23 @@ describe('結算', () => {
       log: playToEnd(),
       claimed: [],
     });
-    assert.equal(second.gained, 0);
-    assert.equal(second.unlocked.length, 0);
-    assert.equal(second.ap, first.ap);
+    // 別的成就都領過了；人生是一條不封頂的階梯，每一段都多一階。
+    const life = achievementsData.first_career_bonus.points;
+    assert.equal(second.gained, life);
+    assert.equal(second.unlocked.length, 1);
+    assert.equal(second.ap, first.ap + life);
+  });
+
+  it('成就帶著稀有率：拿過的玩家 ÷ 打完過生涯的玩家', async () => {
+    const a = await register('Overmind', 'hunter2');
+    const b = await register('Someone', 'hunter2');
+    await finishCareer(a, (await startCareer(a)).careerId, { log: playToEnd(), claimed: [] });
+    await finishCareer(b, (await startCareer(b)).careerId, { log: playToEnd(), claimed: [] });
+    await finishCareer(a, (await startCareer(a)).careerId, { log: playToEnd(), claimed: [] });
+    const me = await meOf(a);
+    // 兩位都打完過第一段 → 100%；第 2 段人生只有 Overmind 有 → 50%。
+    assert.equal(me.achievements.find((x) => x.id === 'first_career')?.rarity, 100);
+    assert.equal(me.achievements.find((x) => x.id === 'life:2')?.rarity, 50);
   });
 
   it('同一局不能結算兩次', async () => {
