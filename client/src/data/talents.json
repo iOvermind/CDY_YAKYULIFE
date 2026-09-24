@@ -483,6 +483,88 @@
       ]
     },
     {
+      "id": "rubber_man",
+      "name": "橡膠人",
+      "group": "傷病",
+      "desc": "身體像橡膠一樣，拉到極限還彈得回來。",
+      "levels": [
+        {
+          "cost": 12,
+          "effect_text": "耐力上限 ×1.05",
+          "effects": [
+            {
+              "path": "season.endurance.max_multiplier",
+              "op": "mul",
+              "value": 1.05
+            }
+          ]
+        },
+        {
+          "cost": 30,
+          "effect_text": "耐力上限 ×1.1",
+          "effects": [
+            {
+              "path": "season.endurance.max_multiplier",
+              "op": "mul",
+              "value": 1.1
+            }
+          ]
+        },
+        {
+          "cost": 60,
+          "effect_text": "耐力上限 ×1.15",
+          "effects": [
+            {
+              "path": "season.endurance.max_multiplier",
+              "op": "mul",
+              "value": 1.15
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pacing",
+      "name": "配速大師",
+      "group": "傷病",
+      "desc": "什麼時候該全力、什麼時候該留一手，你心裡有一本帳。",
+      "levels": [
+        {
+          "cost": 12,
+          "effect_text": "守位與投球的耐力消耗 ×0.95",
+          "effects": [
+            {
+              "path": "season.endurance.cost_multiplier",
+              "op": "mul",
+              "value": 0.95
+            }
+          ]
+        },
+        {
+          "cost": 30,
+          "effect_text": "守位與投球的耐力消耗 ×0.9",
+          "effects": [
+            {
+              "path": "season.endurance.cost_multiplier",
+              "op": "mul",
+              "value": 0.9
+            }
+          ]
+        },
+        {
+          "cost": 60,
+          "effect_text": "守位與投球的耐力消耗 ×0.85",
+          "effects": [
+            {
+              "path": "season.endurance.cost_multiplier",
+              "op": "mul",
+              "value": 0.85
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "scouted",
       "name": "隱藏原石",
       "group": "職業",

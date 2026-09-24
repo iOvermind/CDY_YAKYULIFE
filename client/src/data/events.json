@@ -27,7 +27,8 @@
     "income": "收入增減：當季年薪的百分比（代言、罰款）。養成期沒有年薪，這一格落空",
     "ban": "永久逐出棒球界",
     "yips": "觸發「失憶症」特性",
-    "tj_countdown": "TJ 量表直接推進指定級距",
+    "tj_countdown": "投手耐力直接扣掉上限的 tj_countdown × 15%（韌帶受損，見 season.json 的 endurance.events）",
+    "recover": "休養：野手與投手兩池耐力各回上限的指定百分比",
     "clutch": "觸發「大心臟」特性"
   },
   "_ceiling_note": "事件另可帶 good_ceiling / bad_ceiling 欄位，提升或降低指定能力的上限。它與 good_effects 是**不同的東西**：effects 直接加減能力值，ceiling 只移動天花板，點數仍要自己練上去。每項能力的上限提升最多累積 abilities.json 的 scale.max_ceiling_bonus 點。",
@@ -449,7 +450,7 @@
       "for": "PRO",
       "good_text": "搞笑圈粉無數，當作另類放鬆療癒",
       "bad_text": "玩破關遊戲不小心扭到腳，靠背被教練罵死",
-      "good_effects": {"income": 5, "sta": 2},
+      "good_effects": {"income": 5, "sta": 2, "recover": 3},
       "bad_effects": {"inj": 15}
     },
     {
@@ -636,10 +637,7 @@
       "for": "*",
       "good_text": "解開內心死結，大心臟養成完畢",
       "bad_text": "心理師太爛，聊完反而覺得人生沒希望",
-      "good_effects": {
-        "clutch": 1,
-        "eye": 2
-      },
+      "good_effects": {"clutch": 1, "eye": 2, "recover": 3},
       "bad_effects": {
         "sta": -2
       }
@@ -722,9 +720,7 @@
       "weight": 10,
       "good_text": "滿血復活，狀態比受傷前還猛",
       "bad_text": "操之過急，同一個地方再度拉傷，痛死",
-      "good_effects": {
-        "sta": 2
-      },
+      "good_effects": {"sta": 2, "recover": 5},
       "bad_effects": {
         "inj": 20
       }

@@ -560,8 +560,8 @@ describe('職業階段的狀態', () => {
    */
   it('季末成績卡帶著 OPS+ 或 ERA+', () => {
     let checked = 0;
-    for (let i = 0; i < 10; i++) {
-      const game = playToEnd(started({ seed: `plus-${i}` }));
+    for (let i = 0; i < 20 && checked < 3; i++) {
+      const game = playWell(started({ seed: `plus-${i}` }));
       const bodies = game.flow.log
         .filter((e): e is Extract<typeof e, { kind: 'card' }> => e.kind === 'card')
         .map((c) => c.body);
@@ -2417,6 +2417,100 @@ describe('永久逐出', () => {
     } finally {
       card.weight = saved.weight;
       card.good_effects = saved.good;
+    }
+  });
+});
+
+/**
+ * 投手耐力耗盡的 TJ 關卡（ADR 0051）。真實的消耗要打到三十幾歲才見底，測試把每局
+ * 的消耗調到極大，讓第一個職業球季就耗盡，打完再還原。
+ */
+describe('TJ 與七傷拳', () => {
+  const PITCH = ['sta', 'vel', 'ctl', 'swp', 'chg'];
+  const play = (seed: string, answer: 'tj:surgery' | 'tj:endure') => {
+    const cfg = seasonData.endurance.pitcher as { per_inning: number };
+    const saved = cfg.per_inning;
+    cfg.per_inning = 10;
+    try {
+      const game = new Game({ ...setup, seed, startPosition: 'P' }).start();
+      let asked = 0;
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 20000) {
+        const ids = game.flow.prompt.options.map((o) => o.id);
+        if (ids.includes(answer)) {
+          asked++;
+          game.choose(answer);
+          continue;
+        }
+        const pick = defaultPick(game, PITCH);
+        if (pick === undefined) break;
+        game.choose(pick);
+      }
+      return { game, asked, log: JSON.stringify(game.flow.log) };
+    } finally {
+      cfg.per_inning = saved;
+    }
+  };
+
+  /** 不是每顆種子都走得到職業的投手丘——找第一個被問到的。 */
+  const first = (tag: string, answer: 'tj:surgery' | 'tj:endure') => {
+    for (let i = 0; i < 30; i++) {
+      const r = play(`${tag}-${i}`, answer);
+      if (r.asked > 0) return r;
+    }
+    return { asked: 0, log: '' };
+  };
+
+  it('耐力耗盡會問要不要開 TJ；開了就整季復健', () => {
+    const { asked, log } = first('tj-open', 'tj:surgery');
+    expect(asked).toBeGreaterThan(0);
+    expect(log).toContain('TJ 手術');
+  });
+
+  it('一直不開：七傷拳每季累加，滿 100% 就被迫開刀', () => {
+    // 硬撐的人能力一路往下掉，不少人撐不到 100% 就先被下放、釋出——找一個撐到底的。
+    let forced = false;
+    for (let i = 0; i < 30 && !forced; i++) {
+      const { asked, log } = play(`tj-endure-${i}`, 'tj:endure');
+      if (asked === 0) continue;
+      expect(log).toContain('七傷拳');
+      forced = log.includes('直接開 TJ');
+    }
+    expect(forced).toBe(true);
+  });
+});
+
+/** 野手耐力每掉一階問一次退守（ADR 0051）。同樣把消耗調到極大，打完還原。 */
+describe('耐力退守', () => {
+  it('掉一階問一次；拒絕之後同一階不再問，再往下掉才問', () => {
+    const table = seasonData.endurance.fielder.per_full_season as Record<string, number>;
+    const saved = { ...table };
+    for (const k of Object.keys(table)) if (k !== 'DH') table[k] = (saved[k] ?? 0) * 3;
+    try {
+      let seen = false;
+      for (let i = 0; i < 30 && !seen; i++) {
+        const game = started({ seed: `step-${i}`, startPosition: 'SS' });
+        const asked: string[] = [];
+        let guard = 0;
+        while (game.flow.prompt !== null && guard++ < 20000) {
+          const prompt = game.flow.prompt;
+          if (prompt.options.some((o) => o.id === 'endurance:stay')) {
+            asked.push(prompt.title ?? '');
+            game.choose('endurance:stay');
+            continue;
+          }
+          const pick = defaultPick(game, EFFECTIVE);
+          if (pick === undefined) break;
+          game.choose(pick);
+        }
+        if (asked.length === 0) continue;
+        seen = true;
+        // 拒絕之後同一階不再問：連續兩次問的一定是不同的狀態（中間回升過才會再問同一階）。
+        for (let j = 1; j < asked.length; j++) expect(asked[j]).not.toBe(asked[j - 1]);
+      }
+      expect(seen).toBe(true);
+    } finally {
+      Object.assign(table, saved);
     }
   });
 });

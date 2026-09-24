@@ -72,17 +72,25 @@ function playToEnd(talents: Record<string, number> = {}): ReplayLog {
  * 一軍，天梯一列都不會寫（那是對的，不是漏算）。天梯的測試需要一個有頂級
  * 聯盟成績的樣本，所以這裡把點數投進真正影響評價的能力。
  *
- * 種子是挑過的：`srv-0` 在這個策略下會打上頂級聯盟。跨版本不保證重現
- * （ADR 0002），所以引擎大改之後這個種子可能要重挑——真的失效時
- * `assert.ok(mine.length > 0)` 會直接說「一列都沒寫」。
+ * 種子由 `playSeed` 依序試出來：第一個打上頂級聯盟的就是它。
  *
  * **連 `claimed` 一起回傳**：那是客戶端真正會送的東西（`App.tsx` 送的是
  * `game.achievements.list` 的 id）。傳空陣列的話 `verified` 必然是 false，
  * 而天梯只收 verified 的生涯——測試就會量到一個假的失敗。
  */
 function playStrong(): { log: ReplayLog; claimed: string[] } {
+  // **種子不寫死**：引擎一改抽取順序，原本挑好的那一顆就可能打不上頂級聯盟（ADR 0002
+  // 跨版本不保證重現）。依序試，第一個打上去的就是它——結果仍然是確定的。
+  for (let i = 0; i < 50; i++) {
+    const played = playSeed(`srv-${i}`);
+    if (played !== null) return played;
+  }
+  throw new Error('五十顆種子沒有一顆打上頂級聯盟');
+}
+
+function playSeed(seed: string): { log: ReplayLog; claimed: string[] } | null {
   const game = new Game({
-    seed: 'srv-0',
+    seed,
     name: '測試員',
     startPosition: 'SS',
     throws: 'R',
@@ -102,6 +110,7 @@ function playStrong(): { log: ReplayLog; claimed: string[] } {
       if (pick === undefined) throw new Error('提問沒有選項');
       game.choose(pick.id);
     }
+    if ((game.summary?.leagues.length ?? 0) === 0) return null;
     return {
       log: game.toReplayLog(),
       claimed: (game.achievements?.list ?? []).map((a) => a.id),

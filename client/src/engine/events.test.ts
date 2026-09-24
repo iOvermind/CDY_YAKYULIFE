@@ -375,7 +375,7 @@ describe('事件卡只動得了這位球員練得到的能力（ADR 0022）', ()
   });
 
   it('資料裡沒有沒實作的效果鍵', () => {
-    const known = new Set([...ALL_ABILITIES, 'inj', 'rand', 'pitch', 'suspension', 'income', 'ban', 'yips', 'tj_countdown', 'clutch']);
+    const known = new Set([...ALL_ABILITIES, 'inj', 'rand', 'pitch', 'suspension', 'income', 'ban', 'yips', 'tj_countdown', 'recover', 'clutch']);
     const cards = (events as unknown as { events: readonly { id: string; good_effects?: object; bad_effects?: object }[] }).events;
     for (const e of cards) {
       for (const fx of [e.good_effects, e.bad_effects]) {

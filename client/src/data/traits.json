@@ -324,9 +324,10 @@
     {
       "id": "rubber",
       "tone": "good",
-      "rules_complete": false,
+      "rules_complete": true,
       "name": "橡膠果實",
-      "effect_text": "TJ 量表上限翻倍、打針成功率翻倍"
+      "effect_text": "投手耐力上限 ×1.5；七傷拳每季累加的受傷機率減半",
+      "desc": "天生一條橡膠做的手臂——選投手開局時 3% 的機率帶著它出生。<b class=\"hl\">投手耐力上限 ×1.5，七傷拳每季累加的受傷機率減半</b>。再加上天賦〈橡膠人〉，先發一輩子不開 TJ 不是夢。"
     },
     {
       "id": "onetool",

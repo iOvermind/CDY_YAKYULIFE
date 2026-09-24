@@ -239,6 +239,7 @@ const SPECIAL_KEYS = new Set([
   'ban',
   'yips',
   'tj_countdown',
+  'recover',
   'clutch',
 ]);
 

@@ -1461,6 +1461,8 @@ export interface SeasonData {
       readonly rookie_seasons: number;
     };
   };
+  /** 耐力：身體被磨掉的存量（ADR 0051）。 */
+  readonly endurance: EnduranceConfig;
   readonly aging: {
     readonly peak_start: number;
     readonly peak_end: number;
@@ -1755,6 +1757,31 @@ export function traitName(id: string, fill?: string): string {
 }
 export const teams = teamsJson as unknown as TeamsData;
 export const leagues = leaguesJson as unknown as LeaguesData;
+/** 耐力的設定。見 season.json 的 endurance 與 ADR 0051。 */
+export interface EnduranceConfig {
+  readonly start: Range;
+  readonly max_multiplier: number;
+  readonly cost_multiplier: number;
+  readonly coefficient: Range;
+  readonly fielder: { readonly per_full_season: Readonly<Record<string, number>>; readonly recovery: number };
+  readonly pitcher: { readonly per_inning: number; readonly recovery: number };
+  readonly tiers: readonly { readonly id: EnduranceTier; readonly name: string; readonly above: number | null }[];
+  readonly decline: {
+    readonly base: number;
+    readonly per_season: number;
+    readonly max: number;
+    readonly fielder_keys: readonly string[];
+    readonly pitcher_keys: readonly string[];
+  };
+  readonly tj: { readonly restore: number };
+  readonly seven_fists: { readonly per_season: number; readonly rubber_multiplier: number };
+  readonly rubber: { readonly chance: number; readonly pitcher_max: number };
+  readonly events: { readonly tj_countdown_percent: number };
+}
+
+/** 耐力的狀態字：充沛、疲勞、透支、耗盡。 */
+export type EnduranceTier = 'full' | 'tired' | 'strained' | 'empty';
+
 export const season = seasonJson as unknown as SeasonData;
 
 export interface Team {

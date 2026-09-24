@@ -24,6 +24,7 @@ import {
   traitName,
   traitOf,
   type AbilityKey,
+  type EnduranceTier,
   type Hand,
   type SchoolStage,
 } from '../data/index.ts';
@@ -64,6 +65,7 @@ import {
   fieldingResponsibility,
   positionAverage,
   positionLabel,
+  spectrumOf,
   DH,
   type PositionResult,
 } from './defense.ts';
@@ -133,7 +135,33 @@ import {
   train,
   untrain,
 } from './growth.ts';
-import { agedInjuryLoss, injuryChance, rollInjury, unlocksGlass, type Injury } from './injury.ts';
+import {
+  agedInjuryLoss,
+  injuryChance,
+  injuryChanceBeforeTalent,
+  rollInjury,
+  unlocksGlass,
+  type Injury,
+  type InjuryChanceOptions,
+} from './injury.ts';
+import {
+  adjust as adjustEndurance,
+  afterSurgery,
+  declineAmount,
+  declineKeys,
+  fielderWear,
+  pitcherWear,
+  RECOVERY,
+  rollEndurance,
+  settleSeason,
+  sevenFistsRisk,
+  tierName,
+  tierOf,
+  tierRank,
+  TJ_COUNTDOWN_PERCENT,
+  wearCoefficient,
+  type EndurancePool,
+} from './endurance.ts';
 import {
   isConscripted,
   isEligible,
@@ -230,6 +258,7 @@ import {
 } from './teams.ts';
 import {
   benchmarkLevelOf,
+  blockedByHand,
   defenseMark,
   defenseScore,
   homeBenchmarkLevel,
@@ -412,6 +441,16 @@ export interface PlayerState {
   readonly position: string | null;
   /** 守位的中文名。 */
   readonly positionName: string | null;
+  /**
+   * 身體狀態（ADR 0051）：耐力的狀態字，**不給數字**。只列他用得到的那一池——純投手
+   * 沒有野手那一格，純野手沒有投手那一格。職業期之前是 null。
+   */
+  readonly endurance: {
+    readonly fielder: string | null;
+    readonly pitcher: string | null;
+    /** 七傷拳還掛在身上。 */
+    readonly sevenFists: boolean;
+  } | null;
   /**
    * 現在的投手定位（SP／CP／SU／MR／LR）。
    *
@@ -608,6 +647,21 @@ export class Game {
   #suspendedGames = 0;
   /** 被聯盟永久逐出（事件卡「組頭接觸」）。生涯當場結束、不進名人堂票選。 */
   #banned = false;
+  /** 耐力：野手與投手兩池（ADR 0051）。開局就擲，之後只在職業球季被消耗。 */
+  #endurance: { fielder: EndurancePool; pitcher: EndurancePool } | null = null;
+  /** 七傷拳撐了幾季。0 是沒有；開了 TJ 就歸零。 */
+  #sevenFists = 0;
+  /** 生涯開過幾次 TJ。合約年限看它。 */
+  #tjSurgeries = 0;
+  /** 這一季是 TJ 的復健季：季末把投手耐力回到上限的八成。 */
+  #tjRehab = false;
+  /** 上一次守位會議看到的野手耐力狀態。掉一階問一次要不要退守；同階與回升不問。 */
+  #fielderTierSeen: EnduranceTier = 'full';
+  /**
+   * 因為耐力自己退下來的守位。只要狀態沒有回升到退守那一階之上，教練團不會再把他
+   * 推回更吃重的位置——那是他自己選的，不是守備掉下來。
+   */
+  #enduranceCap: { readonly position: string; readonly tier: number } | null = null;
   /** 大傷永久拿走的訓練骰顆數（issue #11）。職業期的基礎骰數扣掉它，最低 1 顆。 */
   #diceLost = 0;
   /** 明年是否整季報廢。大傷後醫生搖頭的那個結果。 */
@@ -943,6 +997,14 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: signature.position,
       positionName: signature.position === null ? null : positionLabel(signature.position),
+      endurance:
+        this.#endurance === null || this.#pro === null
+          ? null
+          : {
+              fielder: this.#playsField ? tierName(tierOf(this.#endurance.fielder)) : null,
+              pitcher: this.#pitches ? tierName(tierOf(this.#endurance.pitcher)) : null,
+              sevenFists: this.#sevenFists > 0,
+            },
       // 職業期是**已登錄的**定位，不是現算的。與守位同一個立場：它在定位會議
       // 上決定，之後整季不變——現算會讓玩家拒絕過的升遷在畫面上偷偷生效。
       //
@@ -1101,6 +1163,11 @@ export class Game {
     this.#year = player.year;
     this.#school = player.school;
     this.#schoolTier = player.schoolTier;
+    // 天生的體質：選投手開局才擲〈橡膠果實〉。耐力的上限緊接著擲——橡膠果實乘在投手那一池。
+    const rubber =
+      player.startPosition === 'P' && this.world.stream('health').chance(seasonCfg.endurance.rubber.chance);
+    if (rubber) this.#traits.add('rubber');
+    this.#endurance = rollEndurance(this.world, rubber);
 
     const tier = ['', '名門', '中堅', '弱旅'][player.schoolTier] ?? '';
     const startName = abilities.start_positions[player.startPosition];
@@ -1298,6 +1365,79 @@ export class Game {
     );
   }
 
+  /**
+   * 一季的耐力帳（ADR 0051）：扣掉這一季的消耗、加回自然恢復；耗盡之後的能力衰退；
+   * 狀態掉階或回升時發一張卡。
+   *
+   * 野手照登錄守位與出賽算（指定打擊不磨損），投手照局數算。係數每季各擲一次。
+   */
+  #wearSeason(games: number, outs: number): void {
+    const pools = this.#endurance;
+    const pro = this.#pro;
+    if (pools === null || pro === null) return;
+    const before = { fielder: tierOf(pools.fielder), pitcher: tierOf(pools.pitcher) };
+
+    const leagueGames = levelOf(pro.level).games;
+    const fielderCost = fielderWear(this.#fieldPosition ?? DH, games, leagueGames, wearCoefficient(this.world));
+    const pitcherCost = pitcherWear(outs, wearCoefficient(this.world));
+    const fielder = settleSeason(pools.fielder, fielderCost, RECOVERY.fielder);
+    let pitcher = settleSeason(pools.pitcher, pitcherCost, RECOVERY.pitcher);
+    if (this.#tjRehab) {
+      pitcher = afterSurgery(pitcher);
+      this.#tjRehab = false;
+    }
+    this.#endurance = { fielder, pitcher };
+
+    const lines: string[] = [];
+    // 野手耗盡：守備三項往下掉（配球永不衰退）。投手是七傷拳期間才掉。
+    if (this.#playsField && fielder.emptySeasons > 0) {
+      lines.push(...this.#enduranceDecline('fielder', fielder.emptySeasons));
+    }
+    if (this.#pitches && this.#sevenFists > 0) {
+      lines.push(...this.#enduranceDecline('pitcher', this.#sevenFists));
+    }
+
+    const after = { fielder: tierOf(fielder), pitcher: tierOf(pitcher) };
+    const sides: string[] = [];
+    if (this.#playsField && after.fielder !== before.fielder) {
+      sides.push(`${this.#pitches ? '野手的' : ''}身體：<b class="${tierRank(after.fielder) > tierRank(before.fielder) ? 'dn' : 'hl'}">${tierName(after.fielder)}</b>`);
+    }
+    if (this.#pitches && after.pitcher !== before.pitcher) {
+      sides.push(`${this.#playsField ? '投手的' : ''}手臂：<b class="${tierRank(after.pitcher) > tierRank(before.pitcher) ? 'dn' : 'hl'}">${tierName(after.pitcher)}</b>`);
+    }
+    if (sides.length > 0 || lines.length > 0) {
+      const worse =
+        tierRank(after.fielder) > tierRank(before.fielder) || tierRank(after.pitcher) > tierRank(before.pitcher);
+      this.flow.card(worse || lines.length > 0 ? 'bad' : 'info', '身體狀態', [...sides, ...lines].join('<br>'));
+    }
+  }
+
+  /**
+   * 耗盡之後的能力衰退：**獨立於年齡衰退之外**，量約七成。期望值取整前擲一次，
+   * 與年齡衰退同一個做法。只扣在用那一側的能力。
+   */
+  #enduranceDecline(side: 'fielder' | 'pitcher', seasons: number): string[] {
+    const amount = declineAmount(seasons);
+    const rng = this.world.stream('growth');
+    const hit: string[] = [];
+    for (const key of declineKeys(side)) {
+      if (!isSideVisible(key as AbilityKey, this.#activeSide)) continue;
+      const whole = Math.floor(amount);
+      const drop = whole + (rng.next() < amount - whole ? 1 : 0);
+      if (drop <= 0) continue;
+      const before = this.#ability[key] ?? 0;
+      const after = Math.max(abilities.scale.hard_floor, before - drop);
+      if (after === before) continue;
+      this.#ability[key] = after;
+      hit.push(`${esc(abilities.abilities[key] ?? key)} −${before - after}`);
+    }
+    if (hit.length === 0) return [];
+    this.#settleCarry();
+    return [
+      `${side === 'fielder' ? '腿與手套跟不上了' : '七傷拳的代價'}：<b class="dn">${hit.join('、')}</b>`,
+    ];
+  }
+
   /** 解算事件卡並套用結果。 */
   #resolveEventCard(event: GameEvent, mode: EventMode): void {
     const ctx = this.#eventContext;
@@ -1366,6 +1506,20 @@ export class Game {
         lines.push(`禁賽 <span class="dn">${value} 場</span>`);
       } else if (key === 'ban' && value === true && this.#pro !== null) {
         this.#banned = true;
+      } else if (key === 'tj_countdown' && typeof value === 'number' && this.#pitches && this.#endurance !== null) {
+        // 韌帶受損：投手耐力直接扣掉一截（ADR 0051）。
+        this.#endurance = {
+          ...this.#endurance,
+          pitcher: adjustEndurance(this.#endurance.pitcher, -value * TJ_COUNTDOWN_PERCENT),
+        };
+        lines.push('<span class="dn">手肘的韌帶磨損了一截</span>');
+      } else if (key === 'recover' && typeof value === 'number' && this.#endurance !== null) {
+        // 休養：兩池各回上限的 value%（issue #19）。
+        this.#endurance = {
+          fielder: adjustEndurance(this.#endurance.fielder, value),
+          pitcher: adjustEndurance(this.#endurance.pitcher, value),
+        };
+        lines.push('<span class="up">身體恢復了一些</span>');
       }
     }
 
@@ -1842,7 +1996,77 @@ export class Game {
       return;
     }
 
+    this.#enduranceStepDown(() => this.#positionScan(then));
+  }
+
+  /**
+   * 野手耐力每掉一階，守位會議問一次要不要退守（ADR 0051）：疲勞退一格、透支退一壘、
+   * 耗盡退指定打擊。拒絕之後同一階與回升都不再問，再往下掉才問。
+   *
+   * 退下來之後，只要狀態沒有回升到退守那一階之上，教練團不會再把他推回更吃重的
+   * 位置——那是他自己選的，不是守備掉下來的。
+   */
+  #enduranceStepDown(then: () => void): void {
+    const pool = this.#endurance?.fielder;
     const current = this.#position;
+    const player = this.#player;
+    if (pool === undefined || current === null || player === null || this.#pro === null) {
+      then();
+      return;
+    }
+    const tier = tierOf(pool);
+    const worse = tierRank(tier) > tierRank(this.#fielderTierSeen);
+    this.#fielderTierSeen = tier;
+    if (this.#enduranceCap !== null && tierRank(tier) < this.#enduranceCap.tier) this.#enduranceCap = null;
+    const target = worse ? this.#stepDownTarget(tier, current, player.startPosition) : null;
+    if (target === null) {
+      then();
+      return;
+    }
+
+    const name = positionLabel(target);
+    this.flow.ask(
+      {
+        title: `守位會議：身體${tierName(tier)}了，要不要退守${name}？`,
+        options: [
+          { id: 'endurance:move', label: `退守${name}`, note: '少一點消耗，教練團不會再把你推回去', role: 'main' },
+          { id: 'endurance:stay', label: `留守${positionLabel(current)}`, note: '同一個狀態不再問' },
+        ],
+      },
+      (choice) => {
+        if (choice === 'endurance:move') {
+          this.#setPosition(target);
+          this.#enduranceCap = { position: target, tier: tierRank(tier) };
+          this.flow.card('info', '守位調整', `為了多打幾年，新球季改守 <b class="hl">${esc(name)}</b>。`);
+        }
+        then();
+      },
+    );
+  }
+
+  /** 這一階的退守目標：疲勞退光譜上的下一格、透支退一壘、耗盡退指定打擊。已經在那裡或更輕的位置就不問。 */
+  #stepDownTarget(tier: EnduranceTier, current: string, startPosition: string): string | null {
+    const load = (p: string) => (p === DH ? -1 : fieldingResponsibility(p));
+    let target: string | null = null;
+    if (tier === 'tired') {
+      const list = [...spectrumOf(startPosition), DH].filter(
+        (p) => p !== DH && !blockedByHand(this.#player?.throws ?? null, p),
+      );
+      const i = current === 'C' ? -1 : list.indexOf(current);
+      target = list[i + 1] ?? null;
+    } else if (tier === 'strained') target = '1B';
+    else if (tier === 'empty') target = DH;
+    if (target === null || load(target) >= load(current)) return null;
+    return target;
+  }
+
+  /** 守位會議的正規掃描：守不動就降、守得動更吃重的位置就問。 */
+  #positionScan(then: () => void): void {
+    const current = this.#position;
+    if (current === null) {
+      then();
+      return;
+    }
     const result = this.#scanPosition(current);
     if (result.move === 'stay') {
       then();
@@ -1857,7 +2081,11 @@ export class Game {
     }
 
     // 升防：在這個位置上拒絕過就不再問。記憶在 #setPosition 裡隨守位變動清空。
-    if (this.#declinedPromotions.has(result.position)) {
+    // 因為耐力自己退下來的人，狀態沒回升之前也不問（見 #enduranceStepDown）。
+    const capped =
+      this.#enduranceCap !== null &&
+      fieldingResponsibility(result.position) > fieldingResponsibility(this.#enduranceCap.position);
+    if (this.#declinedPromotions.has(result.position) || capped) {
       then();
       return;
     }
@@ -2191,6 +2419,7 @@ export class Game {
     const stints = this.#recordStints(line.batting, line.pitching, def, salary);
     // 這一季算不算蹲了一季捕手：在打完之後才記，這一季本身照「蹲捕中」打折。
     if (this.#fieldPosition === 'C' && this.#seasonInjury !== 'rehab') this.#catcherSeasons++;
+    this.#wearSeason(line.batting?.games ?? 0, line.pitching?.outs ?? 0);
     // 上季勝率：這一年所有分段的份額加總。季中轉隊的人不能只算後半段。
     this.#lastWinPct = winPct(
       sumShares(
@@ -2276,13 +2505,11 @@ export class Game {
       return;
     }
 
-    // 感情狀態雙向回饋到傷病：穩定降風險、風波升風險。與事件卡的自找風險同性質，
-    // 不受魔鬼筋肉人上限保護。
-    const extraRisk = this.#injuryRisk + injuryRiskModifier(this.#love);
+    this.#tjReview(() => this.#rollHealth());
+  }
 
-    // 體力也吃進受傷機率：40 以下加、超過這個守位的「打滿標準」減。零點是守位
-    // 自己的（DH 55、SS 65、捕手 70），所以蹲捕的免傷比 DH 難換得多。用的是
-    // **本體能力**不是當季能力——感情加成抬的是這一年的表現，不是他的身體。
+  /** 傷病判定要的輸入：感情與事件卡的額外風險、體力、守位、七傷拳。 */
+  #healthInputs(): InjuryChanceOptions {
     const pro = this.#pro;
     const player = this.#player;
     const position =
@@ -2294,24 +2521,115 @@ export class Game {
             level: pro.level,
             throws: player.throws,
           }));
-    const durability = {
+    return {
+      age: this.#age,
+      traits: this.#traits,
+      extraRisk: this.#injuryRisk + injuryRiskModifier(this.#love),
+      wear: sevenFistsRisk(this.#sevenFists, this.#traits.has('rubber')),
       stamina: this.#ability['sta'],
       position,
       leagueGames: pro === null ? undefined : levelOf(pro.level).games,
     };
+  }
 
-    const result = rollInjury(this.world, {
-      age: this.#age,
-      traits: this.#traits,
-      extraRisk,
-      ...durability,
-    });
-    const chance = injuryChance({
-      age: this.#age,
-      traits: this.#traits,
-      extraRisk,
-      ...durability,
-    });
+  /**
+   * 投手耐力的關卡：季前健康檢查的第一步（ADR 0051）。
+   *
+   * - 七傷拳撐到**天賦前**受傷機率滿 100%：這一季報銷、記一次大傷、強迫開 TJ。
+   * - 耐力耗盡：問要不要開 TJ。開就是整季復健、隔季耐力回到八成；不開就掛上
+   *   七傷拳，每撐一季受傷機率再累加。
+   * - 還掛著七傷拳但耐力沒見底：不問，照樣再累加一季——只要沒開 TJ 它就不會走。
+   *
+   * 整季報銷時不再接 `then`：那一季不必再擲傷病。
+   */
+  #tjReview(then: () => void): void {
+    const pool = this.#endurance?.pitcher;
+    if (this.#pro === null || pool === undefined || !this.#pitches) {
+      then();
+      return;
+    }
+
+    // 天賦前的受傷機率滿 100%：韌帶真的斷了。累加之後也要再看一次——不然那一季
+    // 會帶著 100% 以上的機率照常擲骰，而不是直接開刀。
+    const snapped = (): boolean => {
+      if (this.#sevenFists <= 0 || injuryChanceBeforeTalent(this.#healthInputs()) < 100) return false;
+      this.#majorInjuries++;
+      this.#surgery('major');
+      this.flow.card(
+        'bad',
+        '七傷拳',
+        '硬撐到最後，韌帶還是斷了。<b class="dn">這一季報銷，而且這一次沒得選——直接開 TJ</b>。',
+      );
+      return true;
+    };
+    if (snapped()) return;
+
+    if (pool.value > 0) {
+      if (this.#sevenFists > 0) this.#sevenFists++;
+      if (snapped()) return;
+      then();
+      return;
+    }
+
+    this.flow.ask(
+      {
+        title: '健康檢查：手肘的韌帶快撐不住了',
+        options: [
+          {
+            id: 'tj:surgery',
+            label: '開 TJ',
+            note: '這一季整季復健；隔季手臂回到八成',
+            role: 'main',
+          },
+          {
+            id: 'tj:endure',
+            label: '打針硬撐',
+            note: '照常出賽；每撐一季受傷機率再往上加，投球能力跟著掉',
+            role: 'warn',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'tj:surgery') {
+          this.#surgery('rehab');
+          this.flow.card(
+            'info',
+            'TJ 手術',
+            '進了手術室。<b class="dn">這一季都在復健</b>，明年的手臂會回到八成左右。',
+          );
+          return;
+        }
+        this.#sevenFists++;
+        if (snapped()) return;
+        this.flow.card(
+          'bad',
+          '七傷拳',
+          `打針上場。受傷機率 <span class="dn">+${pct(sevenFistsRisk(this.#sevenFists, this.#traits.has('rubber')))}%</span>，` +
+            '而且只要不開刀，每一季都會再往上加，投球能力也會一路往下掉。',
+        );
+        then();
+      },
+    );
+  }
+
+  /** 開 TJ：這一季整季報銷，季末把投手耐力回到八成，七傷拳歸零。 */
+  #surgery(kind: 'major' | 'rehab'): void {
+    this.#seasonFactor = 0;
+    this.#injuryRisk = 0;
+    this.#seasonInjury = kind;
+    this.#tjSurgeries++;
+    this.#sevenFists = 0;
+    this.#tjRehab = true;
+  }
+
+  /** 季前擲一次傷病。 */
+  #rollHealth(): void {
+    // 感情狀態雙向回饋到傷病：穩定降風險、風波升風險。與事件卡的自找風險同性質，
+    // 不受魔鬼筋肉人上限保護。體力也吃進受傷機率：40 以下加、超過這個守位的「打滿
+    // 標準」減——用的是**本體能力**不是當季能力。七傷拳在夾子之外另加（ADR 0051）。
+    const inputs = this.#healthInputs();
+    const result = rollInjury(this.world, inputs);
+    const chance = injuryChance(inputs);
     this.#injuryRisk = 0;
     this.#seasonFactor = result.seasonFactor;
     this.#seasonInjury = result.kind === 'none' ? null : result.kind;
@@ -4098,7 +4416,7 @@ export class Game {
       tradeRefused: this.#tradeRefuseYears > 0,
       // 傷病史縮短年限。這個輸入從合約系統做好那天就寫在那裡，恆為 0——
       // 傷病系統上線之後它第一次有數字。
-      injuries: { majorInjuries: this.#majorInjuries, tjSurgeries: 0 },
+      injuries: { majorInjuries: this.#majorInjuries, tjSurgeries: this.#tjSurgeries },
     });
 
     const base = salaryFor(pro.level, this.#lastD);

@@ -268,6 +268,9 @@ export function applyAging(
   const slow = new Set(a.decline.speed_first.slow);
 
   for (const key of keys) {
+    // 配球永不衰退：那是腦袋裡的東西，不是腿（ADR 0051）。捕手退守一壘之後用不到
+    // 的範圍照樣會掉，只有配球留著。
+    if (key === 'cat') continue;
     const mult = fast.has(key)
       ? a.decline.speed_first.fast_multiplier
       : slow.has(key)

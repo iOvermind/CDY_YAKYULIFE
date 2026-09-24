@@ -93,18 +93,37 @@ function staminaRisk(options: {
  * 左右開投的乘數走同一段，但是**另一格**：`talent_multiplier` 是天賦覆蓋層的寫
  * 入點，共用那一格會讓兩邊互相覆寫。兩個乘數相乘。
  */
-export function injuryChance(options: {
+export function injuryChance(options: InjuryChanceOptions): number {
+  const c = cfg.chance;
+  // 兩邊輪流投，單邊手臂的累積量減少——這是左右開投唯一不在尺上的好處。
+  const switchPitcher = options.traits.has(SWITCH_PITCHER_TRAIT) ? c.switch_pitcher_multiplier : 1;
+  return injuryChanceBeforeTalent(options) * c.talent_multiplier * switchPitcher;
+}
+
+export interface InjuryChanceOptions {
   readonly age: number;
   readonly traits: ReadonlySet<string>;
   /** 事件卡等自找的額外風險。 */
   readonly extraRisk?: number;
+  /**
+   * 七傷拳累加的風險（ADR 0051）。**在 95% 的夾子之外**——那是一路硬撐累積出來的，
+   * 不是體質；加到 100% 就是韌帶真的斷了。
+   */
+  readonly wear?: number;
   /** 體力。省略時這一項不計。 */
   readonly stamina?: number | undefined;
   /** 守位，決定免傷的零點。省略時以 DH 計。 */
   readonly position?: string | undefined;
   /** 聯盟場次，短賽季的零點跟著下調。 */
   readonly leagueGames?: number | undefined;
-}): number {
+}
+
+/**
+ * 天賦乘算之前的受傷機率：體質、年齡、體力、額外風險夾在 [min, max] 之後，再加上
+ * 七傷拳。**七傷拳的「滿 100% 強迫開 TJ」看的是這一個**（issue #22）：降受傷機率的
+ * 天賦擋得住受傷，擋不住那條韌帶。
+ */
+export function injuryChanceBeforeTalent(options: InjuryChanceOptions): number {
   const c = cfg.chance;
   const t = c.traits;
 
@@ -129,9 +148,7 @@ export function injuryChance(options: {
 
   p += options.extraRisk ?? 0;
   p = Math.max(c.clamp.min, Math.min(c.clamp.max, p));
-  // 兩邊輪流投，單邊手臂的累積量減少——這是左右開投唯一不在尺上的好處。
-  const switchPitcher = options.traits.has(SWITCH_PITCHER_TRAIT) ? c.switch_pitcher_multiplier : 1;
-  return p * c.talent_multiplier * switchPitcher;
+  return p + (options.wear ?? 0);
 }
 
 /**
@@ -140,17 +157,7 @@ export function injuryChance(options: {
  * **抽取次數與是否受傷無關**：命中與否都把後續的骰子擲完，否則同一個種子會因為
  * 某年差一分而讓整條 health 子序列偏移。
  */
-export function rollInjury(
-  world: World,
-  options: {
-    readonly age: number;
-    readonly traits: ReadonlySet<string>;
-    readonly extraRisk?: number;
-    readonly stamina?: number | undefined;
-    readonly position?: string | undefined;
-    readonly leagueGames?: number | undefined;
-  },
-): Injury {
+export function rollInjury(world: World, options: InjuryChanceOptions): Injury {
   const rng = world.stream('health');
   const s = cfg.severity;
 

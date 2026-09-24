@@ -2219,6 +2219,20 @@ function Board({
           <i />
           SEED {seed}
         </span>
+        {/* 身體狀態：耐力只給狀態字、不給數字（ADR 0051）。二刀流兩池各一盞。 */}
+        {state.endurance?.fielder != null && (
+          <span className="lamp on" title="野手的耐力：守位的消耗扣在這裡，指定打擊是純恢復">
+            <i />
+            身體 {state.endurance.fielder}
+          </span>
+        )}
+        {state.endurance?.pitcher != null && (
+          <span className="lamp on" title="投手的耐力：投球局數扣在這裡；耗盡要開 TJ">
+            <i />
+            手臂 {state.endurance.pitcher}
+            {state.endurance.sevenFists && '・七傷拳'}
+          </span>
+        )}
         {state.honors.length > 0 && (
           // 清單掛在滑鼠停留的提示上。生涯累積下來會有十幾項，攤在版面上會把
           // 記分板撐開，而它們平常並不需要被讀。
