@@ -257,7 +257,7 @@ export function Ladder({ account }: { account: Account }) {
       const list = data.boards.filter((b) => b.side === side);
       if (list.length === 0) return null;
       return (
-        <section key={side}>
+        <section key={side} className="ladder-section">
           <h4>{title}</h4>
           <div className="ladder-grid">
             {list.map((b) => (

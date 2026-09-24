@@ -645,6 +645,8 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
   border-radius:var(--r);color:var(--dim);font-family:var(--sans);font-size:14.5px;font-weight:700;
   padding:11px 4px;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg-scroll>button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}
+/* 綜合／野手／投手之間：上一段最後一列是紀錄，大標直接貼上去會像同一張表的下一列。 */
+.ladder-section+.ladder-section{margin-top:28px}
 .ladder-grid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:8px;min-width:0}
 /* 野手一側、投手一側，左右並排。**這是語意分欄，不是平衡分欄**：野手 18 塊榜、
    投手 13 塊，兩側高度本來就不齊，硬要等高就得把投手的榜混進野手那一側。換到的
