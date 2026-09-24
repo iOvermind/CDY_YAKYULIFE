@@ -481,7 +481,16 @@ function orgNameOf(org: string): string {
  * 讓同一年可以有兩列，年資不能跟著翻倍。
  */
 function seasonCount(list: readonly SeasonRecord[]): number {
-  return new Set(list.map((r) => r.year)).size;
+  return new Set(list.filter(playedSeason).map((r) => r.year)).size;
+}
+
+/**
+ * 這一季有沒有上場。**完全沒出賽的球季不算他打了一季**（開 TJ、整季復健）——
+ * 生涯幾季拿去顯示或計算（名人堂年資、年資未滿的扣分、天梯的季數與資格）時，
+ * 那一年不能被當成打過。
+ */
+export function playedSeason(r: SeasonRecord): boolean {
+  return (r.batting?.games ?? 0) + (r.pitching?.games ?? 0) > 0;
 }
 
 /**

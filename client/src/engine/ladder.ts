@@ -14,7 +14,7 @@
 
 import { leagues, ladder } from '../data/index.ts';
 import { addBatting, addPitching, type BattingLine, type PitchingLine } from './amateurStats.ts';
-import { seasonPoints, type CareerSummary, type SeasonRecord } from './career.ts';
+import { playedSeason, seasonPoints, type CareerSummary, type SeasonRecord } from './career.ts';
 
 /** 「跨聯盟」與「跨守位」。與體系代碼、守位代碼共用同一個欄位，挑一個不可能撞名的字。 */
 export const ALL = '*';
@@ -106,7 +106,8 @@ function thresholdOf(records: readonly SeasonRecord[]): Threshold {
   const cfg = ladder.qualification.per_season;
   let pa = 0;
   let outs = 0;
-  for (const r of records) {
+  // 沒上場的那一季不墊高規定量——他沒有機會累積，就不該被要求。
+  for (const r of records.filter(playedSeason)) {
     const games = leagues.levels[r.level]?.games ?? 0;
     pa += cfg.batter.per_team_game * games;
     outs += cfg.pitcher.per_team_game * games;
@@ -121,7 +122,8 @@ function thresholdOf(records: readonly SeasonRecord[]): Threshold {
  * `seasonCount` 同一條規則。
  */
 function seasonCount(records: readonly SeasonRecord[]): number {
-  return new Set(records.map((r) => r.year)).size;
+  // 完全沒出賽的球季不算（見 career.ts 的 playedSeason）。
+  return new Set(records.filter(playedSeason).map((r) => r.year)).size;
 }
 
 /** 頂級聯盟的球季。二軍不算——它不進通算，也不該墊高門檻。 */

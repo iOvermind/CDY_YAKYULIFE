@@ -491,3 +491,21 @@ describe('tenureDeduction', () => {
     expect(tenureDeduction('LMB', 9, lmbStar)).toBeCloseTo((lmbStar - lmbDaily) * 0.05, 6);
   });
 });
+
+/** 完全沒出賽的球季（開 TJ、整季復健）不算他打了一季。 */
+describe('沒出賽的球季不算季數', () => {
+  it('聯盟季數只數有上場的年份', () => {
+    const records = [
+      season({ year: 2030 }),
+      season({ year: 2031, batting: null, pitching: null, injured: 'rehab' }),
+      season({ year: 2032 }),
+    ];
+    const s = summarizeCareer(records, []);
+    expect(s.leagues[0]?.seasons).toBe(2);
+  });
+
+  it('出賽 0 場的成績列也不算', () => {
+    const records = [season({ year: 2030 }), season({ year: 2031, batting: bat({ games: 0, pa: 0, ab: 0 }) })];
+    expect(summarizeCareer(records, []).leagues[0]?.seasons).toBe(1);
+  });
+});
