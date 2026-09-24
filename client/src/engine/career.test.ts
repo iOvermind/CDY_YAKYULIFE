@@ -176,6 +176,16 @@ describe('里程碑', () => {
     expect(r.reached.some((s) => s.includes('安打'))).toBe(false);
   });
 
+  /** 投手的評價分晚三階起算：一般輪值順手摸到的 150 勝、1500 局不算歷史閥值。 */
+  it('投手的里程碑從 200 勝、2000K、2000 局起算', () => {
+    const mid = evaluateMilestones('league', null, pitch({ wins: 199, so: 1999, outs: 1999 * 3, saves: 199, holds: 199 }));
+    expect(mid.points).toBe(0);
+    expect(mid.reached).toEqual([]);
+    const two = evaluateMilestones('league', null, pitch({ wins: 200 }));
+    expect(two.points).toBeGreaterThan(0);
+    expect(two.reached).toContain('200 勝投');
+  });
+
   it('生涯里程碑跨聯盟通算，門檻同樣照表面數字', () => {
     const r = evaluateMilestones('career', bat({ hits: 2000 }), null);
     expect(r.points).toBeGreaterThan(0);

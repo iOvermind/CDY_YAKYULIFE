@@ -365,7 +365,8 @@ export function evaluateMilestones(
     const { top: highest, points: pts } = ladderTop(
       spec.step,
       spec.score_points ?? spec.points,
-      cfgRungs.first_rung[scope],
+      // 投手的評價分晚幾階才起算（`score_rung_offset`），AP 不受影響。
+      cfgRungs.first_rung[scope] + (spec.score_rung_offset ?? 0),
       value,
     );
     points += pts;

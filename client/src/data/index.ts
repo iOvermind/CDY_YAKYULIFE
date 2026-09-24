@@ -464,6 +464,11 @@ export interface AchievementsData {
              * 紀錄的數字（沒有人在記「10 勝」）。
              */
             readonly score_points?: number;
+            /**
+             * 評價分比 AP 晚幾階才起算（省略是 0）。投手用它把「一般生涯順手就摸到」
+             * 的前幾階拿掉：500 局、500K 不是歷史閥值，200 勝、2000K 才是。
+             */
+            readonly score_rung_offset?: number;
           }
         >
       >;
