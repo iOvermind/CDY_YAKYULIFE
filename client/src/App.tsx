@@ -49,7 +49,7 @@ import {
   type Shares,
 } from './engine/metrics.ts';
 import { joinName } from './engine/naming.ts';
-import { clampName, displayName } from './engine/playerName.ts';
+import { clampName } from './engine/playerName.ts';
 import { tournamentPar } from './engine/national.ts';
 import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
@@ -322,7 +322,9 @@ function StartScreen({
             id="in-name"
             placeholder="例如：林家正"
             value={name}
-            onChange={(e) => setName(composing.current ? e.target.value : clampName(e.target.value))}
+            onChange={(e) =>
+              setName(composing.current ? e.target.value : clampName(e.target.value))
+            }
             onCompositionStart={() => (composing.current = true)}
             onCompositionEnd={(e) => {
               composing.current = false;
@@ -1923,7 +1925,7 @@ export function careerCardOf(game: Game): CareerCard | null {
   // （見 PlayerState.retiredFrom，記分板也是讀這一份）。
   const at = state.retiredFrom;
   return {
-    name: displayName(state.origin.name),
+    name: state.origin.name,
     role: roleLabelOf(state),
     hands: `投${hand(state.origin.throws)}打${hand(state.origin.bats)}`,
     age: state.age,
@@ -2240,7 +2242,7 @@ function Board({
               兩邊各自佔一行。它是「我還剩幾年安穩」，屬於處境，不是能力，因此
               不進下面的方格。 */}
           {state.pro !== null && <small className="deal">約 {state.pro.contractYears} 年</small>}
-          {displayName(player.name)}
+          {player.name}
           <small>
             {roleLabel}·投{hand(player.throws)}打{hand(player.bats)}
           </small>

@@ -65,7 +65,14 @@ describe('卡片內文的跳脫', () => {
   });
 
   it('跳脫不影響球員資料本身——只有卡片內文需要', () => {
-    expect(started({ name: evil }).player?.name).toBe(evil);
+    // 用放得進姓名上限的標記，才不會被開局的截斷蓋掉。
+    expect(started({ name: '<i>王</i>' }).player?.name).toBe('<i>王</i>');
+  });
+});
+
+describe('球員姓名', () => {
+  it('超過上限的名字在開局就截好，之後的流程文字拿到的都是這個', () => {
+    expect(started({ name: '一二三四五六七八九十' }).player?.name).toBe('一二三四……');
   });
 });
 

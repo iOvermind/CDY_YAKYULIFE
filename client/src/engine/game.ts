@@ -1248,7 +1248,8 @@ export class Game {
 
   /** 開局：擲出球員，並交代他的出身。 */
   #genesis(): void {
-    const player = createPlayer(this.world, this.setup.name, this.setup.startPosition, {
+    // 姓名在這裡截一次，之後每一段流程文字拿到的都是能直接顯示的名字。
+    const player = createPlayer(this.world, displayName(this.setup.name), this.setup.startPosition, {
       throws: this.setup.throws,
       bats: this.setup.bats,
     });
@@ -1273,7 +1274,7 @@ export class Game {
     this.flow.card(
       'gold',
       '入學',
-      `${esc(START_SEASON)}，<b class="hl">${esc(displayName(player.name))}</b>進了` +
+      `${esc(START_SEASON)}，<b class="hl">${esc(player.name)}</b>進了` +
         `<b class="hl">${esc(player.school)}</b>` +
         `${tier ? `（${esc(tier)}）` : ''}，在球隊裡的位置是<b class="hl">${esc(startName)}</b>。` +
         `投${handLabel(player.throws)}打${handLabel(player.bats)}。`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampName, displayName, nameWidth } from './playerName';
+import { clampName, displayName, nameWidth } from './playerName.ts';
 
 describe('姓名寬度', () => {
   it('中文算 2、英數算 1', () => {

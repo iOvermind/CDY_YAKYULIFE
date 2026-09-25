@@ -18,7 +18,7 @@ const ELLIPSIS = '……';
 
 /** 全形字元：CJK、注音、全形標點與符號，以及 BMP 以外的字（罕用漢字、emoji）。 */
 const WIDE =
-  /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{10000}-\u{10FFFF}]/u;
+  /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]|[\u{10000}-\u{10FFFF}]/u;
 
 function charWidth(ch: string): number {
   return WIDE.test(ch) ? 2 : 1;
@@ -48,7 +48,7 @@ export function clampName(s: string): string {
   return takeWidth(s, NAME_MAX_WIDTH);
 }
 
-/** 顯示用：寬度 12 以內原樣，超過的截成四個中文字寬再接「……」。 */
+/** 顯示用：寬度在上限內原樣，超過的截成 `NAME_SHORT_WIDTH` 再接刪節號。 */
 export function displayName(s: string): string {
   return nameWidth(s) <= NAME_MAX_WIDTH ? s : takeWidth(s, NAME_SHORT_WIDTH) + ELLIPSIS;
 }
