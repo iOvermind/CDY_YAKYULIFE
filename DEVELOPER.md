@@ -125,7 +125,7 @@ CDY_YAKYULIFE/
 ├─ compose.yaml     部署描述（app + Postgres + cloudflared）
 ├─ .env.example     compose 需要的環境變數範本
 ├─ index_legacy.html 舊版遊戲本體（HTML + CSS + JS 全部內嵌，唯讀保留）
-├─ WIKI.md          遊戲設計文件與完整數值表
+├─ WIKI.md          玩家攻略（數值表由 client/scripts/wiki.mjs 從 json 產生）
 ├─ CONTEXT.md       領域術語表
 ├─ github.bat       Git 快速推拉腳本
 ├─ CHANGELOG.md     變更紀錄
