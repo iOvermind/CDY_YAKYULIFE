@@ -589,8 +589,8 @@ describe('定位鎖定', () => {
    * 打到剛進職業為止，回傳那局遊戲。鎖定發生在進職業的那一刻（高中畢業直接進，
    * 或讀完大學才進），停在選秀提問時還沒有鎖。
    */
-  const toDraft = (seed: string) => {
-    const game = started({ seed });
+  const toDraft = (seed: string, startPosition: GameSetup['startPosition'] = 'SS') => {
+    const game = started({ seed, startPosition });
     while (game.flow.prompt !== null && (game.state?.pro ?? null) === null) {
       const pick = defaultPick(game, EFFECTIVE);
       if (pick === undefined) throw new Error('提問沒有選項');
@@ -599,9 +599,21 @@ describe('定位鎖定', () => {
     return game;
   };
 
-  it('沒取得二刀流就鎖定評價較高的那一側', () => {
+  /** 投手、野手起點鎖在起始那一側，也不判二刀流——UTIL 是唯一入口（ADR 0009）。 */
+  it('投手、野手起點鎖在起始那一側，不會拿到二刀流', () => {
+    for (const [pos, side] of [['SS', 'fielder'], ['P', 'pitcher']] as const) {
+      for (let i = 0; i < 10; i++) {
+        const state = toDraft(`lock-fixed-${i}`, pos).state;
+        if (state === null) continue;
+        expect(state.traits.has('two_way'), pos).toBe(false);
+        expect(state.lockedSide, pos).toBe(side);
+      }
+    }
+  });
+
+  it('UTIL 沒取得二刀流就鎖定評價較高的那一側', () => {
     for (let i = 0; i < 30; i++) {
-      const game = toDraft(`lock-${i}`);
+      const game = toDraft(`lock-${i}`, 'UTIL');
       const state = game.state;
       if (state === null) continue;
       if (state.traits.has('two_way')) {

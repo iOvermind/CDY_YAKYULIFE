@@ -1946,14 +1946,14 @@ export class Game {
   #judgeTwoWay(): void {
     const r = this.rating;
     if (r === null || this.#lockedSide !== null || this.#traits.has(TWO_WAY_TRAIT)) return;
-    if (!qualifiesAsTwoWay(r)) {
+    // **只有 UTIL 起點判二刀流、比評價選邊。** 投手、野手起點本來就鎖在起始那一側
+    // （ADR 0009）：另一側不能加點，但開局擲出的能力、自然成長與事件卡仍然讓它有
+    // 評價——一個把野手側練爛的游擊手曾經因此在畢業時被鎖成投手，另一側夠高的
+    // 人也可能不經 UTIL 就拿到二刀流（2026-09-26 修正）。
+    const startSide = sideOfStartPosition(this.setup.startPosition);
+    if (startSide !== null || !qualifiesAsTwoWay(r)) {
       // 沒取得二刀流就要選邊站，另一側從此關閉——這是二刀流之所以珍貴的代價面。
-      //
-      // **只有 UTIL 比評價選邊。** 投手、野手起點本來就鎖在起始那一側（ADR 0009）：
-      // 另一側不能加點，但開局擲出的能力、自然成長與事件卡仍然讓它有評價，一個
-      // 把野手側練爛的游擊手曾經因此在畢業時被鎖成投手（2026-09-26 修正）。
-      this.#lockedSide =
-        sideOfStartPosition(this.setup.startPosition) ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder');
+      this.#lockedSide = startSide ?? (r.pitcher >= r.fielder ? 'pitcher' : 'fielder');
       const kept = this.#lockedSide === 'pitcher' ? '投手' : '野手';
       const dropped = this.#lockedSide === 'pitcher' ? '打擊與守備' : '投球';
       this.flow.card(
