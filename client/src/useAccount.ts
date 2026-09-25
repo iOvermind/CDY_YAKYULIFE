@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { isOffline, type Me, type ProgressStore } from './api/contract.ts';
+import { GATE_TIMEOUT_MS } from './api/gate.ts';
 
 /** 帳號的連線狀態。 */
 export type Progress =
@@ -34,6 +35,12 @@ export function useAccount(store: ProgressStore): Account {
 
   useEffect(() => {
     let alive = true;
+    // 讀取中時開始按鈕是反灰的——已登入的人在帳號回來前開局，會帶不到天賦
+    // （issue #59）。API 卡住的話先當成離線放行，但**不中斷請求**：晚到的
+    // 回應照樣裝回來，還在開始畫面的人就帶得到天賦。
+    const giveUp = setTimeout(() => {
+      if (alive) setProgress((p) => (p.kind === 'loading' ? { kind: 'offline' } : p));
+    }, GATE_TIMEOUT_MS);
     void store
       .me()
       .then((me) => {
@@ -46,9 +53,11 @@ export function useAccount(store: ProgressStore): Account {
         // 開局畫面不該因為問了一句「我是誰」就整個掛掉。
         if (!isOffline(e)) console.warn('[account]', e);
         setProgress({ kind: 'offline' });
-      });
+      })
+      .finally(() => clearTimeout(giveUp));
     return () => {
       alive = false;
+      clearTimeout(giveUp);
     };
   }, [store]);
 

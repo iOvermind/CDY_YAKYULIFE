@@ -85,7 +85,7 @@ export function AccountBar({ account }: { account: Account }) {
  * 視窗而不是給某個分頁**——切分頁時視窗橫向跳一下比多留一點白邊難看得多。登入框
  * 維持窄的：一排輸入欄拉到 1200px 只會變成一條。
  */
-function Modal({
+export function Modal({
   title,
   onClose,
   children,

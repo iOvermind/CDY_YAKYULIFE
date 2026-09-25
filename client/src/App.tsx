@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import './app.css';
 import { saveCareerCard, type CardLine, type CardRow, type CardTable, type CareerCard } from './careerImage.ts';
-import { AccountBar } from './Account.tsx';
+import { AccountBar, Modal } from './Account.tsx';
 import { useAccount, type Account } from './useAccount.ts';
 import { httpProgress } from './api/http.ts';
+import { ApiError, type CareerTicket, type Me } from './api/contract.ts';
+import { withTimeout } from './api/gate.ts';
 import {
   abilities,
   amateur,
@@ -257,6 +259,36 @@ function StartScreen({
   const posBlocked = (p: StartPosition) => blockedByHand(throws, p);
   const leftThrowBlocked = blockedByHand('L', startPosition);
 
+  /** 開局登記沒成功時，擋下來讓玩家選：重試，或照樣開一局不入帳的。 */
+  const [refused, setRefused] = useState<string | null>(null);
+  /** 帳號還沒讀回來就不能開局：已登入的人會帶不到天賦（issue #59）。 */
+  const loading = account.progress.kind === 'loading';
+
+  /**
+   * 用這一組天賦開局。`ticket` 是 null 就是**不入帳的局**。
+   *
+   * 天賦優先用伺服器凍結的那一組（`ticket.talents`）——驗證時算數的是它。沒有
+   * 開局票時**不能退回「沒有天賦」**：玩家買了突破極限卻在天花板外照付三倍價，
+   * 畫面上沒有任何提示，那一局就是靜靜地變難了（實際發生過：API 沒起來，同一
+   * 個存檔 6X 能力要 18 點蓄力，隔一局同樣的天賦只要 10 點）。
+   *
+   * 「這一局不入帳」與「這一局沒有天賦」是兩件事。不入帳的局本來就不會拿去
+   * 驗證，用本機那份 `me.talents` 開下去是安全的。
+   */
+  const launch = (me: Me | null, ticket: CareerTicket | null) => {
+    const setup = { seed, name: clampName(name.trim()) || '無名氏', startPosition, throws, bats };
+    const progress: CareerProgress =
+      me === null
+        ? NO_PROGRESS
+        : {
+            firstCareer: me.achievements.length === 0,
+            unlocked: new Set(me.achievements.map((a) => a.id)),
+          };
+    const talents = ticket?.talents ?? me?.talents ?? {};
+    const game = new Game({ ...setup, talents }, progress).start();
+    onStart(game, ticket?.careerId ?? null);
+  };
+
   /**
    * 開局。
    *
@@ -264,47 +296,27 @@ function StartScreen({
    * 擁有什麼」與「這一局帶著什麼」是兩件事，而驗證時算數的是伺服器凍結的那一組
    * （見 ADR 0007）。
    *
-   * 登記失敗就照樣開局，只是這一局不入帳。**不能因為伺服器打嗝就不讓人玩**。
+   * 登記失敗（包含逾時）不默默開局：這一局不入帳是玩家在意的代價，讓他自己選
+   * 要重試還是照樣開局。**不能因為伺服器打嗝就不讓人玩**，所以「照樣開局」永遠
+   * 在那裡。
    */
   const begin = () => {
-    if (starting) return;
+    if (starting || loading) return;
+    const me = account.progress.kind === 'signed-in' ? account.progress.me : null;
+    if (me === null) {
+      launch(null, null);
+      return;
+    }
     setStarting(true);
-    const setup = { seed, name: clampName(name.trim()) || '無名氏', startPosition, throws, bats };
-    const signedIn = account.progress.kind === 'signed-in';
-    const ticket = signedIn
-      ? account.store.startCareer().catch((e: unknown) => {
-          console.warn('[career] 開局登記失敗，這一局不入帳', e);
-          return null;
-        })
-      : Promise.resolve(null);
-
-    void ticket.then((t) => {
-      const me = account.progress.kind === 'signed-in' ? account.progress.me : null;
-      const progress: CareerProgress =
-        me === null
-          ? NO_PROGRESS
-          : {
-              firstCareer: me.achievements.length === 0,
-              unlocked: new Set(me.achievements.map((a) => a.id)),
-            };
-      /**
-       * 天賦從哪裡來。
-       *
-       * 優先用伺服器凍結的那一組（`t.talents`）——驗證時算數的是它。但登記失敗
-       * 時**不能退回「沒有天賦」**：玩家買了突破極限卻在天花板外照付三倍價，畫面上
-       * 沒有任何提示，那一局就是靜靜地變難了（實際發生過：API 沒起來，同一個
-       * 存檔 6X 能力要 18 點蓄力，隔一局同樣的天賦只要 10 點）。
-       *
-       * 「這一局不入帳」與「這一局沒有天賦」是兩件事。不入帳的局本來就不會拿去
-       * 驗證，用本機那份 `me.talents` 開下去是安全的。
-       */
-      const talents = t?.talents ?? me?.talents ?? {};
-      if (t === null && me !== null) {
-        console.warn('[career] 沒拿到開局票，改用本機的天賦開局，這一局不入帳');
-      }
-      const game = new Game({ ...setup, talents }, progress).start();
-      onStart(game, t?.careerId ?? null);
-    });
+    setRefused(null);
+    withTimeout(account.store.startCareer()).then(
+      (ticket) => launch(me, ticket),
+      (e: unknown) => {
+        console.warn('[career] 開局登記失敗', e);
+        setRefused(e instanceof ApiError ? e.message : '伺服器沒有回應。');
+        setStarting(false);
+      },
+    );
   };
 
   return (
@@ -427,13 +439,41 @@ function StartScreen({
           type="button"
           className="btn main"
           style={{ marginTop: 28 }}
-          disabled={starting}
+          disabled={starting || loading}
           onClick={begin}
         >
           {/* 起點的學年與季節都從資料來——寫死會像先前那樣，養成期擴成六年之後
               按鈕還停在「高一春天」。 */}
-          開始生涯 ▸ {stageOf('JHS').year_labels[0]}{amateur.career_start.season}
+          {loading
+            ? '讀取帳號中…'
+            : starting
+              ? '開局登記中…'
+              : `開始生涯 ▸ ${stageOf('JHS').year_labels[0]}${amateur.career_start.season}`}
         </button>
+
+        {refused !== null && (
+          <Modal title="開局登記失敗" onClose={() => setRefused(null)}>
+            <p className="modal-error">{refused}</p>
+            <p className="modal-note">
+              照樣開局的話，這一局帶著你的天賦照常進行，但不計入天梯，也不結算 AP。
+            </p>
+            <div className="seg" style={{ marginTop: 16 }}>
+              <button type="button" className="on" onClick={begin}>
+                重試
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const me = account.progress.kind === 'signed-in' ? account.progress.me : null;
+                  setRefused(null);
+                  launch(me, null);
+                }}
+              >
+                照樣開局（不入帳）
+              </button>
+            </div>
+          </Modal>
+        )}
 
         <p className="seedline">
           世界種子{' '}
