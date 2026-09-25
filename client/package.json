@@ -1,7 +1,7 @@
 {
   "name": "client",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/native-platform.mjs && node scripts/changelog.mjs && node scripts/wiki.mjs",
