@@ -67,6 +67,15 @@
         "batter_of_year": 3,
         "rookie_of_year": 2,
         "gold_glove": 2,
+        "_defense_king_note": "白金手套（大聯盟的守備王）：門檻比金手套高，給得比金手套多一檔。",
+        "defense_king": 3,
+        "_titles_note": "個人成績王分兩檔：三冠王的六個組成（打擊、全壘打、打點、勝投、防禦率、三振）是大家認得的頭銜，給 2；上壘、盜壘、救援、中繼照預設 1。",
+        "batting_king": 2,
+        "hr_king": 2,
+        "rbi_king": 2,
+        "wins_king": 2,
+        "era_king": 2,
+        "strikeout_king": 2,
         "all_star": 1
       }
     },

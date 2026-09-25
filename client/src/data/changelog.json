@@ -6,7 +6,24 @@
       "version": "Unreleased",
       "date": null,
       "note": [],
-      "categories": []
+      "categories": [
+        {
+          "key": "Changed",
+          "name": "變更",
+          "entries": [
+            [
+              {
+                "kind": "strong",
+                "text": "成就與天梯"
+              },
+              {
+                "kind": "text",
+                "text": "：幾項獎項成就的 AP 調高：白金手套 1 → 3；打擊王、全壘打王、打點王、勝投王、防禦率王、三振王 1 → 2。上壘王、盜壘王、救援王、中繼王與明星賽維持 1。WIKI 的成就表改成依 AP 逐列寫出每一個獎，不再用「其他獎項」帶過。"
+              }
+            ]
+          ]
+        }
+      ]
     },
     {
       "version": "0.4.0",

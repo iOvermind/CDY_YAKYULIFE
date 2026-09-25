@@ -173,6 +173,39 @@ function cumulativeByRank(byRank) {
 /** 名字寫在 engine/awards.ts 而不在資料檔裡的獎項。 */
 const AWARD_NAMES_IN_ENGINE = { all_star: '明星賽', rookie_of_year: '新人王' };
 
+/**
+ * 所有會頒的獎項代碼，依 awards.json 裡出現的順序（重要的在前）。明星賽與新人王的
+ * 名字寫在引擎裡，資料檔沒有 code，這裡補上。
+ */
+function allAwardCodes(awards) {
+  const codes = [];
+  const walk = (o) => {
+    if (o === null || typeof o !== 'object') return;
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (typeof o.code === 'string' && !codes.includes(o.code)) codes.push(o.code);
+    for (const [k, v] of Object.entries(o)) if (!k.startsWith('_') && k !== 'aliases') walk(v);
+  };
+  walk(awards);
+  for (const code of Object.keys(AWARD_NAMES_IN_ENGINE)) if (!codes.includes(code)) codes.push(code);
+  return codes;
+}
+
+/** 成就表上的獎名。只在單一聯盟頒的獎用那個聯盟的叫法，並註明聯盟。 */
+function awardLabel(code, awards) {
+  let orgs;
+  const walk = (o) => {
+    if (orgs !== undefined || o === null || typeof o !== 'object') return;
+    if (o.code === code && Array.isArray(o.orgs)) orgs = o.orgs;
+    for (const v of Object.values(o)) walk(v);
+  };
+  walk(awards);
+  if (orgs?.length === 1) {
+    const alias = awards.aliases?.[orgs[0]]?.[code];
+    if (alias !== undefined) return `${alias}（僅${orgs[0] === 'MLB' ? '大聯盟' : orgs[0]}）`;
+  }
+  return awardName(code, awards);
+}
+
 /** 在 awards.json 裡找一個獎項代碼的中文名。 */
 function awardName(code, awards) {
   if (AWARD_NAMES_IN_ENGINE[code] !== undefined) return AWARD_NAMES_IN_ENGINE[code];
@@ -201,10 +234,21 @@ function achievementsTable({ achievements, awards, hall_of_fame }) {
     rows.push([c.international.name, `國家隊${rank}`, ap]);
   }
   rows.push([c.international.name, '國際賽 MVP', c.international.mvp]);
-  for (const [code, ap] of Object.entries(c.award.by_code)) {
-    rows.push([c.award.name, `${awardName(code, awards)}（各聯盟各一項）`, ap]);
+  // 獎項照 AP 分列：同一個 AP 的寫在同一列。各聯盟的別名（賽揚獎之於年度最佳投手）
+  // 不另外寫，那只是同一個獎換個叫法；只在單一聯盟頒的獎（白金手套）用那個聯盟的叫法。
+  const byAp = new Map();
+  for (const code of allAwardCodes(awards)) {
+    if (code.startsWith('_')) continue;
+    const ap = c.award.by_code[code] ?? c.award.default;
+    byAp.set(ap, [...(byAp.get(ap) ?? []), awardLabel(code, awards)]);
   }
-  rows.push([c.award.name, '其他獎項與個人成績王（各聯盟各一項）', c.award.default]);
+  for (const [ap, names] of [...byAp.entries()].sort((x, y) => y[0] - x[0])) {
+    // 各聯盟都有的在前、單一聯盟限定的放最後，「各聯盟各一項」才不會讀成在講它。
+    const everywhere = names.filter((n) => !n.includes('（僅'));
+    const only = names.filter((n) => n.includes('（僅'));
+    const text = everywhere.length > 0 ? `${everywhere.join('、')}（各聯盟各一項）` : '';
+    rows.push([c.award.name, [text, ...only].filter((x) => x !== '').join('；'), ap]);
+  }
   const labels = hall_of_fame.tier_thresholds.labels;
   const tierAp = c.tier.by_tier.map((_, i) => c.tier.by_tier.slice(i).reduce((a, b) => a + b, 0));
   labels.forEach((label, i) => {
