@@ -81,7 +81,7 @@ export const START_POSITION_ROWS: readonly (readonly StartPosition[])[] = [
 /** 慣用手：R 右、L 左、S 左右開弓。 */
 export type Hand = 'R' | 'L' | 'S';
 
-/** 四大球系的代碼。取代舊版單一的 brk，見 simulation_math.md §5。 */
+/** 四大球系的代碼。取代舊版單一的 brk，見 docs/design/formulas.md〈投手的四大球系〉。 */
 export type PitchFamily = 'swp' | 'drp' | 'chg' | 'gim';
 
 /** 慣用手的抽樣權重，鍵為 Hand，值為相對權重（不必加總為 100）。 */

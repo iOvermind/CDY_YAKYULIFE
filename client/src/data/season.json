@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_note": "職業球季模擬的全部可調參數。公式定義在 docs/design/simulation_math.md §3-4，本檔只放數字——引擎不得寫死任何一個，未來的參數編輯介面直接改這裡。",
+  "_note": "職業球季模擬的全部可調參數。公式定義在 docs/design/formulas.md〈職業球季〉，本檔只放數字——引擎不得寫死任何一個，未來的參數編輯介面直接改這裡。",
   "_scope_note": "目前只跑 CPBL 主軸（二軍→一軍）。NPB／MLB／KBO 等體系的階梯資料在 leagues.json 已備妥，但轉會與尋路尚未實作，因此這裡的門檻只針對 CPBL 校準過。",
   "league_standards": {
     "_note": "聯盟水準的逐年浮動。leagues.json 的 par／min 是基準值，實際的當年數值圍繞它擺盪——人才有興衰，同一個聯盟在不同年代不是同一個聯盟。以體系為單位：一軍與二軍共用同一組當年數值，同進同退。",
