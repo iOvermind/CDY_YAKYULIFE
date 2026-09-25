@@ -81,8 +81,12 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
             const shown = displayName(e.name);
             return (
               <tr key={`${e.rank}-${e.account}-${e.at}`}>
-                {/* 前三名的名次與名字用強調色＋粗體，一眼看得出誰站在頒獎台上。 */}
-                <td style={{ width: '2.5em' }}>{e.rank <= 3 ? <b className="hl">{e.rank}</b> : e.rank}</td>
+                {/*
+                  前三名的名次與名字用強調色＋粗體，一眼看得出誰站在頒獎台上。名次欄
+                  只留兩位數的寬、右邊不留白——名次跟名字之間每多一格，十幾塊榜並排
+                  就多十幾格。
+                */}
+                <td style={{ width: '2ch', paddingRight: 0 }}>{e.rank <= 3 ? <b className="hl">{e.rank}</b> : e.rank}</td>
                 {/*
                   **只留球員名。** 帳號接在後面時每一列都撐出表格的寬度，而一排有
                   十幾塊榜，那一截寬度乘十幾倍就是整頁橫著爆出去。要分辨是誰的話
@@ -95,11 +99,12 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
                   {e.rank <= 3 ? <b className="hl">{shown}</b> : shown}
                   {/*
                     舊規則的紀錄要標出來。榜單是歷史而不是同一把尺——跨版本不保證
-                    重現（ADR 0002），所以沒有「用新引擎重算」這條路。
+                    重現（ADR 0002），所以沒有「用新引擎重算」這條路。只寫一個「舊」
+                    字，是名字欄的寬度撐不起四個字；是哪一版，滑鼠停上去看得到。
                   */}
                   {e.engineVersion !== ENGINE_VERSION && (
-                    <span className="sub" title={`結算於引擎 v${e.engineVersion}`}>
-                      ・舊規則
+                    <span className="sub" style={{ marginLeft: 4 }} title={`舊規則：結算於引擎 v${e.engineVersion}`}>
+                      舊
                     </span>
                   )}
                 </td>
