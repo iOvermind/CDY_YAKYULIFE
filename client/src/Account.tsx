@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react';
 import { Changelog } from './Changelog.tsx';
 import { Wiki } from './Wiki.tsx';
+import { useDragScroll } from './dragScroll.ts';
 import { Ladder } from './Ladder.tsx';
 import { type Account } from './useAccount.ts';
 import { ApiError, type Me } from './api/contract.ts';
@@ -207,6 +208,19 @@ function AchievementPanel({
   const [tab, setTab] = useState<'achievements' | 'talents' | 'ladder' | 'changelog' | 'wiki'>(
     me === null ? 'changelog' : 'achievements',
   );
+  const drag = useDragScroll();
+  const tabs: readonly { readonly id: typeof tab; readonly label: string }[] = [
+    ...(me === null
+      ? []
+      : [
+          // 數的是收斂後的格數——500／1000／1500 安是一格，不是三格。
+          { id: 'achievements' as const, label: `成就 ${cabinetTiles(me.achievements).length}` },
+          { id: 'talents' as const, label: '天賦' },
+          { id: 'ladder' as const, label: '天梯' },
+        ]),
+    { id: 'changelog', label: '更新' },
+    { id: 'wiki', label: 'WIKI' },
+  ];
 
   return (
     <Modal
@@ -214,52 +228,26 @@ function AchievementPanel({
       onClose={onClose}
       wide
     >
-      <div className="seg" style={{ marginBottom: 14 }}>
-        {me !== null && (
-          <>
-            <button
-              type="button"
-              className={tab === 'achievements' ? 'on' : undefined}
-              onClick={() => setTab('achievements')}
-            >
-              {/* 數的是收斂後的格數——500／1000／1500 安是一格，不是三格。 */}
-              成就 {cabinetTiles(me.achievements).length}
-            </button>
-            <button
-              type="button"
-              className={tab === 'talents' ? 'on' : undefined}
-              onClick={() => setTab('talents')}
-            >
-              天賦
-            </button>
-            <button
-              type="button"
-              className={tab === 'ladder' ? 'on' : undefined}
-              onClick={() => setTab('ladder')}
-            >
-              天梯
-            </button>
-          </>
-        )}
-        {/*
-          更新紀錄排在最右邊。前三個分頁是「這個帳號有什麼」，這一個是「這個遊戲
-          變成什麼樣了」——不同的問題，所以放在隊伍尾巴而不是插進中間。
-        */}
-        <button
-          type="button"
-          className={tab === 'changelog' ? 'on' : undefined}
-          onClick={() => setTab('changelog')}
-        >
-          更新
-        </button>
-        {/* 攻略接在更新後面：兩個都是「這個遊戲是什麼樣子」，不是「這個帳號有什麼」。 */}
-        <button
-          type="button"
-          className={tab === 'wiki' ? 'on' : undefined}
-          onClick={() => setTab('wiki')}
-        >
-          WIKI
-        </button>
+      {/*
+        一排固定四格，多的左右拖曳（滑鼠按住拖、觸控原生捲動）——跟天梯的篩選同一種列。
+        分頁一多就往右長，不擠窄每一格、也不換行，每一排都是同一個樣子。
+        前三個分頁是「這個帳號有什麼」；更新與 WIKI 是「這個遊戲是什麼樣子」，不同的
+        問題，所以排在隊伍尾巴而不是插進中間。
+      */}
+      <div className="seg-scroll" ref={drag.ref} {...drag.handlers}>
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={tab === t.id ? 'on' : undefined}
+            onClick={() => {
+              if (drag.wasDrag()) return;
+              setTab(t.id);
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
       {tab === 'achievements' && me !== null && <AchievementList me={me} />}
       {tab === 'talents' && me !== null && <TalentPanel account={account} me={me} />}
