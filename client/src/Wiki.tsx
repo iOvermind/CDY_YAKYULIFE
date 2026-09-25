@@ -104,9 +104,12 @@ export function Wiki() {
           <summary>
             <h3>{c.title}</h3>
           </summary>
-          {c.blocks.map((b, i) => (
-            <Block key={i} b={b} />
-          ))}
+          {/* 章的內容整塊內縮，一眼看得出哪些字屬於這一章。 */}
+          <div className="wiki-body">
+            {c.blocks.map((b, i) => (
+              <Block key={i} b={b} />
+            ))}
+          </div>
         </details>
       ))}
     </div>

@@ -407,6 +407,9 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 /* 章名靠左。摺疊標題借用成就櫃的 h3，那一條是左右撐開的（左邊標題、右邊 AP 或
    日期）；攻略的章名右邊沒有東西，撐開的結果是整行字被推到最右邊。 */
 .wiki .achgroup h3{justify-content:flex-start}
+/* 章的內容內縮三個中文字（內文 12.5px × 3）。用固定寬度而不是 em：段落、表格、小標
+   字級各不相同，em 會讓每一種東西縮得不一樣深。 */
+.wiki-body{padding-left:37.5px}
 .wiki h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
   font-weight:400;margin:16px 0 8px}
 .wiki-table{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 12px}
