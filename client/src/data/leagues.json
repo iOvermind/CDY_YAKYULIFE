@@ -22,7 +22,7 @@
       "name": "日本職棒二軍",
       "par": 50,
       "min": 47,
-      "games": 100,
+      "games": 140,
       "org": "NPB"
     },
     "NPB1": {
@@ -37,7 +37,7 @@
       "name": "韓國職棒二軍",
       "par": 43,
       "min": 39,
-      "games": 100,
+      "games": 120,
       "org": "KBO"
     },
     "KBO1": {
@@ -68,28 +68,28 @@
       "name": "新人聯盟",
       "par": 44,
       "min": 42,
-      "games": 55,
+      "games": 56,
       "org": "MLB"
     },
     "A1": {
       "name": "1A",
       "par": 48,
       "min": 46,
-      "games": 110,
+      "games": 132,
       "org": "MLB"
     },
     "A2": {
       "name": "2A",
       "par": 52,
       "min": 50,
-      "games": 120,
+      "games": 138,
       "org": "MLB"
     },
     "A3": {
       "name": "3A",
       "par": 57,
       "min": 55,
-      "games": 130,
+      "games": 150,
       "org": "MLB"
     },
     "MLB": {

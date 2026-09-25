@@ -28,9 +28,9 @@ export type LeagueTable = ReadonlyMap<string, TeamSeason>;
 /**
  * 球隊的代表詞，用於「◯◯先生」這類稱號。
  *
- * 大多數隊名是「地名＋代表詞」（台中猛瑪 → 猛瑪），少數整個隊名就是代表詞
- * （東京大人）。`teams.json` 只在後者標了 nick，其餘照 `nick_fallback` 取
- * 末兩字——把每一隊都列一次只會多一份會過期的資料。
+ * 大多數隊名是「地名＋兩字代表詞」（台中猛瑪 → 猛瑪），少數代表詞超過兩個字
+ * （沙城競技者 → 競技者）。`teams.json` 只在後者標了 nick，其餘照 `nick_fallback`
+ * 取末兩字——把每一隊都列一次只會多一份會過期的資料。
  */
 export function teamNick(name: string): string {
   for (const org of Object.keys(teamsData.leagues)) {

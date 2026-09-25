@@ -10,9 +10,15 @@
  * 自動展開命中的那一章，自己做摺疊就沒有這一項。
  */
 
-import type { WikiBlock } from './data/index.ts';
+import { Fragment } from 'react';
+import type { ChangelogPart, WikiBlock } from './data/index.ts';
 import { wiki } from './data/index.ts';
 import { Parts } from './Changelog.tsx';
+
+/** 分組表的組名列：第一格以粗體開頭、其餘格子全空。 */
+function isGroupRow(row: readonly (readonly ChangelogPart[])[]): boolean {
+  return row[0]?.[0]?.kind === 'strong' && row.slice(1).every((c) => c.length === 0);
+}
 
 function Block({ b }: { b: WikiBlock }) {
   switch (b.kind) {
@@ -40,34 +46,50 @@ function Block({ b }: { b: WikiBlock }) {
           ))}
         </ul>
       );
-    case 'table':
+    case 'table': {
+      // 分組表（產生器的聯盟階梯、球隊名單）：組名列畫成小標題、底下重複表頭，
+      // 看起來是分開的幾張表，但仍是同一張 <table>，欄寬上下對齊。
+      const grouped = b.rows.some(isGroupRow);
+      const head = (
+        <tr>
+          {b.head.map((c, i) => (
+            <th key={i}>
+              <Parts parts={c} />
+            </th>
+          ))}
+        </tr>
+      );
       return (
         // 表格太寬時只在表格裡橫捲，不把整個視窗撐開。
         <div className="wiki-table">
           <table>
-            <thead>
-              <tr>
-                {b.head.map((c, i) => (
-                  <th key={i}>
-                    <Parts parts={c} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
+            {!grouped && <thead>{head}</thead>}
             <tbody>
-              {b.rows.map((row, i) => (
-                <tr key={i}>
-                  {row.map((c, j) => (
-                    <td key={j}>
-                      <Parts parts={c} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {b.rows.map((row, i) =>
+                isGroupRow(row) ? (
+                  <Fragment key={i}>
+                    <tr className="wiki-group">
+                      <th colSpan={b.head.length}>
+                        <Parts parts={row[0] ?? []} />
+                      </th>
+                    </tr>
+                    {head}
+                  </Fragment>
+                ) : (
+                  <tr key={i}>
+                    {row.map((c, j) => (
+                      <td key={j}>
+                        <Parts parts={c} />
+                      </td>
+                    ))}
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>
       );
+    }
   }
 }
 

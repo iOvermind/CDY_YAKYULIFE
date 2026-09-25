@@ -415,6 +415,10 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
   text-align:left;vertical-align:top;min-width:4em}
 .wiki-table th{color:var(--dim);font-weight:500;white-space:nowrap}
 .wiki-table td{color:var(--text)}
+/* 分組表的組名列：看起來像下一張表的標題。第一組不留上間距。 */
+.wiki-table tr.wiki-group th{border-bottom:none;padding:18px 6px 4px;color:var(--text);
+  font-family:var(--head);font-size:12px;letter-spacing:.12em;white-space:normal}
+.wiki-table tbody tr.wiki-group:first-child th{padding-top:4px}
 
 /* 整張卡片就是按鈕：左鍵升一級、右鍵降一級。做成 <button> 是為了鍵盤與
    焦點框都自己來，因此外觀要先歸零回一張卡片的樣子。 */

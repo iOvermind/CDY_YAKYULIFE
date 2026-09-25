@@ -58,19 +58,32 @@ const plain = (s) => String(s).replace(/<[^>]+>/g, '');
 
 // ---------------------------------------------------------------- 各張表
 
+/**
+ * 分組表：**實際上是一張表**，每一組前面插一列只有組名的粗體列。分成好幾張表的話，
+ * 每張的欄寬各自隨內容決定，上下對不齊；合成一張之後欄寬由全部內容一起決定。
+ * 遊戲裡的 WIKI 分頁認得這種列，把它畫成小標題、底下重複表頭，看起來仍是分開的表。
+ */
+function groupedTable(head, groups) {
+  const blank = head.slice(1).map(() => '');
+  return table(
+    head,
+    groups.flatMap(({ title, rows }) => [[`**${title}**`, ...blank], ...rows]),
+  );
+}
+
 function teamsTable({ teams, leagues }) {
-  const out = [];
-  for (const [org, list] of Object.entries(teams.leagues)) {
+  const groups = Object.entries(teams.leagues).map(([org, list]) => {
     const name = leagues.top_league_names[org] ?? fail(`leagues.json 沒有 ${org} 的聯盟名稱`);
-    out.push(`**${name}**（${list.length} 隊）`, '');
-    out.push(table(['球隊', '代表詞'], list.map((t) => [t.name, t.nick ?? t.name.slice(-2)])));
-    out.push('');
-  }
-  return out.join('\n').trimEnd();
+    return {
+      title: `${name}（${list.length} 隊）`,
+      rows: list.map((t) => [t.name, t.nick ?? t.name.slice(-2)]),
+    };
+  });
+  return groupedTable(['球隊', '代表詞'], groups);
 }
 
 function ladderTable({ leagues }) {
-  const out = [];
+  const groups = [];
   for (const [org, path] of Object.entries(leagues.paths)) {
     if (org.startsWith('_')) continue;
     const name = leagues.top_league_names[org] ?? fail(`leagues.json 沒有 ${org} 的聯盟名稱`);
@@ -78,9 +91,9 @@ function ladderTable({ leagues }) {
       const lv = leagues.levels[code] ?? fail(`leagues.json 的 paths.${org} 列了不存在的層級 ${code}`);
       return [lv.name, lv.par, lv.min, lv.games];
     });
-    out.push(`**${name}**`, '', table(['層級', '平均水準', '最低門檻', '每季場數'], rows), '');
+    groups.push({ title: name, rows });
   }
-  return out.join('\n').trimEnd();
+  return groupedTable(['層級', '平均水準', '最低門檻', '每季場數'], groups);
 }
 
 function talentsTable({ talents }) {

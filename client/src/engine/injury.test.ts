@@ -33,10 +33,10 @@ describe('受傷機率', () => {
 
   it('年齡照樣加在體質的起點上——魔鬼筋肉人也會老', () => {
     const iron = new Set(['iron']);
-    expect(injuryChance({ age: 38, traits: iron })).toBeGreaterThan(
+    expect(injuryChance({ age: 44, traits: iron })).toBeGreaterThan(
       injuryChance({ age: 22, traits: iron }),
     );
-    expect(injuryChance({ age: 38, traits: iron })).toBe(
+    expect(injuryChance({ age: 44, traits: iron })).toBe(
       cfg.chance.traits.iron.base + cfg.chance.age_steps.tiers[0]!.add,
     );
   });
