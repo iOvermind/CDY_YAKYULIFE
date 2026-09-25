@@ -142,11 +142,22 @@ export class FakeDb implements Queryable {
       }
       return [...holders].map(([achievement, set]) => ({ achievement, holders: set.size }));
     }
-    if (s.startsWith('SELECT COALESCE(SUM(points)')) {
-      const earned = this.achievements
-        .filter((a) => a.user_id === String(v[0]))
-        .reduce((sum, a) => sum + a.points, 0);
-      return [{ earned: String(earned) }];
+    if (s.startsWith('SELECT user_id, achievement, name FROM achievements')) {
+      return this.achievements.map((a) => ({ user_id: a.user_id, achievement: a.achievement, name: a.name }));
+    }
+    if (s.startsWith('DELETE FROM achievements WHERE user_id')) {
+      this.achievements = this.achievements.filter(
+        (a) => !(a.user_id === String(v[0]) && a.achievement === String(v[1])),
+      );
+      return [];
+    }
+    if (s.startsWith('UPDATE achievements SET name')) {
+      const row = this.achievements.find((a) => a.user_id === String(v[0]) && a.achievement === String(v[1]));
+      if (row !== undefined) row.name = String(v[2]);
+      return [];
+    }
+    if (s.startsWith('SELECT 1 AS one FROM careers')) {
+      return this.careers.some((c) => c.user_id === String(v[0]) && c.finished_at !== null) ? [{ one: 1 }] : [];
     }
     if (s.startsWith('INSERT INTO achievements')) {
       const [userId, id] = [String(v[0]), String(v[1])];

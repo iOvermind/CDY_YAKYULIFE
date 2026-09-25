@@ -16,6 +16,8 @@
 import {
   achievements as cfg,
   amateur,
+  awards as awardsData,
+  leagues,
   traitName,
   traits as traitsData,
 } from '../data/index.ts';
@@ -519,4 +521,149 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
   });
 
   return { list, newly, points: newly.reduce((sum, a) => sum + a.points, 0) };
+}
+
+/** 已解鎖的一項成就：資料庫裡的那一列，定價只需要 id 與名稱。 */
+export interface OwnedAchievement {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** 各聯盟的體系代碼（`CPBL`、`MLB`……）。認不出的聯盟就是舊資料。 */
+const ORGS = new Set(Object.values(leagues.levels).map((l) => l.org));
+
+/** 認得出的獎項代碼：有自己點數的，加上各項單項王與守備獎。 */
+const AWARD_CODES = new Set([
+  ...Object.keys(cfg.categories.award.by_code),
+  ...awardsData.titles.list.map((t) => t.code),
+  ...awardsData.fielding.list.map((t) => t.code),
+]);
+
+/** 累積階梯的 AP 總額：跨到 `top` 為止每一階加總。不是合法的一階回傳 null。 */
+function cumulativePrice(scope: string, stat: string, top: number): number | null {
+  const c = cfg.categories.cumulative;
+  const spec = (c.rungs as Record<string, { step: number; points: number } | undefined>)[stat];
+  if (spec === undefined || stat.startsWith('_')) return null;
+  if (!Number.isInteger(top) || top % spec.step !== 0) return null;
+  const first = scope === 'career' ? c.first_rung.career : c.first_rung.league;
+  const got = ladderAp(spec.step, spec.points, first, c.ap_max_rungs, top);
+  return got.top === null ? null : got.points;
+}
+
+/**
+ * 一項成就依**現行規則**的總價，不看它是哪一版規則解鎖的。認不出來回傳 null
+ * ——那是舊規則留下的成就（特性被拿掉、獎項代碼消失、id 格式改過）。
+ *
+ * 階梯（累積、生涯分級）回傳的是**爬到這一階的總額**，不是這一階的增量；同一族
+ * 的好幾階怎麼分，見 `priceOwned()`。
+ *
+ * 規則與 `evaluateAchievements()` 讀同一份設定，因此同一項成就在結算時給的點數
+ * 與日後重新定價的結果一致——除非規則改了，而那正是重新定價的用意。
+ */
+function priceOf(a: OwnedAchievement): number | null {
+  const c = cfg.categories;
+  const parts = a.id.split(':');
+  const head = parts[0];
+
+  if (lifeIndex(a.id) !== null) return cfg.first_career_bonus.points;
+  switch (head) {
+    case 'trait': {
+      const id = parts[1] ?? '';
+      if (!traitsData.traits.some((t) => t.id === id)) return null;
+      const tone = traitTone(id);
+      return c.trait.by_id[id] ?? (tone === null ? c.trait.default : (c.trait.by_tone[tone] ?? c.trait.default));
+    }
+    case 'intl': {
+      if (parts[1] === 'mvp') return c.international.mvp;
+      const index = rankIndexOf(c.international.by_rank, a.name);
+      return index < 0 ? null : ladderPoints(Object.values(c.international.by_rank), index);
+    }
+    case 'cup': {
+      if (!AMATEUR_CUPS.has(a.id.slice('cup:'.length))) return null;
+      const index = rankIndexOf(c.amateur_cup.by_rank, a.name);
+      return index < 0 ? null : ladderPoints(Object.values(c.amateur_cup.by_rank), index);
+    }
+    case 'award': {
+      if (parts.length !== 3 || !ORGS.has(parts[1] ?? '') || !AWARD_CODES.has(parts[2] ?? '')) return null;
+      return c.award.by_code[parts[2] ?? ''] ?? c.award.default;
+    }
+    case 'cum': {
+      if (parts.length !== 4) return null;
+      const scope = parts[1] ?? '';
+      if (scope !== 'career' && !ORGS.has(scope)) return null;
+      return cumulativePrice(scope, parts[2] ?? '', Number(parts[3]));
+    }
+    case 'tier': {
+      const n = Number(parts[2]);
+      if (parts.length !== 3 || !ORGS.has(parts[1] ?? '')) return null;
+      if (!Number.isInteger(n) || n < 0 || n >= c.tier.by_tier.length) return null;
+      return ladderPoints(c.tier.by_tier, n);
+    }
+    case 'hall':
+      return parts.length >= 2 ? c.hall.default : null;
+    case 'marriage':
+      return parts.length >= 2 ? c.marriage.default : null;
+    case 'second_life':
+      return parts.length >= 2 ? c.second_life.default : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * 依現行規則替一個帳號的全部成就定價：id → 這一項現在值多少 AP；認不出的是 null。
+ *
+ * **AP 是動態算的，不是解鎖當下凍結的**（見 ADR 0053）。規則改版後，舊帳號的
+ * 餘額跟著新規則走，不會像 #62 那樣留著舊規則的 854 AP。
+ *
+ * 階梯（`ladderOf` 認得出的累積與生涯分級）**同一族加總等於最高那一階的總額**：
+ * 每一階的值是它比同一族裡下一個較低的已解鎖階多出來的部分。較低的階照樣列在
+ * 成就櫃上，但不會把整條階梯重複算一次。
+ */
+export function priceOwned(owned: readonly OwnedAchievement[]): Map<string, number | null> {
+  const out = new Map<string, number | null>();
+  const families = new Map<string, { rung: number; total: number; id: string }[]>();
+
+  for (const a of owned) {
+    const price = priceOf(a);
+    const l = ladderOf(a.id);
+    const laddered = price !== null && (a.id.startsWith('cum:') || a.id.startsWith('tier:'));
+    if (!laddered) {
+      out.set(a.id, price);
+      continue;
+    }
+    const family = families.get(l.key) ?? [];
+    family.push({ rung: l.rung, total: price, id: a.id });
+    families.set(l.key, family);
+  }
+
+  for (const family of families.values()) {
+    family.sort((x, y) => x.rung - y.rung);
+    let below = 0;
+    for (const step of family) {
+      out.set(step.id, Math.max(0, step.total - below));
+      below = Math.max(below, step.total);
+    }
+  }
+  return out;
+}
+
+/**
+ * 同一項賽事拿到了更好的名次：回傳這一局要把哪幾列的名稱改成新名次。
+ *
+ * 國際賽與養成盃賽的 id 只掛賽事名（`intl:<賽事>`），名次在名稱裡——第一次拿季軍
+ * 之後再拿冠軍，id 一樣，`unlocked` 會把它當成已經領過。改名之後動態定價就會自動
+ * 補上差額，與累積階梯「爬上新的一階就補差額」是同一件事。
+ */
+export function improvedRanks(
+  owned: readonly OwnedAchievement[],
+  list: readonly Achievement[],
+): Achievement[] {
+  const byId = new Map(owned.map((a) => [a.id, a]));
+  const price = (a: OwnedAchievement) => priceOf(a) ?? -1;
+  return list.filter((a) => {
+    if (!a.id.startsWith('intl:') && !a.id.startsWith('cup:')) return false;
+    const prev = byId.get(a.id);
+    return prev !== undefined && price(a) > price(prev);
+  });
 }

@@ -10,10 +10,10 @@
 
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
-import { useDb } from './db.ts';
+import { pruneAchievements, useDb } from './db.ts';
 import { FakeDb } from './fakedb.ts';
-import { ALL, Game, isPitcherRole, type ReplayLog } from '../../client/src/engine/index.ts';
-import { achievements as achievementsData } from '../../client/src/data/index.ts';
+import { ALL, Game, isPitcherRole, priceOwned, type ReplayLog } from '../../client/src/engine/index.ts';
+import { achievements as achievementsData, traits as traitsData } from '../../client/src/data/index.ts';
 import {
   finishCareer,
   HttpError,
@@ -32,16 +32,31 @@ beforeEach(() => {
   useDb(db);
 });
 
-/** 直接發一筆成就給某個人，讓他有 AP 可以花。 */
+/**
+ * 直接發成就給某個人，讓他有 `points` 點 AP 可以花。
+ *
+ * AP 依現行規則動態定價（ADR 0053），假的 id 會被當成舊成就而一文不值，所以這裡
+ * 發的是真的成就：一位對象一格的姻緣，奇數時再補一個一點的特性。
+ */
 function grant(userId: string, id: string, points: number): void {
-  db.achievements.push({
-    user_id: userId,
-    achievement: id,
-    name: id,
-    category: '測試',
-    points,
-    unlocked_at: new Date(),
-  });
+  const push = (achievement: string) =>
+    db.achievements.push({
+      user_id: userId,
+      achievement,
+      name: achievement,
+      category: '測試',
+      points: 0,
+      unlocked_at: new Date(),
+    });
+  const pair = achievementsData.categories.marriage.default;
+  const onePoint = traitsData.traits.find(
+    (t) => priceOwned([{ id: `trait:${t.id}`, name: '' }]).get(`trait:${t.id}`) === 1,
+  );
+  if (onePoint === undefined) throw new Error('找不到一點的特性');
+  let left = points;
+  for (let i = 0; left >= pair; i++, left -= pair) push(`marriage:${id}-${i}`);
+  if (left === 1) push(`trait:${onePoint.id}`);
+  else if (left !== 0) throw new Error(`湊不出 ${points} 點`);
 }
 
 /** 打完一整段生涯，回傳重播日誌。永遠選第一個選項。 */
@@ -239,6 +254,49 @@ describe('天賦', () => {
     assert.equal(refunded.talents['gifted'], undefined);
 
     assert.equal((await setTalent(user, 'gifted', 1)).ap, 90);
+  });
+});
+
+/** AP 依現行規則動態定價，舊成就啟動時刪除（ADR 0053）。 */
+describe('AP 動態定價', () => {
+  const push = (userId: string, achievement: string, points: number) =>
+    db.achievements.push({
+      user_id: userId,
+      achievement,
+      name: achievement,
+      category: '測試',
+      points,
+      unlocked_at: new Date(),
+    });
+
+  it('點數讀現行規則，不讀解鎖當下凍結的值', async () => {
+    const user = await register('Overmind', 'hunter2');
+    push(user.id, 'award:CPBL:mvp', 999);
+    const me = await meOf(user);
+    assert.equal(me.ap, achievementsData.categories.award.by_code['mvp']);
+    assert.equal(me.achievements[0]?.points, achievementsData.categories.award.by_code['mvp']);
+  });
+
+  it('啟動時刪掉認不出的舊成就，餘額可以變負，天賦照常保留', async () => {
+    const user = await register('Overmind', 'hunter2');
+    push(user.id, 'tier:3', 0); // 舊格式
+    grant(user.id, 'x', 10);
+    await setTalent(user, 'gifted', 1); // 第一級 10 點
+
+    // 模擬規則改版：姻緣那幾格變成認不出來的舊成就。
+    for (const a of db.achievements) {
+      if (a.achievement.startsWith('marriage:')) a.achievement = `retired:${a.achievement}`;
+    }
+    assert.equal(await pruneAchievements(), 6);
+    assert.equal(db.achievements.length, 0);
+
+    const me = await meOf(user);
+    assert.equal(me.ap, -10);
+    assert.equal(me.talents['gifted'], 1);
+    // 負數時買不了新的。
+    await assert.rejects(() => setTalent(user, 'gifted', 2), (e: HttpError) => e.status === 409);
+    // 退款照退。
+    assert.equal((await setTalent(user, 'gifted', 0)).ap, 0);
   });
 });
 

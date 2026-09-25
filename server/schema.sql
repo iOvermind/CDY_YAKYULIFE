@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS achievements (
   -- 前端拿到一串 id 就只能顯示 id。解鎖當下凍結寫入。
   name        TEXT NOT NULL DEFAULT '',
   category    TEXT NOT NULL DEFAULT '',
+  -- 解鎖當下的點數，**只是歷史**：餘額依現行規則重新定價（ADR 0053）。
   points      INTEGER NOT NULL,
   -- **真實時間戳**，不是局內年份。由伺服器蓋章，不由客戶端提供。
   unlocked_at TIMESTAMPTZ NOT NULL DEFAULT now(),

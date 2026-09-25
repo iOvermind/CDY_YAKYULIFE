@@ -14,7 +14,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join, normalize } from 'node:path';
 import { API } from '../../client/src/api/contract.ts';
 import { readCookie, readSession, sessionCookie, signSession } from './auth.ts';
-import { migrate, pool, type UserRow } from './db.ts';
+import { migrate, pool, pruneAchievements, type UserRow } from './db.ts';
 import { ALL } from '../../client/src/engine/index.ts';
 import {
   finishCareer,
@@ -193,4 +193,5 @@ const server = createServer((req, res) => {
 });
 
 await migrate();
+await pruneAchievements();
 server.listen(PORT, () => console.log(`[server] http://localhost:${PORT}`));

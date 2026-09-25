@@ -6,6 +6,8 @@ import {
   lifeIndex,
   ladderAp,
   ladderTop,
+  improvedRanks,
+  priceOwned,
   type AchievementContext,
 } from './achievements.ts';
 import { joinName } from './naming.ts';
@@ -454,5 +456,78 @@ describe('第二人生', () => {
 
   it('沒走到第二人生就沒有這一格', () => {
     expect(evaluateAchievements(ctx()).list.some((a) => a.id.startsWith('second_life:'))).toBe(false);
+  });
+});
+
+/** AP 依現行規則動態定價（ADR 0053）。 */
+describe('priceOwned', () => {
+  const one = (id: string, name = id) => priceOwned([{ id, name }]).get(id);
+
+  it('現行規則認不出的成就是 null', () => {
+    expect(one('test:rich')).toBeNull();
+    expect(one('trait:不存在的特性')).toBeNull();
+    expect(one('award:CPBL:不存在的獎')).toBeNull();
+    expect(one('award:不存在的聯盟:mvp')).toBeNull();
+    expect(one('tier:3')).toBeNull(); // 舊的整段生涯一格
+    expect(one('cum:career:hits:123')).toBeNull(); // 不在級距上
+    expect(one('cum:career:不存在的數據:500')).toBeNull();
+    expect(one('cup:不存在的盃賽', '不存在的盃賽冠軍')).toBeNull();
+  });
+
+  it('點數讀現行設定，不讀解鎖當下的值', () => {
+    expect(one('award:CPBL:mvp')).toBe(cfg.categories.award.by_code['mvp']);
+    expect(one('award:CPBL:obp_king')).toBe(cfg.categories.award.default);
+    expect(one('first_career')).toBe(cfg.first_career_bonus.points);
+    expect(one('life:3')).toBe(cfg.first_career_bonus.points);
+    expect(one('hall:中華職棒')).toBe(cfg.categories.hall.default);
+  });
+
+  it('國際賽的名次從名稱剝出來', () => {
+    const champ = one('intl:中華隊 世界棒球經典賽', '中華隊 世界棒球經典賽冠軍')!;
+    const third = one('intl:中華隊 世界棒球經典賽', '中華隊 世界棒球經典賽季軍')!;
+    expect(champ).toBeGreaterThan(third);
+    expect(one('intl:中華隊 世界棒球經典賽', '中華隊 世界棒球經典賽十六強')).toBeNull();
+  });
+
+  it('同一座階梯加總等於最高那一階的總額，不重複算', () => {
+    const c = cfg.categories.cumulative;
+    const hits = c.rungs['hits']!;
+    const lo = hits.step * c.first_rung.career;
+    const hi = lo + hits.step * 2;
+    const prices = priceOwned([
+      { id: `cum:career:hits:${lo}`, name: '' },
+      { id: `cum:career:hits:${hi}`, name: '' },
+    ]);
+    const total = (prices.get(`cum:career:hits:${lo}`) ?? 0) + (prices.get(`cum:career:hits:${hi}`) ?? 0);
+    expect(total).toBe(one(`cum:career:hits:${hi}`));
+    expect(total).toBe(hits.points * 3);
+  });
+
+  it('生涯分級每個聯盟一座，加總等於最高那一級', () => {
+    const prices = priceOwned([
+      { id: 'tier:CPBL:3', name: '' },
+      { id: 'tier:CPBL:0', name: '' },
+      { id: 'tier:MLB:3', name: '' },
+    ]);
+    const cpbl = (prices.get('tier:CPBL:3') ?? 0) + (prices.get('tier:CPBL:0') ?? 0);
+    expect(cpbl).toBe(cfg.categories.tier.by_tier.reduce((a, b) => a + b, 0));
+    expect(prices.get('tier:MLB:3')).toBe(cfg.categories.tier.by_tier[3]);
+  });
+});
+
+describe('improvedRanks', () => {
+  const event = '中華隊 世界棒球經典賽';
+  const owned = [{ id: `intl:${event}`, name: `${event}季軍` }];
+  const got = (rank: string) => [
+    { id: `intl:${event}`, name: `${event}${rank}`, category: '', points: 0 },
+  ];
+
+  it('同一賽事拿到更好的名次就要改名', () => {
+    expect(improvedRanks(owned, got('冠軍')).map((a) => a.name)).toEqual([`${event}冠軍`]);
+  });
+
+  it('名次沒變好就不動', () => {
+    expect(improvedRanks(owned, got('季軍'))).toEqual([]);
+    expect(improvedRanks([{ id: `intl:${event}`, name: `${event}冠軍` }], got('亞軍'))).toEqual([]);
   });
 });

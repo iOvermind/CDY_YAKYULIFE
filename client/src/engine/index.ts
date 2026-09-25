@@ -28,6 +28,9 @@ export {
   type LadderRow,
 } from './ladder.ts';
 
+// ---- 成就的現行定價。AP 是依現行規則動態算的，不是解鎖當下凍結的（ADR 0053）
+export { improvedRanks, priceOwned, type OwnedAchievement } from './achievements.ts';
+
 // ---- 天賦的價錢與層數上限。AP 的帳由伺服器算，因此它需要這兩個（ADR 0007）
 export { costOf, maxLevelOf } from './overlay.ts';
 

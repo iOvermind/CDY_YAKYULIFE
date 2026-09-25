@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import type { UnlockedAchievement } from '../../client/src/api/contract.ts';
+import { priceOwned } from '../../client/src/engine/index.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -100,14 +101,55 @@ export async function achievementsOf(userId: string): Promise<UnlockedAchievemen
      WHERE user_id = $1 ORDER BY unlocked_at DESC, achievement`,
     [userId],
   );
+  // **點數依現行規則重新定價**，不讀解鎖當下凍結的 points 欄（ADR 0053）。
+  // 認不出的舊成就在啟動時就刪掉了（`pruneAchievements`）；萬一還有漏網的算 0。
+  const prices = priceOwned(rows.map((r) => ({ id: r.achievement, name: r.name })));
   return rows.map((r) => ({
     id: r.achievement,
     // 舊資料沒有名稱（那兩欄是後補的），退回顯示 id 總比顯示空白好。
     name: r.name === '' ? r.achievement : r.name,
     category: r.category === '' ? '其他' : r.category,
-    points: r.points,
+    points: prices.get(r.achievement) ?? 0,
     at: r.unlocked_at.toISOString(),
   }));
+}
+
+/**
+ * 刪掉現行規則認不出的成就。**每次啟動跑一次**，跟 schema.sql 同一個時間點——
+ * 規則改版一定伴隨一次部署，刪除就跟著那次部署發生，出錯時看得到是哪一版。
+ *
+ * 認不出的是舊規則留下的：特性被拿掉、獎項代碼消失、id 格式改過。刪掉就收回了
+ * 它的 AP；餘額因此可能變負，那是刻意的（見 ADR 0053）。每刪一列記一行。
+ */
+export async function pruneAchievements(): Promise<number> {
+  const { rows } = await pool.query<{ user_id: string; achievement: string; name: string }>(
+    'SELECT user_id, achievement, name FROM achievements',
+  );
+  const byUser = new Map<string, { id: string; name: string }[]>();
+  for (const r of rows) {
+    const list = byUser.get(String(r.user_id)) ?? [];
+    list.push({ id: r.achievement, name: r.name });
+    byUser.set(String(r.user_id), list);
+  }
+  let removed = 0;
+  for (const [userId, owned] of byUser) {
+    for (const [id, price] of priceOwned(owned)) {
+      if (price !== null) continue;
+      await pool.query('DELETE FROM achievements WHERE user_id = $1 AND achievement = $2', [userId, id]);
+      console.warn(`[achievements] 使用者 ${userId} 的舊成就 ${id} 現行規則認不出，已刪除。`);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+/** 這個帳號有沒有結算過任何一局。「第一段生涯」看它，不看成就表是不是空的。 */
+export async function hasFinishedCareer(userId: string): Promise<boolean> {
+  const { rows } = await pool.query<{ one: number }>(
+    'SELECT 1 AS one FROM careers WHERE user_id = $1 AND finished_at IS NOT NULL LIMIT 1',
+    [userId],
+  );
+  return rows.length > 0;
 }
 
 /**
@@ -129,34 +171,14 @@ export async function rarityOf(): Promise<ReadonlyMap<string, number>> {
 /**
  * AP 餘額。
  *
- * **算出來的，不是存出來的**：賺到的總和減去買天賦花掉的。存一個餘額欄位的話，
- * 它遲早會與那兩張表對不起來，而對不起來的錢是最難查的 bug。
+ * **算出來的，不是存出來的**：每項成就依現行規則的點數加總，減去買天賦花掉的。
+ * 存一個餘額欄位的話，它遲早會與那兩張表對不起來，而對不起來的錢是最難查的 bug。
+ *
+ * **餘額可以是負的。** 規則改版讓成就變便宜、或舊成就被刪掉之後，花掉的可能比
+ * 現在值的多。不自動修正——把餘額夾成 0 會讓玩家的天賦憑空消失，而把 spent 歸零
+ * 等於送 AP。天賦照常生效，只是買不了新的，直到新的成就把它補回來（ADR 0053）。
  */
 export async function balanceOf(userId: string, spent: number): Promise<{ ap: number; earned: number }> {
-  const { rows } = await pool.query<{ earned: string }>(
-    'SELECT COALESCE(SUM(points), 0) AS earned FROM achievements WHERE user_id = $1',
-    [userId],
-  );
-  const earned = Number(rows[0]?.earned ?? 0);
-  const ap = earned - spent;
-
-  /**
-   * **AP 只能從成就來。**
-   *
-   * `earned` 是成就表的 SUM，而那張表只由 `finishCareer` 的伺服器端評估寫入——
-   * 沒有第二個入口。餘額為負代表「花掉的比賺過的多」，那在正常路徑上不可能發生：
-   * 買天賦時會先檢查夠不夠。真的出現只有兩種來源，兩種都該吵：有人直接動了資料庫，
-   * 或是成就 id 改版時刪掉了已經被花掉的那幾列（schema.sql 有過這種遷移）。
-   *
-   * **不自動修正**——把餘額夾成 0 會讓玩家的天賦憑空消失，而把 spent 歸零等於送
-   * AP。留著負數並記一筆，讓它在日誌裡看得見。
-   */
-  if (ap < 0) {
-    console.error(
-      `[ap] 使用者 ${userId} 的餘額是負的：賺過 ${earned}、花掉 ${spent}。` +
-        'AP 只能從成就來，出現負數代表成就表被外部動過，或有成就列在被花用之後遭到刪除。',
-    );
-  }
-
-  return { ap, earned };
+  const earned = (await achievementsOf(userId)).reduce((sum, a) => sum + a.points, 0);
+  return { ap: earned - spent, earned };
 }

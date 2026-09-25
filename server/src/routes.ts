@@ -11,9 +11,11 @@ import {
   ALL,
   costOf,
   Game,
+  improvedRanks,
   isPitcherRole,
   LADDER_POSITIONS,
   maxLevelOf,
+  priceOwned,
   type LadderKey,
 } from '../../client/src/engine/index.ts';
 import { ladder as ladderCfg, leagues, talents as talentData } from '../../client/src/data/index.ts';
@@ -31,6 +33,7 @@ import {
   achievementsOf,
   rarityOf,
   balanceOf,
+  hasFinishedCareer,
   createUser,
   findUser,
   pool,
@@ -136,11 +139,18 @@ export async function finishCareer(
     // **結算的配方只有一份**，在引擎裡（`Game.score()`，見 ADR 0049）。這裡只
     // 負責把跨局的進度交給它——那是只有伺服器手上有的東西。
     const score = game.score({
-      firstCareer: owned.length === 0,
+      firstCareer: !(await hasFinishedCareer(user.id)),
       unlocked: new Set(owned.map((a) => a.id)),
     });
     if (score === null) throw new HttpError(400, '這一局還沒有走到結算。');
     const result = score.achievements;
+    const improved = improvedRanks(owned, result.list);
+    const gained =
+      result.points +
+      improved.reduce((sum, a) => {
+        const before = owned.find((o) => o.id === a.id)?.points ?? 0;
+        return sum + ((priceOwned([a]).get(a.id) ?? 0) - before);
+      }, 0);
 
     // 客戶端算的與伺服器算的一不一樣。不一樣仍以伺服器為準，但記一筆——那通常
     // 代表版本不同步，偶爾代表有人在改東西。
@@ -159,9 +169,18 @@ export async function finishCareer(
           [user.id, a.id, a.name, a.category, a.points],
         );
       }
+      // 同一項賽事拿到更好的名次：id 相同所以不會新增一列，改名之後動態定價就
+      // 補上差額（ADR 0053）。
+      for (const a of improved) {
+        await client.query('UPDATE achievements SET name = $3 WHERE user_id = $1 AND achievement = $2', [
+          user.id,
+          a.id,
+          a.name,
+        ]);
+      }
       await client.query(
         'UPDATE careers SET log = $1, verified = $2, ap_gained = $3, finished_at = now() WHERE id = $4',
-        [JSON.stringify(body.log), verified, result.points, careerId],
+        [JSON.stringify(body.log), verified, gained, careerId],
       );
 
       // 天梯的原料。**只在 verified 時寫**——規則資料由伺服器送出，玩家改了自己
@@ -210,7 +229,7 @@ export async function finishCareer(
     const { ap } = await balanceOf(user.id, spentOn(levels));
     return {
       unlocked: result.newly.map((a) => ({ id: a.id, name: a.name, points: a.points })),
-      gained: result.points,
+      gained,
       ap,
       verified,
     };
