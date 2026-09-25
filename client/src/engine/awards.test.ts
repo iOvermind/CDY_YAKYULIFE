@@ -56,6 +56,7 @@ const ctx = (over: Partial<AwardContext> = {}): AwardContext => ({
   winShares: 8,
   battingWinShares: 5,
   pitchingWinShares: 3,
+  winPct: 0.5,
   availability: 1,
   homeFaith: false,
   ...over,
@@ -292,11 +293,37 @@ describe('明星賽', () => {
     expect(rate({ d: 12 }, 'all_star')).toBeGreaterThan(rate({ d: -2 }, 'all_star'));
   });
 
-  it('人氣球團有加成', () => {
+  /** 能力再高，這一季打得爛就撐不起來（2026-09-26）。 */
+  it('勝率是倍率：.250 的入選率是 .500 的一半', () => {
+    const avg = rate({ d: 0, winPct: 0.5 }, 'all_star', 2000);
+    const bad = rate({ d: 0, winPct: 0.25 }, 'all_star', 2000);
+    expect(bad).toBeCloseTo(avg / 2, 1);
+  });
+
+  it('打得爛又能力低的人幾乎進不去', () => {
+    expect(rate({ d: -5, winPct: 0.2 }, 'all_star', 2000)).toBeLessThan(0.04);
+  });
+
+  it('站不上場的人不在票上，人氣加成也救不回來', () => {
     const pop = cfg.all_star.popularity_bonus;
-    expect(rate({ d: 0, org: pop.league, team: pop.team }, 'all_star')).toBeGreaterThan(
-      rate({ d: 0, team: '某隊' }, 'all_star'),
-    );
+    const star = { d: 20, winPct: 0.8, org: pop.league, team: pop.team, homeFaith: true };
+    expect(rate({ ...star, batting: bat({ pa: 300 }) }, 'all_star')).toBe(0);
+    expect(rate({ ...star, batting: bat({ pa: 420 }) }, 'all_star')).toBeGreaterThan(0.9);
+  });
+
+  it('投手的出場量門檻依聯盟場次等比', () => {
+    const sp = { d: 20, winPct: 0.8, batting: null, role: 'SP' as const };
+    // 150 局：中職 120 場過得了，大聯盟 162 場過不了。
+    const arm = pit({ outs: 450 });
+    expect(rate({ ...sp, pitching: arm }, 'all_star')).toBeGreaterThan(0.9);
+    expect(rate({ ...sp, ...MLB, pitching: arm }, 'all_star')).toBe(0);
+  });
+
+  it('人氣球團加百分點', () => {
+    const pop = cfg.all_star.popularity_bonus;
+    const plain = rate({ d: 0 }, 'all_star', 2000);
+    const popular = rate({ d: 0, org: pop.league, team: pop.team }, 'all_star', 2000);
+    expect(popular - plain).toBeCloseTo(pop.add / 100, 1);
   });
 
   /** 要打到明星賽前（issue #37）：整季報銷、人氣球團也一樣進不去。 */
@@ -308,11 +335,26 @@ describe('明星賽', () => {
     expect(rate({ ...star, availability: 0.6 }, 'all_star')).toBeGreaterThan(0.9);
   });
 
-  /** 〈全台主場〉：不論效力哪一隊，入選率 +20 個百分點（2026-09-25）。 */
-  it('全台主場讓入選率多 20 個百分點', () => {
+  /** 〈全台主場〉：不論效力哪一隊，入選率 ×1.2（2026-09-26）。 */
+  it('全台主場讓入選率乘上倍率', () => {
     const plain = rate({ d: 0 }, 'all_star', 2000);
     const home = rate({ d: 0, homeFaith: true }, 'all_star', 2000);
-    expect(home - plain).toBeCloseTo(cfg.all_star.home_faith.add / 100, 1);
+    expect(home).toBeCloseTo(plain * cfg.all_star.home_faith.multiplier, 1);
+  });
+
+  it('沒有加成就選不進去的那一次標成人氣入選', () => {
+    const names = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      for (const a of annualAwards(new World(`pop-${i}`), ctx({ d: -3, homeFaith: true }))) {
+        if (a.code === 'all_star') names.add(a.name);
+      }
+    }
+    expect(names).toEqual(new Set(['明星賽', '明星賽（人氣入選）']));
+    // 沒有任何加成的人不會被標。
+    for (let i = 0; i < 400; i++) {
+      const got = annualAwards(new World(`pop-${i}`), ctx({ d: 5 })).find((a) => a.code === 'all_star');
+      if (got !== undefined) expect(got.name).toBe('明星賽');
+    }
   });
 
   it('缺席不改變其他獎的抽籤', () => {
@@ -459,13 +501,13 @@ describe('白金手套', () => {
   });
 });
 
-/** 天賦〈流量密碼〉：明星賽入選率 ×1.80（2026-09-25）。 */
+/** 天賦〈流量密碼〉：明星賽入選率 ×1.30（2026-09-26）。 */
 describe('流量密碼', () => {
   it('入選率乘上天賦倍率', () => {
     const plain = rate({ d: 0 }, 'all_star', 2000);
     const revert = applyTalents({ spotlight: 3 });
     try {
-      expect(rate({ d: 0 }, 'all_star', 2000)).toBeCloseTo(plain * 1.8, 1);
+      expect(rate({ d: 0 }, 'all_star', 2000)).toBeCloseTo(plain * 1.3, 1);
     } finally {
       revert();
     }

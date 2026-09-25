@@ -678,8 +678,9 @@ export interface AwardsData {
    */
   readonly mvp: LeaderAward & {
     readonly qualify: {
-      readonly starter_min_ip: number;
-      readonly reliever_min_games: number;
+      /** 三條都乘上聯盟場次：先發的局數、後援的出賽數、打者的打席。 */
+      readonly starter_ip_per_game: number;
+      readonly reliever_games_per_game: number;
       readonly batter_pa_per_game: number;
     };
   };
@@ -691,17 +692,20 @@ export interface AwardsData {
     readonly exponent: number;
     /** 出賽係數低於它就不入選明星賽。 */
     readonly min_availability: number;
+    /** 勝率在這裡時倍率是 1；勝率 ÷ 它就是倍率。 */
+    readonly win_pct_pivot: number;
     readonly clamp: Range;
-    /** 天賦〈流量密碼〉：最後的入選率倍率，平常是 1。 */
+    /** 人氣加成之後的上限。 */
+    readonly boosted_max: number;
+    /** 天賦〈流量密碼〉：入選率倍率，平常是 1。 */
     readonly talent_multiplier: number;
-    /** 〈全台主場〉的明星賽加成（百分點）。 */
-    readonly home_faith: { readonly trait: string; readonly add: number };
+    /** 〈全台主場〉的明星賽倍率。 */
+    readonly home_faith: { readonly trait: string; readonly multiplier: number };
+    /** 人氣球團的明星賽加成（百分點）。 */
     readonly popularity_bonus: {
       readonly league: string;
       readonly team: string;
       readonly add: number;
-      readonly clamp: Range;
-      readonly flag_below_d: number;
     };
   };
   readonly rookie_of_year: {

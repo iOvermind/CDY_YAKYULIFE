@@ -794,6 +794,17 @@
       "levels": [
         {
           "cost": 8,
+          "effect_text": "明星賽入選機率 ×1.10",
+          "effects": [
+            {
+              "path": "awards.all_star.talent_multiplier",
+              "op": "set",
+              "value": 1.1
+            }
+          ]
+        },
+        {
+          "cost": 22,
           "effect_text": "明星賽入選機率 ×1.20",
           "effects": [
             {
@@ -804,24 +815,13 @@
           ]
         },
         {
-          "cost": 22,
-          "effect_text": "明星賽入選機率 ×1.50",
-          "effects": [
-            {
-              "path": "awards.all_star.talent_multiplier",
-              "op": "set",
-              "value": 1.5
-            }
-          ]
-        },
-        {
           "cost": 44,
-          "effect_text": "明星賽入選機率 ×1.80",
+          "effect_text": "明星賽入選機率 ×1.30",
           "effects": [
             {
               "path": "awards.all_star.talent_multiplier",
               "op": "set",
-              "value": 1.8
+              "value": 1.3
             }
           ]
         }

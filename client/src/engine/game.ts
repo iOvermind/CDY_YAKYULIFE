@@ -4231,6 +4231,11 @@ export class Game {
       // 年度最佳打者只看打擊那一段——守備有金手套，投球有最佳投手。
       battingWinShares: this.#seasons.at(-1)?.shares.batting.win ?? 0,
       pitchingWinShares: this.#seasons.at(-1)?.shares.pitching.win ?? 0,
+      // 明星賽看的勝率：投打守三本相加，二刀流是一個人。
+      winPct: (() => {
+        const shares = this.#seasons.at(-1)?.shares;
+        return shares === undefined ? 0.5 : winPct(sumShares(shares.batting, shares.pitching, shares.fielding));
+      })(),
       availability,
       homeFaith: this.#traits.has(awardsCfg.all_star.home_faith.trait),
     });

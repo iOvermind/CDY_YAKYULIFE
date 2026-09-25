@@ -46,6 +46,7 @@ import {
   fieldingShares,
   proBaseline,
   responsibilityOf,
+  sumShares,
   winPct,
 } from '../src/engine/metrics.ts';
 import { abilitySpread, zQuantile } from '../src/engine/rivalPool.ts';
@@ -843,6 +844,7 @@ function awardsAtD(
     winShares: batting.win + (fielding?.win ?? 0),
     battingWinShares: batting.win,
     pitchingWinShares: 0,
+    winPct: winPct(fielding === null ? batting : sumShares(batting, fielding)),
     availability: 1,
     homeFaith: false,
   }).map((a) => a.code);
@@ -939,6 +941,7 @@ function reportAwardRates(): void {
           winShares: batting.win + (fielding?.win ?? 0),
           battingWinShares: batting.win,
           pitchingWinShares: 0,
+          winPct: winPct(fielding === null ? batting : sumShares(batting, fielding)),
           availability: 1,
           homeFaith: false,
         })) {

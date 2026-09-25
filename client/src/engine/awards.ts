@@ -82,6 +82,8 @@ export interface AwardContext {
   readonly battingWinShares: number;
   /** 這一季投球那一本的勝利份額。年度最佳投手看它。 */
   readonly pitchingWinShares: number;
+  /** 這一季投打守三本份額加總的勝率，WS ÷ (WS + LS)。明星賽看它。 */
+  readonly winPct: number;
   /**
    * 當年這個層級的能力離散度，單位與 d 值相同。「聯盟第一名」型的門檻由它推導。
    *
@@ -94,7 +96,7 @@ export interface AwardContext {
    * 明星賽看它：在明星賽前就傷退或被禁賽的人不會入選（issue #37）。
    */
   readonly availability: number;
-  /** 有〈全台主場〉：明星賽入選率另外加 `all_star.home_faith.add` 個百分點，不論效力哪一隊。 */
+  /** 有〈全台主場〉：明星賽入選率再乘 `all_star.home_faith.multiplier`，不論效力哪一隊。 */
   readonly homeFaith: boolean;
 }
 
@@ -306,18 +308,19 @@ function winsLeaderAward(ctx: AwardContext, award: LeaderAward, roll: number): b
 }
 
 /**
- * MVP 的出場量資格。
+ * 出場量資格，MVP 與明星賽共用。
  *
  * 投手看局數或後援場次，野手看打席——只要其中一條過得了就有資格。二刀流
- * 兩邊都算得上，因此他更容易站上這道門。
+ * 兩邊都算得上，因此他更容易站上這道門。三條都依聯盟場次等比，短季聯盟不會
+ * 因為場次少就永遠構不到。
  */
-function qualifiesForMvp(ctx: AwardContext): boolean {
+function playedEnough(ctx: AwardContext): boolean {
   const q = cfg.mvp.qualify;
   if (ctx.pitching !== null && ctx.role !== null) {
     const ok =
       ctx.role === 'SP'
-        ? innings(ctx.pitching) >= q.starter_min_ip
-        : ctx.pitching.games >= q.reliever_min_games;
+        ? innings(ctx.pitching) >= ctx.leagueGames * q.starter_ip_per_game
+        : ctx.pitching.games >= ctx.leagueGames * q.reliever_games_per_game;
     if (ok) return true;
   }
   const b = ctx.batting;
@@ -353,23 +356,27 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
   // ---- 明星賽
   {
     const a = cfg.all_star;
-    // 沒打到明星賽的人不在票上——不是機率低，是根本不在名單上。
-    const present = ctx.availability >= a.min_availability;
-    // 次方曲線：平均水準的人拿得到但不常，強的人陡升上去（見 awards.json 的 _curve_note）。
+    // 沒打到明星賽、或整季站不上場的人不在票上——不是機率低，是根本不在名單上。
+    const present = ctx.availability >= a.min_availability && playedEnough(ctx);
+    // 能力的次方曲線（平均水準的人拿得到但不常，強的人陡升上去）乘上這一季的
+    // 勝率：打得爛的那一年，名氣再大也撐不起來（見 awards.json 的 _curve_note）。
     const x = Math.max(0, (ctx.d + a.shift) / a.shift);
-    let chance = clamp(a.base * Math.pow(x, a.exponent), a.clamp.min, a.clamp.max);
+    const plain = clamp(
+      a.base * Math.pow(x, a.exponent) * (ctx.winPct / a.win_pct_pivot),
+      a.clamp.min,
+      a.clamp.max,
+    );
+    // 人氣加成：先加台中猛瑪的百分點，再乘〈全台主場〉與天賦〈流量密碼〉。
     const pop = a.popularity_bonus;
-    const popular = ctx.org === pop.league && ctx.team === pop.team;
-    if (popular) chance = clamp(chance + pop.add, pop.clamp.min, pop.clamp.max);
-    // 〈全台主場〉：主場的信仰就是票投得最多的那個人。與台中猛瑪的人氣加成疊加，
-    // 上限跟它同一條。
-    if (ctx.homeFaith) chance = clamp(chance + a.home_faith.add, pop.clamp.min, pop.clamp.max);
-    // 天賦〈流量密碼〉乘在最後，上限同一條。
-    if (a.talent_multiplier !== 1) chance = clamp(chance * a.talent_multiplier, pop.clamp.min, pop.clamp.max);
-    // 照擲一次再判斷在不在場：缺席不改變後面其他獎的抽籤順序。
-    if (rng.chance(chance) && present) {
-      const byPopularity = popular && ctx.d < pop.flag_below_d;
-      add('all_star', byPopularity ? '明星賽（人氣入選）' : '明星賽', 'both');
+    let chance = plain;
+    if (ctx.org === pop.league && ctx.team === pop.team) chance += pop.add;
+    if (ctx.homeFaith) chance *= a.home_faith.multiplier;
+    chance = Math.min(chance * a.talent_multiplier, a.boosted_max);
+    // 只擲一次，再判斷在不在場：缺席不改變後面其他獎的抽籤順序。骰子落在
+    // 「沒有加成的機率」之外、「有加成的機率」之內，就是靠人氣進去的。
+    const roll = rng.next() * 100;
+    if (roll < chance && present) {
+      add('all_star', roll < plain ? '明星賽' : '明星賽（人氣入選）', 'both');
     }
   }
 
@@ -421,7 +428,7 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
   {
     const roll = rng.next();
     const line = winningLine(cfg.mvp, ctx, roll);
-    if (qualifiesForMvp(ctx) && line !== null && ctx.winShares >= line) {
+    if (playedEnough(ctx) && line !== null && ctx.winShares >= line) {
       add(cfg.mvp.code, cfg.mvp.name, 'both');
     }
   }
