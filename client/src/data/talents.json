@@ -40,12 +40,12 @@
         },
         {
           "cost": 50,
-          "effect_text": "每項能力的天賦上限 +10",
+          "effect_text": "每項能力的天賦上限 +8",
           "effects": [
             {
               "path": "abilities.talent_bonus.ceiling",
               "op": "set",
-              "value": 10,
+              "value": 8,
               "max": 15
             }
           ]
