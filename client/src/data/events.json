@@ -8,6 +8,7 @@
     "default": 1,
     "JHS": 1,
     "HS": 2,
+    "U": 3,
     "PRO": 3
   },
   "audience_codes": {

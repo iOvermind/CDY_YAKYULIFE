@@ -850,24 +850,32 @@ export function amateurOverseasOffers(
   overall: number,
   standards: LeagueStandards | null = null,
   tier: HandednessTier = 'none',
+  age: number = amateur.amateur_overseas.age_penalty.from_age,
 ): readonly (TransferOffer & { readonly label: string; readonly note: string })[] {
   const cfg = amateur.amateur_overseas;
+  // 大學生旅外：年紀越大門檻越高、簽約金越少。高中畢業的年齡不扣。
+  const yearsOver = Math.max(0, age - cfg.age_penalty.from_age);
+  const gateRaise = Math.floor(yearsOver / cfg.age_penalty.years_per_point);
   const out: (TransferOffer & { label: string; note: string })[] = [];
   const tables: TableCache = new Map();
 
   for (const path of cfg.paths) {
     // 抽取一律先做，與資格無關——否則差一分就會讓後面所有判定整串偏移。
     const count = world.stream('career').int(cfg.offers.min, cfg.offers.max);
-    if (overall < path.min_overall) continue;
+    const minOverall = path.min_overall + gateRaise;
+    if (overall < minOverall) continue;
 
     const level = higherLevel(
       path.org,
       path.level,
       landingLevel(path.org, overall, standards, 0, 'recruit', tier),
     );
-    const base =
-      path.signing_bonus.base +
-      Math.max(0, overall - path.min_overall) * path.signing_bonus.per_point_over;
+    const cut = cfg.age_penalty.by_org[path.org];
+    const floor =
+      cut === undefined
+        ? path.signing_bonus.base
+        : Math.max(cut.min_bonus, path.signing_bonus.base - cut.bonus_per_year * yearsOver);
+    const base = floor + Math.max(0, overall - path.min_overall) * path.signing_bonus.per_point_over;
 
     const table = tableFor(world, path.org, tables);
     const used = new Set<string>();

@@ -204,7 +204,7 @@
       "rules_complete": true,
       "name": "逃學威龍",
       "effect_text": "25 歲前受傷率 −5%、季初擲骰期望值提升",
-      "trigger_text": "大學階段拿下任一大賽冠軍（大學路線尚未開放，目前取不得）",
+      "trigger_text": "大學階段拿下任一大賽冠軍",
       "desc": "二十五歲以前有人幫你排睡眠、排飲食、排重訓，連逃課都有體能教練在門口等——<b class=\"hl\">25 歲前受傷率 −5%、季初擲骰期望值提升</b>。",
       "trigger_note": "大學階段拿下任一大賽冠軍（index_legacy.html:1765）"
     },
@@ -420,7 +420,7 @@
       "rules_complete": true,
       "name": "二刀流",
       "effect_text": "投打俱佳，兩側的成長曲線都較平緩",
-      "trigger_text": "養成期結束時，投手側與野手側的評價都達到 42（兩邊都要刻意練）",
+      "trigger_text": "進入職業時，投手側與野手側的評價都達到 42（兩邊都要刻意練；讀大學的人多四年可以練）",
       "desc": "投手丘與打擊區，你一個都不肯放——<b class=\"hl\">投打俱佳，兩側的成長曲線都較平緩</b>。",
       "trigger_note": "養成結束時投手側與野手側都達到 amateur.json two_way_talent 的門檻"
     }

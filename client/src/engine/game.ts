@@ -1863,6 +1863,12 @@ export class Game {
     this.#year++;
     this.#stageYear++;
 
+    // 大學的每一學年結束都是一次出路（選秀或旅外），不是只有畢業那一次。
+    if (this.#stage === 'U') {
+      this.flow.push(() => this.#crossroads());
+      return;
+    }
+
     if (this.#stageYear <= stageOf(this.#stage).years) {
       this.flow.push(() => this.#startYear());
       return;
@@ -1901,7 +1907,7 @@ export class Game {
     this.flow.push(() => this.#startYear());
   }
 
-  /** 高中畢業：結算三年、判定二刀流，然後進選秀。 */
+  /** 高中畢業：結算三年，然後到出路（選秀、旅外或讀大學）。 */
   #graduate(): void {
     const r = this.rating;
     this.flow.divider(`${this.#year} 年 · ${this.#age} 歲 · 高中畢業`);
@@ -1913,8 +1919,20 @@ export class Game {
         (this.#honors.length > 0 ? `<br>生涯榮譽：${esc(this.#honors.join('、'))}` : ''),
     );
 
-    // 二刀流的判定在選秀之前——它會影響球團怎麼評估你。
-    if (r !== null && !qualifiesAsTwoWay(r)) {
+    this.flow.push(() => this.#crossroads());
+  }
+
+  /**
+   * 二刀流判定與定位鎖定，**在進入職業的那一刻**。
+   *
+   * 不論是高中畢業直接進職業、還是讀完大學才進，都在這裡判——讀大學的人因此多
+   * 幾年可以兩邊練，那是那條路的回報之一。判在高中畢業的話，大學四年的養成對
+   * 二刀流就沒有意義。
+   */
+  #judgeTwoWay(): void {
+    const r = this.rating;
+    if (r === null || this.#lockedSide !== null || this.#traits.has(TWO_WAY_TRAIT)) return;
+    if (!qualifiesAsTwoWay(r)) {
       // 沒取得二刀流就要選邊站。保留評價較高的那一側，另一側從此關閉——
       // 這是二刀流之所以珍貴的代價面。
       this.#lockedSide = r.pitcher >= r.fielder ? 'pitcher' : 'fielder';
@@ -1923,40 +1941,92 @@ export class Game {
       this.flow.card(
         'info',
         `定位確立：${kept}`,
-        `六年下來，你的<b class="hl">${kept}</b>能力明顯突出，球團就是這樣看你的。` +
+        `這幾年下來，你的<b class="hl">${kept}</b>能力明顯突出，球團就是這樣看你的。` +
           `從今以後${esc(dropped)}那一側不再練，能力表也不再顯示它——` +
           '職業球員的角色是固定的。',
       );
+      return;
     }
-
-    if (r !== null && qualifiesAsTwoWay(r)) {
-      this.#traits.add(TWO_WAY_TRAIT);
-      // 二刀流換到另一條成長曲線，成本結構整個變了。
-      this.#settleCarry();
-      this.flow.card(
-        'gold',
-        '隱藏天賦：二刀流',
-        '投得動也打得開。球探報告上多了一行少見的註記——' +
-          '<b class="hl">兩邊都值得投資</b>。從今以後，投打兩側的成長都不再像專精者那樣陡。',
-      );
-    }
-
-    this.flow.push(() => this.#crossroads());
+    this.#traits.add(TWO_WAY_TRAIT);
+    // 二刀流換到另一條成長曲線，成本結構整個變了。
+    this.#settleCarry();
+    this.flow.card(
+      'gold',
+      '隱藏天賦：二刀流',
+      '投得動也打得開。球探報告上多了一行少見的註記——' +
+        '<b class="hl">兩邊都值得投資</b>。從今以後，投打兩側的成長都不再像專精者那樣陡。',
+    );
   }
 
   /**
-   * 高中畢業 · 人生的第一個路口。
+   * 業餘 → 職業。選秀接受指名與簽下海外育成合約都走這裡。
+   *
+   * 大學生離校是一道感情關卡（高中那一道在高中畢業時已經擲過）。
+   */
+  #turnPro(level: string, team: string): void {
+    if (this.#stage === 'U') this.#loveCheckpoint('離開大學');
+    this.#judgeTwoWay();
+    this.flow.push(() => this.#professionalStart(level, team));
+  }
+
+  /**
+   * 進大學：高中畢業自己選、高中選秀落選、或被指名後選擇重返校園。
+   *
+   * 分發跟國中、高中一樣是隨機的，走 career 流——這是生涯事件，不是開局生成。
+   */
+  #enterUniversity(why: string): void {
+    this.#stage = 'U';
+    this.#stageYear = 1;
+    const assigned = assignSchool(this.world, 'U', 'career');
+    this.#school = assigned.school;
+    this.#schoolTier = assigned.tier;
+    const label = schoolTiersOf('U')?.tiers[String(assigned.tier)]?.label ?? '';
+    this.flow.card(
+      'gold',
+      '大學入學',
+      `${esc(why)}你進了<b class="hl">${esc(assigned.school)}</b>` +
+        `${label ? `（${esc(label)}）` : ''}棒球隊。`,
+    );
+    this.flow.push(() => this.#startYear());
+  }
+
+  /** 大學的出路：大一到大三還能回去讀；大四畢業就沒有下一年了。 */
+  #universityFinal(): boolean {
+    return this.#stage === 'U' && this.#stageYear > stageOf('U').years;
+  }
+
+  /** 大學生在出路上沒走成（落選、拒絕指名、留校）：回去讀下一年。 */
+  #backToSchool(): void {
+    this.flow.push(() => this.#startYear());
+  }
+
+  /**
+   * 出路：高中畢業，以及大學每一學年結束。
    *
    * **選秀不是唯一的出口。** 能力夠好的人可以直接與海外球團簽育成合約，不經過
    * 選秀，從對方體系的低階層級出發——那是一條完全不同的生涯：起點更低、薪水
-   * 更少，但天花板高得多。
+   * 更少，但天花板高得多。大學生也能走，只是年紀越大條件越差。
    *
-   * 沒有任何海外報價時不問，直接進選秀：只有一個選項的提問是雜訊。
+   * 高中畢業另外可以讀大學；大一到大三可以留下來再讀一年。只剩選秀一條路時
+   * （大四畢業、沒有海外報價）不問，直接進選秀：只有一個選項的提問是雜訊。
    */
   #crossroads(): void {
     const overall = this.rating?.overall ?? 0;
-    const offers = amateurOverseasOffers(this.world, overall, this.#standards, this.#handednessTier);
-    if (offers.length === 0) {
+    const inUniversity = this.#stage === 'U';
+    const final = this.#universityFinal();
+    const offers = amateurOverseasOffers(
+      this.world,
+      overall,
+      this.#standards,
+      this.#handednessTier,
+      this.#age,
+    );
+    const stayOption: Option | null = !inUniversity
+      ? { id: 'path:university', label: '就讀大學（延長養成）', note: '四年，每學年結束都能再參加選秀' }
+      : final
+        ? null
+        : { id: 'path:stay', label: '留在大學繼續磨練', note: '明年這個時候還能再選一次' };
+    if (offers.length === 0 && stayOption === null) {
       this.flow.push(() => this.#draft());
       return;
     }
@@ -1982,9 +2052,24 @@ export class Game {
         label: list[0]!.label,
         note: `${list[0]!.note}｜${Game.#terms(list[0]!)}`,
       })),
+      ...(stayOption === null ? [] : [stayOption]),
     ];
 
-    this.flow.ask({ title: `高中畢業 · 綜合能力 ${overall} · 人生的第一個路口`, options }, (choice) => {
+    const yearLabel = stageOf('U').year_labels[this.#stageYear - 2] ?? '大學';
+    const title = !inUniversity
+      ? `高中畢業 · 綜合能力 ${overall} · 人生的第一個路口`
+      : final
+        ? `大學畢業 · 綜合能力 ${overall}`
+        : `${yearLabel}結束 · 綜合能力 ${overall}`;
+    this.flow.ask({ title, options }, (choice) => {
+      if (choice === 'path:university') {
+        this.#enterUniversity('');
+        return;
+      }
+      if (choice === 'path:stay') {
+        this.#backToSchool();
+        return;
+      }
       const org = choice.slice('path:'.length);
       const list = paths.get(org);
       if (list === undefined) {
@@ -2022,7 +2107,7 @@ export class Game {
             `簽約金 <b class="hl">${fmtMoney(picked.bonus)}</b>。` +
             '<br><span class="sub">沒有選秀會的舞台，也沒有人保證你上得去。一切從最底層開始。</span>',
         );
-        this.flow.push(() => this.#professionalStart(picked.level, picked.team));
+        this.#turnPro(picked.level, picked.team);
       },
     );
   }
@@ -2039,7 +2124,13 @@ export class Game {
         `唱名一輪又一輪，始終沒有你的名字。` +
           `（綜合 ${overall}｜年齡加權後評價 ${result.score}）`,
       );
-      this.flow.push(() => this.#careerOver('落榜'));
+      if (this.#stage === 'HS') {
+        this.flow.push(() => this.#enterUniversity('落榜之後，你沒有放下手套。'));
+      } else if (!this.#universityFinal()) {
+        this.#backToSchool();
+      } else {
+        this.flow.push(() => this.#careerOver('大學畢業選秀落榜'));
+      }
       return;
     }
 
@@ -2055,10 +2146,11 @@ export class Game {
       );
       this.#earnings += result.bonus;
       this.#pendingBonus += result.bonus;
-      this.flow.push(() => this.#professionalStart(result.level ?? '', result.team ?? ''));
+      this.#turnPro(result.level ?? '', result.team ?? '');
     };
 
-    if (!canRejectOffer(result, this.#age)) {
+    // 大四畢業那一次沒有「回去再拚一年」：已經沒有學校可以回了。
+    if (!canRejectOffer(result, this.#age) || this.#universityFinal()) {
       accept();
       return;
     }
@@ -2078,7 +2170,10 @@ export class Game {
           {
             id: 'draft:reject',
             label: '重返校園，再拚一年',
-            note: '放棄本次指名，明年重新參加選秀',
+            note:
+              this.#stage === 'HS'
+                ? '放棄本次指名，進大學，每學年結束都能再參加選秀'
+                : '放棄本次指名，留在大學，明年重新參加選秀',
             role: 'warn',
           },
         ],
@@ -2094,7 +2189,9 @@ export class Game {
           '看到被選到的輪次，雙眼發黑。你握緊拳頭，決定再磨一年——' +
             '這一次，你一定要在前段輪次被叫到名字。',
         );
-        this.flow.push(() => this.#careerOver('重返校園'));
+        // 高中生進大學；大學生留在學校讀下一年。
+        if (this.#stage === 'HS') this.#enterUniversity('');
+        else this.#backToSchool();
       },
     );
   }

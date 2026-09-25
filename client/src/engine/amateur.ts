@@ -151,6 +151,7 @@ function stageTeamBonus(ctx: CupContext): number {
 export function schoolTiersOf(stage: AmateurStage): SchoolTiers | null {
   if (stage === 'JHS') return amateur.junior_high;
   if (stage === 'HS') return amateur.high_school;
+  if (stage === 'U') return amateur.university;
   return null;
 }
 

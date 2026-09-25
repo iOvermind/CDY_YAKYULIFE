@@ -716,3 +716,30 @@ describe('國際認證與挖角上限', () => {
     }
   });
 });
+
+describe('大學生的旅外報價', () => {
+  const cfg = amateur.amateur_overseas;
+  const npb = cfg.paths.find((p) => p.org === 'NPB')!;
+  const from = cfg.age_penalty.from_age;
+  const at = (overall: number, age: number) =>
+    amateurOverseasOffers(new World('uni-overseas'), overall, null, 'none', age).filter((o) => o.org === 'NPB');
+
+  it('高中畢業的年齡不扣', () => {
+    expect(at(npb.min_overall, from).length).toBeGreaterThan(0);
+  });
+
+  it('年紀越大門檻越高：每大兩歲 +1', () => {
+    expect(at(npb.min_overall, from + 2)).toHaveLength(0);
+    expect(at(npb.min_overall + 1, from + 2).length).toBeGreaterThan(0);
+  });
+
+  it('年紀越大簽約金越少，但有保底', () => {
+    const young = Math.min(...at(60, from).map((o) => o.bonus));
+    const old = Math.min(...at(60, from + 3).map((o) => o.bonus));
+    expect(old).toBeLessThan(young);
+    const floor = cfg.age_penalty.by_org.NPB!.min_bonus;
+    const ancient = at(60, from + 30);
+    expect(ancient.every((o) => o.bonus > 0)).toBe(true);
+    expect(Math.min(...ancient.map((o) => o.bonus))).toBeGreaterThanOrEqual(Math.floor(floor * 0.5));
+  });
+});

@@ -805,6 +805,7 @@ export interface AmateurData {
   } & Readonly<Record<string, StageDefinition | readonly SchoolStage[] | string>>;
   readonly junior_high: SchoolTiers;
   readonly high_school: SchoolTiers;
+  readonly university: SchoolTiers;
   readonly amateur_international: {
     readonly tournaments: Readonly<Record<string, YouthTournament>>;
     readonly ranks: readonly string[];
@@ -890,6 +891,14 @@ export interface AmateurData {
   /** 高中畢業時的旅外簽約。選秀之外的另一個出口，見 amateur.json。 */
   readonly amateur_overseas: {
     readonly offers: Range;
+    /** 大學生旅外的年齡扣減。高中畢業的年齡（from_age）不扣。 */
+    readonly age_penalty: {
+      readonly from_age: number;
+      readonly years_per_point: number;
+      readonly by_org: Readonly<
+        Record<string, { readonly bonus_per_year: number; readonly min_bonus: number }>
+      >;
+    };
     readonly paths: readonly {
       readonly org: string;
       readonly min_overall: number;
@@ -1057,7 +1066,7 @@ export interface RateSpec {
 export type AmateurStage = 'JHS' | 'HS' | 'U' | 'AMA';
 
 /** 有學校分級的養成階段。 */
-export type SchoolStage = 'JHS' | 'HS';
+export type SchoolStage = 'JHS' | 'HS' | 'U';
 
 export interface StageDefinition {
   readonly name: string;

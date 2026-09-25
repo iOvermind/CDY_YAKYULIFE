@@ -585,8 +585,19 @@ describe('職業階段的狀態', () => {
 });
 
 describe('定位鎖定', () => {
-  /** 打到選秀為止，回傳那局遊戲。 */
-  const toDraft = (seed: string) => playWell(started({ seed }), true);
+  /**
+   * 打到剛進職業為止，回傳那局遊戲。鎖定發生在進職業的那一刻（高中畢業直接進，
+   * 或讀完大學才進），停在選秀提問時還沒有鎖。
+   */
+  const toDraft = (seed: string) => {
+    const game = started({ seed });
+    while (game.flow.prompt !== null && (game.state?.pro ?? null) === null) {
+      const pick = defaultPick(game, EFFECTIVE);
+      if (pick === undefined) throw new Error('提問沒有選項');
+      game.choose(pick);
+    }
+    return game;
+  };
 
   it('沒取得二刀流就鎖定評價較高的那一側', () => {
     for (let i = 0; i < 30; i++) {
@@ -605,7 +616,7 @@ describe('定位鎖定', () => {
     }
   });
 
-  it('養成期間一律不鎖——鎖定發生在畢業時', () => {
+  it('養成期間一律不鎖——鎖定發生在進職業時', () => {
     // playAmateur 停在選秀提問，那時畢業已經跑過了，因此要在更早的地方檢查
     const game = started();
     expect(game.state?.lockedSide).toBeNull();
@@ -2661,5 +2672,68 @@ describe('特性的取得條件', () => {
     } finally {
       Object.assign(cfg, saved);
     }
+  });
+});
+
+describe('大學', () => {
+  /** 一路用預設選項打，直到出現帶著某個選項的提問為止。 */
+  const until = (game: Game, id: string, guard = 400): Game => {
+    for (let i = 0; i < guard && game.flow.prompt !== null; i++) {
+      if (game.flow.prompt.options.some((o) => o.id === id)) return game;
+      const pick = defaultPick(game);
+      if (pick === undefined) throw new Error('提問沒有選項');
+      game.choose(pick);
+    }
+    throw new Error(`一直沒等到選項 ${id}`);
+  };
+  const schools = Object.keys(amateur.university.schools);
+
+  it('高中畢業的路口可以選讀大學，進的是九所之一', () => {
+    const game = until(started({ seed: 'uni-enter' }), 'path:university');
+    game.choose('path:university');
+    expect(game.state?.stage).toBe('U');
+    expect(game.state?.stageYear).toBe(1);
+    expect(schools).toContain(game.state?.school);
+  });
+
+  it('大一到大三結束可以留校；大四畢業沒有留校、也不能拒絕指名', () => {
+    const game = until(started({ seed: 'uni-years' }), 'path:university');
+    game.choose('path:university');
+    for (let year = 1; year <= 3; year++) {
+      until(game, 'path:stay');
+      game.choose('path:stay');
+      expect(game.state?.stage).toBe('U');
+      expect(game.state?.stageYear).toBe(year + 1);
+    }
+    // 大四結束：出路裡沒有留校。若只剩選秀一條路就不會問，直接進選秀。
+    for (let i = 0; i < 400 && game.flow.prompt !== null; i++) {
+      const ids = game.flow.prompt.options.map((o) => o.id);
+      if (ids.some((id) => id.startsWith('path:') || id.startsWith('draft:'))) {
+        expect(ids).not.toContain('path:stay');
+        expect(ids).not.toContain('draft:reject');
+      }
+      if ((game.state?.pro ?? null) !== null) break;
+      const pick = defaultPick(game);
+      if (pick === undefined) break;
+      game.choose(pick);
+    }
+  });
+
+  it('讀大學的人在進職業之前兩側都不鎖', () => {
+    const game = until(started({ seed: 'uni-lock' }), 'path:university');
+    game.choose('path:university');
+    until(game, 'path:stay');
+    expect(game.state?.lockedSide).toBeNull();
+    expect(game.state?.traits.has('two_way')).toBe(false);
+  });
+
+  it('大學的事件卡每年三張', () => {
+    const perYear = eventsData.cards_per_year as Readonly<Record<string, number>>;
+    expect(perYear.U).toBe(3);
+  });
+
+  it('大學有四場大賽，其中三場的冠軍取得國際賽資格', () => {
+    expect(amateur.cups.U.names).toHaveLength(4);
+    expect(Object.keys(amateur.cups.U.qualifies ?? {})).toHaveLength(3);
   });
 });

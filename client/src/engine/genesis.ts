@@ -130,7 +130,8 @@ export function assignSchool(
   stream: StreamName = 'genesis',
 ): { school: string; tier: number } {
   const rng = world.stream(stream);
-  const tiers = stage === 'JHS' ? amateur.junior_high : amateur.high_school;
+  const tiers =
+    stage === 'JHS' ? amateur.junior_high : stage === 'HS' ? amateur.high_school : amateur.university;
   const names = Object.keys(tiers.schools).sort();
   const school = rng.pick(names);
   const tier = tiers.schools[school];
