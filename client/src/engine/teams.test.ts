@@ -255,7 +255,8 @@ describe('fmtWinRate', () => {
 describe('隊名代表詞', () => {
   it('三個字以上的代表詞照資料寫的', () => {
     expect(teamNick('水原魔法使')).toBe('魔法使');
-    expect(teamNick('布里斯本亡命之徒')).toBe('亡命之徒');
+    expect(teamNick('布里斯本歹徒')).toBe('歹徒');
+    expect(teamNick('阿瓜斯卡機車')).toBe('機車');
     expect(teamNick('猶加敦百獸王')).toBe('百獸王');
     expect(teamNick('台中猛瑪')).toBe('猛瑪');
   });
