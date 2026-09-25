@@ -49,6 +49,7 @@ import {
   type Shares,
 } from './engine/metrics.ts';
 import { joinName } from './engine/naming.ts';
+import { clampName, displayName } from './engine/playerName.ts';
 import { tournamentPar } from './engine/national.ts';
 import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
@@ -238,6 +239,8 @@ function StartScreen({
   account: Account;
 }) {
   const [name, setName] = useState('');
+  /** 注音、拼音選字到一半時不截——組字中的符號也算寬度，截下去會把字吃掉。 */
+  const composing = useRef(false);
   const [startPosition, setStartPosition] = useState<StartPosition>('P');
   const [throws, setThrows] = useState<Hand>('R');
   const [bats, setBats] = useState<Hand>('R');
@@ -266,7 +269,7 @@ function StartScreen({
   const begin = () => {
     if (starting) return;
     setStarting(true);
-    const setup = { seed, name: name.trim() || '無名氏', startPosition, throws, bats };
+    const setup = { seed, name: clampName(name.trim()) || '無名氏', startPosition, throws, bats };
     const signedIn = account.progress.kind === 'signed-in';
     const ticket = signedIn
       ? account.store.startCareer().catch((e: unknown) => {
@@ -317,10 +320,14 @@ function StartScreen({
           <label htmlFor="in-name">球員姓名</label>
           <input
             id="in-name"
-            maxLength={10}
             placeholder="例如：林家正"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setName(composing.current ? e.target.value : clampName(e.target.value))}
+            onCompositionStart={() => (composing.current = true)}
+            onCompositionEnd={(e) => {
+              composing.current = false;
+              setName(clampName(e.currentTarget.value));
+            }}
           />
         </div>
 
@@ -1916,7 +1923,7 @@ export function careerCardOf(game: Game): CareerCard | null {
   // （見 PlayerState.retiredFrom，記分板也是讀這一份）。
   const at = state.retiredFrom;
   return {
-    name: state.origin.name,
+    name: displayName(state.origin.name),
     role: roleLabelOf(state),
     hands: `投${hand(state.origin.throws)}打${hand(state.origin.bats)}`,
     age: state.age,
@@ -2233,7 +2240,7 @@ function Board({
               兩邊各自佔一行。它是「我還剩幾年安穩」，屬於處境，不是能力，因此
               不進下面的方格。 */}
           {state.pro !== null && <small className="deal">約 {state.pro.contractYears} 年</small>}
-          {player.name}
+          {displayName(player.name)}
           <small>
             {roleLabel}·投{hand(player.throws)}打{hand(player.bats)}
           </small>

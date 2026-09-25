@@ -114,6 +114,7 @@ import {
 } from './metrics.ts';
 import { esc, Flow, type Option, type Prompt } from './flow.ts';
 import { joinName } from './naming.ts';
+import { displayName } from './playerName.ts';
 import { applyTalents, type TalentLevels } from './overlay.ts';
 import {
   advanceStandards,
@@ -1272,7 +1273,7 @@ export class Game {
     this.flow.card(
       'gold',
       '入學',
-      `${esc(START_SEASON)}，<b class="hl">${esc(player.name)}</b>進了` +
+      `${esc(START_SEASON)}，<b class="hl">${esc(displayName(player.name))}</b>進了` +
         `<b class="hl">${esc(player.school)}</b>` +
         `${tier ? `（${esc(tier)}）` : ''}，在球隊裡的位置是<b class="hl">${esc(startName)}</b>。` +
         `投${handLabel(player.throws)}打${handLabel(player.bats)}。`,

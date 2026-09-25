@@ -17,6 +17,7 @@ import type { LadderBoard, LadderQuery, LadderResponse } from './api/contract.ts
 import type { Account } from './useAccount.ts';
 import { ladder as ladderCfg, leagues, positions as positionsCfg } from './data/index.ts';
 import { ALL } from './engine/ladder.ts';
+import { displayName } from './engine/playerName.ts';
 import { fmtMoney } from './engine/salary.ts';
 import { ENGINE_VERSION } from './engine/version.ts';
 
@@ -84,8 +85,11 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
                 十幾塊榜，那一截寬度乘十幾倍就是整頁橫著爆出去。要分辨是誰的話
                 滑鼠停在名字上看得到——那是不佔版面的地方。
               */}
-              <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }} title={e.account}>
-                {e.rank <= 3 ? <b className="hl">{e.name}</b> : e.name}
+              <td
+                style={{ textAlign: 'left', whiteSpace: 'nowrap' }}
+                title={displayName(e.name) === e.name ? e.account : `${e.name}｜${e.account}`}
+              >
+                {e.rank <= 3 ? <b className="hl">{displayName(e.name)}</b> : displayName(e.name)}
                 {/*
                   舊規則的紀錄要標出來。榜單是歷史而不是同一把尺——跨版本不保證
                   重現（ADR 0002），所以沒有「用新引擎重算」這條路。
