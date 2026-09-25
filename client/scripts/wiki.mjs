@@ -82,6 +82,26 @@ function teamsTable({ teams, leagues }) {
   return groupedTable(['球隊', '代表詞'], groups);
 }
 
+/** 養成期的學校：國中、高中、大學各一組，依分級排序。 */
+function schoolsTable({ amateur }) {
+  const stages = [
+    ['國中', amateur.junior_high],
+    ['高中', amateur.high_school],
+    ['大學', amateur.university],
+  ];
+  const groups = stages.map(([title, cfg]) => {
+    const rows = Object.entries(cfg.schools)
+      .sort((a, b) => a[1] - b[1])
+      .map(([school, tier]) => {
+        const t = cfg.tiers[String(tier)] ?? fail(`${title}的 ${school} 分級 ${tier} 不存在`);
+        const bonus = t.power_bonus > 0 ? `+${t.power_bonus}` : String(t.power_bonus);
+        return [school, t.label, bonus];
+      });
+    return { title: `${title}（${rows.length} 所）`, rows };
+  });
+  return groupedTable(['學校', '分級', '大賽戰力'], groups);
+}
+
 function ladderTable({ leagues }) {
   const groups = [];
   for (const [org, path] of Object.entries(leagues.paths)) {
@@ -278,6 +298,7 @@ function eventsTable(ctx) {
 const GENERATORS = {
   teams: teamsTable,
   ladder: ladderTable,
+  schools: schoolsTable,
   talents: talentsTable,
   traits: traitsTable,
   achievements: achievementsTable,
@@ -406,7 +427,7 @@ export function parseWiki(markdown) {
 
 export function loadData() {
   return Object.fromEntries(
-    ['teams', 'leagues', 'talents', 'traits', 'achievements', 'awards', 'hall_of_fame', 'events', 'abilities'].map(
+    ['teams', 'leagues', 'talents', 'traits', 'achievements', 'awards', 'hall_of_fame', 'events', 'abilities', 'amateur'].map(
       (n) => [n, load(n)],
     ),
   );
