@@ -593,12 +593,20 @@ describe('proPitchingLine', () => {
   });
 
   it('能力越好防禦率越低', () => {
+    // 合計自責分與局數再算，不是平均每季的防禦率：遠低於聯盟水準的人常常整季
+    // 投不到一局，那一季的防禦率記 0，平均下去反而看起來投得很好。
     const era = (v: number) => {
-      let t = 0;
-      for (let i = 0; i < 100; i++) t += pitch(`s${i}`, with_(v, { sta: 65, ctl: v }), v).era;
-      return t / 100;
+      let er = 0;
+      let outs = 0;
+      for (let i = 0; i < 100; i++) {
+        const p = pitch(`s${i}`, with_(v, { sta: 65, ctl: v }), v);
+        er += p.er;
+        outs += p.outs;
+      }
+      return (er * 27) / outs;
     };
-    expect(era(65)).toBeLessThan(era(35));
+    // 下端取 45 而不是更低：離一軍平均十四分以上的人整季投不到一局，比不出防禦率。
+    expect(era(65)).toBeLessThan(era(45));
   });
 
   it('球威越強三振越多', () => {

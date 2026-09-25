@@ -13,6 +13,7 @@ import {
   curateOffers,
   fallbackOffers,
   hasOverseasFreeAgency,
+  importPremium,
   landingLevel,
   overseasBidChance,
   overseasFaOffers,
@@ -24,11 +25,14 @@ import {
 
 const cfg = leagues.transfer.posting;
 
-/** 頂級聯盟落得下去的最低能力。入札的資格門檻就是它。 */
+/** 外籍球員在這個體系一軍的加成。缺席是 0。 */
+const premiumOf = (org: string) => leagues.transfer.orgs[org]?.import_premium ?? 0;
+
+/** 頂級聯盟落得下去的最低能力（球團主動）。入札的資格門檻就是它。 */
 function topBar(org: string): number {
   const path = pathOf(org);
   const top = path[path.length - 1]!;
-  return leagues.levels[top]!.min + leagues.transfer.import_premium.value;
+  return leagues.levels[top]!.par + premiumOf(org);
 }
 
 const ctx = (overall: number, age = 27) => ({
@@ -269,23 +273,66 @@ describe('挖角的加薪門檻', () => {
   });
 });
 
-describe('母國聯盟不收外籍加成', () => {
+describe('落地門檻（2026-09-26）', () => {
   const home = leagues.transfer.home_org.value;
-  const premium = leagues.transfer.import_premium.value;
+  const topOf = (org: string) => pathOf(org)[pathOf(org).length - 1]!;
 
-  it('回中職的門檻就是該層級的 min，不加四分', () => {
+  it('回中職看 par，不加外籍加成', () => {
     const bottom = pathOf(home)[0]!;
-    const min = leagues.levels[bottom]!.min;
-    expect(landingLevel(home, min, null)).toBe(bottom);
-    expect(landingLevel(home, min - 1, null)).toBeNull();
+    const par = leagues.levels[bottom]!.par;
+    expect(landingLevel(home, par, null)).toBe(bottom);
+    expect(landingLevel(home, par - 1, null)).toBeNull();
   });
 
-  it('其他體系照收——他在那裡是外籍球員', () => {
-    for (const org of ['NPB', 'KBO', 'ABL', 'LMB', 'MLB']) {
+  it('日職、韓職的一軍是 par + 外籍加成；二軍不分國籍，看 par', () => {
+    for (const org of ['NPB', 'KBO']) {
+      expect(premiumOf(org)).toBe(2);
       const bottom = pathOf(org)[0]!;
-      const min = leagues.levels[bottom]!.min;
-      expect(landingLevel(org, min, null)).toBeNull();
-      expect(landingLevel(org, min + premium, null)).toBe(bottom);
+      const par = leagues.levels[bottom]!.par;
+      expect(landingLevel(org, par - 1, null)).toBeNull();
+      expect(landingLevel(org, par, null)).toBe(bottom);
+      const top = topOf(org);
+      const bar = leagues.levels[top]!.par + 2;
+      expect(landingLevel(org, bar - 1, null)).not.toBe(top);
+      expect(landingLevel(org, bar, null)).toBe(top);
+    }
+  });
+
+  /** 大聯盟沒有外籍名額：外籍與本土同一套標準。 */
+  it('大聯盟每一層都看 par，不加外籍加成', () => {
+    expect(premiumOf('MLB')).toBe(0);
+    for (const level of pathOf('MLB')) {
+      expect(landingLevel('MLB', leagues.levels[level]!.par, null)).toBe(level);
+    }
+  });
+
+  /** 墨聯與澳職是退路聯盟：收的是掉下來的人，不論誰主動都看 min。 */
+  it('退路聯盟不論誰主動都看 min', () => {
+    for (const org of ['LMB', 'ABL']) {
+      expect(leagues.transfer.orgs[org]?.fallback_league).toBe(true);
+      const top = topOf(org);
+      const min = leagues.levels[top]!.min;
+      expect(landingLevel(org, min, null, 0, 'recruit')).toBe(top);
+      expect(landingLevel(org, min - 1, null, 0, 'recruit')).toBeNull();
+    }
+  });
+
+  it('自己找上門一律看 min（ADR 0012）', () => {
+    for (const org of ['NPB', 'KBO', 'MLB', home]) {
+      const top = topOf(org);
+      expect(landingLevel(org, leagues.levels[top]!.min, null, 0, 'seek')).toBe(top);
+    }
+  });
+
+  /**
+   * 落地 par + 2、每年留任 min + 2：中間留三分，剛簽進來的人不會隔年一退步就被
+   * 擠下去。與本土球員落地 par、留任 min 一樣寬。
+   */
+  it('落地門檻比留任門檻高三分', () => {
+    for (const org of ['NPB', 'KBO', 'MLB']) {
+      const top = leagues.levels[topOf(org)]!;
+      expect(topBar(org) - (top.min + importPremium(org, 0))).toBe(top.par - top.min);
+      expect(top.par - top.min).toBe(3);
     }
   });
 });
@@ -316,18 +363,17 @@ describe('高中畢業的旅外報價', () => {
    * 本土的替代人選。所以落點是「地板」與 `landingLevel()` 取高。
    */
   it('能力夠的人直接從打得動的那一層出發', () => {
-    const premium = leagues.transfer.import_premium.value;
-    const npb1 = leagues.levels['NPB1']!.min + premium;
+    const npb1 = leagues.levels['NPB1']!.par + premiumOf('NPB');
     expect(offers(npb1 - 1).find((o) => o.org === 'NPB')?.level).toBe('NPB2');
     expect(offers(npb1).find((o) => o.org === 'NPB')?.level).toBe('NPB1');
 
-    const kbo1 = leagues.levels['KBO1']!.min + premium;
+    const kbo1 = leagues.levels['KBO1']!.par + premiumOf('KBO');
     expect(offers(kbo1 - 1).find((o) => o.org === 'KBO')?.level).toBe('KBO2');
     expect(offers(kbo1).find((o) => o.org === 'KBO')?.level).toBe('KBO1');
 
     // 旅美一路往上：夠格就 2A、3A，甚至直接上大聯盟。
     for (const level of ['A2', 'A3', 'MLB']) {
-      const bar = leagues.levels[level]!.min + premium;
+      const bar = leagues.levels[level]!.par;
       expect(offers(bar).find((o) => o.org === 'MLB')?.level).toBe(level);
     }
   });
@@ -356,38 +402,35 @@ describe('高中畢業的旅外報價', () => {
 });
 
 describe('在籍夠久就視同本土', () => {
-  const premium = leagues.transfer.import_premium.value;
+  const premium = premiumOf('NPB');
   const years = leagues.transfer.orgs['NPB']!.domestic_after_years!;
 
-  it('日職滿八年之後，落地門檻不再加四分', () => {
+  it('日職滿八年之後，一軍落地門檻不再加外籍加成', () => {
     const top = pathOf('NPB')[pathOf('NPB').length - 1]!;
-    const min = leagues.levels[top]!.min;
+    const par = leagues.levels[top]!.par;
 
     // 差一分就上不了一軍——外籍身分還在。
-    expect(landingLevel('NPB', min + premium - 1, null, 0)).not.toBe(top);
+    expect(landingLevel('NPB', par + premium - 1, null, 0)).not.toBe(top);
     // 待滿之後同樣的能力就夠了。
-    expect(landingLevel('NPB', min, null, years)).toBe(top);
+    expect(landingLevel('NPB', par, null, years)).toBe(top);
   });
 
   it('差一年還不算——門檻是「滿」幾年', () => {
     const top = pathOf('NPB')[pathOf('NPB').length - 1]!;
-    const min = leagues.levels[top]!.min;
-    expect(landingLevel('NPB', min, null, years - 1)).not.toBe(top);
+    const par = leagues.levels[top]!.par;
+    expect(landingLevel('NPB', par, null, years - 1)).not.toBe(top);
   });
 
-  it('沒有這條規則的體系待再久也是外籍', () => {
-    for (const org of ['KBO', 'MLB', 'LMB', 'ABL']) {
-      expect(leagues.transfer.orgs[org]?.domestic_after_years).toBeUndefined();
-      const bottom = pathOf(org)[0]!;
-      const min = leagues.levels[bottom]!.min;
-      expect(landingLevel(org, min, null, 30)).toBeNull();
-    }
+  /** 現實裡韓職沒有在籍年限的解套條件（2026-09-26 查證）。 */
+  it('韓職待再久也是外籍', () => {
+    expect(leagues.transfer.orgs['KBO']?.domestic_after_years).toBeUndefined();
+    expect(importPremium('KBO', 30)).toBe(premiumOf('KBO'));
   });
 
   it('母國本來就不收，年資無關', () => {
     const home = leagues.transfer.home_org.value;
     const bottom = pathOf(home)[0]!;
-    expect(landingLevel(home, leagues.levels[bottom]!.min, null, 0)).toBe(bottom);
+    expect(landingLevel(home, leagues.levels[bottom]!.par, null, 0)).toBe(bottom);
   });
 });
 

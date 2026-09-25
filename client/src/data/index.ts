@@ -1161,6 +1161,16 @@ export interface TransferOrg {
    */
   readonly domestic_after_years?: number;
   /**
+   * 外籍球員在這個體系一軍要多強過 par 的分數（落地）與多強過 min 的分數（每年
+   * 留任）。缺席是 0——沒有外籍名額的體系（大聯盟）。
+   */
+  readonly import_premium?: number;
+  /**
+   * 退路聯盟（墨聯、澳職）：不論誰主動，落地一律看 min、不加外籍加成，每年也不
+   * 擠壓。
+   */
+  readonly fallback_league?: boolean;
+  /**
    * 一軍服務滿幾年之後可以拒絕下放（見 ADR 0020）。
    *
    * 缺席表示這個體系的下放是球團說了算。MLB 是 5——五年年資條款。
@@ -1174,7 +1184,8 @@ export interface TransferOrg {
 export interface TransferData {
   /** 球員的母國體系。回這裡不算外籍，不收 import_premium。 */
   readonly home_org: { readonly value: string };
-  readonly import_premium: { readonly value: number };
+  /** 被挖角時落在哪一層的規則。全部寫在 `_note` 裡，數字在各體系的 `import_premium`。 */
+  readonly landing: Readonly<Record<string, string>>;
   /** 球隊的處境如何改變它開出的條件：爭冠的砸錢但給短約，重建的相反。 */
   readonly contention: {
     readonly bonus: { readonly per_odds: number; readonly min: number; readonly max: number };

@@ -117,7 +117,7 @@ export function ageGate(org: string, age: number, overLandingBar: number): numbe
 /**
  * 這個能力在這個體系落得到哪一層。
  *
- * 取能力達得到 `min + import_premium` 的**最高**層級——被挖角不代表到了那邊
+ * 取能力達得到門檻（`landingBar`）的**最高**層級——被挖角不代表到了那邊
  * 還是一軍球員。一個中職綜合 57 的球員被大聯盟看上，落地是 3A，得自己再打
  * 上去。
  *
@@ -131,12 +131,11 @@ export function landingLevel(
   approach: Approach = 'recruit',
   tier: HandednessTier = 'none',
 ): string | null {
-  const premium = importPremium(org, servedYears, approach);
   let best: string | null = null;
   // pathOf 由低到高，因此最後一個達標的就是最高的那一層。
   // 簽不簽得下是關卡，吃個人尺——見 CONTEXT.md「個人尺 / 聯盟真尺」。
   for (const level of pathOf(org)) {
-    if (overall >= personalStandardOf(standards, level, tier).min + premium) best = level;
+    if (overall >= landingBar(org, level, standards, servedYears, approach, tier)) best = level;
   }
   return best;
 }
@@ -152,11 +151,12 @@ export type Approach = 'recruit' | 'seek';
 /**
  * 這個人在這個體系要不要吃外籍加成。
  *
- * 三種情況不吃：
+ * 加成本身逐體系寫在 `leagues.json`（日職、韓職 2，其餘 0——大聯盟沒有外籍
+ * 名額，墨聯與澳職是退路聯盟）。三種情況不吃：
  *
  * - **回母國。** 外籍加成的理由是「名額有限，球團得證明簽這個人比用本地人
  *   好」，對本地人不成立——一個在日職待不下去的台灣球員回中職，他就是個中職
- *   球員，不必比本地人強四分。
+ *   球員，不必比本地人強。
  * - **在當地服務夠久。** 日職的「在籍八年視同本土」是真實規則：待滿之後不再
  *   佔用外籍名額。這個身分**留得住**——離開日職去韓職打幾年再回來，八年還是
  *   那八年，因此年資是累計的而不是連續的。
@@ -171,9 +171,35 @@ export function importPremium(
 ): number {
   if (approach === 'seek') return 0;
   if (org === cfg.home_org.value) return 0;
-  const threshold = orgConfig(org)?.domestic_after_years;
+  const spec = orgConfig(org);
+  const threshold = spec?.domestic_after_years;
   if (threshold !== undefined && servedYears >= threshold) return 0;
-  return cfg.import_premium.value;
+  return spec?.import_premium ?? 0;
+}
+
+/**
+ * 落在某一層需要的能力。
+ *
+ * - **球團主動**：該層的 par——跨海挖人，挖的是上得了場的人。一軍再加外籍加成
+ *   （名額只限一軍，二軍與小聯盟不分國籍）。
+ * - **自己找上門，或退路聯盟**：該層的 min，不加任何東西（ADR 0012）。墨聯與澳職
+ *   收的是掉下來的人，球團不是在挑人。
+ *
+ * 落地看 par、每年留任看 min（見 `evaluateMovement`），中間的三分讓剛簽進來的人
+ * 不會隔年一退步就被擠下去。
+ */
+function landingBar(
+  org: string,
+  level: string,
+  standards: LeagueStandards | null,
+  servedYears: number,
+  approach: Approach,
+  tier: HandednessTier,
+): number {
+  const standard = personalStandardOf(standards, level, tier);
+  if (approach === 'seek' || orgConfig(org)?.fallback_league === true) return standard.min;
+  const top = leagues.levels[level]?.top !== undefined;
+  return standard.par + (top ? importPremium(org, servedYears, approach) : 0);
 }
 
 /**
@@ -200,9 +226,9 @@ function topLandingBar(
 ): number {
   const path = pathOf(org);
   const top = path[path.length - 1] ?? '';
-  // 與 landingLevel 走同一個加成——先前這裡寫死 import_premium，回母國時門檻
+  // 與 landingLevel 走同一條門檻——先前這裡寫死 import_premium，回母國時門檻
   // 因此被高估四分，簽約金與怪物條款都連帶算錯。
-  return personalStandardOf(standards, top, tier).min + importPremium(org, servedYears, approach);
+  return landingBar(org, top, standards, servedYears, approach, tier);
 }
 
 /** 抽一支球隊。走訪順序照 teams.json 的宣告順序，否則同一個種子會抽出不同結果。 */

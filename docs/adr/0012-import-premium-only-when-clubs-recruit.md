@@ -4,6 +4,8 @@
 
 Accepted
 
+加成的數值與落地錨點由 [ADR 0054](0054-landing-bar-is-the-league-average.md) 取代：落地改看 par，加成逐體系（日韓 2、其餘 0），墨聯與澳職成為退路聯盟。
+
 ## Context
 
 `import_premium`（4 分）的理由寫在 `leagues.json` 裡：外籍名額有限，球團得證明

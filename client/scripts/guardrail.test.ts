@@ -60,14 +60,24 @@ const share = (tier: number) =>
 describe('聯盟基準環境', () => {
   const base = proBaseline('CPBL1');
 
-  it('聯盟平均 OPS 落在 .700–.800', () => {
-    expect(baselineOps(base)).toBeGreaterThanOrEqual(0.7);
-    expect(baselineOps(base)).toBeLessThanOrEqual(0.8);
-  });
+  /**
+   * **每一個層級都要過**，不只中職一軍。夾子綁在 par 上——能力剛好等於那個聯盟
+   * 平均的人（ADR 0047）。聯盟平均是自我參照的，各層級理應落在同一個數字上；
+   * 動了某個聯盟的 par 或 min（例如 2026-09-26 中職一二軍 +2）而漏了哪一層，這裡
+   * 會紅。
+   */
+  describe.each(Object.keys(leaguesData.levels))('%s', (level) => {
+    const b = proBaseline(level);
 
-  it('聯盟平均防禦率落在 3.5–4.5', () => {
-    expect(base.era).toBeGreaterThanOrEqual(3.5);
-    expect(base.era).toBeLessThanOrEqual(4.5);
+    it('聯盟平均 OPS 落在 .700–.800', () => {
+      expect(baselineOps(b)).toBeGreaterThanOrEqual(0.7);
+      expect(baselineOps(b)).toBeLessThanOrEqual(0.8);
+    });
+
+    it('聯盟平均防禦率落在 3.5–4.5', () => {
+      expect(b.era).toBeGreaterThanOrEqual(3.5);
+      expect(b.era).toBeLessThanOrEqual(4.5);
+    });
   });
 
   /**
