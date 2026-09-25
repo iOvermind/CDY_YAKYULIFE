@@ -1688,6 +1688,11 @@ export interface Trait {
   readonly name: string | null;
   readonly dynamic_name?: boolean;
   readonly effect_text: string;
+  /**
+   * 給玩家看的取得條件，WIKI 的特性表照抄這一欄。遊戲裡不顯示——特性是隱藏的，
+   * 條件只在攻略裡公開。改了觸發規則要一起改這裡。
+   */
+  readonly trigger_text: string;
   /** 點開狀態時顯示的文案：一句敘述接粗體的效果。資料檔寫死的 HTML。 */
   readonly desc?: string;
   /** 同一支球隊的年數門檻（mrteam）。 */
