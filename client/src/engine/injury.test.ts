@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { injury as cfg } from '../data/index.ts';
-import { agedInjuryLoss, injuryChance, rollAmateurInjury, rollInjury, unlocksGlass } from './injury.ts';
+import { agedInjuryLoss, concealFailChance, injuryChance, oldInjuryFactor, rollAmateurInjury, rollInjury, unlocksGlass } from './injury.ts';
 import { World } from './rng.ts';
 
 const none = new Set<string>();
@@ -310,5 +310,29 @@ describe('衰退期大傷的額外損失', () => {
   it('扣得動的不到兩項就只扣那些', () => {
     const changes = agedInjuryLoss(new World('one'), { con: 20, pow: 20, eye: 20, spd: 30 }, keys);
     expect([...changes.keys()]).toEqual(['spd']);
+  });
+});
+
+describe('隱瞞傷勢', () => {
+  it('失敗率是受傷機率的兩倍，夾在上限', () => {
+    expect(concealFailChance(15)).toBe(15 * cfg.conceal.fail_multiplier);
+    expect(concealFailChance(80)).toBe(cfg.conceal.fail_max);
+  });
+
+  it('舊傷用加的：兩次是 ×0.90，不是 ×0.95²', () => {
+    expect(oldInjuryFactor(1)).toBeCloseTo(0.95, 10);
+    expect(oldInjuryFactor(2)).toBeCloseTo(0.9, 10);
+    expect(oldInjuryFactor(100)).toBe(0);
+  });
+
+  it('小傷帶著同一次擲骰的大傷版本', () => {
+    for (let i = 0; i < 200; i++) {
+      const got = rollInjury(new World(`w-${i}`), { age: 25, traits: new Set(), extraRisk: 80 });
+      if (got.kind !== 'minor') continue;
+      expect(got.worsened?.kind).toBe('major');
+      expect(got.worsened?.loss.scope).toBe('all');
+      return;
+    }
+    throw new Error('兩百次都沒擲出小傷');
   });
 });

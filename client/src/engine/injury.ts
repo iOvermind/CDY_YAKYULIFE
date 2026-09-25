@@ -33,6 +33,11 @@ export interface Injury {
   readonly diceLoss: boolean;
   /** 給卡片用的敘述。 */
   readonly text: string;
+  /**
+   * 小傷隱瞞失敗時變成的那一次大傷。**同一次擲骰已經擲好**——大傷的出賽比例、
+   * 隔年復健與少一顆骰在 `rollInjury` 裡無條件抽過，隱瞞失敗直接拿來用，不另擲。
+   */
+  readonly worsened?: Injury;
 }
 
 const HEALTHY: Injury = {
@@ -176,8 +181,21 @@ export function rollInjury(world: World, options: InjuryChanceOptions): Injury {
 
   if (!hit) return HEALTHY;
 
+  const major: Injury = {
+    kind: 'major',
+    seasonFactor: playedPercent / 100,
+    loss: { scope: 'all', points: s.major.ability_loss.points },
+    rehabNextYear: rehab,
+    diceLoss,
+    text: `重大傷勢——進手術室了。賽季提前報銷（本季留下 ${playedPercent}% 的出賽紀錄）。`,
+  };
+
   if (minor) {
     return {
+      worsened: {
+        ...major,
+        text: `藏不住了，小傷拖成重傷——進手術室了。賽季提前報銷（本季留下 ${playedPercent}% 的出賽紀錄）。`,
+      },
       kind: 'minor',
       seasonFactor: 1 - lostPercent / 100,
       loss: aftereffect
@@ -189,14 +207,25 @@ export function rollInjury(world: World, options: InjuryChanceOptions): Injury {
     };
   }
 
-  return {
-    kind: 'major',
-    seasonFactor: playedPercent / 100,
-    loss: { scope: 'all', points: s.major.ability_loss.points },
-    rehabNextYear: rehab,
-    diceLoss,
-    text: `重大傷勢——進手術室了。賽季提前報銷（本季留下 ${playedPercent}% 的出賽紀錄）。`,
-  };
+  return major;
+}
+
+/**
+ * 隱瞞傷勢失敗（拖成大傷）的機率，百分比。
+ *
+ * 跟著當季的受傷機率走：年紀、體力、玻璃體質都自動進來，老將硬撐是賭命。
+ */
+export function concealFailChance(injuryChancePercent: number): number {
+  const c = cfg.conceal;
+  return Math.min(c.fail_max, injuryChancePercent * c.fail_multiplier);
+}
+
+/**
+ * 舊傷的倍率：這項能力被抽中過 `hits` 次。**用加的，不是乘的**——兩次是 ×0.90，
+ * 不是 ×0.95²。不設底，但不會小於 0。
+ */
+export function oldInjuryFactor(hits: number): number {
+  return Math.max(0, 1 - cfg.conceal.per_hit * hits);
 }
 
 /**

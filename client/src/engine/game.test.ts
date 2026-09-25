@@ -2765,3 +2765,65 @@ describe('大學', () => {
     expect(Object.keys(amateur.cups.U.qualifies ?? {})).toHaveLength(3);
   });
 });
+
+/** 隱瞞傷勢（2026-09-26）：職業期的小傷當下問一次。 */
+describe('隱瞞傷勢', () => {
+  const trait = 'old_injury';
+
+  /** 一律隱瞞，打到引退；回傳每一次隱瞞之後的結果。 */
+  const concealAll = (seed: string) => {
+    const game = started({ seed });
+    const outcomes: ('success' | 'worsened')[] = [];
+    const notes: string[] = [];
+    let guard = 0;
+    while (game.flow.prompt !== null && guard++ < 5000) {
+      const options = game.flow.prompt.options;
+      if (options.some((o) => o.id === 'injury:conceal')) {
+        expect(options[0]?.id).toBe('injury:report');
+        const before = game.flow.log.length;
+        game.choose('injury:conceal');
+        const cards = game.flow.log.slice(before).filter((e) => e.kind === 'card');
+        const worsened = cards.some((e) => e.kind === 'card' && e.title === '大傷');
+        outcomes.push(worsened ? 'worsened' : 'success');
+        if (!worsened) {
+          expect(game.state?.traits.has(trait)).toBe(true);
+          notes.push(game.state?.traitNotes.get(trait) ?? '');
+        } else {
+          expect(game.state?.traits.has(trait)).toBe(false);
+        }
+        continue;
+      }
+      game.choose(defaultPick(game)!);
+    }
+    return { game, outcomes, notes };
+  };
+
+  const runs = Array.from({ length: 40 }, (_, i) => concealAll(`conceal-${i}`));
+  const all = runs.flatMap((r) => r.outcomes);
+
+  it('職業期的小傷會問，兩種結果都碰得到', () => {
+    expect(all.length).toBeGreaterThan(0);
+    expect(all).toContain('success');
+    expect(all).toContain('worsened');
+  });
+
+  it('舊傷的說明寫出打折的能力與倍率', () => {
+    const note = runs.flatMap((r) => r.notes).find((n) => n !== '');
+    expect(note).toMatch(/×0\.\d\d/);
+  });
+
+  it('拿過舊傷就算一項特性成就，大傷清掉也照算', () => {
+    for (const r of runs) {
+      if (!r.outcomes.includes('success')) continue;
+      const ids = r.game.achievements?.list.map((a) => a.id) ?? [];
+      expect(ids).toContain(`trait:${trait}`);
+    }
+  });
+
+  it('預設選上報：自動代理的生涯不會長出舊傷', () => {
+    for (let i = 0; i < 10; i++) {
+      const game = playToEnd(started({ seed: `conceal-${i}` }));
+      expect(game.achievements?.list.some((a) => a.id === `trait:${trait}`)).toBe(false);
+    }
+  });
+});

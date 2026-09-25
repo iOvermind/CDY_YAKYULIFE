@@ -144,8 +144,10 @@ import {
 } from './growth.ts';
 import {
   agedInjuryLoss,
+  concealFailChance,
   injuryChance,
   injuryChanceBeforeTalent,
+  oldInjuryFactor,
   rollInjury,
   unlocksGlass,
   type Injury,
@@ -695,6 +697,13 @@ export class Game {
   #sevenFists = 0;
   /** 生涯掛過七傷拳。開完 TJ 狀態會拿掉，但成就照算——那一段是真的撐過來的。 */
   #sevenFistsEver = false;
+  /**
+   * 舊傷：隱瞞傷勢成功時記一筆，能力 → 被抽中的次數。比賽中那項能力乘
+   * `oldInjuryFactor(次數)`（見 `#seasonAbility`），綜合評價不受影響。下一次大傷
+   * 時全部清除。
+   */
+  #oldInjury: Partial<Record<AbilityKey, number>> = {};
+  #oldInjuryEver = false;
   /** 生涯開過幾次 TJ。合約年限看它。 */
   #tjSurgeries = 0;
   /** 這一季是 TJ 的復健季：季末把投手耐力回到上限的八成。 */
@@ -1001,6 +1010,7 @@ export class Game {
         traits: new Set([
           ...this.#traits,
           ...(this.#sevenFistsEver ? ['seven_fists'] : []),
+          ...(this.#oldInjuryEver ? [injuryCfg.conceal.trait] : []),
           ...(this.#glassEver ? ['glass'] : []),
           ...(this.#onetoolEver ? ['onetool'] : []),
           ...(this.#cancerEver ? ['cancer'] : []),
@@ -1070,11 +1080,14 @@ export class Game {
       injuryRisk: this.#injuryRisk,
       position: signature.position,
       positionName: signature.position === null ? null : positionLabel(signature.position),
-      traitNotes: new Map(
-        this.#sevenFists > 0
-          ? [['seven_fists', `目前額外受傷機率 +${pct(sevenFistsRisk(this.#sevenFists, this.#traits.has('rubber')))}%`]]
-          : [],
-      ),
+      traitNotes: new Map([
+        ...(this.#sevenFists > 0
+          ? [['seven_fists', `目前額外受傷機率 +${pct(sevenFistsRisk(this.#sevenFists, this.#traits.has('rubber')))}%`] as const]
+          : []),
+        ...(this.#traits.has(injuryCfg.conceal.trait)
+          ? [[injuryCfg.conceal.trait, this.#oldInjuryNote()] as const]
+          : []),
+      ]),
       endurance:
         this.#endurance === null || this.#pro === null
           ? null
@@ -2921,6 +2934,7 @@ export class Game {
     const loss = injuryCfg.severity.major.ability_loss.points;
     lines.push(this.#applyInjuryLoss({ kind: 'major', seasonFactor: 0, loss: { scope: 'all', points: loss }, rehabNextYear: false, diceLoss: false, text: '' }));
     this.#majorInjuries++;
+    lines.push(this.#clearOldInjury());
     const aged = this.#applyAgedLoss();
     if (aged !== '') lines.push(aged);
     const lostDie = diceLoss ?? this.world.stream('health').chance(injuryCfg.severity.major.dice_loss.chance);
@@ -2973,11 +2987,100 @@ export class Game {
       return;
     }
 
+    if (result.kind === 'minor' && result.worsened !== undefined) {
+      this.#askConceal(result, result.worsened, chance);
+      return;
+    }
+    this.#settleInjury(result);
+  }
+
+  /**
+   * 隱瞞傷勢：職業期的小傷當下問一次（2026-09-26）。
+   *
+   * 第一個選項是上報——自動代理與校準腳本都選第一個，校準數字因此不受影響。
+   * 隱瞞只擲一次：輸了就是 `worsened` 那一次大傷（同一次擲骰已經擲好），贏了整季
+   * 出賽、小傷的後遺症照擲，另外記一筆舊傷。
+   */
+  #askConceal(minor: Injury, worsened: Injury, injuryChancePercent: number): void {
+    const fail = concealFailChance(injuryChancePercent);
+    this.flow.ask(
+      {
+        title: `小傷：${minor.text}`,
+        options: [
+          {
+            id: 'injury:report',
+            label: '上報休養',
+            note: '照醫囑缺賽，身體不會留下舊傷',
+            role: 'main',
+          },
+          {
+            id: 'injury:conceal',
+            label: '隱瞞硬撐',
+            note: `整季照常出賽，但留下舊傷（某項能力在比賽中永久打折）；${pct(fail)}% 會拖成大傷`,
+            role: 'warn',
+          },
+        ],
+      },
+      (choice) => {
+        if (choice === 'injury:report') {
+          this.#settleInjury(minor);
+          return;
+        }
+        if (this.world.stream('health').chance(fail)) {
+          this.#seasonFactor = worsened.seasonFactor;
+          this.#seasonInjury = 'major';
+          this.#settleInjury(worsened);
+          return;
+        }
+        this.#seasonFactor = 1;
+        const lines = ['咬著牙沒讓任何人知道，<b class="up">整季照常出賽</b>。'];
+        lines.push(this.#applyInjuryLoss(minor));
+        lines.push(this.#addOldInjury());
+        this.flow.card('bad', '隱瞞傷勢', lines.filter((l) => l !== '').join('<br>'));
+      },
+    );
+  }
+
+  /** 記一筆舊傷：從用得到的那一側抽一項能力，回傳給卡片用的敘述。 */
+  #addOldInjury(): string {
+    const keys = ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide));
+    const key = keys[this.world.stream('health').int(0, keys.length - 1)];
+    if (key === undefined) return '';
+    const hits = (this.#oldInjury[key] ?? 0) + 1;
+    this.#oldInjury[key] = hits;
+    this.#oldInjuryEver = true;
+    const first = !this.#traits.has(injuryCfg.conceal.trait);
+    this.#traits.add(injuryCfg.conceal.trait);
+    const name = abilities.abilities[key] ?? key;
+    return (
+      `${first ? '取得〈舊傷〉：' : '舊傷又多一處：'}<b class="dn">${esc(name)}在比賽中只剩 ×${oldInjuryFactor(hits).toFixed(2)}</b>` +
+      '<span class="sub">（能力表不變，下一次大傷時才會一起處理掉）</span>'
+    );
+  }
+
+  /** 舊傷特性的說明：哪幾項打折、打多少。 */
+  #oldInjuryNote(): string {
+    return Object.entries(this.#oldInjury)
+      .map(([key, hits]) => `${abilities.abilities[key] ?? key} ×${oldInjuryFactor(hits ?? 0).toFixed(2)}`)
+      .join('、');
+  }
+
+  /** 大傷時把舊傷一起處理掉。回傳給卡片用的敘述。 */
+  #clearOldInjury(): string {
+    if (!this.#traits.has(injuryCfg.conceal.trait)) return '';
+    this.#oldInjury = {};
+    this.#traits.delete(injuryCfg.conceal.trait);
+    return '這一刀連同身上的<b class="up">舊傷一起處理掉了</b>。';
+  }
+
+  /** 套用一次傷病：永久損失、大傷的連帶後果與卡片。 */
+  #settleInjury(result: Injury): void {
     const lines = [esc(result.text)];
     lines.push(this.#applyInjuryLoss(result));
 
     if (result.kind === 'major') {
       this.#majorInjuries++;
+      lines.push(this.#clearOldInjury());
       const aged = this.#applyAgedLoss();
       if (aged !== '') lines.push(aged);
       if (result.diceLoss) {
@@ -3093,14 +3196,23 @@ export class Game {
     return `<b class="up">${esc(abilities.abilities[key] ?? key)} +${scaled}</b><span class="sub">（本季狀態，不計入能力表）</span>`;
   }
 
-  /** 這一季實際上場用的能力：真實能力加上當季暫時能力。 */
+  /**
+   * 這一季實際上場用的能力：真實能力加上當季暫時能力，再乘上舊傷。
+   *
+   * 舊傷只在這裡打折——成績、守備分、當季定位看它，綜合評價看的是能力表，
+   * 球團不知道你有舊傷。
+   */
   get #seasonAbility(): Abilities {
-    if (Object.keys(this.#seasonBonus).length === 0) return this.#ability;
+    const hurt = Object.entries(this.#oldInjury);
+    if (Object.keys(this.#seasonBonus).length === 0 && hurt.length === 0) return this.#ability;
     const out: Record<string, number> = { ...this.#ability };
     for (const [key, delta] of Object.entries(this.#seasonBonus)) {
       // 當季狀態可以是負的（縮頭烏龜），因此這裡要夾住量表的底——「比 20 更差」
       // 在球探報告上沒有對應的說法。
       out[key] = Math.max(abilities.scale.hard_floor, (out[key] ?? 0) + delta);
+    }
+    for (const [key, hits] of hurt) {
+      out[key] = Math.max(abilities.scale.hard_floor, (out[key] ?? 0) * oldInjuryFactor(hits ?? 0));
     }
     return out as Abilities;
   }

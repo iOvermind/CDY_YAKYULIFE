@@ -293,6 +293,13 @@ export interface InjuryData {
       readonly aged_loss: { readonly picks: number; readonly points: number };
     };
   };
+  /** 隱瞞傷勢：失敗率是當季受傷機率的幾倍，舊傷每被抽中一次打幾折。 */
+  readonly conceal: {
+    readonly fail_multiplier: number;
+    readonly fail_max: number;
+    readonly per_hit: number;
+    readonly trait: string;
+  };
   /** 〈浴火鳳凰〉：有帕瓦諾的人連續幾季沒受傷就解除。 */
   readonly phoenix: { readonly healthy_seasons: number; readonly trait: string };
   /** 〈善良之槍〉：出賽量乘多少，直到換隊。 */
