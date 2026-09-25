@@ -936,6 +936,12 @@
         "trait": "ambience"
       }
     },
+    "ten_and_five": {
+      "_note": "大聯盟的 10-5 條款：大聯盟一軍滿 league_years 年、在現在這一隊滿 team_years 年，被交易時一定有否決權——**〈烏鴉〉也一樣**，年資買到的權利球團拿不走。否決的代價同 refuse（2026-09-25）。",
+      "org": "MLB",
+      "league_years": 10,
+      "team_years": 5
+    },
     "refuse": {
       "_note": "否決交易的代價：接下來幾年的奪冠機率打折，下一張合約的係數也打折（見 multiplier.trade_refuse_penalty）。忠誠是一種選擇，而選擇有成本。",
       "years": 2,

@@ -655,6 +655,9 @@ export class Game {
   #endorsements = 0;
   /** 〈善良之槍〉是在哪一隊拿到的；換了隊就解除。 */
   #onetoolTeam: string | null = null;
+  /** 〈烏鴉〉是在哪一隊拿到的；換了隊就解除。養成期拿到的在進職業時補記。 */
+  #cancerTeam: string | null = null;
+  #cancerEver = false;
   /** 有〈帕瓦諾〉之後連續沒受傷的季數。〈浴火鳳凰〉看它。 */
   #glassHealthy = 0;
   /** 帕瓦諾、善良之槍拿掉之後，成就照樣算——跟七傷拳同一個處理。 */
@@ -980,6 +983,7 @@ export class Game {
           ...(this.#sevenFistsEver ? ['seven_fists'] : []),
           ...(this.#glassEver ? ['glass'] : []),
           ...(this.#onetoolEver ? ['onetool'] : []),
+          ...(this.#cancerEver ? ['cancer'] : []),
           ...(this.#yipsEver ? ['yips'] : []),
         ]),
         traitNames: this.#traitNames,
@@ -1564,6 +1568,7 @@ export class Game {
         this.#traits.add(key);
         // 〈善良之槍〉只到換隊為止：記下是在哪一隊被打入冷宮的。
         if (key === 'onetool') this.#onetoolTeam = this.#pro?.team ?? null;
+        if (key === 'cancer') this.#cancerTeam = this.#pro?.team ?? null;
         const name = traitName(key);
         const bad = traitOf(key)?.tone === 'bad';
         lines.push(`取得特性<b class="${bad ? 'dn' : 'hl'}">〈${esc(name)}〉</b>`);
@@ -1616,7 +1621,10 @@ export class Game {
     if (mode === 'bold' && !outcome.good) this.#boldFails++;
     if (this.#boldFails >= BOLD_FAILS_FOR_CANCER && !this.#traits.has('cancer')) {
       this.#traits.add('cancer');
+      this.#cancerTeam = this.#pro?.team ?? null;
       lines.push(`全力一搏第 ${this.#boldFails} 次失敗，你又掀了桌——取得特性<b class="dn">〈${esc(traitName('cancer'))}〉</b>`);
+      // 歸零：換隊解除之後要再輸滿一輪才會再被貼上，不然下一張卡就立刻回來。
+      this.#boldFails = 0;
     }
     // 〈外務纏身〉：代言接多了。代言是好結果帶代言收入的那幾張卡。
     const income = outcome.special['income'];
@@ -2538,7 +2546,7 @@ export class Game {
     // 它只在守位會議上改變，因此勞損不會因為守位每年重算而漂移。
     const position = this.#fieldPosition ?? DH;
     // 禁賽 N 場：這一季的出賽量少掉那一截。用完歸零——禁賽不會跟到明年。
-    this.#onetoolCheck();
+    this.#teamChangeCheck();
     const suspension = Math.max(0, 1 - this.#suspendedGames / levelOf(pro.level).games);
     this.#suspendedGames = 0;
     const line = playSeason(this.world, {
@@ -3787,6 +3795,18 @@ export class Game {
       return;
     }
 
+    // 大聯盟 10-5 條款：年資買到的否決權，〈烏鴉〉也拿不走。
+    const tf = seasonCfg.trade.ten_and_five;
+    const org = levelOf(pro.level).org;
+    if (
+      org === tf.org &&
+      (this.#orgYears.get(org) ?? 0) >= tf.league_years &&
+      (this.#teamYears.get(pro.team)?.years ?? 0) >= tf.team_years
+    ) {
+      this.#tradeVeto('10-5 條款');
+      return;
+    }
+
     if (this.#traits.has('cancer')) {
       this.#executeTrade();
       this.flow.card('bad', '毒瘤交易', '球團受夠了休息室的氣氛，直接把你打包送走。');
@@ -3801,12 +3821,12 @@ export class Game {
     this.#tradeRumor();
   }
 
-  /** 明星的否決權。留下來要付代價，但那件球衣他留住了。 */
-  #tradeVeto(): void {
+  /** 明星（或 10-5 條款）的否決權。留下來要付代價，但那件球衣他留住了。 */
+  #tradeVeto(why: string | null = null): void {
     const t = seasonCfg.trade.refuse;
     this.flow.ask(
       {
-        title: '交易大限：他隊送來報價，球團徵詢你的否決權',
+        title: `交易大限：他隊送來報價，球團徵詢你的否決權${why === null ? '' : `（${why}）`}`,
         options: [
           { id: 'trade:accept', label: '點頭同意，換個環境', role: 'main' },
           {
@@ -3899,6 +3919,7 @@ export class Game {
     if (team === null) return;
     pro.tradedFrom = pro.team;
     pro.team = team;
+    this.#teamChangeCheck();
   }
 
   /**
@@ -5859,15 +5880,27 @@ export class Game {
   }
 
   /**
-   * 〈善良之槍〉只到換隊為止。季初檢查一次：球隊換了就解除。
+   * 〈善良之槍〉與〈烏鴉〉只跟著拿到它的那一隊：換隊就解除——交易、自由球員、
+   * 被挖角、被釋出都算。交易當下與每季開打前各查一次，換隊的路徑再多也漏不掉。
+   *
+   * 在養成期拿到的〈烏鴉〉還沒有球隊，進職業的第一隊就是它的球隊（選秀不算換隊）。
    */
-  #onetoolCheck(): void {
+  #teamChangeCheck(): void {
     const pro = this.#pro;
-    if (!this.#traits.has('onetool') || pro === null || pro.team === this.#onetoolTeam) return;
-    this.#traits.delete('onetool');
-    this.#onetoolEver = true;
-    this.#onetoolTeam = null;
-    this.flow.card('good', '重獲重用', `換到${esc(pro.team)}，新的總教練不管過去那些事——<b class="hl">〈${esc(traitName('onetool'))}〉解除</b>，你又有位置了。`);
+    if (pro === null) return;
+    if (this.#traits.has('cancer') && this.#cancerTeam === null) this.#cancerTeam = pro.team;
+    if (this.#traits.has('onetool') && pro.team !== this.#onetoolTeam) {
+      this.#traits.delete('onetool');
+      this.#onetoolEver = true;
+      this.#onetoolTeam = null;
+      this.flow.card('good', '重獲重用', `換到${esc(pro.team)}，新的總教練不管過去那些事——<b class="hl">〈${esc(traitName('onetool'))}〉解除</b>，你又有位置了。`);
+    }
+    if (this.#traits.has('cancer') && pro.team !== this.#cancerTeam) {
+      this.#traits.delete('cancer');
+      this.#cancerEver = true;
+      this.#cancerTeam = null;
+      this.flow.card('good', '重新開始', `換到${esc(pro.team)}，沒有人記得你以前在休息室掀過幾次桌——<b class="hl">〈${esc(traitName('cancer'))}〉解除</b>。`);
+    }
   }
 
   /** 太早離開棒球的人走上哪一條路。沒走到第二人生是 null。 */

@@ -2600,6 +2600,21 @@ describe('特性的取得條件', () => {
     throw new Error('六十局都沒有人拿到高手高手高高手');
   });
 
+  it('烏鴉：換隊就解除，成就照樣留著', () => {
+    // 校準用的均衡玩家事件卡一律全力一搏，幾乎每一局都會拿到烏鴉。
+    for (let i = 0; i < 60; i++) {
+      const game = playCareer(`crow-${i}`, 'SS');
+      const log = cards(game);
+      const got = log.findIndex((c) => (c.body ?? '').includes('〈烏鴉〉') && (c.body ?? '').includes('取得特性'));
+      const cleared = log.findIndex((c) => c.title === '重新開始');
+      if (got < 0 || cleared < got) continue;
+      expect(log[cleared]?.body).toContain('〈烏鴉〉解除');
+      expect(game.score()?.achievements.list.some((a) => a.id === 'trait:cancer')).toBe(true);
+      return;
+    }
+    throw new Error('六十局都沒有人帶著烏鴉換隊');
+  });
+
   it('十里坡劍神：頂級聯盟裡綜合能力累計上升夠多，取得當下能力 +1、潛力 +5', () => {
     // 正式門檻（6 季 +8）不點天賦幾乎摸不到，這裡把門檻放低只為了走到那段程式。
     const cfg = abilities.late_bloom as { seasons: number; rise: number };

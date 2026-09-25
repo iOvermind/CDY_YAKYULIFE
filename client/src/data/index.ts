@@ -1596,6 +1596,8 @@ export interface SeasonData {
       readonly silence_chance: number;
       readonly ambience: { readonly complains: number; readonly trait: string };
     };
+    /** 大聯盟 10-5 條款：一軍年資與同隊年資都滿就有否決權，烏鴉也適用。 */
+    readonly ten_and_five: { readonly org: string; readonly league_years: number; readonly team_years: number };
     readonly refuse: { readonly years: number; readonly championship_factor: number };
     readonly split: Range;
   };
