@@ -30,10 +30,10 @@ describe('年齡附加費', () => {
   it('每四年 +1，與能力段無關', () => {
     // 31–34 +1
     expect(abilityCost(50, 80, at(31))).toBe(3); // 基礎 2
-    expect(abilityCost(65, 80, at(31))).toBe(7); // 基礎 6
+    expect(abilityCost(67, 80, at(31))).toBe(7); // 基礎 6
     // 35–38 +2
     expect(abilityCost(50, 80, at(36))).toBe(4);
-    expect(abilityCost(65, 80, at(36))).toBe(8);
+    expect(abilityCost(67, 80, at(36))).toBe(8);
     // 43–46 +4
     expect(abilityCost(50, 80, at(43))).toBe(6);
   });
@@ -67,10 +67,10 @@ describe('年齡附加費', () => {
   /** 上下同一條座標：扣點的借位吃同一份成本（ADR 0033）。 */
   it('扣點的借位吃同一條曲線', () => {
     const old = at(43);
-    const cost = abilityCost(64, 80, old); // 基礎 6 + 4 = 10
+    const cost = abilityCost(66, 80, old); // 基礎 6 + 4 = 10
     expect(cost).toBe(10);
-    const back = untrain(65, 5, 80, 0, old);
-    expect(back.value).toBe(64);
+    const back = untrain(67, 5, 80, 0, old);
+    expect(back.value).toBe(66);
     expect(back.carry).toBe(cost - 5);
   });
 });
@@ -577,12 +577,12 @@ describe('守備奇才的蓄力折扣', () => {
   it('只打守備那四項，打擊與投球照原價', () => {
     const revert = applyTalents({ defense_focus: 3 });
     try {
-      // 能力 72 那一段一級 8 點，×0.7 = 5.6 → 6。
-      expect(abilityCost(72, 80, growthCurve(false, undefined, 'rng'))).toBe(6);
-      expect(abilityCost(72, 80, growthCurve(false, undefined, 'pow'))).toBe(8);
-      expect(abilityCost(72, 80, growthCurve(false, undefined, 'vel'))).toBe(8);
+      // 能力 74 那一段一級 8 點，×0.7 = 5.6 → 6。
+      expect(abilityCost(74, 80, growthCurve(false, undefined, 'rng'))).toBe(6);
+      expect(abilityCost(74, 80, growthCurve(false, undefined, 'pow'))).toBe(8);
+      expect(abilityCost(74, 80, growthCurve(false, undefined, 'vel'))).toBe(8);
       // 沒指定是哪一項的時候不打折——那是在問「這條曲線本身長怎樣」。
-      expect(abilityCost(72, 80, growthCurve(false))).toBe(8);
+      expect(abilityCost(74, 80, growthCurve(false))).toBe(8);
     } finally {
       revert();
     }
