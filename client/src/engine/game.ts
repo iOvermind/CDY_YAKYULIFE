@@ -1919,15 +1919,16 @@ export class Game {
         (this.#honors.length > 0 ? `<br>生涯榮譽：${esc(this.#honors.join('、'))}` : ''),
     );
 
+    // 二刀流的判定在高中畢業、出路之前——讀大學的人不另外多給機會。
+    this.#judgeTwoWay();
     this.flow.push(() => this.#crossroads());
   }
 
   /**
-   * 二刀流判定與定位鎖定，**在進入職業的那一刻**。
+   * 二刀流判定與定位鎖定，**在高中畢業時**，出路之前。
    *
-   * 不論是高中畢業直接進職業、還是讀完大學才進，都在這裡判——讀大學的人因此多
-   * 幾年可以兩邊練，那是那條路的回報之一。判在高中畢業的話，大學四年的養成對
-   * 二刀流就沒有意義。
+   * 讀大學的人不另外多給機會：二刀流的門檻是照六年養成校準的，大學四年再練
+   * 兩邊會讓它變成「多讀幾年就湊得到」的東西。
    */
   #judgeTwoWay(): void {
     const r = this.rating;
@@ -1941,7 +1942,7 @@ export class Game {
       this.flow.card(
         'info',
         `定位確立：${kept}`,
-        `這幾年下來，你的<b class="hl">${kept}</b>能力明顯突出，球團就是這樣看你的。` +
+        `六年下來，你的<b class="hl">${kept}</b>能力明顯突出，球團就是這樣看你的。` +
           `從今以後${esc(dropped)}那一側不再練，能力表也不再顯示它——` +
           '職業球員的角色是固定的。',
       );
@@ -1965,7 +1966,6 @@ export class Game {
    */
   #turnPro(level: string, team: string): void {
     if (this.#stage === 'U') this.#loveCheckpoint('離開大學');
-    this.#judgeTwoWay();
     this.flow.push(() => this.#professionalStart(level, team));
   }
 

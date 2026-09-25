@@ -616,7 +616,7 @@ describe('定位鎖定', () => {
     }
   });
 
-  it('養成期間一律不鎖——鎖定發生在進職業時', () => {
+  it('養成期間一律不鎖——鎖定發生在高中畢業時', () => {
     // playAmateur 停在選秀提問，那時畢業已經跑過了，因此要在更早的地方檢查
     const game = started();
     expect(game.state?.lockedSide).toBeNull();
@@ -2719,12 +2719,14 @@ describe('大學', () => {
     }
   });
 
-  it('讀大學的人在進職業之前兩側都不鎖', () => {
+  it('二刀流在高中畢業就判定好，讀大學不另外多給機會', () => {
     const game = until(started({ seed: 'uni-lock' }), 'path:university');
+    // 走到出路時已經判過：不是二刀流就一定鎖好了一側
+    const twoWay = game.state?.traits.has('two_way') === true;
+    expect(twoWay || game.state?.lockedSide !== null).toBe(true);
     game.choose('path:university');
     until(game, 'path:stay');
-    expect(game.state?.lockedSide).toBeNull();
-    expect(game.state?.traits.has('two_way')).toBe(false);
+    expect(game.state?.traits.has('two_way') === true).toBe(twoWay);
   });
 
   it('大學的事件卡每年三張', () => {
