@@ -4233,7 +4233,15 @@ export class Game {
     this.#phoenix();
 
     // ---- 老化
-    const aging = applyAging(this.world, this.#ability, this.#age, this.#ceilingBonus, this.#traits);
+    const aging = applyAging(
+      this.world,
+      this.#ability,
+      this.#age,
+      this.#ceilingBonus,
+      this.#traits,
+      // 二刀流兩側都抽；定位鎖定之後只抽用得到的那一側。
+      ALL_ABILITIES.filter((k) => isSideVisible(k, this.#lockedSide)),
+    );
     this.#ability = { ...aging.ability };
     // 能力值降下來之後，那一級的成本跟著變便宜——存著的點數可能已經夠用了。
     this.#settleCarry();

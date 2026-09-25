@@ -237,6 +237,8 @@ export function applyAging(
   age: number,
   ceilingBonus: Readonly<Record<string, number>> = {},
   traits: ReadonlySet<string> = new Set(),
+  /** 自然成長抽得到的能力（用得到的那一側）。省略就是全部。 */
+  growable: readonly string[] | null = null,
 ): AgingResult {
   const rng = world.stream('growth');
   const a = cfg.aging;
@@ -254,8 +256,14 @@ export function applyAging(
     // 〈大隻雞慢啼〉：這一季有機會讓上限再高一點。沒買天賦就不抽，生涯逐格不變。
     const bonus = a.growth.bonus_max > 0 && rng.chance(a.growth.bonus_chance * 100) ? a.growth.bonus_max : 0;
     const points = rng.int(a.growth.points.min, a.growth.points.max + bonus);
+    // 只抽**用得到、而且還沒到 80** 的能力：不看潛力，但量表上限擋得住（2026-09-25）。
+    // 以前從全部能力裡抽、也不看上限，鎖成野手的人點數會掉進球速、控球，練滿的
+    // 能力還會被推過 80。每加一點重算一次，同一季也不會把一項推過頂。
+    const pool = growable === null ? keys : keys.filter((k) => growable.includes(k));
     for (let i = 0; i < points; i++) {
-      const key = keys[rng.int(0, keys.length - 1)];
+      const open = pool.filter((k) => (next[k] ?? 0) < abilities.scale.max);
+      if (open.length === 0) break;
+      const key = open[rng.int(0, open.length - 1)];
       if (key === undefined) continue;
       next[key] = (next[key] ?? 0) + 1;
       changes.set(key, (changes.get(key) ?? 0) + 1);

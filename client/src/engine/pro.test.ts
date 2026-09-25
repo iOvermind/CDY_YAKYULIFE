@@ -246,6 +246,23 @@ describe('applyAging', () => {
     expect(rose).toBeGreaterThan(50);
   });
 
+  /** 自然成長只抽用得到、還沒到 80 的能力（2026-09-25）。 */
+  it('自然成長不抽用不到的能力，也不把能力推過 80', () => {
+    const young = cfg.aging.peak_start - 3;
+    const ability = { ...flat(50), con: 80, pow: 80 } as Abilities;
+    const growable = ['con', 'pow', 'eye', 'spd'];
+    for (let i = 0; i < 200; i++) {
+      const r = applyAging(new World(`g${i}`), ability, young, {}, new Set(), growable);
+      for (const key of r.changes.keys()) expect(['eye', 'spd']).toContain(key);
+      expect(r.ability['con']).toBe(80);
+    }
+  });
+
+  it('全部都到 80 就不再長', () => {
+    const r = applyAging(new World('full'), flat(80), cfg.aging.peak_start - 3);
+    expect(r.changes.size).toBe(0);
+  });
+
   it('巔峰期間能力不動', () => {
     const r = age('a', cfg.aging.peak_start);
     expect(r.phase).toBe('peak');
