@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { achievements as cfg, flavor, traits } from '../data/index.ts';
-import { lifeIndex } from './achievements.ts';
+import { lifeIndex, priceOwned } from './achievements.ts';
 import { unlockEverything } from './unlockAll.ts';
 
 /** unlock-all.sh 的名單：除了第 N 段人生，拿得到的全部開。 */
@@ -8,6 +8,15 @@ describe('unlockEverything', () => {
   const all = unlockEverything(new Set());
   const ids = new Set(all.map((a) => a.id));
   const byId = new Map(all.map((a) => [a.id, a]));
+
+  /**
+   * 開出來的每一項都要是現行規則認得的——認不出的會在伺服器啟動時被刪掉，等於
+   * 白開。賽事表的 `_note` 曾經被當成一項賽事，開出少了賽事名的「中華隊 冠軍」。
+   */
+  it('每一項都認得出來', () => {
+    const prices = priceOwned(all);
+    expect([...prices].filter(([, p]) => p === null).map(([id]) => id)).toEqual([]);
+  });
 
   it('沒有第 N 段人生，也沒有重複的 id', () => {
     expect(all.some((a) => lifeIndex(a.id) !== null)).toBe(false);

@@ -16,6 +16,7 @@
 import {
   achievements as cfg,
   amateur,
+  dataKeys,
   awards as awardsData,
   leagues,
   traitName,
@@ -532,6 +533,19 @@ export interface OwnedAchievement {
 /** 各聯盟的體系代碼（`CPBL`、`MLB`……）。認不出的聯盟就是舊資料。 */
 const ORGS = new Set(Object.values(leagues.levels).map((l) => l.org));
 
+/**
+ * 認得出的國際賽：`中華隊 <賽事名>`，養成期與職業兩張賽事表合起來。賽事表夾著
+ * `_note` 註解，走 dataKeys 跳過。
+ */
+const INTL_EVENTS = new Set(
+  (
+    [amateur.amateur_international, amateur.international] as readonly {
+      readonly honor_prefix: string;
+      readonly tournaments: Readonly<Record<string, { readonly name: string }>>;
+    }[]
+  ).flatMap((t) => dataKeys(t.tournaments).map((k) => joinName(t.honor_prefix, t.tournaments[k]!.name))),
+);
+
 /** 認得出的獎項代碼：有自己點數的，加上各項單項王與守備獎。 */
 const AWARD_CODES = new Set([
   ...Object.keys(cfg.categories.award.by_code),
@@ -574,7 +588,14 @@ function priceOf(a: OwnedAchievement): number | null {
       return c.trait.by_id[id] ?? (tone === null ? c.trait.default : (c.trait.by_tone[tone] ?? c.trait.default));
     }
     case 'intl': {
-      if (parts[1] === 'mvp') return c.international.mvp;
+      // 賽事名要對得上一項真的賽事——unlock-all 曾經組出少了賽事名的「中華隊 冠軍」。
+      if (parts[1] === 'mvp') {
+        const honor = a.id.slice('intl:mvp:'.length);
+        const suffix = amateur.international.mvp.suffix;
+        const event = honor.endsWith(suffix) ? honor.slice(0, -suffix.length).trim() : '';
+        return INTL_EVENTS.has(event) ? c.international.mvp : null;
+      }
+      if (!INTL_EVENTS.has(a.id.slice('intl:'.length))) return null;
       const index = rankIndexOf(c.international.by_rank, a.name);
       return index < 0 ? null : ladderPoints(Object.values(c.international.by_rank), index);
     }

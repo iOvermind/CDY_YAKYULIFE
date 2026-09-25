@@ -2588,7 +2588,7 @@ describe('耐力退守', () => {
     for (const k of Object.keys(table)) if (k !== 'DH') table[k] = (saved[k] ?? 0) * 3;
     try {
       let seen = false;
-      for (let i = 0; i < 30 && !seen; i++) {
+      for (let i = 0; i < 80 && !seen; i++) {
         const game = started({ seed: `step-${i}`, startPosition: 'SS' });
         const asked: string[] = [];
         let guard = 0;

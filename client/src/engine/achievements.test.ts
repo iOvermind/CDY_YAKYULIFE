@@ -472,6 +472,10 @@ describe('priceOwned', () => {
     expect(one('cum:career:hits:123')).toBeNull(); // 不在級距上
     expect(one('cum:career:不存在的數據:500')).toBeNull();
     expect(one('cup:不存在的盃賽', '不存在的盃賽冠軍')).toBeNull();
+    // unlock-all 曾經把賽事表的 `_note` 當成一項賽事，組出少了賽事名的兩格。
+    expect(one('intl:中華隊', '中華隊 冠軍')).toBeNull();
+    expect(one('intl:mvp:中華隊 MVP')).toBeNull();
+    expect(one('intl:mvp:中華隊 世界棒球經典賽 MVP')).toBe(cfg.categories.international.mvp);
   });
 
   it('點數讀現行設定，不讀解鎖當下的值', () => {

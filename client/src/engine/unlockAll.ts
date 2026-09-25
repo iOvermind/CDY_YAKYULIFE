@@ -20,6 +20,7 @@
 import {
   achievements as cfg,
   amateur,
+  dataKeys,
   awards as awardsCfg,
   flavor,
   hallOfFame,
@@ -93,12 +94,14 @@ function everyHonor(): string[] {
     if (typeof stage !== 'object' || stage === null || !('names' in stage)) continue;
     for (const cup of (stage as { names?: readonly string[] }).names ?? []) out.push(joinName(cup, champion));
   }
+  // 走 dataKeys 而不是 Object.values：賽事表裡夾著 `_note` 註解，當成一項賽事的話
+  // 組出來的是少了賽事名的「中華隊 冠軍」「中華隊 MVP」（2026-09-26 修正）。
   const youth = amateur.amateur_international;
-  for (const t of Object.values(youth.tournaments)) {
+  for (const t of dataKeys(youth.tournaments).map((k) => youth.tournaments[k]!)) {
     out.push(joinName(youth.honor_prefix, t.name, intlChampion));
   }
   const pro = amateur.international;
-  for (const t of Object.values(pro.tournaments)) {
+  for (const t of dataKeys(pro.tournaments).map((k) => pro.tournaments[k]!)) {
     out.push(joinName(pro.honor_prefix, t.name, intlChampion));
     out.push(joinName(pro.honor_prefix, t.name, pro.mvp.suffix));
   }
