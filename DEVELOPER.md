@@ -312,7 +312,12 @@ docker compose down           # 停掉，資料留著
 
 | 操作 | 影響的資料 | 可回復機制 |
 | :--- | :--- | :--- |
-| 目前無 | 無 | 無 |
+| 伺服器啟動（`pruneAchievements`，在 `schema.sql` 跑完之後） | `achievements` 表裡現行規則認不出的列，連同它們的 AP（[ADR 0053](docs/adr/0053-ap-is-priced-by-the-current-rules.md)） | **無，刪除不可逆。** 每刪一列在日誌留一行 `[achievements] … 已刪除`；要救只能從資料庫備份撈回來 |
+
+**改到成就 id 的規則之前**（改 id 格式、拿掉或改名特性、拿掉獎項代碼、改聯盟代碼、改累積項目或級距、改名次的字樣）：
+
+1. 先在 `schema.sql` 寫遷移，把舊 id 改成新 id——聯盟正名那幾行 `UPDATE achievements` 就是範例。`schema.sql` 在清理之前跑，所以遷移過的列不會被刪。
+2. 部署前拿正式資料庫的副本啟動一次，看日誌裡的刪除清單是不是只有預期要收回的那些。
 
 ---
 
@@ -337,6 +342,12 @@ docker compose down           # 停掉，資料留著
 - **處置**：不用手動處理。`client/scripts/native-platform.mjs` 掛在 `predev` / `prebuild` / `pretest` / `pretest:watch` / `pretypecheck` / `precalibrate`，會偵測平台不符並自動重裝（約 5 秒）。平台正確時開銷約 30ms。
 - **注意**：**繞過 npm scripts 直接跑 `npx vite` / `npx vitest` 不會觸發偵測**，換邊後請走 `npm run dev` / `npm test`。
 - **手動修**：`cd client && npm i --os=win32 --cpu=x64`（WSL 端用 `--os=linux`）。這個指令只換原生套件，**不會改動 `package-lock.json`**——lock 本來就列出所有平台，只是安裝時二選一。
+
+#### 部署之後某些玩家的成就不見了、AP 變少或變負
+
+- **症狀**：成就櫃少了幾格，右上角的 AP 比部署前少，甚至是負數
+- **原因**：AP 依現行規則定價，伺服器每次啟動會刪掉現行規則認不出的成就（[ADR 0053](docs/adr/0053-ap-is-priced-by-the-current-rules.md)）。調低某項成就的點數也會直接讓所有帳號的 AP 變少——這兩件都是設計，不是 bug。
+- **處置**：先看伺服器日誌的 `[achievements]` 行，確認刪掉的是不是預期要收回的。**不是的話**，是改規則時漏寫了 id 遷移：從備份把那些列撈回來，在 `schema.sql` 補上把舊 id 改成新 id 的遷移，再重新部署。負的 AP 不用修，天賦照常生效，打新的成就就會補回來。
 
 #### 開發伺服器啟動失敗，說連接埠被佔用
 
