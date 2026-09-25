@@ -2256,6 +2256,25 @@ describe('天賦', () => {
     expect(seasonData.retirement.max_age).toBe(before);
   });
 
+  /** 不老妖精、棒球公務員開局擲一次：第 3 階是 1～3 年，整局有效，dispose 還原（2026-09-25）。 */
+  it('機率型天賦開局擲一次，三種年數都擲得到，收掉之後還原', () => {
+    const peak = seasonData.aging.peak_end;
+    const age = seasonData.retirement.max_age;
+    const seen = { peak: new Set<number>(), age: new Set<number>() };
+    for (let i = 0; i < 60; i++) {
+      const game = new Game({ ...setup, seed: `roll-${i}`, talents: { evergreen: 3, marathoner: 3 } });
+      seen.peak.add(seasonData.aging.peak_end - peak);
+      seen.age.add(seasonData.retirement.max_age - age);
+      game.start();
+      expect(JSON.stringify(game.flow.log)).toContain('〈不老妖精〉巔峰期結束延後');
+      game.dispose();
+      expect(seasonData.aging.peak_end).toBe(peak);
+      expect(seasonData.retirement.max_age).toBe(age);
+    }
+    expect([...seen.peak].sort()).toEqual([1, 2, 3]);
+    expect([...seen.age].sort()).toEqual([1, 2, 3]);
+  });
+
   it('重播帶天賦的日誌會重現同一段人生', () => {
     const original = play({ gifted: 2, allin: 1 });
     const log = original.toReplayLog();

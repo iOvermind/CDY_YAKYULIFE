@@ -272,30 +272,30 @@
           "effect_text": "巔峰期結束延後 1 年",
           "effects": [
             {
-              "path": "season.aging.peak_end",
-              "op": "add",
+              "path": "season.aging.peak_delay_max",
+              "op": "set",
               "value": 1
             }
           ]
         },
         {
           "cost": 34,
-          "effect_text": "巔峰期結束延後 2 年",
+          "effect_text": "巔峰期結束延後 1～2 年（各 50%，開局時決定）",
           "effects": [
             {
-              "path": "season.aging.peak_end",
-              "op": "add",
+              "path": "season.aging.peak_delay_max",
+              "op": "set",
               "value": 2
             }
           ]
         },
         {
           "cost": 68,
-          "effect_text": "巔峰期結束延後 3 年",
+          "effect_text": "巔峰期結束延後 1～3 年（各 33%，開局時決定）",
           "effects": [
             {
-              "path": "season.aging.peak_end",
-              "op": "add",
+              "path": "season.aging.peak_delay_max",
+              "op": "set",
               "value": 3
             }
           ]
@@ -354,30 +354,30 @@
           "effect_text": "年齡上限 +1",
           "effects": [
             {
-              "path": "season.retirement.max_age",
-              "op": "add",
+              "path": "season.retirement.max_age_bonus_max",
+              "op": "set",
               "value": 1
             }
           ]
         },
         {
           "cost": 28,
-          "effect_text": "年齡上限 +2",
+          "effect_text": "年齡上限 +1～2（各 50%，開局時決定）",
           "effects": [
             {
-              "path": "season.retirement.max_age",
-              "op": "add",
+              "path": "season.retirement.max_age_bonus_max",
+              "op": "set",
               "value": 2
             }
           ]
         },
         {
           "cost": 56,
-          "effect_text": "年齡上限 +3",
+          "effect_text": "年齡上限 +1～3（各 33%，開局時決定）",
           "effects": [
             {
-              "path": "season.retirement.max_age",
-              "op": "add",
+              "path": "season.retirement.max_age_bonus_max",
+              "op": "set",
               "value": 3
             }
           ]
@@ -474,7 +474,7 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "受傷機率 ×0.9",
+          "effect_text": "受傷機率 ×0.90",
           "effects": [
             {
               "path": "injury.chance.talent_multiplier",
@@ -485,7 +485,7 @@
         },
         {
           "cost": 30,
-          "effect_text": "受傷機率 ×0.8",
+          "effect_text": "受傷機率 ×0.80",
           "effects": [
             {
               "path": "injury.chance.talent_multiplier",
@@ -496,7 +496,7 @@
         },
         {
           "cost": 60,
-          "effect_text": "受傷機率 ×0.7",
+          "effect_text": "受傷機率 ×0.70",
           "effects": [
             {
               "path": "injury.chance.talent_multiplier",
@@ -556,7 +556,7 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.8",
+          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.80",
           "effects": [
             {
               "path": "injury.severity.major.dice_loss.chance",
@@ -567,7 +567,7 @@
         },
         {
           "cost": 30,
-          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.5",
+          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.50",
           "effects": [
             {
               "path": "injury.severity.major.dice_loss.chance",
@@ -578,7 +578,7 @@
         },
         {
           "cost": 52,
-          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.3",
+          "effect_text": "大傷永久少一顆訓練骰的機率 ×0.30",
           "effects": [
             {
               "path": "injury.severity.major.dice_loss.chance",
@@ -608,7 +608,7 @@
         },
         {
           "cost": 30,
-          "effect_text": "耐力上限 ×1.1",
+          "effect_text": "耐力上限 ×1.10",
           "effects": [
             {
               "path": "season.endurance.max_multiplier",
@@ -649,7 +649,7 @@
         },
         {
           "cost": 30,
-          "effect_text": "守位與投球的耐力消耗 ×0.9",
+          "effect_text": "守位與投球的耐力消耗 ×0.90",
           "effects": [
             {
               "path": "season.endurance.cost_multiplier",
@@ -835,7 +835,7 @@
       "levels": [
         {
           "cost": 10,
-          "effect_text": "感情風波的機率 ×0.7",
+          "effect_text": "感情風波的機率 ×0.70",
           "effects": [
             {
               "path": "love.turmoil.talent_multiplier",
@@ -846,7 +846,7 @@
         },
         {
           "cost": 24,
-          "effect_text": "感情風波的機率 ×0.4",
+          "effect_text": "感情風波的機率 ×0.40",
           "effects": [
             {
               "path": "love.turmoil.talent_multiplier",
@@ -857,7 +857,7 @@
         },
         {
           "cost": 50,
-          "effect_text": "感情風波的機率 ×0.2",
+          "effect_text": "感情風波的機率 ×0.20",
           "effects": [
             {
               "path": "love.turmoil.talent_multiplier",
@@ -877,7 +877,7 @@
       "levels": [
         {
           "cost": 10,
-          "effect_text": "升學與進職業的關卡撐過去的機率 ×1.2",
+          "effect_text": "升學與進職業的關卡撐過去的機率 ×1.20",
           "effects": [
             {
               "path": "love.amateur.checkpoint.talent_survive_multiplier",
@@ -899,7 +899,7 @@
         },
         {
           "cost": 50,
-          "effect_text": "升學與進職業的關卡撐過去的機率 ×1.5",
+          "effect_text": "升學與進職業的關卡撐過去的機率 ×1.50",
           "effects": [
             {
               "path": "love.amateur.checkpoint.talent_survive_multiplier",
@@ -963,7 +963,7 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "守備能力的升級蓄力 ×0.9",
+          "effect_text": "守備能力的升級蓄力 ×0.90",
           "effects": [
             {
               "path": "abilities.growth_cost.default.defense_multiplier",
@@ -975,7 +975,7 @@
         },
         {
           "cost": 30,
-          "effect_text": "守備能力的升級蓄力 ×0.8",
+          "effect_text": "守備能力的升級蓄力 ×0.80",
           "effects": [
             {
               "path": "abilities.growth_cost.default.defense_multiplier",
@@ -987,7 +987,7 @@
         },
         {
           "cost": 60,
-          "effect_text": "守備能力的升級蓄力 ×0.7",
+          "effect_text": "守備能力的升級蓄力 ×0.70",
           "effects": [
             {
               "path": "abilities.growth_cost.default.defense_multiplier",

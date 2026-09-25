@@ -1526,6 +1526,8 @@ export interface SeasonData {
   readonly aging: {
     readonly peak_start: number;
     readonly peak_end: number;
+    /** 天賦〈不老妖精〉：開局擲 1～這個數字年，加在 peak_end 上。平常是 0。 */
+    readonly peak_delay_max: number;
     /** 〈斷水流〉：衰退延後幾年、衰退量乘多少。 */
     readonly disc: { readonly trait: string; readonly delay_years: number; readonly decline_multiplier: number };
     readonly growth: {
@@ -1551,6 +1553,8 @@ export interface SeasonData {
     };
   };
   readonly retirement: {
+    /** 天賦〈棒球公務員〉：開局擲 1～這個數字年，加在 max_age 上。平常是 0。 */
+    readonly max_age_bonus_max: number;
     readonly min_age: number;
     readonly age_chance: { readonly base: number; readonly per_year: number; readonly max: number };
     readonly max_age: number;

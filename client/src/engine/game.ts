@@ -723,6 +723,9 @@ export class Game {
   #ballots: readonly BallotResult[] = [];
   /** 還原天賦覆蓋的函式。見 constructor 與 dispose()。 */
   #revertTalents: () => void = () => {};
+  /** 開局擲出的〈不老妖精〉延後年數與〈棒球公務員〉的年齡上限加成。沒買是 0。 */
+  #peakDelay = 0;
+  #maxAgeBonus = 0;
   /** 國際賽的生涯成績。與聯盟成績分開——它不屬於任何聯盟。 */
   #intlBatting: BattingLine | null = null;
   #intlPitching: PitchingLine | null = null;
@@ -923,7 +926,23 @@ export class Game {
     //
     // 這是全域可變狀態：**同一時間只能有一局套著覆蓋**。瀏覽器本來就只跑一局；
     // 伺服器端的重跑驗證必須序列化，或隔離到獨立行程。見 ADR 0007。
-    this.#revertTalents = applyTalents(setup.talents ?? {});
+    const revertOverlay = applyTalents(setup.talents ?? {});
+    // 〈不老妖精〉〈棒球公務員〉是機率型的：開局擲一次，擲到的年數整局有效。直接
+    // 加在規則資料上，讀 peak_end／max_age 的每一處都自動吃到；還原跟著天賦覆蓋一起。
+    // 沒買就不擲，沒買天賦的生涯逐格不變。
+    const aging = seasonCfg.aging as { peak_end: number };
+    const retirement = seasonCfg.retirement as { max_age: number };
+    const before = { peakEnd: aging.peak_end, maxAge: retirement.max_age };
+    const roll = (max: number) => (max > 0 ? this.world.stream('career').int(1, Math.round(max)) : 0);
+    this.#peakDelay = roll(seasonCfg.aging.peak_delay_max);
+    this.#maxAgeBonus = roll(seasonCfg.retirement.max_age_bonus_max);
+    aging.peak_end += this.#peakDelay;
+    retirement.max_age += this.#maxAgeBonus;
+    this.#revertTalents = () => {
+      aging.peak_end = before.peakEnd;
+      retirement.max_age = before.maxAge;
+      revertOverlay();
+    };
   }
 
   /**
@@ -1270,6 +1289,13 @@ export class Game {
           '代價是兩邊都不會頂尖。守備位置交給教練團，練到哪裡就站到哪裡。',
       );
     }
+
+    // 開局擲出的機率型天賦，擲到幾年講一次，之後整局都照這個數字。
+    const rolled = [
+      this.#peakDelay > 0 ? `〈不老妖精〉巔峰期結束延後 <b class="hl">${this.#peakDelay}</b> 年` : '',
+      this.#maxAgeBonus > 0 ? `〈棒球公務員〉年齡上限 <b class="hl">+${this.#maxAgeBonus}</b>` : '',
+    ].filter((l) => l !== '');
+    if (rolled.length > 0) this.flow.card('info', '天賦', rolled.join('<br>'));
 
     this.#registerInitialPosition();
 

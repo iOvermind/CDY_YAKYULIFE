@@ -83,16 +83,16 @@ describe('套用與還原', () => {
   });
 
   it('層級越高效果越強', () => {
-    const base = season.aging.peak_end;
+    const base = season.aging.peak_delay_max;
     const one = applyTalents({ evergreen: 1 });
-    const lv1 = season.aging.peak_end;
+    const lv1 = season.aging.peak_delay_max;
     one();
     const two = applyTalents({ evergreen: 2 });
-    const lv2 = season.aging.peak_end;
+    const lv2 = season.aging.peak_delay_max;
     two();
     expect(lv1).toBeGreaterThan(base);
     expect(lv2).toBeGreaterThan(lv1);
-    expect(season.aging.peak_end).toBe(base);
+    expect(season.aging.peak_delay_max).toBe(base);
   });
 
   it('連續套用與還原不會累積殘留', () => {
