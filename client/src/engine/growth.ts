@@ -307,16 +307,16 @@ export function rollTrainingDice(
   // 上一季奪冠的回報：多擲幾顆骰，骰面不變。傷缺的球季也照給——冠軍是去年
   // 掙來的，跟今年有沒有受傷無關。
   count += Math.max(0, options.bonusDice ?? 0);
-  // 天賦買來的骰數。理由同上：那是玩家帶進場的東西，不是那一季的境遇。
-  count += Math.max(0, cfg.bonus_count);
+  // 天賦買來的骰數。理由同上：那是玩家帶進場的東西，不是那一季的境遇。沒買就一顆
+  // 都不抽，沒買天賦的生涯逐格不變。
+  if (cfg.bonus_count_max > 0) count += rng.int(1, Math.round(cfg.bonus_count_max));
 
-  const min = Math.min(6, Math.max(1, cfg.min_face));
-  const weights = pickFaceWeights(traits, min);
+  const weights = pickFaceWeights(traits);
   const values: number[] = [];
   let sixes = 0;
   for (let i = 0; i < count; i++) {
     // 公平骰照舊擲整數；加權的骰面走 weighted，鍵就是點數。
-    const v = weights === null ? rng.int(min, 6) : Number(rng.weighted(weights));
+    const v = weights === null ? rng.int(1, 6) : Number(rng.weighted(weights));
     values.push(v);
     if (v === 6) sixes++;
   }
@@ -326,9 +326,8 @@ export function rollTrainingDice(
 /** 擲一顆訓練骰，骰面規則與季初訓練相同（〈肝帝〉的最低點數、〈高手高手高高手〉的權重）。 */
 export function rollOneDie(world: World, traits: ReadonlySet<string>): number {
   const rng = world.stream('growth');
-  const min = Math.min(6, Math.max(1, abilities.training_dice.min_face));
-  const weights = pickFaceWeights(traits, min);
-  return weights === null ? rng.int(min, 6) : Number(rng.weighted(weights));
+  const weights = pickFaceWeights(traits);
+  return weights === null ? rng.int(1, 6) : Number(rng.weighted(weights));
 }
 
 /**
@@ -349,16 +348,22 @@ export function championshipDice(kinds: readonly string[]): number {
 }
 
 /**
- * 依特性取骰面權重（點數 → 權重）；命中第一個即採用，都沒有就是公平骰（null）。
- * 比 `min` 小的骰面拿掉——〈肝帝〉墊高的最低點數照樣算數。
+ * 骰面權重（點數 → 權重）：特性的骰面（〈高手高手高高手〉，命中第一個即採用）乘上
+ * 天賦〈肝帝〉的高點倍率。兩者都沒有就是公平骰（null），照舊擲整數。
  */
-function pickFaceWeights(traits: ReadonlySet<string>, min: number): Record<string, number> | null {
+function pickFaceWeights(traits: ReadonlySet<string>): Record<string, number> | null {
   const faces = abilities.training_dice.faces;
+  let base: readonly number[] | null = null;
   for (const trait of Object.keys(faces).sort()) {
     if (trait.startsWith('_')) continue;
     const w = faces[trait];
-    if (w === undefined || !traits.has(trait)) continue;
-    return Object.fromEntries(w.flatMap((v, i) => (i + 1 >= min ? [[String(i + 1), v]] : [])));
+    if (w !== undefined && traits.has(trait)) {
+      base = w;
+      break;
+    }
   }
-  return null;
+  const high = abilities.training_dice.high_face_multiplier;
+  if (base === null && high === 1) return null;
+  const w = base ?? [1, 1, 1, 1, 1, 1];
+  return Object.fromEntries(w.map((v, i) => [String(i + 1), v * (i >= 3 ? high : 2 - high)]));
 }

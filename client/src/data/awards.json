@@ -198,6 +198,8 @@
       "min": 3,
       "max": 92
     },
+    "_talent_note": "天賦〈流量密碼〉：最後的入選率再乘這個（1.20／1.50／1.80），上限同 popularity_bonus.clamp。平常是 1（2026-09-25，以前是 base +8／+16）。",
+    "talent_multiplier": 1,
     "home_faith": {
       "_note": "〈全台主場〉：明星賽入選率另外加這麼多個百分點，不論效力哪一隊；與台中猛瑪的人氣加成疊加，上限同 popularity_bonus.clamp（2026-09-25）。",
       "trait": "goldcloth",

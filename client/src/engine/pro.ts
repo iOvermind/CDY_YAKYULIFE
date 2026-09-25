@@ -251,7 +251,9 @@ export function applyAging(
   defenseBonus(rng, next, changes, age, ceilingBonus);
 
   if (age < a.peak_start) {
-    const points = rng.int(a.growth.points.min, a.growth.points.max);
+    // 〈大隻雞慢啼〉：這一季有機會讓上限再高一點。沒買天賦就不抽，生涯逐格不變。
+    const bonus = a.growth.bonus_max > 0 && rng.chance(a.growth.bonus_chance * 100) ? a.growth.bonus_max : 0;
+    const points = rng.int(a.growth.points.min, a.growth.points.max + bonus);
     for (let i = 0; i < points; i++) {
       const key = keys[rng.int(0, keys.length - 1)];
       if (key === undefined) continue;
@@ -269,7 +271,8 @@ export function applyAging(
   const yearsPast = age - peakEnd;
   const total =
     Math.min(a.decline.max, a.decline.base + yearsPast * a.decline.per_year_after_peak) *
-    (disc ? a.disc.decline_multiplier : 1);
+    (disc ? a.disc.decline_multiplier : 1) *
+    a.decline.talent_multiplier;
   const fast = new Set(a.decline.speed_first.fast);
   const slow = new Set(a.decline.speed_first.slow);
 

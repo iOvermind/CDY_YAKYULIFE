@@ -202,10 +202,10 @@ export interface AbilitiesData {
     readonly count_weights: Readonly<Record<string, number>>;
     readonly count_when_injured: number;
     readonly min_count: number;
-    /** 天賦買來的固定骰數，平常是 0。不吃 min_count，傷缺的球季照給。 */
-    readonly bonus_count: number;
-    /** 骰子的最低點數，平常是 1（天賦〈肝帝〉會改它）。 */
-    readonly min_face: number;
+    /** 天賦〈精神時光屋〉：每季多擲 1～這個數字顆，平常是 0。不吃 min_count，傷缺的球季照給。 */
+    readonly bonus_count_max: number;
+    /** 天賦〈肝帝〉：4～6 點的權重倍率，1～3 點是 2 減它。平常是 1。 */
+    readonly high_face_multiplier: number;
     /** 骰面 1～6 的權重，依特性取用；沒有命中就是公平骰。 */
     readonly faces: Readonly<Record<string, readonly number[]>>;
     /** 養成期累計擲出幾顆 6 取得〈高手高手高高手〉。 */
@@ -691,6 +691,8 @@ export interface AwardsData {
     /** 出賽係數低於它就不入選明星賽。 */
     readonly min_availability: number;
     readonly clamp: Range;
+    /** 天賦〈流量密碼〉：最後的入選率倍率，平常是 1。 */
+    readonly talent_multiplier: number;
     /** 〈全台主場〉的明星賽加成（百分點）。 */
     readonly home_faith: { readonly trait: string; readonly add: number };
     readonly popularity_bonus: {
@@ -1178,11 +1180,13 @@ export interface TransferData {
   };
   readonly scouting: {
     readonly offers_per_org: Range;
+    /** 一年最多幾隊來挖角。 */
+    readonly max_offers: number;
     readonly min_win_pct: { readonly value: number };
     /** 挖角的加薪門檻：落地層級的預估年薪至少要是目前年薪的這個倍數。 */
     readonly min_raise: number;
   };
-  readonly fallback: { readonly max_offers: number };
+  readonly fallback: { readonly max_offers: number; readonly per_org: number };
   /** 自由球員的國內市場：同體系其他球隊有幾支上門，看 d 值。 */
   readonly free_agency: {
     readonly suitors: {
@@ -1526,10 +1530,15 @@ export interface SeasonData {
     readonly disc: { readonly trait: string; readonly delay_years: number; readonly decline_multiplier: number };
     readonly growth: {
       readonly points: Range;
+      /** 天賦〈大隻雞慢啼〉：每季有這個機率讓成長上限 +bonus_max。 */
+      readonly bonus_chance: number;
+      readonly bonus_max: number;
       /** 守備天賦買來的額外成長機率，平常是 0。到巔峰結束為止每季一次。 */
       readonly defense_bonus_chance: number;
     };
     readonly decline: {
+      /** 天賦〈鐵血硬漢〉：衰退量的倍率，平常是 1。 */
+      readonly talent_multiplier: number;
       readonly base: number;
       readonly per_year_after_peak: number;
       readonly max: number;

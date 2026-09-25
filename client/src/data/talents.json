@@ -60,19 +60,31 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "突破天賦上限後的成本倍率 −1",
+          "effect_text": "突破天賦上限後的升級成本倍率 −0.50（×3.00 → ×2.50）",
           "effects": [
             {
               "path": "abilities.growth_cost.default.above_ceiling_multiplier",
               "op": "add",
-              "value": -1,
+              "value": -0.5,
               "min": 1
             }
           ]
         },
         {
           "cost": 32,
-          "effect_text": "突破天賦上限後的成本倍率 −1.5",
+          "effect_text": "突破天賦上限後的升級成本倍率 −1.00（×3.00 → ×2.00）",
+          "effects": [
+            {
+              "path": "abilities.growth_cost.default.above_ceiling_multiplier",
+              "op": "add",
+              "value": -1.0,
+              "min": 1
+            }
+          ]
+        },
+        {
+          "cost": 64,
+          "effect_text": "突破天賦上限後的升級成本倍率 −1.50（×3.00 → ×1.50）",
           "effects": [
             {
               "path": "abilities.growth_cost.default.above_ceiling_multiplier",
@@ -93,25 +105,34 @@
       "levels": [
         {
           "cost": 10,
-          "effect_text": "訓練骰的最小點數提高到 2",
+          "effect_text": "訓練骰擲出 4～6 點的機率 ×1.15，1～3 點 ×0.85",
           "effects": [
             {
-              "path": "abilities.training_dice.min_face",
+              "path": "abilities.training_dice.high_face_multiplier",
               "op": "set",
-              "value": 2,
-              "max": 6
+              "value": 1.15
             }
           ]
         },
         {
           "cost": 28,
-          "effect_text": "訓練骰的最小點數提高到 3",
+          "effect_text": "訓練骰擲出 4～6 點的機率 ×1.30，1～3 點 ×0.70",
           "effects": [
             {
-              "path": "abilities.training_dice.min_face",
+              "path": "abilities.training_dice.high_face_multiplier",
               "op": "set",
-              "value": 3,
-              "max": 6
+              "value": 1.3
+            }
+          ]
+        },
+        {
+          "cost": 56,
+          "effect_text": "訓練骰擲出 4～6 點的機率 ×1.45，1～3 點 ×0.55",
+          "effects": [
+            {
+              "path": "abilities.training_dice.high_face_multiplier",
+              "op": "set",
+              "value": 1.45
             }
           ]
         }
@@ -125,23 +146,34 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "巔峰前每季的自然成長上限 +1",
+          "effect_text": "巔峰前每季 80% 機率，自然成長上限 +1",
           "effects": [
             {
-              "path": "season.aging.growth.points.max",
-              "op": "add",
+              "path": "season.aging.growth.bonus_max",
+              "op": "set",
               "value": 1
             }
           ]
         },
         {
           "cost": 30,
-          "effect_text": "巔峰前每季的自然成長上限 +2",
+          "effect_text": "巔峰前每季 80% 機率，自然成長上限 +2",
           "effects": [
             {
-              "path": "season.aging.growth.points.max",
-              "op": "add",
+              "path": "season.aging.growth.bonus_max",
+              "op": "set",
               "value": 2
+            }
+          ]
+        },
+        {
+          "cost": 60,
+          "effect_text": "巔峰前每季 80% 機率，自然成長上限 +3",
+          "effects": [
+            {
+              "path": "season.aging.growth.bonus_max",
+              "op": "set",
+              "value": 3
             }
           ]
         }
@@ -158,20 +190,31 @@
           "effect_text": "季初自主訓練多擲 1 顆骰",
           "effects": [
             {
-              "path": "abilities.training_dice.bonus_count",
-              "op": "add",
+              "path": "abilities.training_dice.bonus_count_max",
+              "op": "set",
               "value": 1
             }
           ]
         },
         {
           "cost": 32,
-          "effect_text": "季初自主訓練多擲 2 顆骰",
+          "effect_text": "季初自主訓練多擲 1～2 顆骰（各 50%）",
           "effects": [
             {
-              "path": "abilities.training_dice.bonus_count",
+              "path": "abilities.training_dice.bonus_count_max",
               "op": "set",
               "value": 2
+            }
+          ]
+        },
+        {
+          "cost": 64,
+          "effect_text": "季初自主訓練多擲 1～3 顆骰（各 33%）",
+          "effects": [
+            {
+              "path": "abilities.training_dice.bonus_count_max",
+              "op": "set",
+              "value": 3
             }
           ]
         }
@@ -189,7 +232,7 @@
           "effects": [
             {
               "path": "abilities.growth_cost.default.discount",
-              "op": "add",
+              "op": "set",
               "value": 1
             }
           ]
@@ -202,6 +245,17 @@
               "path": "abilities.growth_cost.default.discount",
               "op": "set",
               "value": 2
+            }
+          ]
+        },
+        {
+          "cost": 144,
+          "effect_text": "每提升一級的蓄力成本 −3",
+          "effects": [
+            {
+              "path": "abilities.growth_cost.default.discount",
+              "op": "set",
+              "value": 3
             }
           ]
         }
@@ -256,25 +310,34 @@
       "levels": [
         {
           "cost": 16,
-          "effect_text": "每年的衰退幅度減少",
+          "effect_text": "每年的衰退量 ×0.90",
           "effects": [
             {
-              "path": "season.aging.decline.per_year_after_peak",
-              "op": "add",
-              "value": -0.1,
-              "min": 0
+              "path": "season.aging.decline.talent_multiplier",
+              "op": "set",
+              "value": 0.9
             }
           ]
         },
         {
           "cost": 36,
-          "effect_text": "每年的衰退幅度大幅減少",
+          "effect_text": "每年的衰退量 ×0.80",
           "effects": [
             {
-              "path": "season.aging.decline.per_year_after_peak",
-              "op": "add",
-              "value": -0.2,
-              "min": 0
+              "path": "season.aging.decline.talent_multiplier",
+              "op": "set",
+              "value": 0.8
+            }
+          ]
+        },
+        {
+          "cost": 72,
+          "effect_text": "每年的衰退量 ×0.70",
+          "effects": [
+            {
+              "path": "season.aging.decline.talent_multiplier",
+              "op": "set",
+              "value": 0.7
             }
           ]
         }
@@ -307,6 +370,17 @@
               "value": 2
             }
           ]
+        },
+        {
+          "cost": 56,
+          "effect_text": "年齡上限 +3",
+          "effects": [
+            {
+              "path": "season.retirement.max_age",
+              "op": "add",
+              "value": 3
+            }
+          ]
         }
       ]
     },
@@ -318,23 +392,34 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "全力一搏的成功率 ×1.1",
+          "effect_text": "全力一搏的成功率 ×1.08",
           "effects": [
             {
               "path": "events.good_result_chance.mode_modifier.bold_multiplier",
               "op": "mul",
-              "value": 1.1
+              "value": 1.08
             }
           ]
         },
         {
           "cost": 30,
-          "effect_text": "全力一搏的成功率 ×1.2",
+          "effect_text": "全力一搏的成功率 ×1.16",
           "effects": [
             {
               "path": "events.good_result_chance.mode_modifier.bold_multiplier",
               "op": "mul",
-              "value": 1.2
+              "value": 1.16
+            }
+          ]
+        },
+        {
+          "cost": 60,
+          "effect_text": "全力一搏的成功率 ×1.24",
+          "effects": [
+            {
+              "path": "events.good_result_chance.mode_modifier.bold_multiplier",
+              "op": "mul",
+              "value": 1.24
             }
           ]
         }
@@ -348,23 +433,34 @@
       "levels": [
         {
           "cost": 14,
-          "effect_text": "事件卡的成功率 ×1.06",
+          "effect_text": "事件卡的成功率 ×1.05",
           "effects": [
             {
               "path": "events.good_result_chance.talent_multiplier",
               "op": "mul",
-              "value": 1.06
+              "value": 1.05
             }
           ]
         },
         {
           "cost": 34,
-          "effect_text": "事件卡的成功率 ×1.1",
+          "effect_text": "事件卡的成功率 ×1.10",
           "effects": [
             {
               "path": "events.good_result_chance.talent_multiplier",
               "op": "mul",
               "value": 1.1
+            }
+          ]
+        },
+        {
+          "cost": 68,
+          "effect_text": "事件卡的成功率 ×1.15",
+          "effects": [
+            {
+              "path": "events.good_result_chance.talent_multiplier",
+              "op": "mul",
+              "value": 1.15
             }
           ]
         }
@@ -419,23 +515,34 @@
       "levels": [
         {
           "cost": 10,
-          "effect_text": "大傷後隔年報廢的機率減半",
+          "effect_text": "大傷後隔年報廢的機率 ×0.80",
           "effects": [
             {
               "path": "injury.severity.major.rehab_next_year.chance",
               "op": "mul",
-              "value": 0.5
+              "value": 0.8
             }
           ]
         },
         {
           "cost": 26,
-          "effect_text": "大傷後隔年報廢的機率只剩 1/5",
+          "effect_text": "大傷後隔年報廢的機率 ×0.60",
           "effects": [
             {
               "path": "injury.severity.major.rehab_next_year.chance",
               "op": "mul",
-              "value": 0.2
+              "value": 0.6
+            }
+          ]
+        },
+        {
+          "cost": 52,
+          "effect_text": "大傷後隔年報廢的機率 ×0.40",
+          "effects": [
+            {
+              "path": "injury.severity.major.rehab_next_year.chance",
+              "op": "mul",
+              "value": 0.4
             }
           ]
         }
@@ -572,23 +679,34 @@
       "levels": [
         {
           "cost": 10,
-          "effect_text": "選秀評價的年齡加分提高",
+          "effect_text": "選秀評價的年齡加分 ×1.30",
           "effects": [
             {
               "path": "amateur.draft.evaluation.age_bonus_per_year",
-              "op": "add",
-              "value": 1
+              "op": "mul",
+              "value": 1.3
             }
           ]
         },
         {
           "cost": 26,
-          "effect_text": "選秀評價的年齡加分大幅提高",
+          "effect_text": "選秀評價的年齡加分 ×1.55",
           "effects": [
             {
               "path": "amateur.draft.evaluation.age_bonus_per_year",
-              "op": "add",
-              "value": 2
+              "op": "mul",
+              "value": 1.55
+            }
+          ]
+        },
+        {
+          "cost": 52,
+          "effect_text": "選秀評價的年齡加分 ×1.80",
+          "effects": [
+            {
+              "path": "amateur.draft.evaluation.age_bonus_per_year",
+              "op": "mul",
+              "value": 1.8
             }
           ]
         }
@@ -602,34 +720,46 @@
       "levels": [
         {
           "cost": 14,
-          "effect_text": "日職與韓職的球探關注度提升",
+          "effect_text": "韓職球探的關注度 +20%",
           "effects": [
-            {
-              "path": "leagues.transfer.orgs.NPB.scout_chance",
-              "op": "add",
-              "value": 10,
-              "max": 95
-            },
             {
               "path": "leagues.transfer.orgs.KBO.scout_chance",
               "op": "add",
-              "value": 10,
+              "value": 20,
               "max": 95
             }
           ]
         },
         {
           "cost": 36,
-          "effect_text": "各國的球探關注度都明顯提升",
+          "effect_text": "韓職、日職球探的關注度各 +20%",
           "effects": [
             {
-              "path": "leagues.transfer.orgs.NPB.scout_chance",
+              "path": "leagues.transfer.orgs.KBO.scout_chance",
               "op": "add",
               "value": 20,
               "max": 95
             },
             {
+              "path": "leagues.transfer.orgs.NPB.scout_chance",
+              "op": "add",
+              "value": 20,
+              "max": 95
+            }
+          ]
+        },
+        {
+          "cost": 72,
+          "effect_text": "韓職、日職、大聯盟球探的關注度各 +20%，墨聯與澳職也會主動來挖角（各 20%）",
+          "effects": [
+            {
               "path": "leagues.transfer.orgs.KBO.scout_chance",
+              "op": "add",
+              "value": 20,
+              "max": 95
+            },
+            {
+              "path": "leagues.transfer.orgs.NPB.scout_chance",
               "op": "add",
               "value": 20,
               "max": 95
@@ -637,7 +767,19 @@
             {
               "path": "leagues.transfer.orgs.MLB.scout_chance",
               "op": "add",
-              "value": 15,
+              "value": 20,
+              "max": 95
+            },
+            {
+              "path": "leagues.transfer.orgs.LMB.scout_chance",
+              "op": "add",
+              "value": 20,
+              "max": 95
+            },
+            {
+              "path": "leagues.transfer.orgs.ABL.scout_chance",
+              "op": "add",
+              "value": 20,
               "max": 95
             }
           ]
@@ -652,25 +794,34 @@
       "levels": [
         {
           "cost": 8,
-          "effect_text": "明星賽入選機率提升",
+          "effect_text": "明星賽入選機率 ×1.20",
           "effects": [
             {
-              "path": "awards.all_star.base",
-              "op": "add",
-              "value": 8,
-              "max": 95
+              "path": "awards.all_star.talent_multiplier",
+              "op": "set",
+              "value": 1.2
             }
           ]
         },
         {
           "cost": 22,
-          "effect_text": "明星賽入選機率大幅提升",
+          "effect_text": "明星賽入選機率 ×1.50",
           "effects": [
             {
-              "path": "awards.all_star.base",
-              "op": "add",
-              "value": 16,
-              "max": 95
+              "path": "awards.all_star.talent_multiplier",
+              "op": "set",
+              "value": 1.5
+            }
+          ]
+        },
+        {
+          "cost": 44,
+          "effect_text": "明星賽入選機率 ×1.80",
+          "effects": [
+            {
+              "path": "awards.all_star.talent_multiplier",
+              "op": "set",
+              "value": 1.8
             }
           ]
         }

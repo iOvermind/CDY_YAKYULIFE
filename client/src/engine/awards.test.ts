@@ -11,6 +11,7 @@ import {
 import { proBaseline, proBaselineAt } from './metrics.ts';
 import { World } from './rng.ts';
 import type { ProPitchingLine } from './season.ts';
+import { applyTalents } from './overlay.ts';
 
 const SPREAD = 8.4;
 /** 場次來自 leagues.json 的 level.games，不再有第二份副本。 */
@@ -455,5 +456,18 @@ describe('白金手套', () => {
   it('大聯盟拿得到，名字寫白金手套', () => {
     const got = annualAwards(new World('platinum'), ctx({ ...god, org: 'MLB', level: 'MLB', leagueGames: 162 }));
     expect(got.find((a) => a.code === 'defense_king')?.name).toContain('白金手套');
+  });
+});
+
+/** 天賦〈流量密碼〉：明星賽入選率 ×1.80（2026-09-25）。 */
+describe('流量密碼', () => {
+  it('入選率乘上天賦倍率', () => {
+    const plain = rate({ d: 0 }, 'all_star', 2000);
+    const revert = applyTalents({ spotlight: 3 });
+    try {
+      expect(rate({ d: 0 }, 'all_star', 2000)).toBeCloseTo(plain * 1.8, 1);
+    } finally {
+      revert();
+    }
   });
 });

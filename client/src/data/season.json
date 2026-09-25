@@ -766,6 +766,9 @@
     },
     "growth": {
       "_note": "巔峰之前每季自然成長的點數（在訓練骰之外）。",
+      "_bonus_note": "天賦〈大隻雞慢啼〉：巔峰前每季有 bonus_chance 的機率，自然成長的上限再 +bonus_max。平常 bonus_max 是 0，一顆骰子都不抽（2026-09-25）。",
+      "bonus_chance": 0.8,
+      "bonus_max": 0,
       "points": {
         "min": 0,
         "max": 2
@@ -775,6 +778,8 @@
     },
     "decline": {
       "_note": "巔峰之後每季衰退。per_year_after_peak 是每多一歲額外掉的量。",
+      "_talent_note": "天賦〈鐵血硬漢〉：每年的衰退量再乘這個（0.90／0.80／0.70）。平常是 1。與特性〈斷水流〉相乘（2026-09-25，以前是減 per_year_after_peak）。",
+      "talent_multiplier": 1,
       "base": 1,
       "per_year_after_peak": 0.35,
       "max": 6,

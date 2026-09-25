@@ -455,7 +455,7 @@ describe('rollTrainingDice', () => {
     const cfg = abilities.training_dice;
     for (let i = 0; i < 50; i++) {
       const d = roll(`s${i}`, noTraits, { baseCount: 2, bonusDice: 1 });
-      expect(d.values.length).toBe(3 + Math.max(0, cfg.bonus_count));
+      expect(d.values.length).toBe(3 + cfg.bonus_count_max);
     }
   });
 
@@ -611,5 +611,57 @@ describe('守備奇才的蓄力折扣', () => {
     } finally {
       revert();
     }
+  });
+});
+
+/** 2026-09-25 天賦改版：肝帝改成加權骰面、精神時光屋改成機率多骰。 */
+describe('訓練骰的天賦', () => {
+  const faces = (seed: string, talents: Record<string, number>, traits = new Set<string>()) => {
+    const revert = applyTalents(talents);
+    try {
+      const counts = [0, 0, 0, 0, 0, 0];
+      let n = 0;
+      for (let i = 0; i < 3000; i++) {
+        for (const v of rollTrainingDice(new World(`${seed}-${i}`), traits).values) {
+          counts[v - 1]!++;
+          n++;
+        }
+      }
+      return counts.map((c) => c / n);
+    } finally {
+      revert();
+    }
+  };
+
+  it('肝帝第 3 階：4～6 點各 ×1.45、1～3 點各 ×0.55，仍擲得出 1', () => {
+    const p = faces('dil', { diligence: 3 });
+    for (let f = 0; f < 3; f++) expect(p[f]).toBeCloseTo(0.55 / 6, 1);
+    for (let f = 3; f < 6; f++) expect(p[f]).toBeCloseTo(1.45 / 6, 1);
+    expect(p[0]).toBeGreaterThan(0);
+  });
+
+  it('肝帝與高手高手高高手相乘', () => {
+    const p = faces('both', { diligence: 1 }, new Set(['genius']));
+    // 1～3：0.8 × 0.85 = 0.68；4～6：1.2 × 1.15 = 1.38
+    const high = p.slice(3).reduce((a, b) => a + b, 0);
+    expect(high).toBeCloseTo((3 * 1.38) / (3 * 1.38 + 3 * 0.68), 1);
+  });
+
+  it('精神時光屋：第 1 階固定多 1 顆，第 3 階多 1～3 顆', () => {
+    const extra = (level: number) => {
+      const revert = applyTalents({ extra_training: level });
+      try {
+        const seen = new Set<number>();
+        for (let i = 0; i < 300; i++) {
+          const plain = rollTrainingDice(new World(`x${i}`), new Set(), { baseCount: 3 }).values.length;
+          seen.add(plain - 3);
+        }
+        return seen;
+      } finally {
+        revert();
+      }
+    };
+    expect([...extra(1)]).toEqual([1]);
+    expect([...extra(3)].sort()).toEqual([1, 2, 3]);
   });
 });

@@ -364,6 +364,8 @@ export function annualAwards(world: World, ctx: AwardContext): readonly AwardRec
     // 〈全台主場〉：主場的信仰就是票投得最多的那個人。與台中猛瑪的人氣加成疊加，
     // 上限跟它同一條。
     if (ctx.homeFaith) chance = clamp(chance + a.home_faith.add, pop.clamp.min, pop.clamp.max);
+    // 天賦〈流量密碼〉乘在最後，上限同一條。
+    if (a.talent_multiplier !== 1) chance = clamp(chance * a.talent_multiplier, pop.clamp.min, pop.clamp.max);
     // 照擲一次再判斷在不在場：缺席不改變後面其他獎的抽籤順序。
     if (rng.chance(chance) && present) {
       const byPopularity = popular && ctx.d < pop.flag_below_d;

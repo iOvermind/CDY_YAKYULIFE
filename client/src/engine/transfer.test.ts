@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { amateur, leagues } from '../data/index.ts';
 import { pathOf } from './pro.ts';
+import { applyTalents } from './overlay.ts';
 import { World } from './rng.ts';
 import { initLeague } from './teams.ts';
 import { teams as teamsData } from '../data/index.ts';
@@ -489,7 +490,7 @@ describe('下放時的退路', () => {
       topLevelOnly: true,
     });
     expect(offers.map((o) => o.org)).toContain('CPBL');
-    expect(offers.length).toBeLessThanOrEqual(4);
+    expect(offers.length).toBeLessThanOrEqual(6);
   });
 });
 
@@ -646,14 +647,14 @@ describe('自由市場的跨體系報價', () => {
    * 擺上桌的最多四筆、每個聯盟一筆；錨點聯盟與最強的聯盟各保一格，其餘隨機——
    * 墨聯與澳職因此抽得到，不再被強弱排序永遠擠掉。
    */
-  it('挑出來的最多四筆、每聯盟一筆，錨點與最強的必在，墨聯與澳職抽得到', () => {
+  it('挑出來的最多六筆、每聯盟最多兩筆，錨點與最強的必在，墨聯與澳職抽得到', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 40; i++) {
       const pool = [...candidates(`fa-${i}`), { org: 'MLB', level: 'MLB' } as never];
       const picked = curateOffers(new World(`pick-${i}`), pool, 'MLB', null);
       const orgs = picked.map((o) => o.org);
-      expect(picked.length).toBeLessThanOrEqual(4);
-      expect(new Set(orgs).size).toBe(orgs.length);
+      expect(picked.length).toBeLessThanOrEqual(6);
+      for (const org of new Set(orgs)) expect(orgs.filter((o) => o === org).length).toBeLessThanOrEqual(2);
       expect(orgs).toContain('MLB');
       for (const o of orgs) seen.add(o);
     }
@@ -673,5 +674,45 @@ describe('自由市場的跨體系報價', () => {
       minPar: 56,
     });
     expect(offers.map((o) => o.org)).not.toContain('ABL');
+  });
+});
+
+/** 天賦〈國際認證〉第 3 階讓墨聯、澳職也來挖角；挖角一年最多 6 隊（2026-09-25）。 */
+describe('國際認證與挖角上限', () => {
+  const scout = (seed: string) =>
+    scoutingOffers(new World(seed), {
+      tier: 'none' as const,
+      overall: 75,
+      age: 26,
+      lastWinPct: 0.7,
+      currentOrg: 'CPBL',
+      currentTeam: '',
+      playedOrgs: new Set<string>(['CPBL']),
+      standards: null,
+      salary: 1,
+    });
+
+  it('沒買天賦時墨聯、澳職不會來挖角', () => {
+    for (let i = 0; i < 100; i++) {
+      expect(scout(`s${i}`).some((o) => o.org === 'LMB' || o.org === 'ABL')).toBe(false);
+    }
+  });
+
+  it('第 3 階之後墨聯、澳職會來，總數不超過 6 隊、每個聯盟不超過 2 隊', () => {
+    const revert = applyTalents({ overseas_eyes: 3 });
+    try {
+      let seen = false;
+      for (let i = 0; i < 200; i++) {
+        const offers = scout(`t${i}`);
+        expect(offers.length).toBeLessThanOrEqual(6);
+        for (const org of new Set(offers.map((o) => o.org))) {
+          expect(offers.filter((o) => o.org === org).length).toBeLessThanOrEqual(2);
+        }
+        if (offers.some((o) => o.org === 'LMB' || o.org === 'ABL')) seen = true;
+      }
+      expect(seen).toBe(true);
+    } finally {
+      revert();
+    }
   });
 });

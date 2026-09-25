@@ -380,8 +380,11 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
 
   for (const org of dataKeys(cfg.orgs)) {
     const spec = orgConfig(org);
-    if (spec === undefined || !spec.scouts) continue;
+    // 機率是 0 的體系（沒買〈國際認證〉第 3 階的墨聯、澳職）連骰子都不擲。
+    if (spec === undefined || !spec.scouts || (spec.scout_chance ?? 0) <= 0) continue;
     if (org === ctx.currentOrg) continue;
+    // 滿了就不再擲。宣告順序讓墨聯、澳職排在最後。
+    if (out.length >= cfg.scouting.max_offers) break;
 
     // 資格：能力、上季表現、年齡窗口。三者缺一不可。
     const minOverall = spec.scout_min_overall ?? Number.POSITIVE_INFINITY;
@@ -406,7 +409,7 @@ export function scoutingOffers(world: World, ctx: ScoutContext): readonly Transf
     const table = tableFor(world, org, tables);
     const count = rng.int(cfg.scouting.offers_per_org.min, cfg.scouting.offers_per_org.max);
     const used = new Set<string>();
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count && out.length < cfg.scouting.max_offers; i++) {
       const team = pickTeam(world, org, null);
       if (team === null || used.has(team)) continue;
       used.add(team);
@@ -499,27 +502,33 @@ export function fallbackOffers(world: World, ctx: FallbackContext): readonly Tra
     if (ctx.minPar !== undefined && leagueStandardOf(ctx.standards, level).par < ctx.minPar) continue;
 
     const table = tableFor(world, org, tables);
-    const team = pickTeam(world, org, null);
-    if (team === null) continue;
-    const at = contentionOf(table, team);
-    const odds = at.odds;
+    // 同一個聯盟可以有 1～2 隊來問，跟挖角同一個範圍（2026-09-25，以前只有 1 隊）。
+    const count = world.stream('career').int(cfg.scouting.offers_per_org.min, cfg.scouting.offers_per_org.max);
+    const used = new Set<string>();
+    for (let i = 0; i < count; i++) {
+      const team = pickTeam(world, org, null);
+      if (team === null || used.has(team)) continue;
+      used.add(team);
+      const at = contentionOf(table, team);
+      const odds = at.odds;
 
-    out.push({
-      org,
-      orgName: orgLabel(org),
-      level,
-      levelName: leagues.levels[level]?.name ?? level,
-      team,
-      bonus: signingBonus(
+      out.push({
         org,
-        ctx.overall - topLandingBar(org, ctx.standards, served, approach, ctx.tier),
-        at,
-      ),
-      homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
-      odds,
-      years: contractLength(at),
-      table,
-    });
+        orgName: orgLabel(org),
+        level,
+        levelName: leagues.levels[level]?.name ?? level,
+        team,
+        bonus: signingBonus(
+          org,
+          ctx.overall - topLandingBar(org, ctx.standards, served, approach, ctx.tier),
+          at,
+        ),
+        homecoming: homecomingTo(ctx.playedOrgs, ctx.currentOrg, org),
+        odds,
+        years: contractLength(at),
+        table,
+      });
+    }
   }
 
   const sorted = out.sort(
@@ -552,20 +561,25 @@ export function curateOffers<T extends { readonly org: string; readonly level: s
   limit: number = cfg.fallback.max_offers,
 ): readonly T[] {
   const parOf = (o: T) => leagueStandardOf(standards, o.level).par;
-  // 每個聯盟只留一筆：同聯盟裡取最高的那一層（同一層就取先到的）。
-  const perOrg = new Map<string, T>();
+  // 每個聯盟最多留 per_org 筆：同聯盟裡層級高的優先（同一層就取先到的）。以前只留
+  // 一筆、最多 4 隊（2026-09-25 改成 2 筆、6 隊）。
+  const perOrg = new Map<string, T[]>();
   for (const o of offers) {
-    const kept = perOrg.get(o.org);
-    if (kept === undefined || parOf(o) > parOf(kept)) perOrg.set(o.org, o);
+    const list = perOrg.get(o.org) ?? [];
+    list.push(o);
+    perOrg.set(o.org, list);
   }
-  const pool = [...perOrg.values()];
+  for (const [org, list] of perOrg) {
+    perOrg.set(org, [...list].sort((a, b) => parOf(b) - parOf(a)).slice(0, cfg.fallback.per_org));
+  }
+  const pool = [...perOrg.values()].flat();
   if (pool.length === 0 || limit <= 0) return [];
 
   const picked: T[] = [];
   const take = (o: T | undefined) => {
     if (o !== undefined && !picked.includes(o) && picked.length < limit) picked.push(o);
   };
-  take(perOrg.get(anchorOrg));
+  take(perOrg.get(anchorOrg)?.[0]);
   take([...pool].sort((a, b) => parOf(b) - parOf(a))[0]);
   const rest = world.stream('career').shuffle(pool.filter((o) => !picked.includes(o)));
   for (const o of rest) take(o);
