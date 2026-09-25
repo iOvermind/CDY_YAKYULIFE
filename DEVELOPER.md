@@ -100,7 +100,9 @@ cd client && npm run dev     # 1420，/api 會轉給 8099
 
 **改動亂數相關程式碼時**：引擎的隨機必須完全確定（見 [ADR 0002](docs/adr/0002-deterministic-rng-and-replay-log.md)）。任何影響遊戲結果的地方**禁止**呼叫原生 `Math.random()`，一律經過 `src/engine/rng.ts`。改完務必跑 `npm test` —— 確定性與子序列獨立性都有測試守著。
 
-**寫任何平衡數字時**：一律放進 `src/data/` 的 JSON，**禁止**寫死在 TypeScript 裡。規則編輯器（ROADMAP 階段一.七）只改得到 JSON，留在程式碼裡的常數使用者永遠調不到。判準是「改了會不會影響遊戲平衡」——會就進 JSON；純技術常數（陣列索引、字串前綴）不在此列。
+**改動既有選項的意義、或改變同一份選擇序列會長出的生涯時**：`src/engine/version.ts` 的 `ENGINE_VERSION` 要往上升。伺服器用重播重驗成績，版本沒升，舊分頁送來的日誌就會重跑成另一段生涯、換到另一組 AP（見 [ADR 0032](docs/adr/0032-a-die-spends-its-face-a-point-buys-a-level.md)）。
+
+**寫任何平衡數字時**：一律放進 `src/data/` 的 JSON，**禁止**寫死在 TypeScript 裡。規則編輯器（ROADMAP〈規則編輯器〉）只改得到 JSON，留在程式碼裡的常數使用者永遠調不到。判準是「改了會不會影響遊戲平衡」——會就進 JSON；純技術常數（陣列索引、字串前綴）不在此列。
 
 **卡片內文裡放變數時**：一律先經過 `esc()`。卡片是用 `innerHTML` 渲染的（高光標記需要），而球員姓名是自由輸入的文字。
 
