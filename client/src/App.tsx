@@ -1162,7 +1162,9 @@ function TraitList({
         ) : null
       ) : (
         <>
-          <p style={{ fontSize: 12, lineHeight: 2.1, margin: '8px 0 0' }}>
+          {/* 跟榮譽同一個 tag-row：以前是一段文字靠行高撐開，標籤一換行，第二行就
+              貼著第一行的下緣。flex 換行加 gap，上下與左右一樣寬。 */}
+          <div className="tag-row" style={{ margin: '8px 0 0' }}>
             {shown.map((t) => (
               // title 留著：桌面想一次掃過五六個特性時，懸停比逐個點快，內容與
               // 下面那行同源。點擊是給觸控用的第二條路——原生 title 在手機上
@@ -1172,12 +1174,12 @@ function TraitList({
                 key={t.id}
                 title={t.effect_text}
                 onClick={() => setPicked((p) => (p === t.id ? null : t.id))}
-                style={{ marginRight: 4, ...(t.tone === 'bad' ? BAD_TAG : {}) }}
+                style={t.tone === 'bad' ? BAD_TAG : undefined}
               >
                 {t.label}
               </span>
             ))}
-          </p>
+          </div>
           {/* 說明不做浮層：這塊所在的位置（記分板、結算卡）都在會捲動或會被裁切
               的容器裡，浮層要嘛被裁掉、要嘛得改用 fixed 自己算座標並在捲動時
               重算。就地展開沒有這些問題，而 effect_text 最長也才 39 字。 */}

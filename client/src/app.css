@@ -105,7 +105,7 @@ a{color:var(--info)}
    撐高，而記分板是 fixed 的，高度由 ResizeObserver 量給 --board-h，中間那條
    帶子跟著縮，不會被蓋住。 */
 #bd-traits{display:none;margin-top:8px}
-#bd-traits p{text-align:center}
+#bd-traits p,#bd-traits .tag-row{text-align:center;justify-content:center}
 #bd-traits .tag-note{min-height:0}
 /* 一個特性都還沒有的時候整塊不存在（TraitList 在記分板裡不印「還沒有任何
    特性」），連 margin 都不要留。 */

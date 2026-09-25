@@ -180,28 +180,37 @@ function tags(
 ): number {
   const { c, p } = ctx;
   c.font = font(p, 12, 'mono');
+  // 單一標籤比整行還寬時就在標籤裡面換行，跟畫面上一樣——以前直接畫出去，長的
+  // 榮譽在下載的圖上被截掉。多出來的每一行加一個行高。
+  const lineH = TAG_H - 6;
   let cx = x;
   let cy = y;
+  let rowH = TAG_H;
   for (const item of items) {
-    const w = c.measureText(item.label).width + TAG_PAD * 2;
+    const full = c.measureText(item.label).width + TAG_PAD * 2;
+    const lines = full > width ? wrap(c, item.label, width - TAG_PAD * 2) : [item.label];
+    const w = lines.length > 1 ? width : full;
+    const h = TAG_H + (lines.length - 1) * lineH;
     if (cx > x && cx + w > x + width) {
       cx = x;
-      cy += TAG_H + TAG_GAP;
+      cy += rowH + TAG_GAP;
+      rowH = TAG_H;
     }
     if (!ctx.dry) {
       c.strokeStyle = item.bad ? p.bad : p.edge;
       c.fillStyle = p.panel2;
-      roundRect(c, cx, cy, w, TAG_H, Math.min(p.radius, 4));
+      roundRect(c, cx, cy, w, h, Math.min(p.radius, 4));
       c.fill();
       c.stroke();
       c.fillStyle = item.bad ? p.bad : p.text;
       c.textBaseline = 'middle';
       c.textAlign = 'left';
-      c.fillText(item.label, cx + TAG_PAD, cy + TAG_H / 2 + 1);
+      lines.forEach((line, k) => c.fillText(line, cx + TAG_PAD, cy + TAG_H / 2 + 1 + k * lineH));
     }
+    rowH = Math.max(rowH, h);
     cx += w + TAG_GAP;
   }
-  return cy - y + TAG_H;
+  return cy - y + rowH;
 }
 
 /** 段落標題。畫面上的 h4 前面有一顆小方塊，這裡照做。 */
