@@ -2530,7 +2530,7 @@ function AbilityRow({
   const bonus = state.ceilingBonus[abilityKey] ?? 0;
   // 天花板一律問引擎要。這裡曾經拿 origin.potential 自己加 ceilingBonus，漏掉了
   // 「天生神力」那類天賦加成（最高 +10），於是收錢按 80 收、畫面卻寫 70
-  // （problems.txt #56）。合成規則歸引擎，前端只負責畫。
+  // （玩家回報 #56）。合成規則歸引擎，前端只負責畫。
   const ceiling = state.ceiling[abilityKey] ?? 0;
   // 天花板被事件頂過量表上限的那幾項（最多 +5，見 abilities.json 的
   // max_ceiling_bonus）。刻度不為它們伸縮，改用底色與 marker 標示。

@@ -438,7 +438,7 @@ export interface PlayerState {
    *
    * **畫面要顯示天花板就讀這裡，不要自己拼。** 抽到的潛力、天賦加成、事件提升
    * 三者的合成規則（誰只在量表內移動、誰能頂過 80）只有引擎知道，前端重算一次
-   * 就會跟收錢的那條公式分岔——problems.txt #56 就是這樣來的。
+   * 就會跟收錢的那條公式分岔——玩家回報 #56 就是這樣來的。
    */
   readonly ceiling: Readonly<Record<AbilityKey, number>>;
   /** 本季累積的受傷機率增幅。 */

@@ -196,7 +196,7 @@ describe('重播', () => {
   });
 
   it('快照直接給出天花板，且已含天賦加成——前端不必自己拼', () => {
-    // problems.txt #56：畫面本來拿 origin.potential 自己加 ceilingBonus，漏掉
+    // 玩家回報 #56：畫面本來拿 origin.potential 自己加 ceilingBonus，漏掉
     // 「天生神力」那類把上限往上推的天賦，於是收錢按 80 收、分母寫 70。天花板
     // 只有一個合成點，這條測試守的就是那個點。
     for (const seed of ['test-seed', 'ceiling-a', 'ceiling-b', 'ceiling-c']) {
