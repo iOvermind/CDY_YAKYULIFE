@@ -440,7 +440,7 @@ describe('第二人生', () => {
     const got = evaluateAchievements(ctx({ secondLife: '滿壘早餐店' }));
     const row = got.list.find((a) => a.id === 'second_life:滿壘早餐店');
     expect(row?.name).toBe('滿壘早餐店');
-    expect(row?.category).toBe('第二人生');
+    expect(row?.category).toBe('人生');
     expect(row?.points).toBe(3);
     expect(got.newly).toContainEqual(row);
   });

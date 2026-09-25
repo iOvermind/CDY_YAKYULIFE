@@ -56,4 +56,18 @@ describe('成就櫃', () => {
     ]);
     expect(league?.points).toBe(20);
   });
+
+  it('第二人生併進「人生」，第 N 段人生排第一格', () => {
+    const sections = cabinetSections([
+      tile('second_life:打火英雄', '第二人生', '打火英雄'),
+      tile('life:3', cfg.first_career_bonus.name, '第 3 段人生'),
+      tile('second_life:滿壘早餐店', cfg.first_career_bonus.name, '滿壘早餐店'),
+    ]);
+    expect(sections.map((s) => s.title)).toEqual([cfg.first_career_bonus.name]);
+    expect(sections[0]?.groups.flatMap((g) => g.items.map((i) => i.name))).toEqual([
+      '第 3 段人生',
+      '打火英雄',
+      '滿壘早餐店',
+    ]);
+  });
 });

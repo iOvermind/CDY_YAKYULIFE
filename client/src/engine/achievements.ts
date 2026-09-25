@@ -482,16 +482,6 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
     });
   }
 
-  // ---- 第二人生。一條路一格，id 掛故事名，跨局自動去重。
-  if (ctx.secondLife !== null) {
-    list.push({
-      id: `second_life:${ctx.secondLife}`,
-      category: c.second_life.name,
-      name: ctx.secondLife,
-      points: c.second_life.default,
-    });
-  }
-
   // ---- 第 N 段人生：每走完一段就多一階，每階都給 AP，沒有上限。
   //
   // 別的成就同一項只給一次，十段左右就解鎖完了，之後幾乎斷炊；這一條是解鎖完之後
@@ -505,6 +495,17 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementResult
       category: cfg.first_career_bonus.name,
       name: lifeName(n),
       points: cfg.first_career_bonus.points,
+    });
+  }
+
+  // ---- 第二人生。一條路一格，id 掛故事名，跨局自動去重。
+  if (ctx.secondLife !== null) {
+    list.push({
+      id: `second_life:${ctx.secondLife}`,
+      // 跟第 N 段人生同一個分類「人生」，排在它後面。
+      category: cfg.first_career_bonus.name,
+      name: ctx.secondLife,
+      points: c.second_life.default,
     });
   }
 

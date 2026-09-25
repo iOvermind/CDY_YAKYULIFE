@@ -62,7 +62,6 @@ const CATEGORY_ORDER: readonly string[] = [
   cfg.categories.cumulative.name,
   cfg.categories.hall.name,
   cfg.categories.marriage.name,
-  cfg.categories.second_life.name,
   cfg.first_career_bonus.name,
 ];
 
@@ -77,6 +76,8 @@ function orderOf(list: readonly string[], key: string): number {
 
 /** 同一格之內的排序鍵——先聯盟、再項目，其餘照 id。 */
 function sortKeyOf(key: string): readonly [number, number, string] {
+  // 「人生」底下第 N 段人生排第一格，第二人生跟在後面。
+  if (key === 'life') return [-1, 0, key];
   const parts = key.split(':');
   if (parts[0] === 'cum') {
     const org = parts[1] ?? '';
@@ -107,7 +108,8 @@ export function cabinetTiles(unlocked: readonly UnlockedLike[]): readonly Achiev
       rung,
       tile: {
         id: key,
-        category: a.category,
+        // 第二人生併進「人生」（2026-09-25）。舊的成就列存的是「第二人生」，在這裡改掛。
+        category: a.category === cfg.categories.second_life.name ? cfg.first_career_bonus.name : a.category,
         name: a.name,
         points,
         at: a.at,
