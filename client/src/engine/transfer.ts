@@ -152,7 +152,7 @@ export type Approach = 'recruit' | 'seek';
  * 這個人在這個體系要不要吃外籍加成。
  *
  * 加成本身逐體系寫在 `leagues.json`（日職、韓職 2，其餘 0——大聯盟沒有外籍
- * 名額，墨聯與澳職是退路聯盟）。三種情況不吃：
+ * 名額，墨聯與澳職是退路聯盟）。兩種情況不吃：
  *
  * - **回母國。** 外籍加成的理由是「名額有限，球團得證明簽這個人比用本地人
  *   好」，對本地人不成立——一個在日職待不下去的台灣球員回中職，他就是個中職
@@ -160,16 +160,12 @@ export type Approach = 'recruit' | 'seek';
  * - **在當地服務夠久。** 日職的「在籍八年視同本土」是真實規則：待滿之後不再
  *   佔用外籍名額。這個身分**留得住**——離開日職去韓職打幾年再回來，八年還是
  *   那八年，因此年資是累計的而不是連續的。
- * - **是你去找他們。** 那個「得明顯強過本土替代人選」的論證預設了球團在挑人。
- *   被釋出或被下放的人自己找上門時，澳職球團的替代人選不是本土明星，是沒有
- *   人——見 ADR 0012。
+ *
+ * **誰主動不影響它**：自己找上門的人一樣佔外籍名額，一軍的位置一樣要比本土
+ * 的替代人選強（2026-09-26，推翻 ADR 0012 的「自己找上門不加成」）。ADR 0012
+ * 真正要保住的退路——墨聯與澳職——由退路聯盟的規則處理，那裡本來就沒有加成。
  */
-export function importPremium(
-  org: string,
-  servedYears: number,
-  approach: Approach = 'recruit',
-): number {
-  if (approach === 'seek') return 0;
+export function importPremium(org: string, servedYears: number): number {
   if (org === cfg.home_org.value) return 0;
   const spec = orgConfig(org);
   const threshold = spec?.domestic_after_years;
@@ -180,10 +176,12 @@ export function importPremium(
 /**
  * 落在某一層需要的能力。
  *
- * - **球團主動**：該層的 par——跨海挖人，挖的是上得了場的人。一軍再加外籍加成
- *   （名額只限一軍，二軍與小聯盟不分國籍）。
- * - **自己找上門，或退路聯盟**：該層的 min，不加任何東西（ADR 0012）。墨聯與澳職
- *   收的是掉下來的人，球團不是在挑人。
+ * - **球團主動**：該層的 par——跨海挖人，挖的是上得了場的人。
+ * - **自己找上門**：該層的 min——球團不是在挑人，但你仍然佔外籍名額。
+ * - **退路聯盟**（墨聯、澳職）：不論誰主動都是 min。它們收的是掉下來的人。
+ *
+ * 前兩種在一軍都再加外籍加成（名額只限一軍，二軍與小聯盟不分國籍）；退路聯盟
+ * 沒有加成（ADR 0012、0054）。
  *
  * 落地看 par、每年留任看 min（見 `evaluateMovement`），中間的三分讓剛簽進來的人
  * 不會隔年一退步就被擠下去。
@@ -197,9 +195,10 @@ function landingBar(
   tier: HandednessTier,
 ): number {
   const standard = personalStandardOf(standards, level, tier);
-  if (approach === 'seek' || orgConfig(org)?.fallback_league === true) return standard.min;
+  if (orgConfig(org)?.fallback_league === true) return standard.min;
   const top = leagues.levels[level]?.top !== undefined;
-  return standard.par + (top ? importPremium(org, servedYears, approach) : 0);
+  const premium = top ? importPremium(org, servedYears) : 0;
+  return (approach === 'seek' ? standard.min : standard.par) + premium;
 }
 
 /**

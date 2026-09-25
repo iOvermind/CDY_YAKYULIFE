@@ -317,10 +317,13 @@ describe('落地門檻（2026-09-26）', () => {
     }
   });
 
-  it('自己找上門一律看 min（ADR 0012）', () => {
+  /** 自己找上門看 min，但一樣佔外籍名額：日韓一軍是 min + 2。 */
+  it('自己找上門看 min 加外籍加成', () => {
     for (const org of ['NPB', 'KBO', 'MLB', home]) {
       const top = topOf(org);
-      expect(landingLevel(org, leagues.levels[top]!.min, null, 0, 'seek')).toBe(top);
+      const bar = leagues.levels[top]!.min + (org === home ? 0 : premiumOf(org));
+      expect(landingLevel(org, bar - 1, null, 0, 'seek')).not.toBe(top);
+      expect(landingLevel(org, bar, null, 0, 'seek')).toBe(top);
     }
   });
 

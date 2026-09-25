@@ -4,7 +4,7 @@
 
 Accepted
 
-加成的數值與落地錨點由 [ADR 0054](0054-landing-bar-is-the-league-average.md) 取代：落地改看 par，加成逐體系（日韓 2、其餘 0），墨聯與澳職成為退路聯盟。
+**「自己找上門不加成」已由 [ADR 0054](0054-landing-bar-is-the-league-average.md) 推翻**：自己找上門看 min 但照加外籍加成（日韓 2、其餘 0）；這份 ADR 要保住的墨聯、澳職退路，改由「退路聯盟不加成」保住。
 
 ## Context
 
