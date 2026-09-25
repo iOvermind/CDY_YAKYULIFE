@@ -30,6 +30,8 @@ docs
 *.md
 index_legacy.html
 
-# 但 CHANGELOG.md 是前端建置的輸入：client/scripts/changelog.mjs 會把它轉成
-# client/src/data/changelog.json。少了它 prebuild 會直接 ENOENT 停在那裡。
+# 但 CHANGELOG.md 與 WIKI.md 是前端建置的輸入：client/scripts/changelog.mjs 與
+# wiki.mjs 會把它們轉成 client/src/data/ 底下的 changelog.json、wiki.json。少了任一份
+# prebuild 會直接 ENOENT 停在那裡。
 !CHANGELOG.md
+!WIKI.md

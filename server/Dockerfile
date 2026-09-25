@@ -8,8 +8,9 @@ WORKDIR /build
 COPY client/package*.json ./client/
 RUN cd client && npm ci
 COPY client ./client
-# prebuild 的 changelog.mjs 從儲存庫根目錄讀這一份，產生遊戲裡的更新紀錄資料。
-COPY CHANGELOG.md ./
+# prebuild 從儲存庫根目錄讀這兩份：changelog.mjs 產生遊戲裡的更新紀錄，wiki.mjs
+# 從 WIKI.md 產生遊戲裡的攻略（WIKI 分頁）。
+COPY CHANGELOG.md WIKI.md ./
 RUN cd client && npm run build
 
 FROM node:24-alpine
