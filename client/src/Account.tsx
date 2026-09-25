@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { Changelog } from './Changelog.tsx';
+import { Wiki } from './Wiki.tsx';
 import { Ladder } from './Ladder.tsx';
 import { type Account } from './useAccount.ts';
 import { ApiError, type Me } from './api/contract.ts';
@@ -41,12 +42,13 @@ export function AccountBar({ account }: { account: Account }) {
         <button
           type="button"
           className="ghost"
-          // 未登入時反灰：成就是掛在帳號上的，沒有帳號就沒有東西可看。
-          disabled={me === null}
-          title={offline ? OFFLINE_HINT : me === null ? '登入後才看得到成就與天賦' : undefined}
+          // 未登入也打得開：更新紀錄與攻略不屬於帳號，沒登入的玩家更需要攻略。
+          // 裡面只剩那兩個分頁，所以按鈕的名字跟著換，不掛著一個點進去沒有的「成就」。
+          title={me === null ? '登入後還看得到成就、天賦與天梯' : undefined}
           onClick={() => setPanel('achievements')}
         >
-          成就{me !== null && <span className="ap">{me.ap} AP</span>}
+          {me === null ? '更新・攻略' : '成就'}
+          {me !== null && <span className="ap">{me.ap} AP</span>}
         </button>
         {me === null ? (
           <button
@@ -66,7 +68,7 @@ export function AccountBar({ account }: { account: Account }) {
       </div>
 
       {panel === 'login' && <LoginPanel account={account} onClose={() => setPanel(null)} />}
-      {panel === 'achievements' && me !== null && (
+      {panel === 'achievements' && (
         <AchievementPanel account={account} me={me} onClose={() => setPanel(null)} />
       )}
     </>
@@ -198,38 +200,47 @@ function AchievementPanel({
   onClose,
 }: {
   account: Account;
-  me: Me;
+  /** 未登入時是 null：只剩「更新」與「WIKI」兩個不屬於帳號的分頁。 */
+  me: Me | null;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'achievements' | 'talents' | 'ladder' | 'changelog'>(
-    'achievements',
+  const [tab, setTab] = useState<'achievements' | 'talents' | 'ladder' | 'changelog' | 'wiki'>(
+    me === null ? 'changelog' : 'achievements',
   );
 
   return (
-    <Modal title={`${me.account} · ${me.ap} AP`} onClose={onClose} wide>
+    <Modal
+      title={me === null ? '更新與攻略' : `${me.account} · ${me.ap} AP`}
+      onClose={onClose}
+      wide
+    >
       <div className="seg" style={{ marginBottom: 14 }}>
-        <button
-          type="button"
-          className={tab === 'achievements' ? 'on' : undefined}
-          onClick={() => setTab('achievements')}
-        >
-          {/* 數的是收斂後的格數——500／1000／1500 安是一格，不是三格。 */}
-          成就 {cabinetTiles(me.achievements).length}
-        </button>
-        <button
-          type="button"
-          className={tab === 'talents' ? 'on' : undefined}
-          onClick={() => setTab('talents')}
-        >
-          天賦
-        </button>
-        <button
-          type="button"
-          className={tab === 'ladder' ? 'on' : undefined}
-          onClick={() => setTab('ladder')}
-        >
-          天梯
-        </button>
+        {me !== null && (
+          <>
+            <button
+              type="button"
+              className={tab === 'achievements' ? 'on' : undefined}
+              onClick={() => setTab('achievements')}
+            >
+              {/* 數的是收斂後的格數——500／1000／1500 安是一格，不是三格。 */}
+              成就 {cabinetTiles(me.achievements).length}
+            </button>
+            <button
+              type="button"
+              className={tab === 'talents' ? 'on' : undefined}
+              onClick={() => setTab('talents')}
+            >
+              天賦
+            </button>
+            <button
+              type="button"
+              className={tab === 'ladder' ? 'on' : undefined}
+              onClick={() => setTab('ladder')}
+            >
+              天梯
+            </button>
+          </>
+        )}
         {/*
           更新紀錄排在最右邊。前三個分頁是「這個帳號有什麼」，這一個是「這個遊戲
           變成什麼樣了」——不同的問題，所以放在隊伍尾巴而不是插進中間。
@@ -241,12 +252,21 @@ function AchievementPanel({
         >
           更新
         </button>
+        {/* 攻略接在更新後面：兩個都是「這個遊戲是什麼樣子」，不是「這個帳號有什麼」。 */}
+        <button
+          type="button"
+          className={tab === 'wiki' ? 'on' : undefined}
+          onClick={() => setTab('wiki')}
+        >
+          WIKI
+        </button>
       </div>
-      {tab === 'achievements' && <AchievementList me={me} />}
-      {tab === 'talents' && <TalentPanel account={account} me={me} />}
+      {tab === 'achievements' && me !== null && <AchievementList me={me} />}
+      {tab === 'talents' && me !== null && <TalentPanel account={account} me={me} />}
       {/* 我的／所有玩家是天梯自己的第一個選單——同一份資料的兩種查法（ADR 0038）。 */}
-      {tab === 'ladder' && <Ladder account={account} />}
+      {tab === 'ladder' && me !== null && <Ladder account={account} />}
       {tab === 'changelog' && <Changelog />}
+      {tab === 'wiki' && <Wiki />}
     </Modal>
   );
 }

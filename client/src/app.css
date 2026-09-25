@@ -396,6 +396,22 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .changelist code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
 /* 版本標題右邊的日期，與成就櫃大標右邊的 AP 同一個位置與寫法。 */
 .changelist + .achsub{margin-top:9px}
+/* 攻略。內文與更新紀錄同一個字級與行高；表格的字**要能換行**——事件卡那張的好壞
+   結果是一整句話，不換行的話整張表橫著爆出去，手機上得左右來回捲才讀得完一列。
+   真的塞不下（例如五欄的天賦表）才在表格自己的框裡橫捲，不撐開視窗。 */
+.wiki p,.wiki li{font-size:12.5px;line-height:1.85;color:var(--dim);margin:0 0 10px}
+.wiki p b,.wiki li b,.wiki td b{color:var(--text)}
+.wiki code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+.wiki ul{list-style:none;margin:0 0 10px;padding:0}
+.wiki li{padding-left:11px;border-left:2px solid var(--edge);margin-bottom:6px}
+.wiki h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
+  font-weight:400;margin:16px 0 8px}
+.wiki-table{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 12px}
+.wiki-table table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.6}
+.wiki-table th,.wiki-table td{border-bottom:1px solid var(--edge);padding:5px 6px;
+  text-align:left;vertical-align:top;min-width:4em}
+.wiki-table th{color:var(--dim);font-weight:500;white-space:nowrap}
+.wiki-table td{color:var(--text)}
 
 /* 整張卡片就是按鈕：左鍵升一級、右鍵降一級。做成 <button> 是為了鍵盤與
    焦點框都自己來，因此外觀要先歸零回一張卡片的樣子。 */

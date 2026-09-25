@@ -18,7 +18,7 @@ import { changelog } from './data/index.ts';
 import type { ChangelogPart, ChangelogVersion } from './data/index.ts';
 
 /** 行內語法。連結在轉檔時就已經變成純文字了，這裡只剩三種。 */
-function Parts({ parts }: { parts: readonly ChangelogPart[] }) {
+export function Parts({ parts }: { parts: readonly ChangelogPart[] }) {
   return (
     <>
       {parts.map((p, i) =>

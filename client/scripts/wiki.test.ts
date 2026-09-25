@@ -10,12 +10,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error 產生器是 .mjs，沒有型別宣告；這裡只在測試裡用它。
-import { fillWiki, loadData, renderBlocks } from './wiki.mjs';
+import { fillWiki, loadData, parseWiki, renderBlocks } from './wiki.mjs';
 
 type Data = Record<string, any>;
 const fill = fillWiki as (markdown: string, blocks: Record<string, string>) => string;
 const render = renderBlocks as (data: Data) => Record<string, string>;
 const load = loadData as () => Data;
+const parse = parseWiki as (markdown: string) => Data;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -68,5 +69,50 @@ describe('WIKI.md 與資料檔', () => {
   it('標記裡的表格跟資料檔一致——沒有人手改過，也沒有人忘了重跑', () => {
     const md = readFileSync(join(root, 'WIKI.md'), 'utf8');
     expect(fill(md, render(load()))).toBe(md);
+  });
+
+  it('wiki.json 跟 WIKI.md 一致——遊戲裡的 WIKI 分頁讀的是它', () => {
+    const md = readFileSync(join(root, 'WIKI.md'), 'utf8');
+    const built = JSON.parse(readFileSync(join(root, 'client', 'src', 'data', 'wiki.json'), 'utf8')) as Data;
+    const { _generated: _, ...rest } = built;
+    expect(rest).toEqual(parse(md));
+  });
+});
+
+describe('WIKI.md 轉成遊戲讀的結構', () => {
+  it('## 是章、### 是節，第一章之前的內容是開場', () => {
+    const out = parse(['# 標題', '', '> 說明', '', '## 一、總覽', '', '### 小節', '', '內文'].join('\n'));
+    expect(out.intro).toEqual([{ kind: 'note', parts: [{ kind: 'text', text: '說明' }] }]);
+    expect(out.chapters).toEqual([
+      {
+        title: '一、總覽',
+        blocks: [
+          { kind: 'h3', text: '小節' },
+          { kind: 'p', parts: [{ kind: 'text', text: '內文' }] },
+        ],
+      },
+    ]);
+  });
+
+  it('表格：表頭、分隔線、內容列', () => {
+    const out = parse(['## 章', '', '| 甲 | 乙 |', '| --- | --- |', '| **1** | 2 |'].join('\n'));
+    expect(out.chapters[0].blocks).toEqual([
+      {
+        kind: 'table',
+        head: [[{ kind: 'text', text: '甲' }], [{ kind: 'text', text: '乙' }]],
+        rows: [[[{ kind: 'strong', text: '1' }], [{ kind: 'text', text: '2' }]]],
+      },
+    ]);
+  });
+
+  it('產生器的標記不會變成內容', () => {
+    const out = parse(['## 章', '<!-- gen:teams -->', '表', '<!-- /gen:teams -->'].join('\n'));
+    expect(out.chapters[0].blocks).toEqual([{ kind: 'p', parts: [{ kind: 'text', text: '表' }] }]);
+  });
+
+  it('遊戲裡顯示不出來的語法直接報錯', () => {
+    expect(() => parse(['## 章', '- 項目', '  - 巢狀'].join('\n'))).toThrow(/縮排/);
+    expect(() => parse(['## 章', '1. 編號'].join('\n'))).toThrow(/編號/);
+    expect(() => parse(['## 章', '| 甲 | 乙 |', '| --- | --- |', '| 1 |'].join('\n'))).toThrow(/格/);
   });
 });

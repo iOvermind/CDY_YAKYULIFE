@@ -24,6 +24,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inline } from './changelog.mjs';
 
 const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = join(clientDir, 'src', 'data');
@@ -293,6 +294,103 @@ export function fillWiki(markdown, blocks) {
   return out;
 }
 
+// ---------------------------------------------------------------- 轉成遊戲讀的資料檔
+
+/**
+ * 把 WIKI.md 轉成遊戲裡「WIKI」分頁讀的結構。
+ *
+ * **只認這份攻略實際用到的語法**：`##` 章、`###` 節、段落、`- ` 清單、表格、`>` 引言，
+ * 行內的粗體與 code（跟更新紀錄共用 changelog.mjs 的 `inline()`）。其餘的東西——縮排、
+ * 巢狀清單、編號清單——直接報錯：攻略長歪了要當場知道，不是等玩家點開看到一團亂碼。
+ * `#` 標題與 `---` 分隔線是 Markdown 檢視時用的，遊戲裡由分頁與摺疊代替，略過。
+ */
+export function parseWiki(markdown) {
+  const lines = markdown.replace(/<!-- \/?gen:[a-z_]+ -->\n?/g, '').split('\n');
+  const intro = [];
+  const chapters = [];
+  let blocks = intro;
+  let para = null;
+  let list = null;
+  let tbl = null;
+  let quote = null;
+
+  const flush = () => {
+    if (para !== null) blocks.push({ kind: 'p', parts: inline(para.join('')) });
+    if (list !== null) blocks.push({ kind: 'ul', items: list.map(inline) });
+    if (tbl !== null) blocks.push(tbl);
+    if (quote !== null) blocks.push({ kind: 'note', parts: inline(quote.join('')) });
+    para = list = tbl = quote = null;
+  };
+  const cells = (line) =>
+    line
+      .slice(1, -1)
+      .split('|')
+      .map((c) => inline(c.trim()));
+
+  lines.forEach((raw, i) => {
+    const line = raw.trimEnd();
+    const where = `WIKI.md 第 ${i + 1} 行`;
+    if (line === '' || line === '---' || /^# /.test(line)) {
+      flush();
+      return;
+    }
+    if (/^\s/.test(line)) fail(`${where}：縮排的內容遊戲裡顯示不出來，請改成不縮排`);
+    if (line.startsWith('## ')) {
+      flush();
+      blocks = [];
+      chapters.push({ title: line.slice(3).trim(), blocks });
+      return;
+    }
+    if (line.startsWith('### ')) {
+      flush();
+      blocks.push({ kind: 'h3', text: line.slice(4).trim() });
+      return;
+    }
+    if (line.startsWith('|')) {
+      if (para !== null || list !== null || quote !== null) flush();
+      if (!line.endsWith('|')) fail(`${where}：表格列要以 | 結尾`);
+      if (tbl === null) {
+        tbl = { kind: 'table', head: cells(line), rows: [] };
+      } else if (/^\|[\s:|-]+\|$/.test(line)) {
+        if (tbl.rows.length > 0) fail(`${where}：分隔線只能緊接在表頭後面`);
+      } else {
+        const row = cells(line);
+        if (row.length !== tbl.head.length) fail(`${where}：這一列有 ${row.length} 格，表頭有 ${tbl.head.length} 格`);
+        tbl.rows.push(row);
+      }
+      return;
+    }
+    if (line.startsWith('>')) {
+      if (quote === null) flush();
+      const text = line.replace(/^>\s?/, '');
+      if (text === '') {
+        // 引言裡的空行是分段：先收掉這一段，下一行開新的一段。
+        flush();
+        quote = null;
+        return;
+      }
+      quote = [...(quote ?? []), text];
+      return;
+    }
+    if (line.startsWith('- ')) {
+      if (list === null) flush();
+      list = [...(list ?? []), line.slice(2)];
+      return;
+    }
+    if (/^\d+\. /.test(line)) fail(`${where}：編號清單遊戲裡顯示不出來，請改成 - 清單`);
+    if (list !== null) {
+      // 清單項目的軟換行：接回上一項。
+      list[list.length - 1] += line;
+      return;
+    }
+    if (para === null) flush();
+    para = [...(para ?? []), line];
+  });
+  flush();
+  if (chapters.length === 0) fail('WIKI.md 沒有任何 ## 章節');
+  return { intro, chapters };
+}
+
 export function loadData() {
   return Object.fromEntries(
     ['teams', 'leagues', 'talents', 'traits', 'achievements', 'awards', 'hall_of_fame', 'events', 'abilities'].map(
@@ -305,4 +403,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const before = readFileSync(target, 'utf8');
   const after = fillWiki(before, renderBlocks(loadData()));
   if (after !== before) writeFileSync(target, after);
+  const json = `${JSON.stringify({ _generated: '由 client/scripts/wiki.mjs 從 WIKI.md 產生，不要手改。', ...parseWiki(after) }, null, 2)}\n`;
+  const jsonPath = join(dataDir, 'wiki.json');
+  let old = '';
+  try {
+    old = readFileSync(jsonPath, 'utf8');
+  } catch {
+    // 第一次產生，檔案還不存在。
+  }
+  if (json !== old) writeFileSync(jsonPath, json);
 }

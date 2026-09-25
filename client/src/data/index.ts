@@ -28,6 +28,7 @@ import leaguesJson from './leagues.json' with { type: 'json' };
 import loveJson from './love.json' with { type: 'json' };
 import positionsJson from './positions.json' with { type: 'json' };
 import traitsJson from './traits.json' with { type: 'json' };
+import wikiJson from './wiki.json' with { type: 'json' };
 import seasonJson from './season.json' with { type: 'json' };
 import talentsJson from './talents.json' with { type: 'json' };
 import teamsJson from './teams.json' with { type: 'json' };
@@ -1793,6 +1794,33 @@ export interface ChangelogData {
   readonly versions: readonly ChangelogVersion[];
 }
 export const changelog = changelogJson as unknown as ChangelogData;
+
+/**
+ * 玩家攻略（WIKI）。
+ *
+ * **這一份是產生出來的**（`client/scripts/wiki.mjs` 從根目錄的 `WIKI.md` 轉出來，
+ * 跟更新紀錄同一批 pre-scripts 帶著跑），不要手改 `wiki.json`。行內語法與更新紀錄
+ * 共用同一套，所以直接沿用 `ChangelogPart`。
+ */
+export type WikiBlock =
+  | { readonly kind: 'p' | 'note'; readonly parts: readonly ChangelogPart[] }
+  | { readonly kind: 'h3'; readonly text: string }
+  | { readonly kind: 'ul'; readonly items: readonly (readonly ChangelogPart[])[] }
+  | {
+      readonly kind: 'table';
+      readonly head: readonly (readonly ChangelogPart[])[];
+      readonly rows: readonly (readonly (readonly ChangelogPart[])[])[];
+    };
+export interface WikiChapter {
+  readonly title: string;
+  readonly blocks: readonly WikiBlock[];
+}
+export interface WikiData {
+  /** 第一個 `##` 章之前的內容（攻略的開場說明）。 */
+  readonly intro: readonly WikiBlock[];
+  readonly chapters: readonly WikiChapter[];
+}
+export const wiki = wikiJson as unknown as WikiData;
 
 export const abilities = abilitiesJson as unknown as AbilitiesData;
 export const amateur = amateurJson as unknown as AmateurData;
