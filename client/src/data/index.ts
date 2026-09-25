@@ -759,9 +759,9 @@ export interface PositionsData {
 /** 成長成本曲線。tiers 由高到低比對，取第一個 current >= from 的 cost。 */
 /** 二刀流的成本折扣。直接從成本扣點，不另立一條曲線。 */
 export interface TwoWayDiscount {
-  /** 天賦上限之內每級少付的點數。 */
+  /** 潛力之內每級少付的點數。 */
   readonly within_ceiling: number;
-  /** 天賦上限之外每級少付的點數，在乘上懲罰倍率之後才扣。 */
+  /** 潛力之外每級少付的點數，在乘上懲罰倍率之後才扣。 */
   readonly above_ceiling: number;
   /** 扣完之後的成本下限。 */
   readonly min_cost: number;

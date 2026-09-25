@@ -4,7 +4,7 @@
   "_vs_trait_note": "**天賦與隱藏特性是兩件事。** 特性是在一段生涯裡掙來的、只屬於那個球員；天賦是跨局累積的、屬於玩家——他開的每一局都帶著買過的天賦。",
   "_effect_note": "效果宣告成「改哪一個設定、怎麼改、夾在哪」，由設定覆蓋層在載入規則資料時套上。**新增一個天賦只是新增一筆 JSON，不必改程式。** 代價是路徑寫錯不會在編譯期被抓到，因此有一條護欄測試把每一個天賦的每一條路徑都解一次。",
   "_path_note": "路徑的第一段是規則資料的檔名（abilities / season / amateur / leagues / awards / events / injury / love / traits / positions / hall_of_fame），其後是該檔內的鍵。",
-  "_ops_note": "op 有三種：add（加）、set（直接指定）、mul（乘）。min / max 是套用後的夾擠——「天賦上限 +5 仍不超過 80」「成本 −2 不低於 1」那個「仍不」就寫在這裡。**機率類的一律用 mul**：那些設定各自有自己的起點（體質特性、事件模式），拿百分點去加會在疊起來時破表，而且乘算層是套在夾擠之後的，穿得過帕瓦諾的高起點與 95% 的上限。",
+  "_ops_note": "op 有三種：add（加）、set（直接指定）、mul（乘）。min / max 是套用後的夾擠——「潛力 +5 仍不超過 80」「成本 −2 不低於 1」那個「仍不」就寫在這裡。**機率類的一律用 mul**：那些設定各自有自己的起點（體質特性、事件模式），拿百分點去加會在疊起來時破表，而且乘算層是套在夾擠之後的，穿得過帕瓦諾的高起點與 95% 的上限。",
   "_refund_note": "天賦**可以退掉換回 AP**，退款全額。因此「玩家現在擁有什麼」與「某一局帶著什麼」是兩件事——見 CONTEXT.md 的「開局登記」。",
   "_cost_note": "價格遞增：第二級明顯比第一級貴。這讓玩家真的要在「先把一項點滿」與「各項都買一級」之間選——一次性的解鎖清單買完就結束了，遞增的則永遠有下一級在那裡。一段 balanced 生涯約 23 AP——**一級天賦要價 8–14，也就是一整段生涯換不到一項的第二級**。價目在累積成就改成無天花板的階梯之後整體 ×2：階梯讓長生涯的 AP 收入平方成長，價目不跟著抬，天賦樹會在第三段生涯就買空。",
   "talents": [
@@ -16,7 +16,7 @@
       "levels": [
         {
           "cost": 10,
-          "effect_text": "每項能力的天賦上限 +2",
+          "effect_text": "每項能力的潛力 +2",
           "effects": [
             {
               "path": "abilities.talent_bonus.ceiling",
@@ -28,7 +28,7 @@
         },
         {
           "cost": 24,
-          "effect_text": "每項能力的天賦上限 +5",
+          "effect_text": "每項能力的潛力 +5",
           "effects": [
             {
               "path": "abilities.talent_bonus.ceiling",
@@ -40,7 +40,7 @@
         },
         {
           "cost": 50,
-          "effect_text": "每項能力的天賦上限 +8",
+          "effect_text": "每項能力的潛力 +8",
           "effects": [
             {
               "path": "abilities.talent_bonus.ceiling",
@@ -60,7 +60,7 @@
       "levels": [
         {
           "cost": 12,
-          "effect_text": "突破天賦上限後的升級成本倍率 −0.50（×3.00 → ×2.50）",
+          "effect_text": "超過潛力後的升級成本倍率 −0.50（×3.00 → ×2.50）",
           "effects": [
             {
               "path": "abilities.growth_cost.default.above_ceiling_multiplier",
@@ -72,7 +72,7 @@
         },
         {
           "cost": 32,
-          "effect_text": "突破天賦上限後的升級成本倍率 −1.00（×3.00 → ×2.00）",
+          "effect_text": "超過潛力後的升級成本倍率 −1.00（×3.00 → ×2.00）",
           "effects": [
             {
               "path": "abilities.growth_cost.default.above_ceiling_multiplier",
@@ -84,7 +84,7 @@
         },
         {
           "cost": 64,
-          "effect_text": "突破天賦上限後的升級成本倍率 −1.50（×3.00 → ×1.50）",
+          "effect_text": "超過潛力後的升級成本倍率 −1.50（×3.00 → ×1.50）",
           "effects": [
             {
               "path": "abilities.growth_cost.default.above_ceiling_multiplier",
