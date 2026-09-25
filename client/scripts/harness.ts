@@ -61,7 +61,9 @@ export function playCareer(
         .find((o) => o !== undefined) ??
       options.find((o) => o.id === 'alloc:confirm' && o.disabled !== true) ??
       options.find((o) => o.id === 'draft:accept') ??
-      options.find((o) => o.disabled !== true && o.id !== 'alloc:undo') ??
+      options.find((o) => o.disabled !== true && o.id !== 'alloc:undo' && o.id !== 'alloc:forfeit') ??
+      // 所有能力都到頂時只剩放棄可按——那是唯一的出口，不按就卡死在這一步。
+      options.find((o) => o.id === 'alloc:forfeit') ??
       undefined;
     if (pick === undefined) break;
     if (pick.id.startsWith('alloc:') && pick.id !== 'alloc:confirm') cursor++;

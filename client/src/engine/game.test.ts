@@ -372,8 +372,8 @@ describe('養成六年（國中三年 + 高中三年）', () => {
 describe('訓練骰的分配', () => {
   it('每一顆骰都是一次選擇，全部記進重播日誌', () => {
     const game = playToEnd(started());
-    // alloc: 底下除了能力還有 undo / confirm 兩個控制項，先濾掉
-    const control = new Set(['alloc:undo', 'alloc:confirm']);
+    // alloc: 底下除了能力還有 undo / confirm / forfeit 三個控制項，先濾掉
+    const control = new Set(['alloc:undo', 'alloc:confirm', 'alloc:forfeit']);
     const allocs = game.flow.choices.filter((c) => c.startsWith('alloc:') && !control.has(c));
     expect(allocs.length).toBeGreaterThanOrEqual(2);
     // 分配的目標必須都是實際存在的能力
@@ -678,7 +678,7 @@ describe('配點的復原與確認', () => {
     const game = started({ seed });
     let guard = 0;
     while (game.flow.prompt !== null && guard++ < 50) {
-      if (game.flow.prompt.options.some((o) => o.id === 'alloc:confirm')) return game;
+      if (game.flow.prompt.options.some((o) => o.id === 'alloc:forfeit')) return game;
       game.choose(firstEnabled(game));
     }
     throw new Error('沒有進到配點階段');
@@ -691,21 +691,44 @@ describe('配點的復原與確認', () => {
     expect(optionOf(toAllocation(), 'pool:keep')).toBeUndefined();
   });
 
-  it('還沒分配時，復原與確認都反灰', () => {
+  it('還沒分配完時沒有確認，只有放棄；還沒分配時復原反灰', () => {
     const game = toAllocation();
     expect(optionOf(game, 'alloc:undo')?.disabled).toBe(true);
-    expect(optionOf(game, 'alloc:confirm')?.disabled).toBe(true);
+    expect(optionOf(game, 'alloc:confirm')).toBeUndefined();
+    expect(optionOf(game, 'alloc:forfeit')?.disabled).not.toBe(true);
   });
 
-  it('分配一點之後復原可按，但確認仍反灰', () => {
+  it('分配一點之後復原可按，放棄仍在', () => {
     const game = toAllocation();
     game.choose(allocOne(game));
     expect(optionOf(game, 'alloc:undo')?.disabled).toBe(false);
-    expect(optionOf(game, 'alloc:confirm')?.disabled).toBe(true);
+    expect(optionOf(game, 'alloc:forfeit')).toBeDefined();
   });
 
   it('反灰的選項擋得住直接呼叫——介面之外也擋得住', () => {
-    expect(() => toAllocation().choose('alloc:confirm')).toThrow();
+    expect(() => toAllocation().choose('alloc:undo')).toThrow();
+  });
+
+  it('放棄：剩下的點數作廢，不再問一次，直接往下走', () => {
+    const game = toAllocation();
+    game.choose(allocOne(game));
+    const after = { ...(game.state?.ability ?? {}) };
+    game.choose('alloc:forfeit');
+    // 不經過「點數分配完畢」的確認關卡，也不會再回到配點
+    const ids = game.flow.prompt?.options.map((o) => o.id) ?? [];
+    expect(ids).not.toContain('alloc:confirm');
+    expect(ids).not.toContain('alloc:forfeit');
+    // 已經加下去的那一點留著，剩下的沒有進能力
+    expect(game.state?.ability).toEqual(after);
+  });
+
+  it('放棄也寫進重播日誌，重播仍然完全一致', () => {
+    const game = toAllocation();
+    game.choose(allocOne(game));
+    game.choose('alloc:forfeit');
+    const replayed = Game.replay(game.toReplayLog());
+    expect(replayed.state?.ability).toEqual(game.state?.ability);
+    expect(replayed.flow.log).toEqual(game.flow.log);
   });
 
   it('復原會把能力與蓄力槽都還原', () => {
@@ -729,7 +752,7 @@ describe('配點的復原與確認', () => {
     const game = toAllocation();
     const before = { ...(game.state?.ability ?? {}) };
     let steps = 0;
-    while (optionOf(game, 'alloc:confirm')?.disabled === true) {
+    while (optionOf(game, 'alloc:forfeit') !== undefined) {
       game.choose(allocOne(game));
       steps++;
     }
@@ -737,10 +760,11 @@ describe('配點的復原與確認', () => {
     expect(game.state?.ability).toEqual(before);
   });
 
-  it('全部分配完之後確認才可按', () => {
+  it('全部分配完之後才出現確認，放棄就消失了', () => {
     const game = toAllocation();
-    while (optionOf(game, 'alloc:confirm')?.disabled === true) game.choose(allocOne(game));
+    while (optionOf(game, 'alloc:forfeit') !== undefined) game.choose(allocOne(game));
     expect(optionOf(game, 'alloc:confirm')?.disabled).not.toBe(true);
+    expect(optionOf(game, 'alloc:forfeit')).toBeUndefined();
   });
 
   it('復原本身也寫進重播日誌，重播仍然完全一致', () => {

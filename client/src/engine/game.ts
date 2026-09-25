@@ -6083,7 +6083,13 @@ export class Game {
   /**
    * 配點階段。
    *
-   * 一次提問管到底：可以逐點分配、隨時復原上一步，全部分配完才能確認往下走。
+   * 一次提問管到底：可以逐點分配、隨時復原上一步，全部分配完才進確認關卡。
+   *
+   * **還沒分配完就只能放棄。** 原本的「確認」在點數沒分配完時反灰；現在換成
+   * 「放棄」——按下去剩下的點數直接作廢，不另外問「你確定嗎」，也不經過確認
+   * 關卡。手殘按到就是按到了，那是刻意的惡趣味。它用自己的 id（alloc:forfeit）
+   * 而不是 alloc:confirm：測試與校準的代理看到 confirm 就會先按，同一個 id 會讓
+   * 它們每一局都把點數丟掉。
    * 復原**本身也是一次選擇**，會寫進重播日誌——配點不消耗亂數，因此反向操作
    * 是精確的，日誌記下「加了什麼、又退了什麼」仍然完整重現同一段生涯。
    *
@@ -6115,10 +6121,10 @@ export class Game {
     const options: Option[] = this.#allocatableAbilities.map((key) =>
       this.#abilityOption(key, spendOf(key), source === 'pool'),
     );
-    // 每一項都頂到天花板時，剩下的點數沒有地方去。這時確認鍵必須放行，否則畫面上
-    // 只剩灰按鈕，生涯卡在這一步走不下去。**只看能力選項**——復原鍵可不可按跟
-    // 「還有沒有地方加點」無關，把它算進去會讓死局漏判。
+    // 每一項都頂到天花板時，剩下的點數沒有地方去——這時放棄就是唯一的出口。
+    // **只看能力選項**——復原鍵可不可按跟「還有沒有地方加點」無關。
     const stuck = options.every((o) => o.disabled === true);
+    const rest = source === 'dice' ? `${left} 顆骰` : `${left} 點`;
     options.push({
       id: 'alloc:undo',
       label: '復原',
@@ -6127,15 +6133,10 @@ export class Game {
       disabled: done === 0,
     });
     options.push({
-      id: 'alloc:confirm',
-      label: '確認',
-      note: stuck
-        ? `所有能力都到頂了，剩下的${source === 'dice' ? `${left} 顆骰` : `${left} 點`}作廢`
-        : source === 'dice'
-          ? `還有 ${left} 顆骰沒分配`
-          : `還有 ${left} 點沒分配`,
-      role: 'main',
-      disabled: !stuck,
+      id: 'alloc:forfeit',
+      label: '放棄',
+      note: stuck ? `所有能力都到頂了，剩下的${rest}作廢` : `剩下的${rest}直接作廢，不再確認`,
+      role: 'warn',
     });
 
     const title =
@@ -6144,11 +6145,12 @@ export class Game {
         : `大賽點數：還有 ${left} 點要加在哪？`;
 
     this.flow.ask({ title, options }, (choice) => {
-      if (choice === 'alloc:confirm') {
-        // 作廢剩下的點數：骰面推到底、池子歸零，不留到下一年（見上面的「沒有先留著」）。
-        if (source === 'dice' && this.#dice !== null) {
-          this.#dice = { values: this.#dice.values, index: this.#dice.values.length };
-        } else if (source === 'pool') this.#pool = 0;
+      if (choice === 'alloc:forfeit') {
+        // 作廢剩下的點數：池子歸零、骰子收掉，不留到下一年（見上面的「沒有先留著」）。
+        // 清掉復原堆疊，確認關卡看到空的就直接放行——放棄不再問第二次。
+        if (source === 'pool') this.#pool = 0;
+        this.#dice = null;
+        this.#allocHistory = [];
         return;
       }
       if (choice === 'alloc:undo') this.#undoAllocation();

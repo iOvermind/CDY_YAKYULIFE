@@ -468,7 +468,7 @@ function StartScreen({
  * 它們與能力共用前綴是刻意的——同一個配點階段的選項應該長得一樣，重播日誌
  * 看起來才是連貫的一串。但介面上它們是動作鈕，不是能力列。
  */
-const ALLOC_CONTROLS = new Set(['alloc:undo', 'alloc:confirm']);
+const ALLOC_CONTROLS = new Set(['alloc:undo', 'alloc:confirm', 'alloc:forfeit']);
 
 function allocOptions(prompt: Prompt | null): Map<string, Option> {
   const map = new Map<string, Option>();
@@ -495,7 +495,7 @@ function GameScreen({
   const allocatable = allocOptions(prompt);
   // 加點時，能力選項已經在左欄的能力列上；動作區留下其餘的。
   const otherOptions = (prompt?.options ?? []).filter((o) => !o.id.startsWith('alloc:'));
-  // 復原與確認獨立一排並列——它們是一組動作（退一步／往前走），拆成上下兩顆
+  // 復原與確認（或放棄）獨立一排並列——它們是一組動作（退一步／往前走），拆成上下兩顆
   // 全寬按鈕會讓人以為是兩個不相干的選項。
   const controlOptions = (prompt?.options ?? []).filter((o) => ALLOC_CONTROLS.has(o.id));
 

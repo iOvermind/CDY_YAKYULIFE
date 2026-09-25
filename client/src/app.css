@@ -404,6 +404,9 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .wiki code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
 .wiki ul{list-style:none;margin:0 0 10px;padding:0}
 .wiki li{padding-left:11px;border-left:2px solid var(--edge);margin-bottom:6px}
+/* 章名靠左。摺疊標題借用成就櫃的 h3，那一條是左右撐開的（左邊標題、右邊 AP 或
+   日期）；攻略的章名右邊沒有東西，撐開的結果是整行字被推到最右邊。 */
+.wiki .achgroup h3{justify-content:flex-start}
 .wiki h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
   font-weight:400;margin:16px 0 8px}
 .wiki-table{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 12px}
