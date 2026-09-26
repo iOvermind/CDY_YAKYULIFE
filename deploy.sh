@@ -12,6 +12,17 @@
 #     git pull && ./deploy.sh      # 建出新的 cdy_yakyulife:latest
 #     然後在 Dockhand 重新建立 app 這顆容器（或 docker compose up -d app）
 #
+# **CHANGELOG.md 的 [Unreleased] 有東西，就順便發一版**（見 DEVELOPER.md §7）：
+#
+#     1. 工作目錄有沒 commit 的改動 → 列出來問一次，要出貨就先 commit，不要就停
+#     2. client 與 server 的測試、型別檢查全過才往下
+#     3. 依 [Unreleased] 的類別算新版號（VERSION_RULES §4.1，client/scripts/release.mjs）
+#     4. 改 client/package.json 的版號、把 [Unreleased] 轉成版本區塊
+#     5. 建 image——**成功才 commit 與打 tag v<版號>**，失敗就把那幾個檔案還原
+#     6. 推到 GitHub 之前問一次（預設不推）
+#
+# [Unreleased] 是空的就只建 image，不動版號。
+#
 # 建置的 context 是**專案根目錄**而不是 server/：同一個 image 要同時裝前端與
 # 伺服器，而伺服器直接 import client 的引擎原始碼（見 ADR 0007）。
 #
@@ -77,12 +88,101 @@ fi
 # 空目錄，Postgres 進去之後才發現寫不了。
 mkdir -p "$ROOT/data/pg"
 
+# ── 發版前：工作目錄 ──────────────────────────────────────
+# image 是用工作目錄建的。有沒 commit 的改動卻照樣打 tag 的話，tag 指的 commit 就
+# 不是實際出貨的東西——所以先決定這些改動要不要一起出貨。
+command -v git >/dev/null 2>&1 || die '找不到 git。'
+interactive=false
+[ -t 0 ] && interactive=true
+
+if [ -n "$(git status --porcelain)" ]; then
+  warn '工作目錄有還沒 commit 的改動：'
+  git status --short
+  $interactive || die '沒有互動終端機，無法確認要不要出貨這些改動。先 commit 或還原再部署。'
+  read -r -p '這些改動要一起出貨嗎？先 commit 它們 [y/N] ' answer
+  case "$answer" in
+    y|Y)
+      read -r -p 'commit 訊息：' message
+      [ -n "$message" ] || die 'commit 訊息不能是空的。'
+      git add -A
+      git commit -q -m "$message"
+      say "已 commit：$(git log -1 --format='%h %s')"
+      ;;
+    *) die '沒有出貨。改動留在工作目錄裡。' ;;
+  esac
+fi
+
+# ── 發版前：測試 ──────────────────────────────────────────
+# 發佈門檻要求「建置成功、基本功能實測通過」（RELEASE_RULES §4.1）。壞掉的規則
+# 不該拿到一個正式版號。
+command -v node >/dev/null 2>&1 || die '找不到 node，跑不了測試。'
+say '跑測試與型別檢查（client、server）……'
+run_quiet() {
+  local label="$1"; shift
+  local log; log="$(mktemp)"
+  if ! "$@" >"$log" 2>&1; then
+    tail -40 "$log" >&2
+    rm -f "$log"
+    die "$label 沒過，不發版也不建 image。"
+  fi
+  rm -f "$log"
+}
+run_quiet 'client 測試' npm --prefix client test
+run_quiet 'client 型別檢查' npm --prefix client run typecheck
+run_quiet 'server 測試' npm --prefix server test
+run_quiet 'server 型別檢查' npm --prefix server run typecheck
+# pretest 會重產 changelog.json／wiki.json；它們應該跟 commit 裡的一模一樣。
+[ -z "$(git status --porcelain)" ] || die '跑完測試之後工作目錄變了（產生的資料檔跟 commit 的不一致）。先把它們 commit 了再部署。'
+
+# ── 發版：算版號 ──────────────────────────────────────────
+plan="$(node client/scripts/release.mjs plan)"
+release=''
+if [ "$plan" = 'none' ]; then
+  say 'CHANGELOG 的 [Unreleased] 是空的：不發版，只建 image。'
+else
+  bump="${plan%% *}"
+  release="${plan##* }"
+  current="$(node -p "require('./client/package.json').version")"
+  git rev-parse -q --verify "refs/tags/v${release}" >/dev/null && die "tag v${release} 已經存在——版號不能重複使用（VERSION_RULES §4.4）。"
+  say "發版：${current} → ${release}（${bump}）"
+  RELEASE_FILES=(client/package.json client/package-lock.json CHANGELOG.md client/src/data/changelog.json)
+  # 建置失敗、或中途按了 Ctrl-C，都把改過的檔案還原：版號沒有真的發出去，就不該
+  # 留在工作目錄裡等著下一次被當成已經發過。
+  rollback() { git checkout -- "${RELEASE_FILES[@]}"; warn "已還原版號與 CHANGELOG（v${release} 沒有發出去）。"; }
+  trap 'rollback; exit 1' INT TERM
+  npm --prefix client version "$release" --no-git-tag-version >/dev/null
+  node client/scripts/release.mjs apply "$release" "$(date +%F)"
+  node client/scripts/changelog.mjs >/dev/null
+fi
+
 # ── 建 image ──────────────────────────────────────────────
 say "建置 ${IMAGE}（context：${ROOT}）……"
-docker build \
+if ! docker build \
   --file "${ROOT}/server/Dockerfile" \
   --tag "${IMAGE}" \
-  "${ROOT}"
+  "${ROOT}"; then
+  [ -n "$release" ] && rollback
+  die 'image 沒有建成。'
+fi
+
+# ── 發版：commit、tag、推送 ────────────────────────────────
+if [ -n "$release" ]; then
+  trap - INT TERM
+  git add "${RELEASE_FILES[@]}"
+  git commit -q -m "release: v${release}"
+  git tag -a "v${release}" -m "Release v${release}"
+  say "已發版 v${release}：$(git log -1 --format='%h')，tag v${release}"
+  # 推送是對外的動作，問一次、預設不推。沒有互動終端機就不推。
+  if $interactive; then
+    read -r -p "推到 GitHub（目前分支與 tag v${release}）？[y/N] " answer
+    case "$answer" in
+      y|Y) git push origin HEAD && git push origin "v${release}" && say '已推送。' ;;
+      *) say "沒有推送。之後要推：git push origin HEAD && git push origin v${release}" ;;
+    esac
+  else
+    say "沒有互動終端機，沒有推送。之後要推：git push origin HEAD && git push origin v${release}"
+  fi
+fi
 
 say "完成：$(docker image inspect "${IMAGE}" --format '{{.Id}} 大小 {{.Size}} bytes')"
 echo

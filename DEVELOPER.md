@@ -216,7 +216,7 @@ npm run build        # → client/dist/
 建 image 與跑容器是分開的兩步——「重啟一下」不該變成「順手換了一個版本」。
 
 ```bash
-./deploy.sh                   # 產生 .env（若無）、建出 cdy_yakyulife:latest。不啟動任何東西
+./deploy.sh                   # 產生 .env（若無）、[Unreleased] 有東西就發一版、建出 cdy_yakyulife:latest。不啟動任何東西
 docker compose up -d          # 或在 Dockhand 之類的管理介面上部署這個專案
 docker compose logs -f app
 docker compose down           # 停掉，資料留著
@@ -233,9 +233,22 @@ docker compose down           # 停掉，資料留著
 §4.3），第一刀切在 `0.1.0`（2026-09-06）——那不是「發佈」，是為了讓遊戲裡的「更新」
 分頁有版本界線可以顯示，否則玩家永遠只看到一塊 `[Unreleased]`。
 
-**每做完一批就要收一版**：照 `CHANGELOG_RULES.md` §4.2 把 `## [Unreleased]` 改成
-`## [<版本號>] - <日期>`、在上面新開一個空的 `[Unreleased]`，並同步 `client/package.json`
-的 `version`。忘了收版不會有任何錯誤訊息，只會讓那一頁停在上一版。
+**收版由 `./deploy.sh` 自動做**（2026-09-27）：`CHANGELOG.md` 的 `[Unreleased]` 有條目時，
+部署就是一次發版，依序是——
+
+1. 工作目錄有沒 commit 的改動：列出來問一次，要出貨就輸入 commit 訊息先 commit，不要就停。
+   沒有互動終端機時直接停。
+2. client 與 server 的測試、型別檢查全過才往下。跑完工作目錄必須還是乾淨的（`pretest`
+   重產的 `changelog.json`／`wiki.json` 要跟 commit 的一樣）。
+3. `client/scripts/release.mjs` 依 `[Unreleased]` 的類別算新版號（`VERSION_RULES.md` §4.1，
+   **0.x 也照字面**：一條 `Removed` 或 **[破壞性變更]** 就跳到 `1.0.0`）。
+4. `npm version` 改 `client/package.json` 與 lock 檔，`[Unreleased]` 轉成
+   `## [<版本號>] - <今天>`、上面留一個新的空 `[Unreleased]`，重產 `changelog.json`。
+5. 建 image。**成功才 commit（`release: v<版本號>`）並打 tag `v<版本號>`**；失敗或中途
+   Ctrl-C 就把那幾個檔案還原——版號沒發出去，不能留在工作目錄裡。
+6. 推到 GitHub 之前問一次，預設不推。GitHub Release 頁面不自動建。
+
+`[Unreleased]` 是空的就只建 image，不動版號。要手動收版時照同一套規則即可。
 
 建置**中間產物**（不對外發佈）：
 
@@ -251,9 +264,9 @@ docker compose down           # 停掉，資料留著
 
 | 位置 | 欄位 | 方式 |
 | :--- | :--- | :--- |
-| `client/package.json` | `version` | 手動（單一來源） |
+| `client/package.json` | `version` | **自動**（單一來源）。`./deploy.sh` 發版時用 `npm version` 改，連 `package-lock.json` 一起 |
 | ~~`package.json`（根目錄）~~ | — | **刻意不帶 `version`**。它只是指令轉發，不是第二個版本號來源 |
-| `CHANGELOG.md` | 版本標題 | 手動 |
+| `CHANGELOG.md` | 版本標題 | **自動**。`./deploy.sh` 發版時把 `[Unreleased]` 轉成版本區塊（`client/scripts/release.mjs`）；條目本身照舊手寫 |
 | `client/src/data/changelog.json` | — | **自動**。由 `client/scripts/changelog.mjs` 從 `CHANGELOG.md` 產生（predev／prebuild／pretest 帶著跑），遊戲的「更新」分頁讀它。**禁止手改**，測試會比對它與 `CHANGELOG.md` 是否一致 |
 
 `index_legacy.html` 不帶版本號——它是唯讀保留的舊實作，不隨版本遞增（見 §8）。
