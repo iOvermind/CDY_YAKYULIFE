@@ -10,6 +10,8 @@ import {
   evaluateMilestones,
   seasonPoints,
   signatureRoles,
+  sumWar,
+  warOf,
   summarizeCareer,
   tenureDeduction,
   tierThresholds,
@@ -529,5 +531,35 @@ describe('沒出賽的球季不算季數', () => {
   it('出賽 0 場的成績列也不算', () => {
     const records = [season({ year: 2030 }), season({ year: 2031, batting: bat({ games: 0, pa: 0, ab: 0 }) })];
     expect(summarizeCareer(records, []).leagues[0]?.seasons).toBe(1);
+  });
+});
+
+/** WAR 是評價分那本雙帳換個單位（2026-09-26）。 */
+describe('WAR', () => {
+  const k = 0.8; // p₀ = k/(1+k) ≈ .444
+  const rec = (batting: { win: number; loss: number }) =>
+    season({
+      shares: { batting, pitching: NONE, fielding: NONE },
+      lossPenalty: { batting: k, pitching: k, fielding: k },
+      difficulty: 1.3,
+    });
+
+  it('替代水準的勝率打出來就是 0', () => {
+    const p0 = k / (1 + k);
+    expect(warOf(rec({ win: p0 * 10, loss: (1 - p0) * 10 })).batting).toBeCloseTo(0, 10);
+  });
+
+  it('WS − p₀ × 責任額，而且不乘難度係數', () => {
+    const r = rec({ win: 12, loss: 8 });
+    const p0 = k / (1 + k);
+    expect(warOf(r).batting).toBeCloseTo(12 - p0 * 20, 10);
+    // 評價分 = WAR × (1 + k) × 難度：同一個零點、同一個正負號。
+    expect(seasonPoints(r)).toBeCloseTo(warOf(r).batting * (1 + k) * 1.3, 10);
+  });
+
+  it('逐季加總', () => {
+    const a = rec({ win: 12, loss: 8 });
+    const b = rec({ win: 3, loss: 9 });
+    expect(sumWar([a, b]).batting).toBeCloseTo(warOf(a).batting + warOf(b).batting, 10);
   });
 });

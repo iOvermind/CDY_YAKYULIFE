@@ -15,6 +15,7 @@ import {
   proBattingLine,
   proPitchingLine,
   eraAt,
+  fip,
   staminaFactor,
   fullSeasonSta,
   trustFactor,
@@ -1380,5 +1381,33 @@ describe('球系影響局數、三振與保送', () => {
   it('橫向與特殊常丟在好球帶外面：保送變多', () => {
     expect(sum({ ...base, swp: 75 }).bb9).toBeGreaterThan(sum(base).bb9);
     expect(sum({ ...base, gim: 75 }).bb9).toBeGreaterThan(sum(base).bb9);
+  });
+});
+
+describe('FIP', () => {
+  /** 常數由聯盟平均投手反推：他的 FIP 應該落在聯盟防禦率附近。 */
+  it('聯盟平均的投手，FIP 平均貼近聯盟防禦率', () => {
+    const par = leagues.levels['CPBL1']!.par;
+    let er = 0;
+    let outs = 0;
+    let fipSum = 0;
+    let n = 0;
+    for (let i = 0; i < 200; i++) {
+      const flatAbility = Object.fromEntries(
+        ['sta', 'vel', 'ctl', 'swp', 'drp', 'chg', 'gim', 'con', 'pow', 'spd', 'eye', 'rng', 'fld', 'arm', 'cat'].map((k) => [k, par]),
+      ) as unknown as Abilities;
+      const p = proPitchingLine(new World(`fip-${i}`), { ...flatAbility, sta: 70 } as Abilities, 'CPBL1', par);
+      if (p.outs === 0) continue;
+      er += p.er;
+      outs += p.outs;
+      fipSum += fip(p)! * p.outs;
+      n++;
+    }
+    expect(n).toBeGreaterThan(100);
+    expect(Math.abs(fipSum / outs - (er * 27) / outs)).toBeLessThan(0.5);
+  });
+
+  it('沒有局數就沒有 FIP', () => {
+    expect(fip({ games: 0, starts: 0, wins: 0, losses: 0, saves: 0, holds: 0, outs: 0, hits: 0, double: 0, triple: 0, runs: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, era: 0 })).toBeNull();
   });
 });

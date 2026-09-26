@@ -196,6 +196,8 @@ export interface LeagueCareer {
     readonly pitching: Shares;
     readonly fielding: Shares;
   };
+  /** 三分量各自的 WAR，逐季加總（見 `warOf`）。 */
+  readonly war: WarByPart;
   /** 份額換算出來的分數（已含難度係數與 k 的扣分）。 */
   readonly sharePoints: number;
   readonly awardPoints: number;
@@ -300,6 +302,44 @@ export function difficultyOf(par: number): number {
   const d = cfg.difficulty;
   if (d.baseline_par <= 0 || par <= 0) return 1;
   return Math.pow(par / d.baseline_par, d.exponent);
+}
+
+/** 三個分段各自的 WAR。 */
+export interface WarByPart {
+  readonly batting: number;
+  readonly pitching: number;
+  readonly fielding: number;
+}
+
+/**
+ * 一季的 WAR（Wins Above Replacement）：比替代水準的球員多贏幾場。
+ *
+ * **不是新的模型**，是評價分那本雙帳換個單位：替代水準的勝率 p₀ 就是評價分的零點，
+ * `WS − p₀ × 責任額 = (WS − k × LS) ÷ (1 + k)`，其中 `k = p₀ ÷ (1 − p₀)`。因此三段
+ * 可以直接相加，也與評價分同號。**不乘難度係數**：中職的 5 WAR 就是在中職多贏
+ * 5 場，與現實的 WAR 一樣是聯盟內的數字。
+ */
+export function warOf(record: SeasonRecord): WarByPart {
+  const part = (s: { win: number; loss: number }, k: number) => (s.win - k * s.loss) / (1 + k);
+  return {
+    batting: part(record.shares.batting, record.lossPenalty.batting),
+    pitching: part(record.shares.pitching, record.lossPenalty.pitching),
+    fielding: part(record.shares.fielding, record.lossPenalty.fielding),
+  };
+}
+
+/** 幾季的 WAR 加總。**逐季加**：每一年的 k 不同，不能拿合計的份額再套一次。 */
+export function sumWar(records: readonly SeasonRecord[]): WarByPart {
+  let batting = 0;
+  let pitching = 0;
+  let fielding = 0;
+  for (const r of records) {
+    const w = warOf(r);
+    batting += w.batting;
+    pitching += w.pitching;
+    fielding += w.fielding;
+  }
+  return { batting, pitching, fielding };
 }
 
 /** 一段效力貢獻的分數：三個分段各自扣完敗戰份額，再乘難度係數。 */
@@ -560,6 +600,7 @@ export function summarizeCareer(
       defenseRuns: list.reduce((sum, r) => sum + r.defenseRuns, 0),
       shares,
       sharesByPart,
+      war: sumWar(list),
       sharePoints,
       awardPoints: awardTotal,
       milestonePoints: milestones.points,

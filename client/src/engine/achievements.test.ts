@@ -36,6 +36,7 @@ const league = (over: Partial<LeagueCareer> = {}): LeagueCareer =>
     defenseRuns: 0,
     shares: NONE,
     sharesByPart: { batting: NONE, pitching: NONE, fielding: NONE },
+    war: { batting: 0, pitching: 0, fielding: 0 },
     sharePoints: 0,
     awardPoints: 0,
     milestonePoints: 0,

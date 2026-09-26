@@ -88,8 +88,10 @@ import {
   difficultyOf,
   signatureRoles,
   summarizeCareer,
+  warOf,
   type CareerSummary,
   type SeasonRecord,
+  type WarByPart,
 } from './career.ts';
 import { runBallots, type BallotResult } from './hall.ts';
 import { ladderRows, type LadderRow } from './ladder.ts';
@@ -483,6 +485,8 @@ export interface PlayerState {
   readonly seasonDefenseRuns: number;
   /** 這一季的三本帳。還沒結算過就是 null。 */
   readonly seasonShares: SeasonRecord['shares'] | null;
+  /** 最近一季的 WAR，與 `seasonShares` 同一季。沒有就是 null。 */
+  readonly seasonWar: WarByPart | null;
   /**
    * 各階段的累計成績。
    *
@@ -1107,6 +1111,10 @@ export class Game {
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
       seasonShares: this.#seasonShares,
+      seasonWar: (() => {
+        const last = this.#seasons.at(-1);
+        return this.#seasonShares === null || last === undefined ? null : warOf(last);
+      })(),
       seasonPitching: this.#seasonPitching,
       statsByStage: this.#statsByStage,
       pro: this.#proState,
@@ -5772,6 +5780,8 @@ export class Game {
         `<b class="hl">${esc(l.orgName)}${esc(l.tierLabel)}</b>` +
         `　評價分 <b class="hl">${Math.round(l.score)}</b>（${detail}）` +
         `<br><span class="sub">勝利份額 ${l.shares.win.toFixed(1)}／敗戰份額 ${l.shares.loss.toFixed(1)}` +
+        // 投打守合計的 WAR。聯盟內的數字，所以跟著各聯盟那一列，不加總成跨聯盟的一個數。
+        `　·　WAR ${(l.war.batting + l.war.pitching + l.war.fielding).toFixed(1)}` +
         `${l.milestones.length > 0 ? `　·　${esc(l.milestones.join('、'))}` : ''}</span>`
       );
     });

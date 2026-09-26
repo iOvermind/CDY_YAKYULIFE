@@ -1035,6 +1035,36 @@ export function eraAt(d: number, par = cfg.pitching.reference_par): number {
 }
 
 /**
+ * FIP 的常數：讓聯盟平均投手的 FIP 等於他的防禦率。
+ *
+ * 受試者與 `eraAt(0)` 同一個——能力等於聯盟平均、關掉波動與抖動——因此 FIP 與
+ * ERA+ 對「聯盟平均」的定義是同一件事。各層級共用：聯盟平均是自我參照的。
+ */
+export const FIP_CONSTANT: number = (() => {
+  const par = cfg.pitching.reference_par;
+  const ip = cfg.pitching.records.hits.per;
+  const ability = uniformAbility(par);
+  const skill = pitcherRatio(pitcherStuff(ability, 'SP'), par);
+  const e = allowedEvents(ability, par, ip, skill, () => 1, () => 0);
+  return eraAt(0) - fipCore(e.hr, e.bb, e.hbp, e.so, ip);
+})();
+
+/** FIP 去掉常數的那一段：只看投手自己決定的事——全壘打、四壞觸身、三振。 */
+function fipCore(hr: number, bb: number, hbp: number, so: number, ip: number): number {
+  return (13 * hr + 3 * (bb + hbp) - 2 * so) / ip;
+}
+
+/**
+ * FIP（Fielding Independent Pitching）：拿掉守備與運氣之後的防禦率。
+ *
+ * 沒有投球局數回傳 null。
+ */
+export function fip(line: PitchingLine): number | null {
+  if (line.outs === 0) return null;
+  return fipCore(line.hr, line.bb, line.hbp, line.so, line.outs / 3) + FIP_CONSTANT;
+}
+
+/**
  * 一季的投球成績。
  *
  * 順序是相依的，**不可以重排**：角色 → 出賽與先發 → 局數 → 勝敗 → 救援 → 中繼

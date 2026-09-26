@@ -198,6 +198,11 @@ export function kPerNine(line: PitchingLine): number {
   return ip === 0 ? 0 : (line.so * 9) / ip;
 }
 
+/** 三振與四壞的比。沒有四壞就沒有意義，回傳 null（不是無限大）。 */
+export function strikeoutsPerWalk(line: PitchingLine): number | null {
+  return line.bb === 0 ? null : line.so / line.bb;
+}
+
 /** 每九局保送數。 */
 export function bbPerNine(line: PitchingLine): number {
   const ip = innings(line);

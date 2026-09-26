@@ -23,12 +23,13 @@ import {
   fmtInnings,
   kPerNine,
   ops,
+  strikeoutsPerWalk,
   whip,
   type BattingLine,
   type PitchingLine,
 } from './engine/amateurStats.ts';
 import type { AwardRecord } from './engine/awards.ts';
-import type { CareerSummary, SeasonRecord } from './engine/career.ts';
+import { warOf, type CareerSummary, type SeasonRecord, type WarByPart } from './engine/career.ts';
 import {
   Game,
   NO_PROGRESS,
@@ -55,7 +56,7 @@ import { clampName } from './engine/playerName.ts';
 import { tournamentPar } from './engine/national.ts';
 import { blockedByHand, isSideVisible, type Rating } from './engine/rating.ts';
 import { fmtMoneyShort } from './engine/salary.ts';
-import { positionName, ROLE_NAMES } from './engine/season.ts';
+import { fip, positionName, ROLE_NAMES } from './engine/season.ts';
 import { partnerProfile } from './engine/loveYear.ts';
 import { newSeed } from './engine/rng.ts';
 
@@ -1049,7 +1050,11 @@ function StatsPanel({ state }: { state: PlayerState }) {
         batting={state.seasonBatting}
         pitching={state.seasonPitching}
         base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
-        shares={state.seasonShares}
+        shares={
+          state.seasonShares === null
+            ? null
+            : { ...state.seasonShares, ...(state.seasonWar === null ? {} : { war: state.seasonWar }) }
+        }
         defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
       />
       <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} tags={relationTags(state)} />
@@ -1313,7 +1318,14 @@ interface StatColumn<T> {
 }
 
 /** 三本帳。守備那一本沒有自己的表，它跟著野手走。 */
-type SharesByPart = SeasonRecord['shares'];
+/**
+ * 一列成績的三本帳，外加那一列的 WAR。WAR 要逐季用當年的 k 換算，不能從合計的
+ * 份額回推，因此由產生這一列的地方算好帶進來；養成期與國際賽沒有替代水準，不帶。
+ */
+type SharesByPart = SeasonRecord['shares'] & { readonly war?: WarByPart };
+
+/** WAR 一位小數；沒有就是「-」。 */
+const fmtWar = (war: number | undefined): string => (war === undefined ? NA : war.toFixed(1));
 
 /**
  * 野手那張表的份額：**打擊加守備**。
@@ -1359,6 +1371,11 @@ const BATTING_COLUMNS: readonly StatColumn<BattingLine>[] = [
   { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利（打擊與守備合計）', value: (b, base, shares) => batterShares(b, base, shares).win.toFixed(1) },
   { key: 'LS', title: '敗戰份額：佔用了出場機會與守備位置卻沒換回勝利的部分', value: (b, base, shares) => batterShares(b, base, shares).loss.toFixed(1) },
   { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (b, base, shares) => (noPa(b) ? NA : fmtAvg(winPct(batterShares(b, base, shares)))) },
+  {
+    key: 'WAR',
+    title: '勝場貢獻：比替代水準的球員多贏幾場（打擊＋守備）。聯盟內的數字，不跨聯盟換算',
+    value: (_b, _base, shares) => fmtWar(shares?.war === undefined ? undefined : shares.war.batting + shares.war.fielding),
+  },
 ];
 
 const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
@@ -1379,9 +1396,16 @@ const PITCHING_COLUMNS: readonly StatColumn<PitchingLine>[] = [
   { key: 'K/9', title: '每九局奪三振', value: (p) => (noOuts(p) ? NA : kPerNine(p).toFixed(1)) },
   { key: 'BB/9', title: '每九局四壞', value: (p) => (noOuts(p) ? NA : bbPerNine(p).toFixed(1)) },
   { key: 'ERA+', title: '相對聯盟平均的防禦率（100 為聯盟平均）', value: (p, base) => rel(eraPlus(p, base)) },
+  { key: 'FIP', title: '拿掉守備與運氣的防禦率：只看全壘打、四壞觸身與三振，聯盟平均等於聯盟防禦率', value: (p) => { const v = fip(p); return v === null ? NA : v.toFixed(2); } },
+  { key: 'K/BB', title: '三振與四壞的比', value: (p) => { const v = strikeoutsPerWalk(p); return v === null ? NA : v.toFixed(2); } },
   { key: 'WS', title: '勝利份額：這一季替球隊贏下幾份勝利', value: (p, base, shares) => (shares?.pitching ?? pitchingShares(p, base)).win.toFixed(1) },
   { key: 'LS', title: '敗戰份額：佔用了投球局數卻沒換回勝利的部分', value: (p, base, shares) => (shares?.pitching ?? pitchingShares(p, base)).loss.toFixed(1) },
   { key: 'W%', title: '勝率：勝利份額佔責任額的比例，.500 為聯盟平均', value: (p, base, shares) => (noOuts(p) ? NA : fmtAvg(winPct(shares?.pitching ?? pitchingShares(p, base)))) },
+  {
+    key: 'WAR',
+    title: '勝場貢獻：比替代水準的投手多贏幾場。聯盟內的數字，不跨聯盟換算',
+    value: (_p, _base, shares) => fmtWar(shares?.war?.pitching),
+  },
 ];
 
 /** 一列通算成績。第一欄是列名（聯盟或「通算」），其餘欄位與生涯年表一致。 */
@@ -2087,7 +2111,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     pitching: s.pitching ?? (s.batting === null && s.pitcherRole !== null ? ZERO_PITCHING : null),
     injured: s.injured,
     defenseRuns: s.defenseRuns,
-    shares: s.shares,
+    shares: { ...s.shares, war: warOf(s) },
     base: proBaseline(s.level),
   }));
 
@@ -2102,7 +2126,7 @@ function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
     batting: l.batting,
     pitching: l.pitching,
     defenseRuns: l.defenseRuns,
-    shares: l.sharesByPart,
+    shares: { ...l.sharesByPart, war: l.war },
     // 用結算給的頂級層級，**不要拿 org 拼字串**：墨聯的層級就叫 LMB、澳職叫
     // ABL、美職的頂級是 MLB，拼出來的 LMB1 不存在，讀它會直接拋錯——整個
     // 結算畫面因此變成一片空白。
@@ -2122,6 +2146,11 @@ function topTotalRow(summary: CareerSummary): TotalRow {
       batting: sumShares(...summary.leagues.map((l) => l.sharesByPart.batting)),
       pitching: sumShares(...summary.leagues.map((l) => l.sharesByPart.pitching)),
       fielding: sumShares(...summary.leagues.map((l) => l.sharesByPart.fielding)),
+      war: {
+        batting: summary.leagues.reduce((n, l) => n + l.war.batting, 0),
+        pitching: summary.leagues.reduce((n, l) => n + l.war.pitching, 0),
+        fielding: summary.leagues.reduce((n, l) => n + l.war.fielding, 0),
+      },
     },
     // 通算橫跨數個聯盟，基準線只能挑一個——取評價分最高的那座，那是這段生涯
     // 的代表舞台。沒有職業紀錄時退回中職一軍。
