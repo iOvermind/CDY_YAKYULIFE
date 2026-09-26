@@ -21,7 +21,15 @@ import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine
 import { ladderTop, rungName } from './achievements.ts';
 import type { PitcherRole } from './season.ts';
 import type { AwardRecord } from './awards.ts';
-import { battingShares, pitchingShares, sumShares, type Baseline, type Shares } from './metrics.ts';
+import {
+  battingShares,
+  fieldingReplacementWinPct,
+  pitchingShares,
+  replacementWinPctOf,
+  sumShares,
+  type Baseline,
+  type Shares,
+} from './metrics.ts';
 
 /**
  * 一段效力的紀錄。
@@ -57,6 +65,10 @@ export interface InternationalRecord {
   readonly mvp: boolean;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
+  /** 這一屆的守備分（顯示用）。平均線是賽會的 par 加守位偏移。 */
+  readonly defenseRuns: number;
+  /** 守備那一本帳。國際賽不進評價分，只給 WAR 用。 */
+  readonly fielding: Shares;
 }
 export interface SeasonRecord {
   readonly year: number;
@@ -165,6 +177,10 @@ export interface AmateurSeasonRecord {
   readonly pitcherRole: PitcherRole | null;
   readonly batting: BattingLine | null;
   readonly pitching: PitchingLine | null;
+  /** 這一季的守備分（顯示用）。平均線是該階段的 par 加守位偏移。 */
+  readonly defenseRuns: number;
+  /** 守備那一本帳。養成期不進評價分，只給 WAR 用。 */
+  readonly fielding: Shares;
 }
 
 /** 某個聯盟的生涯總結。 */
@@ -328,21 +344,45 @@ export function warOf(record: SeasonRecord): WarByPart {
   };
 }
 
+/** 一段成績的三本帳與 WAR。 */
+export interface Ledger {
+  readonly batting: Shares;
+  readonly pitching: Shares;
+  readonly fielding: Shares;
+  readonly war: WarByPart;
+}
+
 /**
- * 沒有結算帳的一段成績（養成期、國際賽）的 WAR：從成績與基準線現算份額，替代
- * 勝率 `p0` 由呼叫端給（見 `replacementWinPctOf`）。沒有守備份額，守備那一段是 0。
+ * 沒有結算帳的一段成績（養成期、國際賽）的三本帳與 WAR。
+ *
+ * 打擊與投球的份額從成績與基準線現算；守備那一本在記錄當下就算好了（見
+ * `AmateurSeasonRecord.fielding`）。替代水準：打擊與投球共用 `replacement` 那條
+ * 基準線推出的勝率（與職業的 `lossPenalty` 同一個理由），守備用職業同一條
+ * `fieldingReplacementWinPct`。
  */
-export function lineWar(
+export function eventLedger(
   batting: BattingLine | null,
   pitching: PitchingLine | null,
+  fielding: Shares,
   base: Baseline,
-  p0: number,
-): WarByPart {
-  const above = (s: { win: number; loss: number }) => s.win - p0 * (s.win + s.loss);
+  replacement: Baseline,
+): Ledger {
+  const none = { win: 0, loss: 0 };
+  const shares = {
+    batting: batting === null ? none : battingShares(batting, base),
+    pitching: pitching === null ? none : pitchingShares(pitching, base),
+    fielding,
+  };
+  const p0 = replacementWinPctOf(base, replacement);
+  const p0f = fieldingReplacementWinPct();
+  const above = (s: Shares, p: number) => s.win - p * (s.win + s.loss);
   return {
-    batting: batting === null ? 0 : above(battingShares(batting, base)),
-    pitching: pitching === null ? 0 : above(pitchingShares(pitching, base)),
-    fielding: 0,
+    ...shares,
+    war: {
+      batting: above(shares.batting, p0),
+      pitching: above(shares.pitching, p0),
+      fielding: above(fielding, p0f),
+    },
   };
 }
 

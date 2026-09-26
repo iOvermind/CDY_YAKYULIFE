@@ -67,6 +67,7 @@ import {
 import { annualAwards, type AwardRecord } from './awards.ts';
 import {
   assignPosition,
+  defenseMarkAt,
   fieldingResponsibility,
   positionAverage,
   positionLabel,
@@ -87,6 +88,7 @@ import {
 import {
   difficultyOf,
   signatureRoles,
+  eventLedger,
   summarizeCareer,
   warOf,
   type CareerSummary,
@@ -101,6 +103,8 @@ import {
   type AchievementResult,
 } from './achievements.ts';
 import {
+  amateurBaseline,
+  amateurBaselineAt,
   baselineAt,
   battingShares,
   fieldingReplacementWinPct,
@@ -648,6 +652,8 @@ export class Game {
   /** 這一季的守備分。與 #defenseRuns 的層級累計值不同，最近一季那張表看它。 */
   #seasonDefenseRuns = 0;
   #seasonShares: SeasonRecord['shares'] | null = null;
+  /** 最近一季的 WAR，與 `#seasonShares` 同一季、同時更新。 */
+  #seasonWar: WarByPart | null = null;
   /** 這一季的出賽係數。傷病落在這裡：1 為全勤、0 為整季報銷。 */
   #seasonFactor = 1;
   /** 全力一搏累計成功的次數。〈今晚打老虎〉看它。 */
@@ -1111,10 +1117,7 @@ export class Game {
       seasonBatting: this.#seasonBatting,
       seasonDefenseRuns: this.#seasonDefenseRuns,
       seasonShares: this.#seasonShares,
-      seasonWar: (() => {
-        const last = this.#seasons.at(-1);
-        return this.#seasonShares === null || last === undefined ? null : warOf(last);
-      })(),
+      seasonWar: this.#seasonWar,
       seasonPitching: this.#seasonPitching,
       statsByStage: this.#statsByStage,
       pro: this.#proState,
@@ -1819,8 +1822,23 @@ export class Game {
     const line = playAmateurStats(this.world, this.#stage, this.#ability, season.games, season.wins);
     this.#seasonBatting = line.batting;
     this.#seasonPitching = line.pitching;
-    this.#seasonDefenseRuns = 0;
-    this.#seasonShares = null;
+    const fieldingNow = this.#eventFielding(
+      this.#ability,
+      this.#fieldPosition,
+      amateurCfg.cups[this.#stage].par,
+      line.batting,
+    );
+    this.#seasonDefenseRuns = fieldingNow.defenseRuns;
+    // 養成期沒有結算帳，份額與 WAR 從成績現算，替代水準是 par − 3（見 eventLedger）。
+    const ledger = eventLedger(
+      line.batting,
+      line.pitching,
+      fieldingNow.fielding,
+      amateurBaseline(),
+      amateurBaselineAt(amateurCfg.war_replacement.d),
+    );
+    this.#seasonShares = { batting: ledger.batting, pitching: ledger.pitching, fielding: ledger.fielding };
+    this.#seasonWar = ledger.war;
     // 當季暫時能力用完就歸零——它只屬於這一年。
     this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
@@ -1836,6 +1854,7 @@ export class Game {
       pitcherRole: line.pitching === null ? null : amateurRole(this.#stage, this.#ability),
       batting: line.batting,
       pitching: line.pitching,
+      ...fieldingNow,
     });
 
     const statLines: string[] = [];
@@ -2725,6 +2744,7 @@ export class Game {
     this.#seasonPitching = line.pitching;
     this.#seasonDefenseRuns = 0;
     this.#seasonShares = null;
+    this.#seasonWar = null;
     // 當季暫時能力用完就歸零——它只屬於這一年。
     this.#seasonBonus = {};
     this.#accumulate(line.batting, line.pitching);
@@ -3868,6 +3888,7 @@ export class Game {
       mvp,
       batting: line.batting,
       pitching: line.pitching,
+      ...this.#eventFielding(this.#seasonAbility, this.#fieldPosition ?? DH, tournamentPar(), line.batting),
     });
     this.#grantPoints(result.points);
     // 一屆賽會打完，下季的受傷風險上升。國家隊不是免費的榮耀。
@@ -3930,6 +3951,34 @@ export class Game {
       line.pitching === null ? { win: 0, loss: 0 } : pitchingShares(line.pitching, base),
     );
     return shares.win + shares.loss === 0 ? null : winPct(shares);
+  }
+
+  /**
+   * 養成期與國際賽的守備分與守備帳：沒有聯盟層級，平均線用那一段的 par 加守位
+   * 偏移（`defenseMarkAt`）。這兩段的賽事短、每場都上，出賽比重視為 1——守備
+   * 分因此就是純值，責任額照這一段實際上了幾場算。
+   *
+   * **記錄當下就算好**：守備分要的是那一季的能力，引退時回頭算只拿得到最後一年的。
+   */
+  #eventFielding(
+    ability: Abilities,
+    position: string | null,
+    par: number,
+    batting: BattingLine | null,
+  ): { defenseRuns: number; fielding: Shares } {
+    const none = { defenseRuns: 0, fielding: { win: 0, loss: 0 } };
+    if (position === null || batting === null || batting.games === 0) return none;
+    const mark = defenseMarkAt(ability, position, par);
+    if (mark === null) return none;
+    return {
+      defenseRuns: Math.round(mark),
+      fielding: fieldingShares({
+        defenseMark: mark,
+        positionShare: fieldingResponsibility(position),
+        leagueGames: batting.games,
+        gamesShare: 1,
+      }),
+    };
   }
 
   /**
@@ -4293,7 +4342,9 @@ export class Game {
 
     // 記分板的「最近一季」要的是同一份數字。三本帳**分開帶**——野手表取打擊加
     // 守備、投手表取投球，兩張表各取自己該取的那幾本。
-    this.#seasonShares = this.#seasons.at(-1)?.shares ?? null;
+    const last = this.#seasons.at(-1);
+    this.#seasonShares = last?.shares ?? null;
+    this.#seasonWar = last === undefined ? null : warOf(last);
   }
 
   /**

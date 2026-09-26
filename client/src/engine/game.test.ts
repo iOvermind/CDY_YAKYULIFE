@@ -2840,3 +2840,19 @@ describe('隱瞞傷勢', () => {
     }
   });
 });
+
+/** 養成期與國際賽的 DEF：平均線是那一段的 par 加守位偏移（2026-09-26）。 */
+describe('養成期的守備分', () => {
+  it('野手每一季都記下守備帳', () => {
+    let fielderSeen = false;
+    for (let i = 0; i < 5; i++) {
+      const ss = playToEnd(started({ seed: `am-def-${i}`, startPosition: 'SS' }));
+      for (const a of ss.summary?.amateurSeasons ?? []) {
+        if (a.batting === null || a.position === null || a.position === 'DH') continue;
+        fielderSeen = true;
+        expect(a.fielding.win + a.fielding.loss).toBeGreaterThan(0);
+      }
+    }
+    expect(fielderSeen).toBe(true);
+  });
+});

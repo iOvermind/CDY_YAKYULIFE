@@ -290,6 +290,18 @@ export function defenseResponsibility(position: string, gamesShare: number): num
  * 擲骰決定守哪裡會讓玩家練了守備卻看不到效果。`jitter` 沒傳就不抖，年表因此可以
  * 在任何時候重算。
  */
+/**
+ * 沒有聯盟層級的場合（養成期、國際賽）的守備純值：平均線是那一段的 par 加上守位
+ * 偏移，與職業的 `localPositionAverageLine` 同一條式子，只是 par 由呼叫端給。
+ * 指定打擊與沒有偏移的守位回傳 null。
+ */
+export function defenseMarkAt(ability: Abilities, position: string, par: number): number | null {
+  if (position === DH) return null;
+  const offset = positions.defense_offsets[position];
+  if (offset === undefined) return null;
+  return defenseMark(defenseScore(ability, position), par + offset);
+}
+
 export function defenseRuns(options: {
   readonly ability: Abilities;
   readonly position: string;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dataKeys, hallOfFame as cfg, leagues } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import type { AwardRecord } from './awards.ts';
-import { proBaseline } from './metrics.ts';
+import { fieldingReplacementWinPct, proBaseline } from './metrics.ts';
 import {
   applyTierFloors,
   awardPoints,
@@ -10,6 +10,7 @@ import {
   evaluateMilestones,
   seasonPoints,
   signatureRoles,
+  eventLedger,
   sumWar,
   warOf,
   summarizeCareer,
@@ -255,9 +256,9 @@ describe('summarizeCareer', () => {
   it('國際賽通算把每一屆加起來，而且不混進聯盟通算', () => {
     const intl = [
       { year: 2031, age: 25, tournament: '世界棒球經典賽', rank: '冠軍', mvp: false,
-        batting: bat({ games: 7, pa: 30, hits: 10, hr: 2 }), pitching: null },
+        batting: bat({ games: 7, pa: 30, hits: 10, hr: 2 }), pitching: null, defenseRuns: 0, fielding: NONE },
       { year: 2035, age: 29, tournament: '世界十二強', rank: '亞軍', mvp: true,
-        batting: bat({ games: 6, pa: 25, hits: 8, hr: 1 }), pitching: null },
+        batting: bat({ games: 6, pa: 25, hits: 8, hr: 1 }), pitching: null, defenseRuns: 0, fielding: NONE },
     ];
     const s = summarizeCareer([season()], [], 0, [], 0, intl);
     expect(s.internationalTotal.batting?.games).toBe(13);
@@ -561,5 +562,18 @@ describe('WAR', () => {
     const a = rec({ win: 12, loss: 8 });
     const b = rec({ win: 3, loss: 9 });
     expect(sumWar([a, b]).batting).toBeCloseTo(warOf(a).batting + warOf(b).batting, 10);
+  });
+});
+
+describe('eventLedger', () => {
+  it('守備帳照原樣帶著，守備 WAR 用守備的替代勝率', () => {
+    const base = proBaseline('CPBL1');
+    const fielding = { win: 3, loss: 1 };
+    const l = eventLedger(null, null, fielding, base, base);
+    expect(l.fielding).toEqual(fielding);
+    const p0f = fieldingReplacementWinPct();
+    expect(l.war.fielding).toBeCloseTo(3 - p0f * 4, 10);
+    // 替代水準等於聯盟平均時，平均打者的打擊 WAR 約為 0。
+    expect(l.war.batting).toBe(0);
   });
 });
