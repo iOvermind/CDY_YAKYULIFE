@@ -340,23 +340,33 @@ export interface WarByPart {
 /**
  * 一季的 WAR（Wins Above Replacement）：比替代水準的球員多贏幾場。
  *
- * **不是新的模型**，是評價分那本雙帳換個單位：替代水準的勝率 p₀ 就是評價分的零點，
- * `WS − p₀ × 責任額 = (WS − k × LS) ÷ (1 + k)`，其中 `k = p₀ ÷ (1 − p₀)`。因此三段
- * 可以直接相加，也與評價分同號。**不乘難度係數**：中職的 5 WAR 就是在中職多贏
- * 5 場，與現實的 WAR 一樣是聯盟內的數字。
+ * 從評價分那本雙帳算：`(WS − f × p₀ × 責任額) ÷ 每場份數`。p₀ 是評價分的零點
+ *（`k = p₀ ÷ (1 − p₀)`），**f 是 WAR 自己的係數**（`season.json` 的
+ * `war_replacement_scale`，打擊、投球、守備各一個）——p₀ 扣得太多，WAR 只剩現實的
+ * 一半，而 p₀ 綁著分級與名人堂不能動，所以 WAR 另外乘（2026-09-27）。因此 WAR 與
+ * 評價分**不再同一個零點**：略高於替代水準的球員 WAR 為正、評價分可能還是負的。三段
+ * 可以直接相加。**不乘難度係數**：中職的 5 WAR 就是在中職多贏 5 場，與現實的 WAR
+ * 一樣是聯盟內的數字。
  *
  * **最後除以每場份數**：那是比替代水準多出來的**份額**，照 James 一場勝利是 3 份，
  * 除完才是場數。以前沒除，WAR 整整高估三倍——645 WS 的生涯掛著 336 WAR，WS ÷ WAR
  * 只有 1.9，現實的長青球星是 4 到 7（2026-09-27）。
  */
 export function warOf(record: SeasonRecord): WarByPart {
-  const perGame = seasonCfg.advanced.shares.per_game;
-  const part = (s: { win: number; loss: number }, k: number) => (s.win - k * s.loss) / (1 + k) / perGame;
+  const scale = seasonCfg.advanced.war_replacement_scale;
+  // 評價分的零點 p₀ 由 k 換回來（k = p₀ ÷ (1 − p₀)），WAR 再乘自己的係數。
+  const part = (s: { win: number; loss: number }, k: number, f: number) =>
+    warFromShares(s, (k / (1 + k)) * f);
   return {
-    batting: part(record.shares.batting, record.lossPenalty.batting),
-    pitching: part(record.shares.pitching, record.lossPenalty.pitching),
-    fielding: part(record.shares.fielding, record.lossPenalty.fielding),
+    batting: part(record.shares.batting, record.lossPenalty.batting, scale.batting),
+    pitching: part(record.shares.pitching, record.lossPenalty.pitching, scale.pitching),
+    fielding: part(record.shares.fielding, record.lossPenalty.fielding, scale.fielding),
   };
+}
+
+/** 比替代勝率 `p` 多出來的份額，換成勝場：`(WS − p × 責任額) ÷ 每場份數`。 */
+function warFromShares(s: { win: number; loss: number }, p: number): number {
+  return (s.win - p * (s.win + s.loss)) / seasonCfg.advanced.win_shares_per_win;
 }
 
 /** 一段成績的三本帳與 WAR。 */
@@ -390,15 +400,14 @@ export function eventLedger(
   };
   const p0 = replacementWinPctOf(base, replacement);
   const p0f = fieldingReplacementWinPct();
-  // 與 warOf 同一個單位：多出來的份額除以每場份數才是場數。
-  const perGame = seasonCfg.advanced.shares.per_game;
-  const above = (s: Shares, p: number) => (s.win - p * (s.win + s.loss)) / perGame;
+  // 與 warOf 同一套：替代勝率乘 WAR 自己的係數，多出來的份額除以每場份數。
+  const scale = seasonCfg.advanced.war_replacement_scale;
   return {
     ...shares,
     war: {
-      batting: above(shares.batting, p0),
-      pitching: above(shares.pitching, p0),
-      fielding: above(fielding, p0f),
+      batting: warFromShares(shares.batting, p0 * scale.batting),
+      pitching: warFromShares(shares.pitching, p0 * scale.pitching),
+      fielding: warFromShares(fielding, p0f * scale.fielding),
     },
   };
 }

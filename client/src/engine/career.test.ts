@@ -537,13 +537,15 @@ describe('沒出賽的球季不算季數', () => {
 });
 
 /**
- * WAR 是評價分那本雙帳換個單位（2026-09-26）。**單位是勝場**：勝利份額照 James 是
- * 一場勝利 3 份（`per_game`），比替代水準多出來的份額要除以它才是場數——以前沒除，
- * WAR 整整高估三倍（2026-09-27）。
+ * WAR 從評價分那本雙帳算，但**替代水準是自己的**（2026-09-27）：評價分的 p₀ 乘上
+ * `war_replacement_scale`。p₀ 扣得太多，WAR 只剩現實的一半，而 p₀ 綁著分級與名人堂
+ * 不能動，所以 WAR 另外乘一個係數（校準見 scripts/war.test.ts）。**單位是勝場**：
+ * 一場勝利 3 份勝利份額，多出來的份額要除以它。
  */
 describe('WAR', () => {
   const k = 0.8; // p₀ = k/(1+k) ≈ .444
-  const perGame = season_.advanced.shares.per_game;
+  const perGame = season_.advanced.win_shares_per_win;
+  const f = season_.advanced.war_replacement_scale.batting;
   const rec = (batting: { win: number; loss: number }) =>
     season({
       shares: { batting, pitching: NONE, fielding: NONE },
@@ -551,17 +553,22 @@ describe('WAR', () => {
       difficulty: 1.3,
     });
 
-  it('替代水準的勝率打出來就是 0', () => {
+  it('WAR 的零點是 p₀ × 係數；打在評價分的零點 p₀ 上時 WAR 是正的', () => {
     const p0 = k / (1 + k);
-    expect(warOf(rec({ win: p0 * 10, loss: (1 - p0) * 10 })).batting).toBeCloseTo(0, 10);
+    const q = p0 * f;
+    expect(warOf(rec({ win: q * 10, loss: (1 - q) * 10 })).batting).toBeCloseTo(0, 10);
+    expect(warOf(rec({ win: p0 * 10, loss: (1 - p0) * 10 })).batting).toBeGreaterThan(0);
   });
 
-  it('(WS − p₀ × 責任額) ÷ 每場份數，而且不乘難度係數', () => {
+  it('(WS − p₀ × 係數 × 責任額) ÷ 每場份數，而且不乘難度係數', () => {
     const r = rec({ win: 12, loss: 8 });
     const p0 = k / (1 + k);
-    expect(warOf(r).batting).toBeCloseTo((12 - p0 * 20) / perGame, 10);
-    // 評價分 = WAR × 每場份數 × (1 + k) × 難度：同一個零點、同一個正負號。
-    expect(seasonPoints(r)).toBeCloseTo(warOf(r).batting * perGame * (1 + k) * 1.3, 10);
+    expect(warOf(r).batting).toBeCloseTo((12 - p0 * f * 20) / perGame, 10);
+  });
+
+  it('評價分照舊只看 p₀，不看 WAR 的係數', () => {
+    const r = rec({ win: 12, loss: 8 });
+    expect(seasonPoints(r)).toBeCloseTo((12 - k * 8) * 1.3, 10);
   });
 
   it('逐季加總', () => {
@@ -578,7 +585,8 @@ describe('eventLedger', () => {
     const l = eventLedger(null, null, fielding, base, base);
     expect(l.fielding).toEqual(fielding);
     const p0f = fieldingReplacementWinPct();
-    expect(l.war.fielding).toBeCloseTo((3 - p0f * 4) / season_.advanced.shares.per_game, 10);
+    const fF = season_.advanced.war_replacement_scale.fielding;
+    expect(l.war.fielding).toBeCloseTo((3 - p0f * fF * 4) / season_.advanced.win_shares_per_win, 10);
     // 替代水準等於聯盟平均時，平均打者的打擊 WAR 約為 0。
     expect(l.war.batting).toBe(0);
   });

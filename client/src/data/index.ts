@@ -1604,6 +1604,8 @@ export interface SeasonData {
   readonly advanced: {
     readonly runs_per_win: number;
     readonly win_shares_per_win: number;
+    /** WAR 的替代水準＝評價分的 p₀ × 這個係數（打擊／投球／守備各一個）。評價分不看它。 */
+    readonly war_replacement_scale: { readonly batting: number; readonly pitching: number; readonly fielding: number };
     /** 勝利份額／敗戰份額雙帳制的參數，見 ADR 0003。 */
     readonly shares: {
       /** 每場球產生幾份（勝場與敗場各自 ×3）。 */
