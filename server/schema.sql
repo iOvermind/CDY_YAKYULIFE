@@ -144,3 +144,17 @@ DELETE FROM achievements WHERE achievement ~ '^tier:[0-9]+$';
 -- 外觀（2026-09-27）：佈景主題與每一套各自的色相格數，整份存成 JSONB。**NULL 是還沒
 -- 設定過**——客戶端登入時看到 NULL，就把那台裝置上的設定寫上來。
 ALTER TABLE users ADD COLUMN IF NOT EXISTS appearance JSONB;
+
+-- 養成期國際賽改成簡稱（2026-09-27）：名字太長，表格、榮譽標籤、成績圖都塞不下。成就的
+-- id 與名稱都含賽事名（`intl:中華隊 <賽事>`、`中華隊 <賽事> <名次>`），**必須在
+-- pruneAchievements 之前改掉**——不然舊名認不出來會被整列刪除、收回 AP。新名都不含
+-- 舊名，重跑是冪等的。
+UPDATE achievements SET achievement = replace(achievement, 'LLB 世界次青少棒錦標賽', 'LLB 次青少棒'), name = replace(name, 'LLB 世界次青少棒錦標賽', 'LLB 次青少棒') WHERE achievement LIKE '%LLB 世界次青少棒錦標賽%' OR name LIKE '%LLB 世界次青少棒錦標賽%';
+UPDATE achievements SET achievement = replace(achievement, 'PONY 世界青少棒錦標賽', 'PONY 青少棒'), name = replace(name, 'PONY 世界青少棒錦標賽', 'PONY 青少棒') WHERE achievement LIKE '%PONY 世界青少棒錦標賽%' OR name LIKE '%PONY 世界青少棒錦標賽%';
+UPDATE achievements SET achievement = replace(achievement, 'WBSC U-15 世界盃', 'U-15 世界盃'), name = replace(name, 'WBSC U-15 世界盃', 'U-15 世界盃') WHERE achievement LIKE '%WBSC U-15 世界盃%' OR name LIKE '%WBSC U-15 世界盃%';
+UPDATE achievements SET achievement = replace(achievement, 'PONY 小馬級世界青棒錦標賽', 'PONY 青棒'), name = replace(name, 'PONY 小馬級世界青棒錦標賽', 'PONY 青棒') WHERE achievement LIKE '%PONY 小馬級世界青棒錦標賽%' OR name LIKE '%PONY 小馬級世界青棒錦標賽%';
+UPDATE achievements SET achievement = replace(achievement, 'WBSC U-18 世界盃棒球賽', 'U-18 世界盃'), name = replace(name, 'WBSC U-18 世界盃棒球賽', 'U-18 世界盃') WHERE achievement LIKE '%WBSC U-18 世界盃棒球賽%' OR name LIKE '%WBSC U-18 世界盃棒球賽%';
+UPDATE achievements SET achievement = replace(achievement, 'BFA 亞洲 U-18 青棒錦標賽', '亞洲 U-18'), name = replace(name, 'BFA 亞洲 U-18 青棒錦標賽', '亞洲 U-18') WHERE achievement LIKE '%BFA 亞洲 U-18 青棒錦標賽%' OR name LIKE '%BFA 亞洲 U-18 青棒錦標賽%';
+UPDATE achievements SET achievement = replace(achievement, '世界大學運動會', '世大運'), name = replace(name, '世界大學運動會', '世大運') WHERE achievement LIKE '%世界大學運動會%' OR name LIKE '%世界大學運動會%';
+UPDATE achievements SET achievement = replace(achievement, '國際大學菁英棒球賽', '大學菁英賽'), name = replace(name, '國際大學菁英棒球賽', '大學菁英賽') WHERE achievement LIKE '%國際大學菁英棒球賽%' OR name LIKE '%國際大學菁英棒球賽%';
+UPDATE achievements SET achievement = replace(achievement, '哈連盃國際棒球邀請賽', '哈連盃'), name = replace(name, '哈連盃國際棒球邀請賽', '哈連盃') WHERE achievement LIKE '%哈連盃國際棒球邀請賽%' OR name LIKE '%哈連盃國際棒球邀請賽%';

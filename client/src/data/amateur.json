@@ -607,7 +607,7 @@
     "_qualification_note": "全部走同一套：贏下指定的國內大賽，就代表你的表現足以入選國家隊。國中層級這是真實的直通制；高中的 U-18 與亞青現實上是遴選，但打好國內盃賽本來就是入選的主要依據，因此機制相同，敘事一律寫成「入選國家隊」。",
     "tournaments": {
       "LLB": {
-        "name": "LLB 世界次青少棒錦標賽",
+        "name": "LLB 次青少棒",
         "stage": "JHS",
         "qualified_by": "謝國城盃",
         "thresholds": [
@@ -625,7 +625,7 @@
         ]
       },
       "PONY": {
-        "name": "PONY 世界青少棒錦標賽",
+        "name": "PONY 青少棒",
         "stage": "JHS",
         "qualified_by": "青少棒錦標賽",
         "thresholds": [
@@ -643,7 +643,7 @@
         ]
       },
       "U15": {
-        "name": "WBSC U-15 世界盃",
+        "name": "U-15 世界盃",
         "stage": "JHS",
         "qualified_by": "華南金控盃",
         "thresholds": [
@@ -661,7 +661,7 @@
         ]
       },
       "PONY18": {
-        "name": "PONY 小馬級世界青棒錦標賽",
+        "name": "PONY 青棒",
         "stage": "HS",
         "qualified_by": "王貞治盃",
         "thresholds": [
@@ -679,7 +679,7 @@
         ]
       },
       "U18": {
-        "name": "WBSC U-18 世界盃棒球賽",
+        "name": "U-18 世界盃",
         "stage": "HS",
         "qualified_by": "玉山盃",
         "thresholds": [
@@ -697,7 +697,7 @@
         ]
       },
       "UNIV": {
-        "name": "世界大學運動會",
+        "name": "世大運",
         "stage": "U",
         "qualified_by": "大專棒球運動聯賽",
         "thresholds": [
@@ -715,7 +715,7 @@
         ]
       },
       "HAARLEM": {
-        "name": "哈連盃國際棒球邀請賽",
+        "name": "哈連盃",
         "stage": "U",
         "qualified_by": "梅花旗大學棒球錦標賽",
         "thresholds": [
@@ -733,7 +733,7 @@
         ]
       },
       "UELITE": {
-        "name": "國際大學菁英棒球賽",
+        "name": "大學菁英賽",
         "stage": "U",
         "qualified_by": "全國成棒甲組春季聯賽",
         "thresholds": [
@@ -751,7 +751,7 @@
         ]
       },
       "ASIA18": {
-        "name": "BFA 亞洲 U-18 青棒錦標賽",
+        "name": "亞洲 U-18",
         "stage": "HS",
         "qualified_by": "黑豹旗",
         "thresholds": [

@@ -60,7 +60,7 @@ export function Board({
           {/* 合約剩餘年數放在姓名上方——那塊空白本來就對著隊名側的奪冠機率，
               兩邊各自佔一行。它是「我還剩幾年安穩」，屬於處境，不是能力，因此
               不進下面的方格。 */}
-          {state.pro !== null && <small className={styles.deal}>約 {state.pro.contractYears} 年</small>}
+          {state.pro !== null && <small className={styles.deal}>合約 {state.pro.contractYears} 年</small>}
           {player.name}
           <small>
             {roleLabel}·投{hand(player.throws)}打{hand(player.bats)}

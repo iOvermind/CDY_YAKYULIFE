@@ -331,6 +331,37 @@ describe('AP 動態定價', () => {
   });
 });
 
+describe('養成期國際賽改名', () => {
+  it('簡稱的成就 id 認得出來，啟動清理不會刪掉它', async () => {
+    // schema.sql 把舊全名的 id 改成簡稱；改完之後現行規則必須認得，否則
+    // pruneAchievements 會把它當成舊規則的產物刪掉、收回 AP（2026-09-27）。
+    const user = await register('Overmind', 'hunter2');
+    for (const [id, name] of [
+      ['intl:中華隊 PONY 青棒', '中華隊 PONY 青棒 冠軍'],
+      ['intl:中華隊 U-15 世界盃', '中華隊 U-15 世界盃 亞軍'],
+      ['intl:中華隊 世大運', '中華隊 世大運 季軍'],
+    ] as const) {
+      db.achievements.push({ user_id: user.id, achievement: id, name, category: '國際賽', points: 0, unlocked_at: new Date() });
+    }
+    assert.equal(await pruneAchievements(), 0);
+    assert.equal(db.achievements.length, 3);
+    assert.ok((await meOf(user)).ap > 0);
+  });
+
+  it('舊全名的 id 現行規則認不出來——所以 schema.sql 的遷移必須先跑', async () => {
+    const user = await register('Overmind', 'hunter2');
+    db.achievements.push({
+      user_id: user.id,
+      achievement: 'intl:中華隊 PONY 小馬級世界青棒錦標賽',
+      name: '中華隊 PONY 小馬級世界青棒錦標賽 冠軍',
+      category: '國際賽',
+      points: 0,
+      unlocked_at: new Date(),
+    });
+    assert.equal(await pruneAchievements(), 1);
+  });
+});
+
 describe('開局登記', () => {
   it('凍結當下的天賦組合', async () => {
     const user = await register('Overmind', 'hunter2');
