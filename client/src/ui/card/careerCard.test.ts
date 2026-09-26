@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { careerCardOf } from './App.tsx';
-import { Game, type GameSetup } from './engine/game.ts';
-import { HARNESS_POSITIONS, playCareer } from '../scripts/harness.ts';
+import { careerCardOf } from './careerCard.ts';
+import { Game, type GameSetup } from '../../engine/game.ts';
+import { HARNESS_POSITIONS, playCareer } from '../../../scripts/harness.ts';
 
 const setup: GameSetup = {
   seed: 'card-seed',
