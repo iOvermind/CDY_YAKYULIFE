@@ -120,7 +120,8 @@ CDY_YAKYULIFE/
 ├─ client/          新架構實作（React + Vite）
 │  ├─ src/
 │  │  ├─ data/      規則資料（JSON）與型別化的載入層
-│  │  └─ engine/    模擬引擎；測試與被測檔案同層並列
+│  │  ├─ engine/    模擬引擎；測試與被測檔案同層並列
+│  │  └─ ui/        React 介面，依畫面分資料夾；樣式是元件旁邊的 CSS Module，全域只有 ui/global.css
 ├─ server/          帳號、成就與重跑驗證；Postgres schema 與 Dockerfile
 ├─ deploy.sh        建出 image（不啟動任何東西）
 ├─ reset-db.sh      清空資料庫並重建結構（會先問一次）
@@ -348,6 +349,12 @@ docker compose down           # 停掉，資料留著
 - **症狀**：成就櫃少了幾格，右上角的 AP 比部署前少，甚至是負數
 - **原因**：AP 依現行規則定價，伺服器每次啟動會刪掉現行規則認不出的成就（[ADR 0053](docs/adr/0053-ap-is-priced-by-the-current-rules.md)）。調低某項成就的點數也會直接讓所有帳號的 AP 變少——這兩件都是設計，不是 bug。
 - **處置**：先看伺服器日誌的 `[achievements]` 行，確認刪掉的是不是預期要收回的。**不是的話**，是改規則時漏寫了 id 遷移：從備份把那些列撈回來，在 `schema.sql` 補上把舊 id 改成新 id 的遷移，再重新部署。負的 AP 不用修，天賦照常生效，打新的成就就會補回來。
+
+#### 引擎新寫的 class 在畫面上沒有樣式
+
+- **症狀**：引擎或規則資料寫進卡片的 HTML 帶了一個新 class（例如 `<span class="warn">`），畫面上卻沒有任何變化，也沒有錯誤
+- **原因**：元件的樣式是 CSS Modules，class 名會被加上雜湊；引擎寫的是字面上的名字，只對得上全域的那幾個（[ADR 0055](docs/adr/0055-css-modules-with-a-global-vocabulary.md)）。
+- **處置**：把規則加進 `client/src/ui/global.css` 的引擎詞彙區（`.hl`、`.dn`、`.up` 旁邊）。只在某個元件底下才有樣式的，寫在那個元件的 module 裡並用 `:global(.名字)` 引用。
 
 #### 開發伺服器啟動失敗，說連接埠被佔用
 

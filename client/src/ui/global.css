@@ -1,0 +1,49 @@
+/* 主題 token：每個 body[data-theme] 一組，預設為 a（科技藍）。
+   規格見 INTERFACE.md §2。
+
+   本檔自 index_legacy.html 的 <style> 抽出。主題 a 由原本的「深綠記分板」改為
+   新架構的視覺識別「科技藍」；b／c／d 三個主題維持原樣。舊版專用、新介面已經
+   沒有元素用得到的規則（三欄版型、生涯時間軸、原生 confirm 的替代對話框…）已刪除，
+   原始的樣式與深綠配色仍完整保存在 index_legacy.html。 */
+body{
+  --bg:#070d16;--panel:#0e1826;--panel2:#16243a;--edge:#24384f;--text:#dce6f2;--dim:#8298b4;
+  --accent:#38bdf8;--good:#3ddc97;--bad:#f2616b;--info:#818cf8;--gold:#f5c451;--r:10px;
+  --sans:'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;
+  --head:'Noto Sans TC',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --disp:'IBM Plex Mono',monospace;
+  --glow:0 0 8px rgba(56,189,248,.4);
+  --btnbg:linear-gradient(#1b3a5c,#132b45);--btnedge:#2f5f8f;--btntx:#e8f2ff;
+  --bgfx:radial-gradient(ellipse 120% 60% at 50% -10%,rgba(30,90,160,.45) 0%,transparent 60%);
+  --shadow:rgba(0,0,0,.45);
+  /* 「上限突破」的語意色。預設借 --good；主題 d 的 --good 跟 --accent 是同一個
+     綠，突破的能力條會跟一般的糊在一起，那裡改用 --info。 */
+  --over:var(--good);
+  /* 相容別名：舊的行內樣板仍在引用。新程式碼禁止使用，見 INTERFACE.md §2.3 */
+  --chalk:var(--text);--amber:var(--accent);--blue:var(--info);--clay:var(--accent);
+}
+body[data-theme='b']{--bg:#07090c;--panel:#0c1014;--panel2:#10161c;--edge:#232c36;--text:#d8dde2;--dim:#5c6873;
+  --accent:#ffb32e;--good:#49b675;--bad:#e2695c;--info:#3a7bd5;--gold:#ffb32e;--r:4px;
+  --head:'DotGothic16',monospace;--disp:'DotGothic16',monospace;
+  --glow:0 0 10px rgba(255,179,46,.6);--btnbg:#132018;--btnedge:#49b675;--btntx:#d8dde2;--bgfx:none;--shadow:rgba(0,0,0,.5)}
+body[data-theme='c']{--bg:#f4efe1;--panel:#faf6ea;--panel2:#ece5d2;--edge:#1e1c18;--text:#1e1c18;--dim:#6f6857;
+  --accent:#b3402f;--good:#2f6b3a;--bad:#b3402f;--info:#35506b;--gold:#b3402f;--r:0px;
+  --head:'Noto Serif TC',serif;--disp:'Noto Serif TC',serif;
+  --glow:none;--btnbg:#1e1c18;--btnedge:#1e1c18;--btntx:#f4efe1;--bgfx:none;--shadow:rgba(30,28,24,.12)}
+body[data-theme='d']{--bg:#f6f7f6;--panel:#ffffff;--panel2:#f2f4f2;--edge:#e2e6e3;--text:#1a201c;--dim:#7a857e;
+  --accent:#0f7b4d;--good:#0f7b4d;--bad:#c0392b;--info:#4a76a8;--gold:#b8862d;--r:12px;--over:var(--info);
+  --glow:none;--btnbg:#0f7b4d;--btnedge:#0f7b4d;--btntx:#ffffff;--bgfx:none;--shadow:rgba(26,32,28,.1)}
+/* touch-action:manipulation keeps pan + pinch but kills double-tap zoom (tap-heavy game) */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html,body{height:100%;overscroll-behavior-y:none}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6}
+/* stadium glow lives on a fixed pseudo-element: body is only 100vh tall, so a
+   body background-image would tile once per viewport and show a seam on scroll */
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--bgfx);pointer-events:none}
+a{color:var(--info)}
+.up{color:var(--good);font-weight:700}
+.dn{color:var(--bad);font-weight:700}
+.hl{color:var(--accent);font-weight:700}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}

@@ -22,6 +22,10 @@ import { ApiError, type Me } from '../../api/contract.ts';
 import { talents as talentData } from '../../data/index.ts';
 import { cabinetSections, cabinetTiles } from './cabinet.ts';
 import { maxLevelOf } from '../../engine/overlay.ts';
+import styles from './Account.module.css';
+import modal from '../common/modal.module.css';
+import controls from '../common/controls.module.css';
+import sectionStyles from '../guide/sections.module.css';
 
 /** 開局畫面右上角。 */
 export function AccountBar({ account }: { account: Account }) {
@@ -39,22 +43,22 @@ export function AccountBar({ account }: { account: Account }) {
 
   return (
     <>
-      <div className="accountbar">
+      <div className={styles.accountbar}>
         <button
           type="button"
-          className="ghost"
+          className={styles.ghost}
           // 未登入也打得開：更新紀錄與攻略不屬於帳號，沒登入的玩家更需要攻略。
           // 裡面只剩那兩個分頁，所以按鈕的名字跟著換，不掛著一個點進去沒有的「成就」。
           title={me === null ? '登入後還看得到成就、天賦與天梯' : undefined}
           onClick={() => setPanel('achievements')}
         >
           {me === null ? '更新・攻略' : '成就'}
-          {me !== null && <span className="ap">{me.ap} AP</span>}
+          {me !== null && <span className={styles.ap}>{me.ap} AP</span>}
         </button>
         {me === null ? (
           <button
             type="button"
-            className="ghost"
+            className={styles.ghost}
             disabled={offline}
             title={offline ? OFFLINE_HINT : undefined}
             onClick={() => setPanel('login')}
@@ -62,7 +66,7 @@ export function AccountBar({ account }: { account: Account }) {
             {offline ? '離線' : '登入'}
           </button>
         ) : (
-          <button type="button" className="ghost" onClick={() => void account.signOut()}>
+          <button type="button" className={styles.ghost} onClick={() => void account.signOut()}>
             {me.account} · 登出
           </button>
         )}
@@ -105,15 +109,15 @@ export function Modal({
   }, [onClose]);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className={wide ? 'modal wide' : 'modal'} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
+    <div className={modal.modalBackdrop} onClick={onClose}>
+      <div className={wide ? `${modal.modal} ${modal.wide}` : modal.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={modal.modalHead}>
           <h2>{title}</h2>
-          <button type="button" className="ghost" onClick={onClose}>
+          <button type="button" className={styles.ghost} onClick={onClose}>
             關閉
           </button>
         </div>
-        <div className="modal-body">{children}</div>
+        <div className={modal.modalBody}>{children}</div>
       </div>
     </div>
   );
@@ -149,18 +153,18 @@ function LoginPanel({ account, onClose }: { account: Account; onClose: () => voi
 
   return (
     <Modal title="帳號" onClose={onClose}>
-      <p className="modal-note">
+      <p className={modal.modalNote}>
         成就與天賦是跨生涯累積的，因此要有個地方記著它們。這裡不收信箱、不寄驗證信
         ——取個名字、設個密碼就開始。
       </p>
       <form
-        className="loginform"
+        className={controls.loginform}
         onSubmit={(e) => {
           e.preventDefault();
           submit('login');
         }}
       >
-        <div className="field">
+        <div className={controls.field}>
           <label htmlFor="acc-name">帳號</label>
           <input
             id="acc-name"
@@ -170,7 +174,7 @@ function LoginPanel({ account, onClose }: { account: Account; onClose: () => voi
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <div className="field">
+        <div className={controls.field}>
           <label htmlFor="acc-pw">密碼</label>
           <input
             id="acc-pw"
@@ -180,9 +184,9 @@ function LoginPanel({ account, onClose }: { account: Account; onClose: () => voi
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {error !== null && <p className="modal-error">{error}</p>}
-        <div className="seg" style={{ marginTop: 16 }}>
-          <button type="submit" className="on" disabled={busy}>
+        {error !== null && <p className={modal.modalError}>{error}</p>}
+        <div className={controls.seg} style={{ marginTop: 16 }}>
+          <button type="submit" className={controls.on} disabled={busy}>
             登入
           </button>
           <button type="button" disabled={busy} onClick={() => submit('register')}>
@@ -234,12 +238,12 @@ function AchievementPanel({
         前三個分頁是「這個帳號有什麼」；更新與 WIKI 是「這個遊戲是什麼樣子」，不同的
         問題，所以排在隊伍尾巴而不是插進中間。
       */}
-      <div className="seg-scroll" ref={drag.ref} {...drag.handlers}>
+      <div className={controls.segScroll} ref={drag.ref} {...drag.handlers}>
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
-            className={tab === t.id ? 'on' : undefined}
+            className={tab === t.id ? controls.on : undefined}
             onClick={() => {
               if (drag.wasDrag()) return;
               setTab(t.id);
@@ -264,7 +268,7 @@ const DATE = new Intl.DateTimeFormat('zh-TW', { dateStyle: 'medium' });
 function AchievementList({ me }: { me: Me }) {
   if (me.achievements.length === 0) {
     return (
-      <p className="modal-note">
+      <p className={modal.modalNote}>
         還沒有解鎖任何成就。打完一段生涯就會結算——<b>就算打得很差也可能拿到</b>，
         累積型的成就看的是總量，不是高度。
       </p>
@@ -276,26 +280,26 @@ function AchievementList({ me }: { me: Me }) {
 
   return (
     <>
-      <p className="modal-note">
+      <p className={modal.modalNote}>
         生涯累積 {me.apEarned} AP，目前可用 {me.ap} AP。同一項成就只給一次點數，
         <b>同一座階梯只佔一格</b>——顯示的是爬到的最高一階。
       </p>
-      {/* 分類排兩欄。用多欄而不是格線，理由見 app.css 的 `.twocol`：多欄的閱讀順序
+      {/* 分類排兩欄。用多欄而不是格線，理由見 sections.module.css 的 `.twocol`：多欄的閱讀順序
           是「左欄由上往下、再跳右欄」，正好保住 ADR 0031 釘的固定排序。 */}
-      <div className="twocol">
+      <div className={sectionStyles.twocol}>
         {sections.map((s) => (
-          <div key={s.key} className="achgroup">
+          <div key={s.key} className={sectionStyles.achgroup}>
             <h3>
               {s.title}
               <span className="sub">{s.points} AP</span>
             </h3>
             {s.groups.map((g) => (
-              <div key={g.title ?? '-'} className="achsub">
+              <div key={g.title ?? '-'} className={sectionStyles.achsub}>
                 {/* 小標只有在大標底下真的分得出兩堆時才出現（聯盟＝獎項＋累積）。 */}
                 {g.title !== null && <h4>{g.title}</h4>}
                 {/* 小方塊而不是逐條列——櫃子是拿來一眼掃過的，不是拿來讀的。點數與
                     日期收進 tooltip，需要的人再問。 */}
-                <ul className="achtiles">
+                <ul className={sectionStyles.achtiles}>
                   {g.items.map((a) => (
                     <li
                       key={a.id}
@@ -365,18 +369,18 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
 
   return (
     <>
-      <p className="modal-note">
+      <p className={modal.modalNote}>
         買下的天賦<b>永久啟用</b>，每一段新生涯都帶著。隨時可以退掉，AP 全額返還——
         但<b>已經開始的生涯用的是開局時凍結的那一組</b>，中途退掉不會影響它。
       </p>
-      {error !== null && <p className="modal-error">{error}</p>}
+      {error !== null && <p className={modal.modalError}>{error}</p>}
 
       {/* 分組排兩欄，與成就櫃同一套：「成長」那六張卡不會被切成左三右三，欄高由
           瀏覽器平衡，落單的那一組留在左欄。順序在 talents.json 裡就定好了，多欄的
           由上往下、再跳右欄正好保住它。 */}
-      <div className="twocol">
+      <div className={sectionStyles.twocol}>
         {[...groups.entries()].map(([group, items]) => (
-          <div key={group} className="achgroup">
+          <div key={group} className={sectionStyles.achgroup}>
             <h3>{group}</h3>
             {items.map((t) => {
               const level = me.talents[t.id] ?? 0;
@@ -402,10 +406,10 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                   說明的展開鈕是卡片**外面**的另一顆按鈕：按鈕不能套按鈕，而
                   「看一下說明」也不該順手把一級買下去。
                 */
-                <div className="talent-card" key={t.id}>
+                <div className={styles.talentCard} key={t.id}>
                   <button
                     type="button"
-                    className={`talent${level > 0 ? ' owned' : ''}${canBuy || next === undefined ? '' : ' broke'}`}
+                    className={`${styles.talent}${level > 0 ? ` ${styles.owned}` : ''}${canBuy || next === undefined ? '' : ` ${styles.broke}`}`}
                     /*
                       **買不起但退得掉的時候不能 disable**：`disabled` 的按鈕收不到
                       `contextmenu`，玩家會被鎖在一個退不回來的等級上。那種卡片只反灰
@@ -421,28 +425,28 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                       if (level > 0) act(t.id, level - 1);
                     }}
                   >
-                    <div className="talent-head">
+                    <div className={styles.talentHead}>
                       <b>{t.name}</b>
                       <span className="sub">
                         {level} / {max}
                       </span>
                     </div>
-                    <p className="talent-desc">{t.desc}</p>
+                    <p className={styles.talentDesc}>{t.desc}</p>
                     {/* 一條從左到右的進度，不是一格一格的刻度——玩家要看的是「還有
                         多遠」，切成格子反而要先數格子才讀得出來。 */}
-                    <div className="talent-bar">
+                    <div className={styles.talentBar}>
                       <span
-                        className="fill"
+                        className={styles.fill}
                         style={{ width: `${String(max === 0 ? 0 : (level / max) * 100)}%` }}
                       />
                     </div>
-                    <span className="talent-hint">
+                    <span className={styles.talentHint}>
                       {next === undefined ? (
                         '已經點滿'
                       ) : (
                         <>
                           升到 Lv{level + 1} 需
-                          <b className={canBuy ? 'price on' : 'price'}>{next.cost} AP</b>
+                          <b className={canBuy ? `${styles.price} ${styles.on}` : styles.price}>{next.cost} AP</b>
                           {/* 差多少要寫在卡片上：反灰只說得出「不行」，說不出「還差幾點」。 */}
                           {!canBuy && `（還差 ${String(short)}）`}
                         </>
@@ -452,16 +456,16 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
                   </button>
                   <button
                     type="button"
-                    className="talent-more"
+                    className={styles.talentMore}
                     aria-expanded={shown}
                     onClick={() => toggle(t.id)}
                   >
                     {shown ? '收起效果 ▴' : '各級效果 ▾'}
                   </button>
                   {shown && (
-                    <ol className="talent-levels">
+                    <ol className={styles.talentLevels}>
                       {t.levels.map((l, i) => (
-                        <li key={l.effect_text} className={i < level ? 'on' : undefined}>
+                        <li key={l.effect_text} className={i < level ? styles.on : undefined}>
                           <b>Lv{i + 1}</b>
                           <span>{l.effect_text}</span>
                           <span className="sub">{l.cost} AP</span>

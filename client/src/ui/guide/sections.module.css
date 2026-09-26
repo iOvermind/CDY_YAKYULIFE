@@ -1,0 +1,88 @@
+.achgroup{margin-bottom:20px}
+/* 更新紀錄的版本區塊是 <details>。摺疊三角自己畫——原生的 marker 在各家瀏覽器
+   上大小與間距都不一樣，而這裡的大標是有字距的小字，差一點就歪得很明顯。 */
+.achgroup > summary{list-style:none;cursor:pointer}
+.achgroup > summary::-webkit-details-marker{display:none}
+.achgroup > summary h3::before{content:'▸';display:inline-block;margin-right:8px;
+  font-size:10px;color:var(--dim);opacity:.6;transition:transform .12s}
+.achgroup[open] > summary h3::before{transform:rotate(90deg)}
+@media (hover:hover){
+  .achgroup > summary:hover h3{color:var(--text)}
+}
+/* h3 本身是 flex（日期靠右），放進 summary 之後要讓它撐滿那一行。 */
+.achgroup > summary h3{margin-bottom:0}
+.achgroup[open] > summary h3{margin-bottom:9px}
+.achgroup h3{font-family:var(--head);font-size:12px;letter-spacing:.24em;color:var(--dim);
+  margin:0 0 9px;display:flex;justify-content:space-between;align-items:baseline}
+.achgroup h3 :global(.sub){font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:0}
+.achgroup ul{list-style:none;margin:0;padding:0}
+/* 間隔掛在分組外層，不是掛在 ul 上：每個分組都自己包一層 div，ul 永遠是那層
+   的最後一個小孩，掛在 ul 上的 margin 會被 :last-child 全部吃掉。分組之間跟
+   大標底下同寬（9px），小標離自己的磚 6px——上面寬、下面窄才不會讀錯組。 */
+.achsub + .achsub{margin-top:9px}
+/* 小標比大標輕：聯盟才是玩家在找的那一層，獎項／累積只是它底下的隔板。 */
+.achgroup h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
+  opacity:.7;font-weight:400;line-height:1;margin:0 0 6px}
+/* 成就櫃是小方塊：一眼掃完一整面，點數與日期在 tooltip 裡。 */
+.achtiles{display:flex;flex-wrap:wrap;gap:6px}
+.achtiles li{border:1px solid var(--edge);border-radius:var(--r);background:var(--panel2);
+  padding:6px 10px;font-size:12.5px;line-height:1.3;cursor:default}
+/* 姻緣那一格底下接側寫。**它自己換一行**，不然名字會被那一長串推到擠不下。 */
+.achtiles li :global(.sub){display:block;margin-top:2px;max-width:22em}
+/* 成就櫃與天賦的兩欄。**用多欄而不是 grid**：多欄的閱讀順序是「左欄由上往下、
+   再跳右欄」，成就櫃的固定排序（依聯盟階梯、生涯與名人堂放最後，ADR 0031）與
+   天賦的 JSON 順序都因此原封不動；grid 會把相鄰兩組並排成一列，順序就散了。
+   欄高由瀏覽器自己平衡，落單的那一組留在左欄。
+   `break-inside:avoid` 是這裡的重點——一個聯盟、一組天賦不能被切成兩半。它要
+   同時掛在區塊與區塊裡的每一層（h3、ul、卡片），否則瀏覽器仍會從裡層切開。 */
+.twocol{column-count:2;column-gap:22px}
+.twocol > .achgroup{break-inside:avoid;-webkit-column-break-inside:avoid}
+/* 裡層也要擋。只擋外層的話，瀏覽器仍會從 h3 與 ul 之間、或天賦卡之間切開，
+   標題留在左欄底、內容跑到右欄頂。 */
+.twocol > .achgroup > *{break-inside:avoid}
+/* 更新紀錄。**兩欄切在條目上，不是切在版本上**：0.1.0 一版就有一百多條，把版本
+   當成不可切開的區塊等於要求瀏覽器把一根一千像素高的柱子塞進半欄，結果是左欄爆出
+   去、右欄全空。條目本身則不能被切開——一條變更橫跨兩欄要來回掃兩次才讀得完。 */
+.changelist{list-style:none;margin:0;padding:0;column-count:2;column-gap:22px}
+.changelist li{break-inside:avoid;-webkit-column-break-inside:avoid;
+  font-size:12.5px;line-height:1.85;color:var(--dim);margin:0 0 10px;
+  padding-left:11px;border-left:2px solid var(--edge)}
+.changelist li b{color:var(--text)}
+.changelist code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+/* 版本標題右邊的日期，與成就櫃大標右邊的 AP 同一個位置與寫法。 */
+.changelist + .achsub{margin-top:9px}
+/* 攻略。內文與更新紀錄同一個字級與行高；表格的字**要能換行**——事件卡那張的好壞
+   結果是一整句話，不換行的話整張表橫著爆出去，手機上得左右來回捲才讀得完一列。
+   真的塞不下（例如五欄的天賦表）才在表格自己的框裡橫捲，不撐開視窗。 */
+.wiki p,.wiki li{font-size:12.5px;line-height:1.85;color:var(--dim);margin:0 0 10px}
+.wiki p b,.wiki li b,.wiki td b{color:var(--text)}
+.wiki code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+.wiki ul{list-style:none;margin:0 0 10px;padding:0}
+.wiki li{padding-left:11px;border-left:2px solid var(--edge);margin-bottom:6px}
+/* 章名靠左。摺疊標題借用成就櫃的 h3，那一條是左右撐開的（左邊標題、右邊 AP 或
+   日期）；攻略的章名右邊沒有東西，撐開的結果是整行字被推到最右邊。 */
+.wiki .achgroup h3{justify-content:flex-start}
+/* 章的內容內縮三個中文字（內文 12.5px × 3）。用固定寬度而不是 em：段落、表格、小標
+   字級各不相同，em 會讓每一種東西縮得不一樣深。 */
+.wiki-body{padding-left:37.5px}
+.wiki h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
+  font-weight:400;margin:16px 0 8px}
+.wiki-table{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 12px}
+.wiki-table table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.6}
+.wiki-table th,.wiki-table td{border-bottom:1px solid var(--edge);padding:5px 6px;
+  text-align:left;vertical-align:top;min-width:4em}
+.wiki-table th{color:var(--dim);font-weight:500;white-space:nowrap}
+.wiki-table td{color:var(--text)}
+/* 分組表的組名列：看起來像下一張表的標題。第一組不留上間距。 */
+.wiki-table tr.wiki-group th{border-bottom:none;padding:18px 6px 4px;color:var(--text);
+  font-family:var(--head);font-size:12px;letter-spacing:.12em;white-space:normal}
+.wiki-table tbody tr.wiki-group:first-child th{padding-top:4px}
+@media (max-width:920px){
+  /* 窄視窗一律退回單欄。兩欄各 300px 時，天賦卡的「升到 Lv2 需 24 AP（還差 8）」
+     那一行會折成三四行，兩欄反而比一欄還長；天梯的名次列（球員名・帳號是 nowrap）
+     則會直接爆出去。寬度不夠就不分欄，比擠成兩條長條好。
+     **斷點與主畫面共用 920px**（INTERFACE.md §8）——同一份介面有兩個斷點的話，
+     縮視窗時會看到兩段各自跳一次的重排。 */
+  .twocol{column-count:1}
+  .changelist{column-count:1}
+}

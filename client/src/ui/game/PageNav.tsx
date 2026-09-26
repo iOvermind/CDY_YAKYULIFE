@@ -1,3 +1,4 @@
+import styles from './PageNav.module.css';
 
 
 /**
@@ -8,10 +9,10 @@
  */
 export function PageNav({ page, go }: { page: number; go: (i: number) => void }) {
   return (
-    <div id="pagenav">
+    <div id="pagenav" className={styles.pagenav}>
       <button
         type="button"
-        className="pagearrow left"
+        className={`${styles.pagearrow} ${styles.left}`}
         aria-label="看能力"
         hidden={page === 0}
         onClick={() => go(0)}
@@ -20,16 +21,16 @@ export function PageNav({ page, go }: { page: number; go: (i: number) => void })
       </button>
       <button
         type="button"
-        className="pagearrow right"
+        className={`${styles.pagearrow} ${styles.right}`}
         aria-label="看事件"
         hidden={page === 1}
         onClick={() => go(1)}
       >
         ›
       </button>
-      <div className="pagedots" aria-hidden="true">
-        <i className={page === 0 ? 'on' : ''} />
-        <i className={page === 1 ? 'on' : ''} />
+      <div className={styles.pagedots} aria-hidden="true">
+        <i className={page === 0 ? styles.on : ''} />
+        <i className={page === 1 ? styles.on : ''} />
       </div>
     </div>
   );

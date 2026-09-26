@@ -1,0 +1,17 @@
+.modal-backdrop{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.62);
+  display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto}
+.modal{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);
+  width:100%;max-width:620px;box-shadow:0 18px 50px var(--shadow,rgba(0,0,0,.5))}
+/* 成就櫃那一張。1200 是從天梯反推的：野手側要放得下兩塊 260px 的榜（260×2＋18
+   ＝538），投手側同寬，中間一個 18 的溝，加上左右內距 36，共 1130。抓整數留餘裕。
+   成就與天賦切兩欄之後每欄約 575px，與原本單欄的 584px 幾乎同寬——卡片與榜單
+   的內部排版一行都不用動。登入框不吃這一條：一排輸入欄拉到 1200 只會變成一條。 */
+.modal.wide{max-width:1200px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:16px 18px;border-bottom:1px solid var(--edge);position:sticky;top:0;background:var(--panel);
+  border-radius:var(--r) var(--r) 0 0}
+.modal-head h2{font-family:var(--head);font-size:17px;letter-spacing:.08em;margin:0;color:var(--accent)}
+.modal-body{padding:16px 18px 22px}
+.modal-note{font-size:12.5px;color:var(--dim);line-height:1.75;margin:0 0 14px}
+.modal-note b{color:var(--text)}
+.modal-error{font-size:12.5px;color:var(--bad);margin:12px 0 0;line-height:1.6}

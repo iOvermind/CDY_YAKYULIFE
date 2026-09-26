@@ -30,7 +30,7 @@ interface HonorGroup {
  *   三次婚的人，與一個拿五座 MVP 且孩子坐滿看台的人，不是同一個故事。
  *
  * 空的組不回傳。標籤的樣式四組一致：每一組上面本來就寫著自己的小標，用形狀
- * 再編碼一次只是要求讀的人先學會那套編碼（見 app.css 的 .tag）。
+ * 再編碼一次只是要求讀的人先學會那套編碼（見 tag.module.css 的 .tag）。
  */
 export function honorGroups({
   awards,

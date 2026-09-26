@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import styles from './FitValue.module.css';
 
 /**
  * 一行放不下就縮字級，絕不換行。
@@ -49,7 +50,7 @@ export function FitValue({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <b ref={ref} className="fit-value">
+    <b ref={ref} className={styles.fitValue}>
       {children}
     </b>
   );

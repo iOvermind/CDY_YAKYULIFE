@@ -3,6 +3,7 @@ import type { Baseline } from '../../engine/metrics.ts';
 import { positionName, ROLE_NAMES } from '../../engine/season.ts';
 import { BATTING_COLUMNS, PITCHING_COLUMNS, type SharesByPart, type StatColumn } from './columns.ts';
 import { type CareerRow, careerRows, COMBINED_COLUMNS, combinedRows, INTL, type IntlKind, intlTotalRow, leagueTotals, topTotalRow, type TotalRow } from './rows.ts';
+import table from './table.module.css';
 
 /**
  * 成績表的資料列。
@@ -72,9 +73,9 @@ function TotalsTable({
     <>
       <h4 style={{ marginTop: 14 }}>{title}</h4>
       {batting.length > 0 && (
-        <div className="fin-scroll">
-          <div className="fin-caption">野手</div>
-          <table className="fin">
+        <div className={table.finScroll}>
+          <div className={table.finCaption}>野手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>{leadHead}</th>
@@ -97,9 +98,9 @@ function TotalsTable({
         </div>
       )}
       {pitching.length > 0 && (
-        <div className="fin-scroll">
-          <div className="fin-caption">投手</div>
-          <table className="fin">
+        <div className={table.finScroll}>
+          <div className={table.finCaption}>投手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>{leadHead}</th>
@@ -172,9 +173,9 @@ function InternationalTable({ summary, kind }: { summary: CareerSummary; kind: I
     <>
       <h4 style={{ marginTop: 14 }}>{spec.title}</h4>
       {batting.length > 0 && (
-        <div className="fin-scroll">
-          <div className="fin-caption">野手</div>
-          <table className="fin">
+        <div className={table.finScroll}>
+          <div className={table.finCaption}>野手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 {head}
@@ -195,9 +196,9 @@ function InternationalTable({ summary, kind }: { summary: CareerSummary; kind: I
         </div>
       )}
       {pitching.length > 0 && (
-        <div className="fin-scroll">
-          <div className="fin-caption">投手</div>
-          <table className="fin">
+        <div className={table.finScroll}>
+          <div className={table.finCaption}>投手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 {head}
@@ -240,8 +241,8 @@ function CombinedTable({ summary }: { summary: CareerSummary }) {
   return (
     <>
       <h4 style={{ marginTop: 14 }}>合併生涯紀錄</h4>
-      <div className="fin-scroll">
-        <table className="fin">
+      <div className={table.finScroll}>
+        <table className={table.fin}>
           <thead>
             <tr>
               <th title="年度">年</th>
@@ -297,7 +298,8 @@ export function CareerTable({ summary }: { summary: CareerSummary }) {
   );
   // 傷過的年份整列標色，而不是加一欄「傷」——空白佔一整欄只為了標少數幾年，
   // 而且橫向已經很擠了。標色只回答「這一年他不是完整的」，細節在事件流裡。
-  const rowClass = (r: CareerRow) => (r.injured === null ? undefined : `hurt hurt-${r.injured}`);
+  const rowClass = (r: CareerRow) =>
+    r.injured === null ? undefined : r.injured === 'minor' ? `${table.hurt} ${table.hurtMinor}` : table.hurt;
   // 季中轉隊的那一年會有兩列。年與齡只寫在第一列——同一年重覆印一次年份，
   // 讀起來像兩個球季，而球隊那一欄已經說清楚這是同一年的後半段了。
   const rowLead = (r: CareerRow, cont: boolean) => (
@@ -312,13 +314,13 @@ export function CareerTable({ summary }: { summary: CareerSummary }) {
   );
 
   return (
-    <div id="panel-career">
+    <div id="panel-career" className={table.panelCareer}>
       <h4>生涯年表</h4>
       {batting.length > 0 && (
-        <div className="fin-scroll">
+        <div className={table.finScroll}>
           {/* 兩張表的欄位差很多，沒有小標的話捲到一半會分不出在看哪一側。 */}
-          <div className="fin-caption">野手</div>
-          <table className="fin">
+          <div className={table.finCaption}>野手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 {headLead}
@@ -344,9 +346,9 @@ export function CareerTable({ summary }: { summary: CareerSummary }) {
       )}
 
       {pitching.length > 0 && (
-        <div className="fin-scroll">
-          <div className="fin-caption">投手</div>
-          <table className="fin">
+        <div className={table.finScroll}>
+          <div className={table.finCaption}>投手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 {headLead}

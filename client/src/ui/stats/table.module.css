@@ -1,0 +1,31 @@
+table.fin{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;margin-top:6px}
+table.fin th,table.fin td{border-bottom:1px solid var(--edge);padding:4px 4px;text-align:right;white-space:nowrap}
+table.fin th{color:var(--dim);font-weight:500;letter-spacing:.05em}
+table.fin td:first-child,table.fin th:first-child{text-align:left}
+/* 完整的成績列比右欄寬——讓表格自己橫向捲動，而不是把頁面撐出橫捲軸。 */
+.fin-scroll{overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch}
+.fin-scroll .fin{min-width:max-content}
+.fin-scroll .fin th{white-space:nowrap;cursor:help}
+.fin-scroll .fin td{white-space:nowrap}
+/* 生涯年表：引退之後接在事件流末端，是一張結算卡。
+   外框、內距與標題都由 .card 負責，這裡只管兩張表之間的距離；欄位比一般卡片
+   寬得多，橫向捲動由 .fin-scroll 各自處理。 */
+.panel-career .fin-scroll+.fin-scroll{margin-top:14px}
+/* 兩張表的欄位差很多，捲到一半會分不出在看哪一側，因此各給一個小標。 */
+.fin-caption{font-family:var(--head);font-size:11px;letter-spacing:.16em;
+  color:var(--dim);margin-bottom:2px}
+.panel-career :global(.sub){color:var(--dim);font-size:11px}
+/* 成績表 */
+table.fin{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;margin-top:6px}
+table.fin th{color:var(--dim);font-weight:400;font-size:10px;letter-spacing:.1em;
+  padding:2px 4px;border-bottom:1px solid var(--edge);text-align:right}
+table.fin td{padding:3px 4px;text-align:right;color:var(--text)}
+table.fin th:first-child,table.fin td:first-child{text-align:left}
+/* 受傷年份整列淡紅底。這裡不加欄位、不加圖示——一整欄只為了標少數幾年太貴，
+   而數字本身（出賽數掉下來）已經在講故事了；底色只負責讓人不要把那一年
+   當成正常年來讀。minor 更淡，因為「小傷但打完整季」和「整年不在」不是同一件事。 */
+table.fin tr.hurt td{background:color-mix(in srgb,var(--bad) 14%,transparent)}
+table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparent)}
+.ladder-board{min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.ladder-board .fin{margin-top:4px;min-width:max-content}
+.ladder-board .fin td{padding:3px 4px}

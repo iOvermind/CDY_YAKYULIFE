@@ -1,0 +1,47 @@
+/* ---------- 操作區 ---------- */
+.btn{display:block;width:100%;background:var(--panel2);border:1px solid var(--edge);color:var(--text);
+  font-family:var(--sans);font-size:15px;font-weight:700;border-radius:var(--r);padding:11px 14px;margin-top:8px;
+  cursor:pointer;text-align:center;transition:.15s}
+.btn:active{transform:scale(.98)}
+.btn:hover{border-color:var(--accent)}
+.btn small{display:block;font-weight:400;font-size:12px;color:var(--dim);margin-top:2px}
+.btn.main{background:var(--btnbg);border-color:var(--btnedge);color:var(--btntx)}
+.btn.main small{color:inherit;opacity:.8}
+.btn.warn{border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
+/* 並排的一組動作鈕。選擇器不掛在 #act 底下——動作區的實際 id 是 panel-act。
+   標題與說明都置中，兩顆按鈕才像一組對稱的選擇。 */
+.row2{display:flex;gap:8px;margin-top:8px}
+.row2 .btn{flex:1;text-align:center;margin-top:0}
+.row2 .btn small{text-align:center}
+.field{margin-top:18px}
+.field label{display:block;font-size:12px;letter-spacing:.25em;color:var(--dim);font-weight:700;margin-bottom:8px}
+.field input{width:100%;background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--text);
+  font-family:var(--sans);font-size:16px;padding:11px 14px;outline:none}
+.field input:focus{border-color:var(--accent)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.seg.two{grid-template-columns:repeat(2,1fr)}
+.seg button{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--dim);
+  font-family:var(--sans);font-size:14.5px;font-weight:700;padding:11px 4px;cursor:pointer}
+.seg button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}
+/* 規則上不可能的組合（左投守二三游）：留在原地反灰，不要整排消失——玩家要看得出
+   「這個位置存在，只是你這隻手守不了」，而不是以為遊戲少了三個守位。 */
+.seg button:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
+/* 反灰的行動鈕：留在原地但按不動——藏起來會讓版面在配點過程中跳動。
+   選擇器掛在 .btn 上而不是 #act 底下：動作區的實際 id 是 panel-act。 */
+.btn:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
+.btn:disabled:hover{border-color:var(--edge);background:var(--panel)}
+.loginform .field:first-child{margin-top:0}
+/* 天梯的第三層選項：一排四顆，多的用拖的。按鈕寬度算成「四顆剛好塞滿」，容器自己
+   橫向捲動——滑鼠按住拖（Ladder.tsx 的 useDragScroll），觸控是原生捲動。樣式與
+   .seg 的按鈕一致。捲軸藏起來：那一排只有四格寬，一條捲軸會佔掉按鈕近三分之一的高度。 */
+/* **兩端各留 1px。** 按鈕寬度剛好是四等分，容器寬度或捲動位置落在小數像素上時，
+   最右邊那顆的右框線會被容器的 overflow 裁掉（點一下重繪又冒出來）。左右各 1px
+   的 padding 讓框線永遠有地方畫；百分比寬度算在 padding 之內，四顆仍然剛好塞滿。 */
+.seg-scroll{display:flex;gap:8px;overflow-x:auto;cursor:grab;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;margin-bottom:12px;padding:0 1px}
+.seg-scroll::-webkit-scrollbar{display:none}
+.seg-scroll:active{cursor:grabbing}
+.seg-scroll>button{box-sizing:border-box;flex:0 0 calc((100% - 24px) / 4);background:var(--panel);border:1px solid var(--edge);
+  border-radius:var(--r);color:var(--dim);font-family:var(--sans);font-size:14.5px;font-weight:700;
+  padding:11px 4px;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg-scroll>button.on{background:var(--panel2);color:var(--accent);border-color:var(--accent)}

@@ -14,6 +14,8 @@ import { Fragment } from 'react';
 import type { ChangelogPart, WikiBlock } from '../../data/index.ts';
 import { wiki } from '../../data/index.ts';
 import { Parts } from './Changelog.tsx';
+import sections from './sections.module.css';
+import modal from '../common/modal.module.css';
 
 /** 分組表的組名列：第一格以粗體開頭、其餘格子全空。 */
 function isGroupRow(row: readonly (readonly ChangelogPart[])[]): boolean {
@@ -32,7 +34,7 @@ function Block({ b }: { b: WikiBlock }) {
       );
     case 'note':
       return (
-        <p className="modal-note">
+        <p className={modal.modalNote}>
           <Parts parts={b.parts} />
         </p>
       );
@@ -61,14 +63,14 @@ function Block({ b }: { b: WikiBlock }) {
       );
       return (
         // 表格太寬時只在表格裡橫捲，不把整個視窗撐開。
-        <div className="wiki-table">
+        <div className={sections.wikiTable}>
           <table>
             {!grouped && <thead>{head}</thead>}
             <tbody>
               {b.rows.map((row, i) =>
                 isGroupRow(row) ? (
                   <Fragment key={i}>
-                    <tr className="wiki-group">
+                    <tr className={sections.wikiGroup}>
                       <th colSpan={b.head.length}>
                         <Parts parts={row[0] ?? []} />
                       </th>
@@ -95,17 +97,17 @@ function Block({ b }: { b: WikiBlock }) {
 
 export function Wiki() {
   return (
-    <div className="wiki">
+    <div className={sections.wiki}>
       {wiki.intro.map((b, i) => (
         <Block key={i} b={b} />
       ))}
       {wiki.chapters.map((c) => (
-        <details key={c.title} className="achgroup">
+        <details key={c.title} className={sections.achgroup}>
           <summary>
             <h3>{c.title}</h3>
           </summary>
           {/* 章的內容整塊內縮，一眼看得出哪些字屬於這一章。 */}
-          <div className="wiki-body">
+          <div className={sections.wikiBody}>
             {c.blocks.map((b, i) => (
               <Block key={i} b={b} />
             ))}

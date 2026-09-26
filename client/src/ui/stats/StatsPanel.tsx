@@ -4,18 +4,20 @@ import { amateurBaseline, type Baseline, proBaseline } from '../../engine/metric
 import { TraitList } from '../player/TraitList.tsx';
 import { relationTags } from '../player/profile.ts';
 import { BATTING_COLUMNS, PITCHING_COLUMNS, type SharesByPart } from './columns.ts';
+import panel from './panel.module.css';
+import table from './table.module.css';
 
 /**
  * 最近一季的成績與狀態。只在生涯進行中出現，而且**只有桌面看得到**。
  *
- * 手機把整塊收掉（見 app.css 的手機段）：成績由每季結算的事件卡負責，狀態則
+ * 手機把整塊收掉（見 panel.module.css 的手機段）：成績由每季結算的事件卡負責，狀態則
  * 由記分板底下那一份接手（`#bd-traits`）。**兩邊是同一個 `TraitList`**，差的
  * 只是掛在哪裡與帶不帶小標——桌面的狀態接在成績表下面（它們是同一段時間的
  * 側寫），手機沒有成績表可接，就釘在球員資料下面。
  */
 export function StatsPanel({ state }: { state: PlayerState }) {
   return (
-    <div id="panel-stats">
+    <div id="panel-stats" className={panel.panelStats}>
       {/* 面板不帶自己的標題：底下那塊自己有 `<h4>`（最近一季），再加一個面板級
           標題就是兩個同級標題連在一起、中間沒有內容。 */}
       {/* 這裡不再放方格。
@@ -68,7 +70,7 @@ function StatLines({
 }) {
   if (batting === null && pitching === null) {
     return (
-      <p className="stat-pending" style={{ marginTop: 8 }}>
+      <p className={panel.statPending} style={{ marginTop: 8 }}>
         {label === null ? '還沒有成績。' : `${label}：還沒打過大賽。`}
       </p>
     );
@@ -78,12 +80,12 @@ function StatLines({
     <>
       {/* 間距一律交給 CSS：這個標題現在是面板的第一行（面板自己的標題拿掉了），
           帶著行內 margin 會在 padding 之上再多一截頭。 */}
-      {label !== null && <h4 className="tl-head">{label}</h4>}
+      {label !== null && <h4 className={panel.tlHead}>{label}</h4>}
       {pitching !== null && (
-        <div className="fin-scroll">
+        <div className={table.finScroll}>
           {/* 二刀流會同時出現兩張表，沒有小標就分不出哪張是哪張。 */}
-          <div className="fin-caption">投手</div>
-          <table className="fin">
+          <div className={table.finCaption}>投手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 {PITCHING_COLUMNS.map((c) => (
@@ -104,9 +106,9 @@ function StatLines({
         </div>
       )}
       {batting !== null && (
-        <div className="fin-scroll">
-          <div className="fin-caption">野手</div>
-          <table className="fin">
+        <div className={table.finScroll}>
+          <div className={table.finCaption}>野手</div>
+          <table className={table.fin}>
             <thead>
               <tr>
                 {BATTING_COLUMNS.map((c) => (

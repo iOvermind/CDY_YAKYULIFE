@@ -16,6 +16,8 @@
 
 import { changelog } from '../../data/index.ts';
 import type { ChangelogPart, ChangelogVersion } from '../../data/index.ts';
+import sections from './sections.module.css';
+import modal from '../common/modal.module.css';
 
 /** 行內語法。連結在轉檔時就已經變成純文字了，這裡只剩三種。 */
 export function Parts({ parts }: { parts: readonly ChangelogPart[] }) {
@@ -38,7 +40,7 @@ function Version({ v, open }: { v: ChangelogVersion; open: boolean }) {
   return (
     // 用原生 <details>，不自己接 useState：摺疊、鍵盤操作與瀏覽器的頁內搜尋
     // （Chrome 會自動展開命中的區塊）都是免費的，自己做只會少掉最後那一項。
-    <details className="achgroup" open={open}>
+    <details className={sections.achgroup} open={open}>
       <summary>
         <h3>
           {v.version}
@@ -48,14 +50,14 @@ function Version({ v, open }: { v: ChangelogVersion; open: boolean }) {
       </summary>
       {/* 版本導言：這一版整體是什麼（CHANGELOG_RULES §3.1.1）。 */}
       {v.note.length > 0 && (
-        <p className="modal-note">
+        <p className={modal.modalNote}>
           <Parts parts={v.note} />
         </p>
       )}
       {v.categories.map((c) => (
-        <div key={c.key} className="achsub">
+        <div key={c.key} className={sections.achsub}>
           <h4>{c.name}</h4>
-          <ul className="changelist">
+          <ul className={sections.changelist}>
             {c.entries.map((entry, i) => (
               <li key={i}>
                 <Parts parts={entry} />
@@ -75,7 +77,7 @@ export function Changelog() {
   const shown = changelog.versions.filter((v) => v.categories.length > 0);
   return (
     <>
-      <p className="modal-note">
+      <p className={modal.modalNote}>
         由新到舊，點版本號展開。<b>版本號本身就是資訊</b>——中間那位跳動代表多了新
         東西，最後一位跳動代表只修了錯。
       </p>

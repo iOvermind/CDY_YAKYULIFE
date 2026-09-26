@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Game } from '../../engine/game.ts';
 import { careerCardOf } from './careerCard.ts';
 import { saveCareerCard } from './careerImage.ts';
+import controls from '../common/controls.module.css';
 
 /**
  * 「下載生涯成績」。
@@ -20,7 +21,7 @@ export function SaveCardButton({ game }: { game: Game }) {
   return (
     <button
       type="button"
-      className="btn main"
+      className={`${controls.btn} ${controls.main}`}
       disabled={busy}
       onClick={() => {
         const card = careerCardOf(game);

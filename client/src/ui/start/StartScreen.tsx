@@ -10,6 +10,9 @@ import { newSeed } from '../../engine/rng.ts';
 import { AccountBar, Modal } from '../account/Account.tsx';
 import type { Account } from '../account/useAccount.ts';
 import { HAND_LABEL } from '../player/profile.ts';
+import styles from './StartScreen.module.css';
+import controls from '../common/controls.module.css';
+import modal from '../common/modal.module.css';
 
 const THEMES = [
   { code: 'a', name: '科技藍' },
@@ -109,15 +112,15 @@ export function StartScreen({
   };
 
   return (
-    <div id="start">
+    <div id="start" className={styles.start}>
       <AccountBar account={account} />
-      <div className="wrap">
+      <div className={styles.wrap}>
         <h1>
           <em>棒球人生模擬器</em>
         </h1>
-        <p className="sub">國中、高中六年養成 → 選秀・旅外 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
+        <p className={styles.tagline}>國中、高中六年養成 → 選秀・旅外 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
 
-        <div className="field">
+        <div className={controls.field}>
           <label htmlFor="in-name">球員姓名</label>
           <input
             id="in-name"
@@ -134,19 +137,19 @@ export function StartScreen({
           />
         </div>
 
-        <div className="field">
+        <div className={controls.field}>
           <label>起始守位</label>
           {/* 三列：投捕與不定、內野、外野。每列都是四格的網格，不足四個就空著
               ——按鈕寬度因此與「打擊慣用手」那幾組完全一致，整個開局畫面看起來
               才是同一套元件。 */}
-          <div className="poslist">
+          <div className={styles.poslist}>
             {START_POSITION_ROWS.map((row, i) => (
-              <div key={i} className="seg">
+              <div key={i} className={controls.seg}>
                 {row.map((p) => (
                   <button
                     key={p}
                     type="button"
-                    className={p === startPosition ? 'on' : undefined}
+                    className={p === startPosition ? controls.on : undefined}
                     disabled={posBlocked(p)}
                     title={posBlocked(p) ? '左投守不了這個位置' : undefined}
                     onClick={() => setStartPosition(p)}
@@ -159,14 +162,14 @@ export function StartScreen({
           </div>
         </div>
 
-        <div className="field">
+        <div className={controls.field}>
           <label>投球慣用手</label>
-          <div className="seg">
+          <div className={controls.seg}>
             {abilities.handedness.selectable.throws.map((h) => (
               <button
                 key={h}
                 type="button"
-                className={h === throws ? 'on' : undefined}
+                className={h === throws ? controls.on : undefined}
                 disabled={h === 'L' && leftThrowBlocked}
                 title={
                   h === 'L' && leftThrowBlocked
@@ -186,14 +189,14 @@ export function StartScreen({
           )}
         </div>
 
-        <div className="field">
+        <div className={controls.field}>
           <label>打擊慣用手</label>
-          <div className="seg">
+          <div className={controls.seg}>
             {abilities.handedness.selectable.bats.map((h) => (
               <button
                 key={h}
                 type="button"
-                className={h === bats ? 'on' : undefined}
+                className={h === bats ? controls.on : undefined}
                 onClick={() => setBats(h)}
               >
                 {HAND_LABEL[h]}
@@ -208,14 +211,14 @@ export function StartScreen({
           </p>
         </div>
 
-        <div className="field">
+        <div className={controls.field}>
           <label>佈景主題</label>
-          <div className="seg">
+          <div className={controls.seg}>
             {THEMES.map((t) => (
               <button
                 key={t.code}
                 type="button"
-                className={t.code === theme ? 'on' : undefined}
+                className={t.code === theme ? controls.on : undefined}
                 onClick={() => onTheme(t.code)}
               >
                 {t.name}
@@ -226,7 +229,7 @@ export function StartScreen({
 
         <button
           type="button"
-          className="btn main"
+          className={`${controls.btn} ${controls.main}`}
           style={{ marginTop: 28 }}
           disabled={starting || loading}
           onClick={begin}
@@ -242,12 +245,12 @@ export function StartScreen({
 
         {refused !== null && (
           <Modal title="開局登記失敗" onClose={() => setRefused(null)}>
-            <p className="modal-error">{refused}</p>
-            <p className="modal-note">
+            <p className={modal.modalError}>{refused}</p>
+            <p className={modal.modalNote}>
               照樣開局的話，這一局帶著你的天賦照常進行，但不計入天梯，也不結算 AP。
             </p>
-            <div className="seg" style={{ marginTop: 16 }}>
-              <button type="button" className="on" onClick={begin}>
+            <div className={controls.seg} style={{ marginTop: 16 }}>
+              <button type="button" className={controls.on} onClick={begin}>
                 重試
               </button>
               <button
@@ -264,10 +267,10 @@ export function StartScreen({
           </Modal>
         )}
 
-        <p className="seedline">
+        <p className={styles.seedline}>
           世界種子{' '}
           <input
-            id="seed-show"
+            id="seed-show" className={styles.seedShow}
             maxLength={24}
             value={seed}
             onChange={(e) => setSeed(e.target.value)}

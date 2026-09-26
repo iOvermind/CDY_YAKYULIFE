@@ -28,7 +28,7 @@ export function esc(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** 卡片的語氣，對應 app.css 的 .card.good / .bad / .info / .gold。 */
+/** 卡片的語氣。介面換成 EventLog.module.css 的 .good / .bad / .info / .gold。 */
 export type Tone = 'info' | 'good' | 'bad' | 'gold';
 
 /** 一則敘事輸出。純展示，不影響任何運算。 */

@@ -5,6 +5,7 @@ import type { PlayerState } from '../../engine/game.ts';
 import { abilityCost, carryGauge, growthCurve } from '../../engine/growth.ts';
 import { isSideVisible } from '../../engine/rating.ts';
 import { useElementWidth } from '../common/useElementWidth.ts';
+import styles from './AbilityPanel.module.css';
 
 export function AbilityPanel({
   state,
@@ -58,7 +59,7 @@ function AbilityBlock({
 }) {
   return (
     <>
-      <p className="divider">{title}</p>
+      <p className={styles.divider}>{title}</p>
       {keys.map((key) => (
         <AbilityRow
           key={key}
@@ -130,14 +131,14 @@ function AbilityRow({
 
   const row = (
     <>
-      <span className="nm">{abilities.abilities[abilityKey] ?? abilityKey}</span>
-      <span className="bar" ref={barRef}>
+      <span className={styles.nm}>{abilities.abilities[abilityKey] ?? abilityKey}</span>
+      <span className={styles.bar} ref={barRef}>
         <i style={{ width: `${pct(current)}%` }} />
         {/* 位置取整到整數像素，否則 2px 的線會被抹在三欄上，看起來忽粗忽細。
             還沒量到寬度時先退回百分比——第一幀糊一下，好過整條線不見。 */}
         <em style={markerStyle} />
       </span>
-      <span className="val" style={{ lineHeight: 1.1 }}>
+      <span className={styles.val} style={{ lineHeight: 1.1 }}>
         {current}
         {/* 分母是這一項真正的天花板。原本固定寫 80，於是所有能力看起來都一樣有
             前途，玩家得靠 marker 的位置目測自己的潛力——而那道線只有兩像素。
@@ -160,7 +161,7 @@ function AbilityRow({
   if (!allocating) {
     return (
       <div
-        className={`abrow${option !== undefined ? ' capped' : ''}${overScale ? ' over' : ''}`}
+        className={`${styles.abrow}${option !== undefined ? ` ${styles.capped}` : ''}${overScale ? ` ${styles.over}` : ''}`}
         // 分配中卻不能點的列，把 engine 給的理由（已達上限）直接掛上去，
         // 不要退回那條泛用的量表說明。
         title={option?.note ?? `${head}–${tail}${bonus > 0 ? `（上限已提升 +${bonus}）` : ''}`}
@@ -172,7 +173,7 @@ function AbilityRow({
 
   return (
     <div
-      className={`abrow pickable${overScale ? ' over' : ''}`}
+      className={`${styles.abrow} ${styles.pickable}${overScale ? ` ${styles.over}` : ''}`}
       role="button"
       tabIndex={0}
       title={option.note}

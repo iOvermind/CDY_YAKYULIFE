@@ -1,0 +1,27 @@
+/* 骰子與加點 */
+/* single row always: dice shrink evenly (44px cap) when the container is narrow */
+.dice{display:flex;align-items:flex-start;gap:8px;flex-wrap:nowrap;margin-bottom:10px}
+/* dice as baseballs: light ball face + dashed stitch ring (per-theme tint), depth per theme */
+.die{flex:1 1 0;max-width:44px;min-width:0;aspect-ratio:1;height:auto;border-radius:var(--r);background:#ece7d6;border:2px solid rgba(0,0,0,.16);
+  color:#13291c;font-family:var(--disp);font-size:22px;font-weight:700;line-height:1; /* inherited 1.6 would floor the auto height above the aspect-ratio square */
+  display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;
+  --stitch:rgba(179,64,47,.5);
+  background-image:linear-gradient(rgba(255,255,255,.25),rgba(0,0,0,.08));
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
+.die::after{content:'';position:absolute;inset:4px;border-radius:calc(var(--r)*.6);
+  border:1.5px dashed var(--stitch);pointer-events:none}
+.die.active{border-color:var(--accent);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.18),0 0 10px color-mix(in srgb,var(--accent) 60%,transparent)}
+.die.used{opacity:.25;transform:scale(.9)}
+.die.six{color:#b3402f}
+:global(body[data-theme='b']) .die{background:var(--panel2);background-image:none;color:var(--text);border-color:var(--edge);
+  --stitch:rgba(226,105,92,.45);box-shadow:inset 0 0 8px rgba(0,0,0,.6)}
+:global(body[data-theme='b']) .die.active{border-color:var(--accent);color:var(--accent);
+  box-shadow:inset 0 0 8px rgba(0,0,0,.6),0 0 12px color-mix(in srgb,var(--accent) 70%,transparent)}
+:global(body[data-theme='b']) .die.six{color:var(--bad)}
+:global(body[data-theme='c']) .die{background:#faf6ea;background-image:none;color:#1e1c18;border-color:#1e1c18;
+  --stitch:rgba(179,64,47,.6);box-shadow:2.5px 2.5px 0 var(--edge)}
+:global(body[data-theme='c']) .die.active{border-color:var(--accent);box-shadow:2.5px 2.5px 0 var(--accent)}
+:global(body[data-theme='d']) .die{background:#ffffff;background-image:none;color:var(--text);border-color:var(--edge);
+  --stitch:rgba(192,57,43,.45);box-shadow:0 2px 6px rgba(26,32,28,.18),inset 0 -2px 0 rgba(0,0,0,.05)}
+:global(body[data-theme='d']) .die.active{border-color:var(--accent);box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 40%,transparent),inset 0 -2px 0 rgba(0,0,0,.05)}

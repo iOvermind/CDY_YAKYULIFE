@@ -9,6 +9,13 @@ export default defineConfig(async () => ({
   base: "/",
   plugins: [react()],
 
+  /**
+   * 元件的樣式是 CSS Modules（`*.module.css`），在 JSX 裡寫成 `styles.tagRow`。
+   * 只有主題 token 與引擎寫進 HTML 的 class 留在全域（`src/ui/global.css`，見
+   * ADR 0055）。
+   */
+  css: { modules: { localsConvention: "camelCaseOnly" } },
+
   server: {
     /**
      * **連接埠固定為 1420，被佔用時直接失敗。**

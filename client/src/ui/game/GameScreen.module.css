@@ -1,0 +1,45 @@
+.pool{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:700;text-shadow:var(--glow);margin-bottom:10px}
+.game{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+/* 左欄：身分（上）＋ 能力（下） */
+.col-left{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--edge)}
+.panel-abilities{flex:1;overflow-y:auto;padding:12px 14px 20px;min-height:0}
+.panel-abilities h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;
+  color:var(--dim);font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:6px}
+.panel-abilities h4::before{content:'■';font-size:9px;line-height:1;flex:none}
+/* 右欄：數據（上）＋ 事件（下）＋ 操作（底） */
+.col-right{display:flex;flex-direction:column;min-width:0}
+.panel-act{border-top:2px solid var(--edge);background:var(--panel);
+  padding:10px 14px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 18px var(--shadow)}
+.panel-act .title{font-family:var(--head);font-size:12px;letter-spacing:.2em;color:var(--dim);
+  margin-bottom:8px;font-weight:700}
+@media(min-width:921px){
+  /* 桌面：左右並排。手機維持單欄堆疊。 */
+  .game{display:grid;grid-template-columns:clamp(320px,32vw,400px) minmax(0,1fr);
+      max-width:1360px;margin:0 auto;height:100vh;height:100dvh;
+      border-left:1px solid var(--edge);border-right:1px solid var(--edge)}
+  .col-left,.col-right{height:100vh;height:100dvh;overflow:hidden}
+}
+@media(max-width:920px){
+  /* 手機：中間是「能力頁 ‖ 事件頁」的橫向走馬燈。
+  
+     **走馬燈不另外包一層，是 #game 自己換角色。** 那兩頁在桌面分屬左右欄，一個
+     DOM 生不出兩種父子關係；硬包一層就得改寫桌面的 grid，而 grid 的列高會把
+     #board 與 #panel-stats 綁進同一列（列高取兩者的大者），能力欄的起點就跟著
+     成績表的高度跑——桌面的版面於是動了。改成讓 #game 在這個斷點下變成橫向 snap
+     容器，兩欄各佔一頁，**上面那段桌面 CSS 一行都不必碰**。
+  
+     記分板與動作區改 fixed：它們分別在兩頁裡面，留在流裡會跟著頁一起滑走。代價
+     是中間那條帶子的上下界要靠 JS 量出來的 --board-h / --act-h（記分板的高度隨
+     合約、年薪、特性數量變動，動作區隨選項數量變動，兩個都不是常數）。 */
+  .game{flex-direction:row;height:100dvh;
+      overflow-x:auto;overflow-y:hidden;
+      scroll-snap-type:x mandatory;overscroll-behavior-x:contain;
+      padding-top:var(--board-h,0px);padding-bottom:var(--act-h,0px);
+      /* 捲軸自己是多餘的：頁點已經在講「一共兩頁、現在在哪一頁」。 */
+      scrollbar-width:none}
+  .game::-webkit-scrollbar{display:none}
+  .col-left,.col-right{flex:0 0 100%;height:100%;min-width:0;border-right:none;
+      scroll-snap-align:start;scroll-snap-stop:always}
+  .panel-act{position:fixed;left:0;right:0;z-index:30}
+  .panel-act{bottom:0}
+}

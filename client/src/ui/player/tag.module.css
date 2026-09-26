@@ -1,0 +1,44 @@
+/* 記分板裡的特性列。**只有手機用得到**——桌面的狀態仍然接在右欄的成績表下面
+   （那是它原本的位置：成績與狀態是同一段時間的兩種側寫）。手機把整塊成績面板
+   收掉，狀態得有地方去，而記分板是釘在畫面頂端、兩頁都看得到的那一塊。
+
+   兩邊是同一個 TraitList 元件，因此內容不可能分岔；分岔的只有掛在哪裡。
+
+   與記分板其餘的附註帶同一種對齊（置中），標籤多了就自然換行——它會把記分板
+   撐高，而記分板是 fixed 的，高度由 ResizeObserver 量給 --board-h，中間那條
+   帶子跟著縮，不會被蓋住。 */
+.bd-traits{display:none;margin-top:8px}
+.bd-traits p,.bd-traits .tag-row{text-align:center;justify-content:center}
+.bd-traits .tag-note{min-height:0}
+/* 一個特性都還沒有的時候整塊不存在（TraitList 在記分板裡不印「還沒有任何
+   特性」），連 margin 都不要留。 */
+.bd-traits:empty{display:none}
+.tag{display:inline-block;font-family:var(--mono);font-size:12px;padding:0 6px;border-radius:min(var(--r),4px);
+  background:var(--panel2);border:1px solid var(--edge);color:var(--accent);margin:0 2px}
+/* 特性標籤可點開說明。**選中態只能用 outline**：邊框樣式已經被 milestone（虛線）
+   與 life（點線）征用，底色與字色被 tone 征用（負向特性整組換紅），只有外圈是空
+   的——它與那兩套編碼正交，兩種標籤上都讀得出來，也不會讓負向特性在被點的那一
+   刻看起來變成正向的。 */
+/* 一排標籤。換行之後上下要與左右一樣寬，所以兩個方向都交給 gap 決定，標籤自己
+   的左右 margin 在這裡歸零，免得橫向被加兩次。8px 是原本 margin 疊出來的間距。 */
+.tag-row{display:flex;flex-wrap:wrap;gap:8px}
+.tag-row .tag{margin:0}
+/* 榮譽榜的四組標籤（獎項／里程碑／業餘與國際賽／人生）**長得一模一樣**。
+   這裡曾經用虛線、點線與不同的透明度區分來源，但每一組上面本來就寫著自己的
+   小標——同一件事編碼兩次，而且形狀那一份還要先看得懂才讀得出來。淡掉的那兩
+   組更糟：透明度在版面上的意思是「比較不重要」，可是一面國際賽的金牌並不比
+   一座打點王次要。 */
+/* 榮譽榜只在生涯結束後出現，接在生涯年表後面，同樣是事件流末端的結算卡。
+   外框與標題由 .card 負責。 */
+/* 榮譽的分組小標。獎項、里程碑、業餘與國際賽、人生是四種不同的東西，混在同一
+   袋標籤裡看不出邊界。 */
+.tag-group+.tag-group{margin-top:10px}
+.tag.pick{cursor:pointer}
+.tag.pick.on{outline:1px solid var(--accent);outline-offset:1px}
+/* 說明行。未選時放的是「點特性看說明」的提示，位置與高度和說明本身一樣——
+   這行永遠在，展開與收合就不會把底下的東西推來推去。 */
+.tag-note{font-size:11px;line-height:1.8;color:var(--dim);margin:4px 0 0;min-height:1.8em}
+.tag-note.hint{opacity:.6}
+@media(max-width:920px){
+  .bd-traits{display:block}
+}

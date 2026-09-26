@@ -1,3 +1,4 @@
+import styles from './DiceRow.module.css';
 
 
 /**
@@ -8,13 +9,13 @@
  */
 export function DiceRow({ dice }: { dice: { values: readonly number[]; index: number } }) {
   return (
-    <div id="dice">
+    <div id="dice" className={styles.dice}>
       {dice.values.map((v, i) => (
         <div
           key={i}
-          className={`die${i < dice.index ? ' used' : ''}${i === dice.index ? ' active' : ''}${
-            v === 6 ? ' six' : ''
-          }`}
+          className={[styles.die, i < dice.index && styles.used, i === dice.index && styles.active, v === 6 && styles.six]
+            .filter(Boolean)
+            .join(' ')}
         >
           {v}
         </div>

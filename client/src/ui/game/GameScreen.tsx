@@ -8,6 +8,8 @@ import { DiceRow } from './DiceRow.tsx';
 import { EventLog } from './EventLog.tsx';
 import { PageNav } from './PageNav.tsx';
 import { usePages } from './usePages.ts';
+import styles from './GameScreen.module.css';
+import controls from '../common/controls.module.css';
 
 /**
  * alloc: 底下的控制項，不是能力。
@@ -16,6 +18,11 @@ import { usePages } from './usePages.ts';
  * 看起來才是連貫的一串。但介面上它們是動作鈕，不是能力列。
  */
 const ALLOC_CONTROLS = new Set(['alloc:undo', 'alloc:confirm', 'alloc:forfeit']);
+
+/** 動作鈕的樣式：主要動作與警告各有一種外框。 */
+function buttonClass(role: Option['role']): string {
+  return [controls.btn, role === 'main' && controls.main, role === 'warn' && controls.warn].filter(Boolean).join(' ');
+}
 
 /** 目前的提問是不是在要求分配點數到某項能力。 */
 function allocOptions(prompt: Prompt | null): Map<string, Option> {
@@ -51,13 +58,13 @@ export function GameScreen({
 
   return (
     <>
-      <div id="game" ref={pages.ref} onScroll={pages.onScroll}>
-        <div id="col-left">
+      <div id="game" className={styles.game} ref={pages.ref} onScroll={pages.onScroll}>
+        <div id="col-left" className={styles.colLeft}>
           {state && (
             <Board state={state} rating={game.rating} seed={game.setup.seed} />
           )}
           {state && (
-            <div id="panel-abilities">
+            <div id="panel-abilities" className={styles.panelAbilities}>
               <h4>能力</h4>
               <AbilityPanel
                 state={state}
@@ -69,22 +76,22 @@ export function GameScreen({
           )}
         </div>
 
-        <div id="col-right">
+        <div id="col-right" className={styles.colRight}>
           {/* 生涯結束後整塊拿掉：狀態、生涯年表、榮譽都改由事件流末端的結算卡呈現。 */}
           {state && game.summary === null && <StatsPanel state={state} />}
           <EventLog entries={game.flow.log} state={state} summary={game.summary} />
-          <div id="panel-act">
+          <div id="panel-act" className={styles.panelAct}>
             {prompt !== null ? (
               <>
-                {prompt.title !== undefined && <div className="title">{prompt.title}</div>}
+                {prompt.title !== undefined && <div className={styles.title}>{prompt.title}</div>}
                 {game.dice !== null && <DiceRow dice={game.dice} />}
                 {state !== null && state.pool > 0 && allocatable.size > 0 && game.dice === null && (
-                  <div className="pool">大賽點數還有 {state.pool} 點（點一下能力 +1）</div>
+                  <div className={styles.pool}>大賽點數還有 {state.pool} 點（點一下能力 +1）</div>
                 )}
                 {allocatable.size > 0 && (
                   // 不寫方向。桌面在左欄、手機在同一頁的上方，而手機還能滑到事件
                   // 頁去——任何一個方向詞都會有講錯的時候，一份文案兩邊共用才不會。
-                  <div className="title" style={{ color: 'var(--accent)', letterSpacing: 0 }}>
+                  <div className={styles.title} style={{ color: 'var(--accent)', letterSpacing: 0 }}>
                     點能力列加點
                   </div>
                 )}
@@ -92,9 +99,7 @@ export function GameScreen({
                   <button
                     key={o.id}
                     type="button"
-                    className={`btn${o.role === 'main' ? ' main' : ''}${
-                      o.role === 'warn' ? ' warn' : ''
-                    }`}
+                    className={buttonClass(o.role)}
                     disabled={o.disabled === true}
                     onClick={() => {
                       onChoose(o.id);
@@ -106,14 +111,12 @@ export function GameScreen({
                   </button>
                 ))}
                 {controlOptions.length > 0 && (
-                  <div className="row2">
+                  <div className={controls.row2}>
                     {controlOptions.map((o) => (
                       <button
                         key={o.id}
                         type="button"
-                        className={`btn${o.role === 'main' ? ' main' : ''}${
-                          o.role === 'warn' ? ' warn' : ''
-                        }`}
+                        className={buttonClass(o.role)}
                         disabled={o.disabled === true}
                         onClick={() => {
                           onChoose(o.id);
@@ -129,9 +132,9 @@ export function GameScreen({
               </>
             ) : (
               <>
-                <div className="title">{game.summary === null ? '流程已到目前實作的盡頭' : '生涯結束'}</div>
+                <div className={styles.title}>{game.summary === null ? '流程已到目前實作的盡頭' : '生涯結束'}</div>
                 {game.summary !== null && <SaveCardButton game={game} />}
-                <button type="button" className="btn" onClick={onRestart}>
+                <button type="button" className={controls.btn} onClick={onRestart}>
                   重新開局
                 </button>
               </>

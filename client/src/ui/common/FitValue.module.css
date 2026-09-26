@@ -1,0 +1,5 @@
+/* the two-way value row (`63/58`) never wraps: the cell grid is four fixed
+   columns and a wrapped value pushes the whole strip a line taller. JS shrinks
+   the font to fit (FitValue); nowrap is what makes scrollWidth report the
+   overflow it measures, and hidden keeps a pathological value inside the box. */
+.fit-value{white-space:nowrap;overflow:hidden}

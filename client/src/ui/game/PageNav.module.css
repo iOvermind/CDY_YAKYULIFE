@@ -1,0 +1,24 @@
+@media(max-width:920px){
+  .pagenav{display:block}
+}
+/* ---------- 換頁提示：左右半透明箭頭 ＋ 兩顆頁點 ---------- */
+/* 預設不存在——它是手機專屬的東西，桌面兩欄同時看得到，沒有頁可換。 */
+.pagenav{display:none}
+@media(max-width:920px){
+  /* 蓋在中間那條帶子上，本身不收事件（否則整條帶子都點不到），只有箭頭與
+       頁點自己收。 */
+  .pagenav{position:fixed;left:0;right:0;top:var(--board-h,0px);bottom:var(--act-h,0px);
+      z-index:29;pointer-events:none}
+  .pagearrow{position:absolute;top:50%;transform:translateY(-50%);pointer-events:auto;
+      width:26px;height:56px;padding:0;display:flex;align-items:center;justify-content:center;
+      border:1px solid var(--edge);background:color-mix(in srgb,var(--panel) 55%,transparent);
+      color:var(--dim);font-size:20px;line-height:1;cursor:pointer}
+  /* [hidden] 擋不住 display:flex，UA 的樣式權重比類別低——箭頭在到底的那一側
+       要自己寫一條才收得起來。 */
+  .pagearrow[hidden]{display:none}
+  .pagearrow.left{left:0;border-left:none;border-radius:0 var(--r) var(--r) 0}
+  .pagearrow.right{right:0;border-right:none;border-radius:var(--r) 0 0 var(--r)}
+  .pagedots{position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center;gap:6px}
+  .pagedots i{width:5px;height:5px;border-radius:50%;background:var(--edge)}
+  .pagedots i.on{background:var(--accent);box-shadow:var(--glow)}
+}

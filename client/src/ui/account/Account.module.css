@@ -1,0 +1,57 @@
+/* ── 帳號、成就與天賦商店 ───────────────────────────────────── */
+/* 開局畫面右上角。position:fixed 而不是塞進 .wrap——.wrap 有最大寬度並置中，
+   把它掛進去會讓按鈕在寬螢幕上飄到畫面中間。 */
+.accountbar{position:fixed;z-index:60;display:flex;gap:8px;
+  top:calc(14px + env(safe-area-inset-top,0px));right:calc(16px + env(safe-area-inset-right,0px))}
+.ghost{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--dim);
+  font-family:var(--sans);font-size:12.5px;font-weight:700;padding:7px 12px;cursor:pointer;
+  letter-spacing:.06em;white-space:nowrap}
+.ghost:hover:not(:disabled){color:var(--accent);border-color:var(--accent)}
+/* 未登入時的成就鈕：留在原地但按不動——藏起來的話玩家不會知道有這個東西。 */
+.ghost:disabled{opacity:.35;cursor:not-allowed}
+.ghost .ap{color:var(--gold);margin-left:7px;font-family:var(--mono);font-size:11.5px}
+/* 整張卡片就是按鈕：左鍵升一級、右鍵降一級。做成 <button> 是為了鍵盤與
+   焦點框都自己來，因此外觀要先歸零回一張卡片的樣子。 */
+.talent-card{margin-bottom:10px}
+.talent{display:block;width:100%;text-align:left;font:inherit;color:inherit;
+  background:none;cursor:pointer;
+  border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px}
+/* 買過的用強調色框起來——一整頁天賦裡，玩家最先要找到的是自己已經有的那幾個。 */
+.talent.owned{border-color:var(--accent);background:var(--panel2)}
+@media (hover:hover){
+  .talent:not(:disabled):not(.broke):hover{border-color:var(--accent)}
+}
+.talent:disabled{opacity:.5;cursor:not-allowed}
+/* AP 不夠：跟 disabled 長一樣。已經買過的那幾張不是 disabled——右鍵還要能退錢——
+   所以反灰是另一條規則，不能只靠 `:disabled`。 */
+.talent.broke{opacity:.5;cursor:not-allowed}
+.talent-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.talent-head b{font-size:14.5px;color:var(--text)}
+.talent-head :global(.sub){font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.talent-desc{font-size:12px;color:var(--dim);margin:5px 0 9px;line-height:1.6}
+/* 進度是**一條連續的橫條**：問的是「還有多遠」，切成格子得先數格子才讀得出來。
+   每一級的效果收在 tooltip 裡，不常態攤在卡片上。 */
+.talent-bar{height:8px;border-radius:999px;background:var(--panel);
+  border:1px solid var(--edge);overflow:hidden;margin:0 0 7px}
+.talent-bar .fill{display:block;height:100%;background:var(--accent);
+  box-shadow:var(--glow);transition:width .2s}
+.talent-hint{display:block;font-size:12px;color:var(--dim)}
+.talent-hint .price{font-family:var(--mono);color:var(--gold);margin:0 3px;font-weight:700}
+.talent-hint .price.on{color:var(--accent)}
+/* 效果說明的展開鈕。tooltip 在觸控裝置上根本出不來，所以每一級的效果得有一條
+   點得開的路；桌機維持 tooltip，這顆鈕只是同一份資訊的第二個入口。 */
+.talent-more{display:block;width:100%;text-align:right;font:inherit;font-size:11.5px;
+  color:var(--dim);background:none;border:0;cursor:pointer;padding:5px 2px 0}
+@media (hover:hover){
+  .talent-more:hover{color:var(--accent)}
+}
+.talent-levels{list-style:none;margin:6px 0 0;padding:8px 10px;
+  border:1px solid var(--edge);border-radius:var(--r);background:var(--panel)}
+.talent-levels li{display:flex;gap:8px;align-items:baseline;
+  font-size:12px;color:var(--dim);line-height:1.6;padding:2px 0}
+.talent-levels li b{font-family:var(--mono);font-size:11px;color:var(--dim);flex:0 0 auto}
+/* 已經買到的那幾級寫實色：玩家一眼要分得出「我在哪裡」與「還能往哪去」。 */
+.talent-levels li.on{color:var(--text)}
+.talent-levels li.on b{color:var(--accent)}
+.talent-levels li span:nth-child(2){flex:1 1 auto}
+.talent-levels li :global(.sub){font-family:var(--mono);font-size:11px;flex:0 0 auto}

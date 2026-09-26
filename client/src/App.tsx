@@ -1,4 +1,4 @@
-import './app.css';
+import './ui/global.css';
 import { useEffect, useRef, useState } from 'react';
 import { httpProgress } from './api/http.ts';
 import { Game } from './engine/game.ts';
@@ -13,7 +13,8 @@ import { StartScreen } from './ui/start/StartScreen.tsx';
  * 三件事：收集開局設定、把 flow.log 畫出來、把玩家點的選項餵回 flow.choose()。
  * 這一層只在開局畫面與遊戲畫面之間切換；各畫面在 `ui/` 底下，依畫面分資料夾。
  *
- * 樣式在 app.css，版型比照原版。介面規格見 INTERFACE.md。
+ * 樣式：主題 token 與引擎詞彙在 `ui/global.css`，其餘是各元件旁邊的 CSS Module。
+ * 版型比照原版。介面規格見 INTERFACE.md。
  */
 export default function App() {
   const [theme, setTheme] = useState('a');

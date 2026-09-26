@@ -6,6 +6,7 @@ import { HonorBoard } from '../player/HonorBoard.tsx';
 import { TraitList } from '../player/TraitList.tsx';
 import { relationTags } from '../player/profile.ts';
 import { CareerTable } from '../stats/CareerTable.tsx';
+import styles from './EventLog.module.css';
 
 /**
  * 事件流。**新內容出現時一律捲到底，不管玩家有沒有自己往上捲。**
@@ -75,7 +76,7 @@ export function EventLog({
   }, []);
 
   return (
-    <div id="panel-log" ref={ref}>
+    <div id="panel-log" className={styles.panelLog} ref={ref}>
       <div ref={innerRef}>
         <LogView entries={entries} state={state} summary={summary} />
       </div>
@@ -102,18 +103,18 @@ function FinaleCard({
   if (state === null || summary === null) return null;
   if (section === 'traits')
     return (
-      <div className="card">
+      <div className={styles.card}>
         <TraitList traits={state.traits} names={state.traitNames} notes={state.traitNotes} tags={relationTags(state)} />
       </div>
     );
   if (section === 'career')
     return (
-      <div className="card">
+      <div className={styles.card}>
         <CareerTable summary={summary} />
       </div>
     );
   return (
-    <div className="card">
+    <div className={styles.card}>
       <HonorBoard
         awards={state.awards}
         honors={state.honors}
@@ -147,12 +148,12 @@ function LogView({
   return (
     <>
       {blocks.map((block, i) => (
-        <div className="yr-block" key={i}>
-          {block.head !== null && <div className="yr-head has-body">{block.head}</div>}
-          <div className="yr-body">
+        <div className={styles.yrBlock} key={i}>
+          {block.head !== null && <div className={`${styles.yrHead} ${styles.hasBody}`}>{block.head}</div>}
+          <div className={styles.yrBody}>
             {block.cards.map((entry, j) =>
               entry.kind === 'card' ? (
-                <div className={`card ${entry.tone}`} key={j}>
+                <div className={`${styles.card} ${styles[entry.tone]}`} key={j}>
                   {entry.title !== undefined && <h4>{entry.title}</h4>}
                   <p dangerouslySetInnerHTML={{ __html: entry.body }} />
                 </div>

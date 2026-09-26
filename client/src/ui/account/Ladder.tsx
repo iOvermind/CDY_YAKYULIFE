@@ -21,6 +21,10 @@ import { ALL } from '../../engine/ladder.ts';
 import { displayName } from '../../engine/playerName.ts';
 import { fmtMoney } from '../../engine/salary.ts';
 import { ENGINE_VERSION } from '../../engine/version.ts';
+import styles from './Ladder.module.css';
+import table from '../stats/table.module.css';
+import modal from '../common/modal.module.css';
+import controls from '../common/controls.module.css';
 
 /**
  * 聯盟選單上的名字。跨聯盟之外寫**頂級聯盟名**（中職／日職／大聯盟），不是體系名
@@ -73,9 +77,9 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
   if (column === undefined) return null;
 
   return (
-    <div className="ladder-board">
-      <div className="fin-caption">{column.name}</div>
-      <table className="fin">
+    <div className={table.ladderBoard}>
+      <div className={table.finCaption}>{column.name}</div>
+      <table className={table.fin}>
         <tbody>
           {board.entries.map((e) => {
             const shown = displayName(e.name);
@@ -103,7 +107,7 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
                     字，是名字欄的寬度撐不起四個字；是哪一版，滑鼠停上去看得到。
                   */}
                   {e.engineVersion !== ENGINE_VERSION && (
-                    <span className="sub" style={{ marginLeft: 4 }} title={`舊規則：結算於引擎 v${e.engineVersion}`}>
+                    <span className={styles.stale} style={{ marginLeft: 4 }} title={`舊規則：結算於引擎 v${e.engineVersion}`}>
                       舊
                     </span>
                   )}
@@ -209,11 +213,11 @@ export function Ladder({ account }: { account: Account }) {
   }, [combos, query]);
 
   function boards() {
-    if (error !== null) return <p className="modal-note">{error}</p>;
-    if (data === null) return <p className="modal-note">讀取中…</p>;
+    if (error !== null) return <p className={modal.modalNote}>{error}</p>;
+    if (data === null) return <p className={modal.modalNote}>讀取中…</p>;
     if (data.boards.length === 0) {
       return (
-        <p className="modal-note">
+        <p className={modal.modalNote}>
           還沒有任何紀錄。天梯收的是<b>打完並結算過</b>的生涯——
           {self ? '打完一段就會出現在這裡。' : '這台服務上還沒有人打完一段生涯。'}
         </p>
@@ -223,9 +227,9 @@ export function Ladder({ account }: { account: Account }) {
       const list = data.boards.filter((b) => b.side === side);
       if (list.length === 0) return null;
       return (
-        <section key={side} className="ladder-section">
+        <section key={side} className={styles.ladderSection}>
           <h4>{title}</h4>
-          <div className="ladder-grid">
+          <div className={styles.ladderGrid}>
             {list.map((b) => (
               <Board key={b.column} board={b} single={query.kind === 'best'} />
             ))}
@@ -275,12 +279,12 @@ export function Ladder({ account }: { account: Account }) {
   return (
     <>
       {/* 第二層：跟上面的分頁同一個樣式，只寫目前的值。按一下展開第三層，再按一下收起。 */}
-      <div className="seg" style={{ marginBottom: 8 }}>
+      <div className={controls.seg} style={{ marginBottom: 8 }}>
         {(['who', 'org', 'kind', 'position'] as const).map((f) => (
           <button
             key={f}
             type="button"
-            className={open === f ? 'on' : undefined}
+            className={open === f ? controls.on : undefined}
             aria-expanded={open === f}
             onClick={() => setOpen(open === f ? null : f)}
           >
@@ -293,12 +297,12 @@ export function Ladder({ account }: { account: Account }) {
         只列選項，不另加標題——展開的是哪一顆，第二層那顆亮著就看得出來。
       */}
       {opened !== null && (
-        <div className="seg-scroll" ref={drag.ref} {...drag.handlers}>
+        <div className={controls.segScroll} ref={drag.ref} {...drag.handlers}>
           {opened.choices.map((c) => (
             <button
               key={c.value}
               type="button"
-              className={c.value === opened.current ? 'on' : undefined}
+              className={c.value === opened.current ? controls.on : undefined}
               onClick={() => {
                 if (drag.wasDrag()) return;
                 opened.pick(c.value);
