@@ -14,7 +14,8 @@
 
 import { leagues, ladder } from '../data/index.ts';
 import { addBatting, addPitching, type BattingLine, type PitchingLine } from './amateurStats.ts';
-import { playedSeason, seasonPoints, type CareerSummary, type SeasonRecord } from './career.ts';
+import type { AwardRecord } from './awards.ts';
+import { playedSeason, seasonPoints, warOf, type CareerSummary, type SeasonRecord } from './career.ts';
 
 /** 「跨聯盟」與「跨守位」。與體系代碼、守位代碼共用同一個欄位，挑一個不可能撞名的字。 */
 export const ALL = '*';
@@ -71,6 +72,16 @@ export interface LadderRow extends LadderKey {
   /** 勝利份額與敗戰份額。**整個球員的，不分投打**——他的份額本來就只有一份。 */
   readonly winShares: number;
   readonly lossShares: number;
+  /**
+   * WAR：打擊＋守備＋投球，整個球員的（見 career.ts 的 `warOf`）。跨聯盟那一格直接
+   * 加總各聯盟的原值；單季取 WAR 最高的那一季。
+   */
+  readonly war: number;
+  /**
+   * 總冠軍次數，只算這個組合裡的球季（指定守位就只算那個守位的那幾年）。單季榜是
+   * null——一季最多一座，排出來只是一排 1。
+   */
+  readonly rings: number | null;
   /** 評價分。每種組合的意思不同，見 `scoreOf()`。 */
   readonly score: number;
   /** 薪水（萬元台幣）。每種組合的意思不同，見 `salaryOf()`。 */
@@ -82,7 +93,22 @@ export interface LadderRow extends LadderKey {
 }
 
 /** 一列扣掉身分、評價分與薪水之後的部分——那三樣要看它是哪一種組合。 */
-type RowBody = Omit<LadderRow, keyof LadderKey | 'score' | 'salary'>;
+type RowBody = Omit<LadderRow, keyof LadderKey | 'score' | 'salary' | 'rings'>;
+
+/** 一季的 WAR：三段相加。 */
+function seasonWar(r: SeasonRecord): number {
+  const w = warOf(r);
+  return w.batting + w.fielding + w.pitching;
+}
+
+/**
+ * 這批球季裡拿了幾座總冠軍。**以（年, 聯盟）對上**：冠軍屬於年底所在的那一隊
+ * （ADR 0045），季中轉隊那一年有兩列，但冠軍只算一次。
+ */
+function ringsOf(records: readonly SeasonRecord[], awards: readonly AwardRecord[]): number {
+  const seasons = new Set(records.map((r) => `${r.year}:${r.org}`));
+  return awards.filter((a) => a.code === 'championship' && seasons.has(`${a.year}:${a.org}`)).length;
+}
 
 /** 一個範圍內的規定打席與規定局數（出局數），逐年累加。 */
 interface Threshold {
@@ -161,7 +187,11 @@ function qualifies(total: number, required: number, seasons: number): boolean {
  * `earnings` 是生涯淨收入——跨聯盟跨守位那一列的薪水要它（扣掉離婚分走的財產
  * 與旅外安家費），其他組合拆不出淨收入，改用逐季的年薪與簽約金。
  */
-export function ladderRows(summary: CareerSummary, earnings: number): readonly LadderRow[] {
+export function ladderRows(
+  summary: CareerSummary,
+  earnings: number,
+  awards: readonly AwardRecord[] = [],
+): readonly LadderRow[] {
   const rows: LadderRow[] = [];
   // 沒打過任何頂級聯盟就一列都沒有——一段沒上過一軍的生涯在榜上是空的，那是對
   // 的，不是漏算。
@@ -180,6 +210,7 @@ export function ladderRows(summary: CareerSummary, earnings: number): readonly L
         ...careerRow(records),
         ...key,
         kind: 'total',
+        rings: ringsOf(records, awards),
         score: scoreOf(summary, key, 'total', records),
         salary: salaryOf(summary, key, 'total', records, earnings),
       });
@@ -187,6 +218,7 @@ export function ladderRows(summary: CareerSummary, earnings: number): readonly L
         ...bestRow(records),
         ...key,
         kind: 'best',
+        rings: null,
         score: scoreOf(summary, key, 'best', records),
         salary: salaryOf(summary, key, 'best', records, earnings),
       });
@@ -267,6 +299,7 @@ function careerRow(records: readonly SeasonRecord[]): RowBody {
     defenseRuns,
     winShares: shares.win,
     lossShares: shares.loss,
+    war: records.reduce((n, r) => n + seasonWar(r), 0),
     qualifiedBatter: qualifies(batting?.pa ?? 0, t.pa, t.seasons),
     qualifiedPitcher: qualifies(pitching?.outs ?? 0, t.outs, t.seasons),
   };
@@ -306,6 +339,8 @@ function bestRow(records: readonly SeasonRecord[]): RowBody {
     defenseRuns: records.reduce((best, r) => Math.max(best, r.defenseRuns), 0),
     winShares: shares.win,
     lossShares: shares.loss,
+    // 單季取 WAR 最高的那一季。沒有任何球季時是 0。
+    war: records.length === 0 ? 0 : Math.max(...records.map(seasonWar)),
     qualifiedBatter: records.some((r) => qualified(r, 'batter')),
     qualifiedPitcher: records.some((r) => qualified(r, 'pitcher')),
   };

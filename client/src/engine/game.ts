@@ -1037,7 +1037,7 @@ export class Game {
         unlocked: progress.unlocked,
       }),
       // 跨聯盟跨守位那一列的薪水是生涯淨收入——扣掉離婚分走的與旅外安家費。
-      ladder: ladderRows(summary, this.#earnings),
+      ladder: ladderRows(summary, this.#earnings, this.#awards),
       playerName: this.#player?.name ?? '',
       engineVersion: ENGINE_VERSION,
     };

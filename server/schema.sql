@@ -109,6 +109,12 @@ CREATE TABLE IF NOT EXISTS ladder_rows (
   PRIMARY KEY (career_id, org, position, kind)
 );
 
+-- WAR 與總冠軍數（2026-09-26，原本 ROADMAP 的「神獸殿堂」併進天梯）。**舊的列留著
+-- NULL**：跨版本不能重跑（ADR 0002），補不出來；NULL 的列不上這兩張榜，其他榜照舊。
+-- 單季榜的 rings 永遠是 NULL——一季最多一座，排出來只是一排 1。
+ALTER TABLE ladder_rows ADD COLUMN IF NOT EXISTS war REAL;
+ALTER TABLE ladder_rows ADD COLUMN IF NOT EXISTS rings INTEGER;
+
 -- 查一格榜：全伺服器天梯查 (org, position, kind)，個人天梯再加 user_id。
 CREATE INDEX IF NOT EXISTS ladder_rows_combo_idx ON ladder_rows (org, position, kind);
 CREATE INDEX IF NOT EXISTS ladder_rows_user_idx  ON ladder_rows (user_id, org, position, kind);

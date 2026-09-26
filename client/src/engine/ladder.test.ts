@@ -304,9 +304,28 @@ describe('天梯欄位清單', () => {
    */
   it('投打共通的欄位只在共通那一張', () => {
     const shared = ladder.columns.shared.map((c) => c.key);
-    expect(shared).toEqual(['ws', 'ls', 'score', 'salary']);
+    expect(shared).toEqual(['ws', 'ls', 'war', 'rings', 'score', 'salary']);
     for (const side of ['batter', 'pitcher'] as const) {
       for (const c of ladder.columns[side]) expect(shared, side).not.toContain(c.key);
     }
+  });
+});
+
+/** WAR 與總冠軍數（原本的「神獸殿堂」併進天梯，2026-09-26）。 */
+describe('天梯的 WAR 與總冠軍', () => {
+  it('跨聯盟跨守位的 WAR 是各聯盟 WAR 直接加總', () => {
+    const { summary, rows } = withTop('war');
+    const career = find(rows, ALL, ALL, 'total')!;
+    const sum = summary.leagues.reduce((n, l) => n + l.war.batting + l.war.fielding + l.war.pitching, 0);
+    expect(career.war).toBeCloseTo(sum, 6);
+  });
+
+  it('單季榜沒有總冠軍數；累計的總冠軍數等於拿過的座數', () => {
+    const { game, summary } = withTop('rings');
+    const awards = game.state?.awards ?? [];
+    const rows = ladderRows(summary, game.state?.earnings ?? 0, awards);
+    for (const r of rows.filter((x) => x.kind === 'best')) expect(r.rings).toBeNull();
+    const rings = awards.filter((a) => a.code === 'championship').length;
+    expect(find(rows, ALL, ALL, 'total')?.rings).toBe(rings);
   });
 });

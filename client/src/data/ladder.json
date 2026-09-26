@@ -80,6 +80,8 @@
     "shared": [
       { "key": "ws", "name": "勝利份額", "rate": false, "order": "desc", "digits": 1 },
       { "key": "ls", "name": "敗戰份額", "rate": false, "order": "desc", "digits": 1 },
+      { "key": "war", "name": "WAR", "rate": false, "order": "desc", "digits": 1 },
+      { "key": "rings", "name": "總冠軍", "rate": false, "order": "desc" },
       { "key": "score", "name": "評價分", "rate": false, "order": "desc", "digits": 1 },
       { "key": "salary", "name": "薪水", "rate": false, "order": "desc", "unit": "money" }
     ]

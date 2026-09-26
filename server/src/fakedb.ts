@@ -45,6 +45,8 @@ interface StatRow {
   loss_shares: number;
   score: number;
   salary: number;
+  war: number | null;
+  rings: number | null;
   qualified_batter: boolean;
   qualified_pitcher: boolean;
   engine_version: number;
@@ -224,6 +226,8 @@ export class FakeDb implements Queryable {
         qualified_pitcher: Boolean(v[14]),
         engine_version: Number(v[15]),
         player_name: String(v[16]),
+        war: v[17] === null || v[17] === undefined ? null : Number(v[17]),
+        rings: v[18] === null || v[18] === undefined ? null : Number(v[18]),
         finished_at: new Date(),
       });
       return [];

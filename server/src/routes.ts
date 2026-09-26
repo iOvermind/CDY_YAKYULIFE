@@ -192,8 +192,8 @@ export async function finishCareer(
             `INSERT INTO ladder_rows
                (career_id, user_id, org, position, kind, seasons, batting, pitching,
                 defense_runs, win_shares, loss_shares, score, salary,
-                qualified_batter, qualified_pitcher, engine_version, player_name)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                qualified_batter, qualified_pitcher, engine_version, player_name, war, rings)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
              ON CONFLICT (career_id, org, position, kind) DO NOTHING`,
             [
               careerId,
@@ -213,6 +213,8 @@ export async function finishCareer(
               row.qualifiedPitcher,
               score.engineVersion,
               score.playerName,
+              row.war,
+              row.rings,
             ],
           );
         }
@@ -298,7 +300,7 @@ export async function ladder(
 
   const { rows } = await pool.query<StatRow>(
     `SELECT lr.org, lr.position, lr.kind, lr.seasons, lr.batting, lr.pitching,
-            lr.defense_runs, lr.win_shares, lr.loss_shares, lr.score, lr.salary,
+            lr.defense_runs, lr.win_shares, lr.loss_shares, lr.score, lr.salary, lr.war, lr.rings,
             lr.qualified_batter, lr.qualified_pitcher, lr.engine_version,
             lr.player_name, lr.finished_at, u.account
        FROM ladder_rows lr
@@ -341,6 +343,9 @@ interface StatRow {
   score: number;
   /** BIGINT 從 pg 回來是字串。 */
   salary: number | string;
+  /** 舊的列是 NULL，不上 WAR 與總冠軍榜。 */
+  war: number | null;
+  rings: number | null;
   qualified_batter: boolean;
   qualified_pitcher: boolean;
   engine_version: number;
@@ -390,6 +395,9 @@ function valueOf(row: StatRow, side: LadderSide, key: string): number | null {
     if (key === 'ls') return row.loss_shares;
     if (key === 'score') return row.score;
     if (key === 'salary') return Number(row.salary);
+    // `?? null`：開發用假資料庫的舊快照沒有這兩欄，讀出來是 undefined。
+    if (key === 'war') return row.war ?? null;
+    if (key === 'rings') return row.rings ?? null;
     return null;
   }
   if (key === 'defenseRuns') return row.batting === null ? null : row.defense_runs;

@@ -460,6 +460,27 @@ describe('天梯', () => {
     }
   });
 
+  /** WAR 與總冠軍數：舊的列沒有這兩欄（NULL），不上那兩張榜，其他榜照舊。 */
+  it('WAR 與總冠軍榜只收有這兩欄的列', async () => {
+    const user = await finish('Overmind');
+    const before = await ladder(user, TOTAL, false);
+    assert.ok(before.boards.some((b) => b.side === 'shared' && b.column === 'war'));
+    // 模擬舊版本留下的列：兩欄都是 NULL。
+    for (const r of db.ladderRows) {
+      r.war = null;
+      r.rings = null;
+    }
+    const after = await ladder(user, TOTAL, false);
+    assert.ok(!after.boards.some((b) => b.column === 'war' || b.column === 'rings'));
+    assert.ok(after.boards.some((b) => b.column === 'ws'));
+  });
+
+  it('單季榜沒有總冠軍那一張', async () => {
+    const user = await finish('Overmind');
+    const best = await ladder(user, { ...TOTAL, kind: 'best' }, false);
+    assert.ok(!best.boards.some((b) => b.column === 'rings'));
+  });
+
   it('驗證失敗的生涯不進榜', async () => {
     const user = await register('Overmind', 'hunter2');
     const ticket = await startCareer(user);
