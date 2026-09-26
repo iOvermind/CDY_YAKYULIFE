@@ -72,7 +72,7 @@ describe('卡片內文的跳脫', () => {
 
 describe('球員姓名', () => {
   it('超過上限的名字在開局就截好，之後的流程文字拿到的都是這個', () => {
-    expect(started({ name: '一二三四五六七八九十' }).player?.name).toBe('一二三四……');
+    expect(started({ name: '一二三四五六七八九十' }).player?.name).toBe('一二三四五六……');
   });
 });
 
