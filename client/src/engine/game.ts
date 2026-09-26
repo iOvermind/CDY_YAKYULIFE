@@ -662,7 +662,7 @@ export class Game {
   #amateurSixes = 0;
   /** 事件卡連續抽到壞結果的次數。〈何金銀〉看它。 */
   #eventFailStreak = 0;
-  /** 全力一搏累計失敗的次數。〈烏鴉〉看它。 */
+  /** 職業期全力一搏累計失敗的次數。〈烏鴉〉看它；養成期的失敗不算。 */
   #boldFails = 0;
   /** 事件卡代言（好結果帶代言收入）的次數。〈外務纏身〉看它。 */
   #endorsements = 0;
@@ -1671,8 +1671,10 @@ export class Game {
       this.#traits.add('thief');
       lines.push(`連續 ${this.#eventFailStreak} 張事件卡全部搞砸——取得特性<b class="dn">〈${esc(traitName('thief'))}〉</b>`);
     }
-    // 〈烏鴉〉：全力一搏累計輸夠多次，賭輸就掀桌。
-    if (mode === 'bold' && !outcome.good) this.#boldFails++;
+    // 〈烏鴉〉：全力一搏累計輸夠多次，賭輸就掀桌。**只算職業期**——它講的是球團受夠
+    // 了你，養成期還沒有球團（2026-09-27）。以前養成期也算，走大學又常豪賭的人幾乎
+    // 必定帶著烏鴉進職業的第一隊。〈今晚打老虎〉的成功次數照舊含養成期。
+    if (mode === 'bold' && !outcome.good && this.#pro !== null) this.#boldFails++;
     if (this.#boldFails >= BOLD_FAILS_FOR_CANCER && !this.#traits.has('cancer')) {
       this.#traits.add('cancer');
       this.#cancerTeam = this.#pro?.team ?? null;

@@ -2676,6 +2676,24 @@ describe('特性的取得條件', () => {
     throw new Error('六十局都沒有人拿到高手高手高高手');
   });
 
+  it('烏鴉：養成期的全力一搏失敗不算，只有職業期才累計', () => {
+    // 〈烏鴉〉講的是球團受夠了你——養成期還沒有球團。以前養成期也算，走大學
+    // （21 張事件卡）又常豪賭的人幾乎必定帶著烏鴉進職業（2026-09-27）。
+    let checked = 0;
+    for (let i = 0; i < 80; i++) {
+      const game = playCareer(`crow-amateur-${i}`, (['SS', 'CF', 'C', '1B', 'P'] as const)[i % 5]!);
+      let divider = '';
+      for (const entry of game.flow.log) {
+        if (entry.kind === 'divider') divider = entry.text;
+        if (entry.kind !== 'card') continue;
+        if (!(entry.body.includes('〈烏鴉〉') && entry.body.includes('全力一搏第'))) continue;
+        checked++;
+        expect(divider, `crow-amateur-${i} 在「${divider}」拿到烏鴉`).not.toMatch(/國中|高中|大學/);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('烏鴉：換隊就解除，成就照樣留著', () => {
     // 校準用的均衡玩家事件卡一律全力一搏，幾乎每一局都會拿到烏鴉。
     for (let i = 0; i < 60; i++) {
