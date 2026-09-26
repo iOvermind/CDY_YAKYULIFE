@@ -1,3 +1,4 @@
+import './ui/fonts.ts';
 import './ui/global.css';
 import { useEffect, useRef, useState } from 'react';
 import { httpProgress } from './api/http.ts';

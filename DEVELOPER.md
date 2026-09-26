@@ -330,12 +330,6 @@ docker compose down           # 停掉，資料留著
 - **原因**：管線串接運算子 `&&` 與 `||` 是 PowerShell 7 才加入的，5.1 沒有。
 - **處置**：分兩行寫，或用 `;` 串接（但 `;` 是無條件執行，前一個失敗仍會執行下一個）。
 
-#### 佈景主題切換後字體沒變，看起來跟原版不一樣
-
-- **症狀**：切到「電子看板」或「報紙版面」，顏色變了但字體還是系統預設，整體質感與原版不符
-- **原因**：`legacy.css` 的主題 b 指定 `DotGothic16`、主題 c 指定 `Noto Serif TC`，這些字體從 Google Fonts 載入。`client/index.html` 少了那兩行 `<link>`，或是離線狀態下載不到，字體就會 fallback。
-- **處置**：確認 `client/index.html` 的 `fonts.googleapis.com` 兩行還在。**玩家連不到 Google Fonts 時必然 fallback**（防火牆、離線、擋第三方網域），要讓那些情況也正確就必須把字體檔內嵌進產物。
-
 #### `Cannot find module @rollup/rollup-win32-x64-msvc`（或 `@esbuild/...`）
 
 - **症狀**：Windows 端跑 `npm run dev` 炸在 `rollup/dist/native.js`，訊息叫你刪掉 `package-lock.json` 與 `node_modules` 重裝。**照做只會讓另一邊壞掉**。

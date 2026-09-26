@@ -132,6 +132,29 @@ interface Ctx {
   readonly dry: boolean;
 }
 
+/** 圖上寫死、不在 `CareerCard` 裡的字：段落標題、引退那一行、落款。 */
+const DRAWN_LABELS = '年歲引退於・狀態引退之日生涯評價生涯收入榮譽棒球生涯模擬器 https://yakyulife.overmind.men';
+
+/**
+ * 把這張圖會用到的字型分片先載下來。
+ *
+ * `document.fonts.ready` 只等「已經開始下載」的字：中文字型依 unicode-range 切成
+ * 上百片（ADR 0056），畫面上沒出現過的字所在的那一片根本還沒被要求過，canvas 就會
+ * 拿備援字體去量、去畫。所以要明確地用圖上的每一個字、每一種字體與字重問一次。
+ */
+async function loadFonts(p: Palette, card: CareerCard): Promise<void> {
+  if (document.fonts === undefined) return;
+  const text = [...new Set(JSON.stringify(card) + DRAWN_LABELS)].join('');
+  const faces: [family: 'head' | 'sans' | 'mono', weight: number][] = [
+    ['head', 700],
+    ['head', 900],
+    ['sans', 400],
+    ['mono', 400],
+  ];
+  await Promise.all(faces.map(([family, weight]) => document.fonts.load(font(p, 16, family, weight), text)));
+  await document.fonts.ready;
+}
+
 function font(p: Palette, size: number, family: 'head' | 'sans' | 'mono', weight = 400): string {
   return `${weight} ${size}px ${p[family]}`;
 }
@@ -471,10 +494,10 @@ function layout(ctx: Ctx, card: CareerCard, width: number): number {
  * 條線，取 15M 留一點餘裕。
  */
 export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElement> {
-  // 字沒載完就量，量到的是備援字體的寬度，表格的欄寬會全部偏掉。
-  if (document.fonts !== undefined) await document.fonts.ready;
-
   const p = palette();
+  // 字沒載完就量，量到的是備援字體的寬度，表格的欄寬會全部偏掉。
+  await loadFonts(p, card);
+
   const probe = document.createElement('canvas').getContext('2d');
   if (probe === null) throw new Error('這個瀏覽器沒有 2D 畫布');
 

@@ -79,7 +79,7 @@
 | `--head` | `'Noto Sans TC',sans-serif` | `'DotGothic16',monospace` | `'Noto Serif TC',serif` | 同 a |
 | `--disp` | `'IBM Plex Mono',monospace` | `'DotGothic16',monospace` | `'Noto Serif TC',serif` | 同 a |
 
-`DotGothic16`、`IBM Plex Mono`、`Noto Sans TC`、`Noto Serif TC` 皆自 Google Fonts 載入，由 `client/index.html` 的 `<link>` 引入。**離線時會 fallback 成系統字體**，主題 b 與 c 的識別度會明顯下降——這是目前未解的問題，見 `DEVELOPER.md` §10。
+`DotGothic16`、`IBM Plex Mono`、`Noto Sans TC`、`Noto Serif TC` 皆隨前端產物出貨（`@fontsource` 套件，由 `client/src/ui/fonts.ts` 引入），不依賴 Google Fonts，離線也不會退成系統字（ADR 0056）。
 
 | 用途 | 字級 | 字重 | 行距 | 字體 |
 | :--- | ---: | :--- | ---: | :--- |
