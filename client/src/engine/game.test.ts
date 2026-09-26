@@ -2694,6 +2694,25 @@ describe('特性的取得條件', () => {
     expect(checked).toBeGreaterThan(0);
   });
 
+  it('WAR 的單位是勝場：生涯的 WS ÷ WAR 不會低於 3', () => {
+    // 一場勝利是 3 份勝利份額，WAR 又扣掉了替代水準，所以 WS ÷ WAR 一定大於 3——
+    // 現實的長青球星大約 4 到 7（魯斯 756 WS／182.5 WAR ≈ 4.1、Pete Rose ≈ 6.9）。
+    // WAR 忘了除以每場份數時這個比值只有 1.3 到 2.5，一個 645 WS 的生涯掛著 336 WAR
+    //（2026-09-27）。上限不在這裡守：比值偏高多少取決於替代水準，那是校準的事。
+    let checked = 0;
+    for (let i = 0; i < 40; i++) {
+      const game = playCareer(`war-scale-${i}`, (['SS', 'CF', 'C', '1B', 'P'] as const)[i % 5]!);
+      for (const l of game.summary?.leagues ?? []) {
+        const ws = l.sharesByPart.batting.win + l.sharesByPart.pitching.win + l.sharesByPart.fielding.win;
+        const war = l.war.batting + l.war.pitching + l.war.fielding;
+        if (war < 10) continue;
+        checked++;
+        expect(ws / war, `war-scale-${i} ${l.orgName}：${ws.toFixed(1)} WS／${war.toFixed(1)} WAR`).toBeGreaterThan(3);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('烏鴉：換隊就解除，成就照樣留著', () => {
     // 校準用的均衡玩家事件卡一律全力一搏，幾乎每一局都會拿到烏鴉。
     for (let i = 0; i < 60; i++) {

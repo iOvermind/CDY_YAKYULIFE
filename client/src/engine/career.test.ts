@@ -20,6 +20,7 @@ import {
   tierOf,
   type SeasonRecord,
 } from './career.ts';
+import { season as season_ } from '../data/index.ts';
 
 const NONE = { win: 0, loss: 0 };
 
@@ -535,9 +536,14 @@ describe('沒出賽的球季不算季數', () => {
   });
 });
 
-/** WAR 是評價分那本雙帳換個單位（2026-09-26）。 */
+/**
+ * WAR 是評價分那本雙帳換個單位（2026-09-26）。**單位是勝場**：勝利份額照 James 是
+ * 一場勝利 3 份（`per_game`），比替代水準多出來的份額要除以它才是場數——以前沒除，
+ * WAR 整整高估三倍（2026-09-27）。
+ */
 describe('WAR', () => {
   const k = 0.8; // p₀ = k/(1+k) ≈ .444
+  const perGame = season_.advanced.shares.per_game;
   const rec = (batting: { win: number; loss: number }) =>
     season({
       shares: { batting, pitching: NONE, fielding: NONE },
@@ -550,12 +556,12 @@ describe('WAR', () => {
     expect(warOf(rec({ win: p0 * 10, loss: (1 - p0) * 10 })).batting).toBeCloseTo(0, 10);
   });
 
-  it('WS − p₀ × 責任額，而且不乘難度係數', () => {
+  it('(WS − p₀ × 責任額) ÷ 每場份數，而且不乘難度係數', () => {
     const r = rec({ win: 12, loss: 8 });
     const p0 = k / (1 + k);
-    expect(warOf(r).batting).toBeCloseTo(12 - p0 * 20, 10);
-    // 評價分 = WAR × (1 + k) × 難度：同一個零點、同一個正負號。
-    expect(seasonPoints(r)).toBeCloseTo(warOf(r).batting * (1 + k) * 1.3, 10);
+    expect(warOf(r).batting).toBeCloseTo((12 - p0 * 20) / perGame, 10);
+    // 評價分 = WAR × 每場份數 × (1 + k) × 難度：同一個零點、同一個正負號。
+    expect(seasonPoints(r)).toBeCloseTo(warOf(r).batting * perGame * (1 + k) * 1.3, 10);
   });
 
   it('逐季加總', () => {
@@ -572,7 +578,7 @@ describe('eventLedger', () => {
     const l = eventLedger(null, null, fielding, base, base);
     expect(l.fielding).toEqual(fielding);
     const p0f = fieldingReplacementWinPct();
-    expect(l.war.fielding).toBeCloseTo(3 - p0f * 4, 10);
+    expect(l.war.fielding).toBeCloseTo((3 - p0f * 4) / season_.advanced.shares.per_game, 10);
     // 替代水準等於聯盟平均時，平均打者的打擊 WAR 約為 0。
     expect(l.war.batting).toBe(0);
   });

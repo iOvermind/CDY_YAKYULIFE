@@ -16,7 +16,7 @@
  * 本模組是純函式，不抽亂數。名人堂票選要擲骰，因此在 `hall.ts`。
  */
 
-import { achievements, awards as awardsCfg, hallOfFame as cfg, ladder as ladderCfg, leagues } from '../data/index.ts';
+import { achievements, awards as awardsCfg, hallOfFame as cfg, ladder as ladderCfg, leagues, season as seasonCfg } from '../data/index.ts';
 import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine } from './amateurStats.ts';
 import { ladderTop, rungName } from './achievements.ts';
 import type { PitcherRole } from './season.ts';
@@ -344,9 +344,14 @@ export interface WarByPart {
  * `WS − p₀ × 責任額 = (WS − k × LS) ÷ (1 + k)`，其中 `k = p₀ ÷ (1 − p₀)`。因此三段
  * 可以直接相加，也與評價分同號。**不乘難度係數**：中職的 5 WAR 就是在中職多贏
  * 5 場，與現實的 WAR 一樣是聯盟內的數字。
+ *
+ * **最後除以每場份數**：那是比替代水準多出來的**份額**，照 James 一場勝利是 3 份，
+ * 除完才是場數。以前沒除，WAR 整整高估三倍——645 WS 的生涯掛著 336 WAR，WS ÷ WAR
+ * 只有 1.9，現實的長青球星是 4 到 7（2026-09-27）。
  */
 export function warOf(record: SeasonRecord): WarByPart {
-  const part = (s: { win: number; loss: number }, k: number) => (s.win - k * s.loss) / (1 + k);
+  const perGame = seasonCfg.advanced.shares.per_game;
+  const part = (s: { win: number; loss: number }, k: number) => (s.win - k * s.loss) / (1 + k) / perGame;
   return {
     batting: part(record.shares.batting, record.lossPenalty.batting),
     pitching: part(record.shares.pitching, record.lossPenalty.pitching),
@@ -385,7 +390,9 @@ export function eventLedger(
   };
   const p0 = replacementWinPctOf(base, replacement);
   const p0f = fieldingReplacementWinPct();
-  const above = (s: Shares, p: number) => s.win - p * (s.win + s.loss);
+  // 與 warOf 同一個單位：多出來的份額除以每場份數才是場數。
+  const perGame = seasonCfg.advanced.shares.per_game;
+  const above = (s: Shares, p: number) => (s.win - p * (s.win + s.loss)) / perGame;
   return {
     ...shares,
     war: {

@@ -158,3 +158,21 @@ UPDATE achievements SET achievement = replace(achievement, 'BFA 亞洲 U-18 青�
 UPDATE achievements SET achievement = replace(achievement, '世界大學運動會', '世大運'), name = replace(name, '世界大學運動會', '世大運') WHERE achievement LIKE '%世界大學運動會%' OR name LIKE '%世界大學運動會%';
 UPDATE achievements SET achievement = replace(achievement, '國際大學菁英棒球賽', '大學菁英賽'), name = replace(name, '國際大學菁英棒球賽', '大學菁英賽') WHERE achievement LIKE '%國際大學菁英棒球賽%' OR name LIKE '%國際大學菁英棒球賽%';
 UPDATE achievements SET achievement = replace(achievement, '哈連盃國際棒球邀請賽', '哈連盃'), name = replace(name, '哈連盃國際棒球邀請賽', '哈連盃') WHERE achievement LIKE '%哈連盃國際棒球邀請賽%' OR name LIKE '%哈連盃國際棒球邀請賽%';
+
+-- 只能跑一次的遷移記在這裡。schema.sql 每次啟動都整份重跑，「把某一欄除以 3」這種
+-- 不冪等的改動要靠這張表擋住第二次。
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id         TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- WAR 忘了除以每場份數（2026-09-27）：勝利份額照 James 一場勝利是 3 份，比替代水準多
+-- 出來的份額要除以 3 才是場數，以前存進天梯的 WAR 全部高估三倍。**只跑一次**——下
+-- 一次啟動時這一列已經在，整段跳過；之後寫進來的 WAR 是新公式算的，不能再除。
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE id = '2026-09-27-war-per-game') THEN
+    UPDATE ladder_rows SET war = war / 3 WHERE war IS NOT NULL;
+    INSERT INTO schema_migrations (id) VALUES ('2026-09-27-war-per-game');
+  END IF;
+END $$;
