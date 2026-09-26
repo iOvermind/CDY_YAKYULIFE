@@ -7,6 +7,7 @@ import { TraitList } from '../player/TraitList.tsx';
 import { hand, relationTags, roleLabelOf, sortHonors } from '../player/profile.ts';
 import styles from './Board.module.css';
 import tag from '../player/tag.module.css';
+import { Heading } from '../common/Heading.tsx';
 
 export function Board({
   state,
@@ -53,7 +54,7 @@ export function Board({
   const roleLabel = roleLabelOf(state);
   return (
     <div id="board" className={styles.board}>
-      <h4 className={styles.boardTitle}>球員</h4>
+      <Heading>球員</Heading>
       <div id="bd-top" className={styles.bdTop}>
         <span id="bd-name" className={styles.bdName}>
           {/* 合約剩餘年數放在姓名上方——那塊空白本來就對著隊名側的奪冠機率，

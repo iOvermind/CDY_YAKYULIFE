@@ -76,7 +76,8 @@ const SITE_URL = 'https://yakyulife.overmind.men';
 const PAD = 40;
 const MIN_WIDTH = 820;
 const MAX_WIDTH = 2000;
-const GAP = 22;
+/** 行高：跟畫面一樣是字級的 1.6 倍。文字之間的距離一律從行框量起（INTERFACE.md §4.1）。 */
+const lineH = (size: number): number => Math.round(size * 1.6);
 const ROW_H = 22;
 const CELL_PAD = 14;
 const TAG_H = 24;
@@ -97,12 +98,20 @@ interface Palette {
   head: string;
   sans: string;
   mono: string;
+  /** 文字層級之間的距離（INTERFACE.md §4.1），與畫面讀同一份 token。 */
+  gapHead: number;
+  gapSub: number;
+  gapBlock: number;
 }
 
 function palette(): Palette {
   const css = getComputedStyle(document.body);
   const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
   const radius = Number.parseFloat(v('--r', '10px'));
+  const px = (name: string, fallback: number) => {
+    const n = Number.parseFloat(v(name, `${fallback}px`));
+    return Number.isFinite(n) ? n : fallback;
+  };
   return {
     bg: v('--bg', '#070d16'),
     panel: v('--panel', '#0e1826'),
@@ -117,6 +126,9 @@ function palette(): Palette {
     head: v('--head', 'sans-serif'),
     sans: v('--sans', 'sans-serif'),
     mono: v('--mono', 'monospace'),
+    gapHead: px('--gap-head', 10),
+    gapSub: px('--gap-sub', 6),
+    gapBlock: px('--gap-block', 14),
   };
 }
 
@@ -205,7 +217,7 @@ function tags(
   c.font = font(p, 12, 'mono');
   // 單一標籤比整行還寬時就在標籤裡面換行，跟畫面上一樣——以前直接畫出去，長的
   // 榮譽在下載的圖上被截掉。多出來的每一行加一個行高。
-  const lineH = TAG_H - 6;
+  const labelH = TAG_H - 6;
   let cx = x;
   let cy = y;
   let rowH = TAG_H;
@@ -213,10 +225,10 @@ function tags(
     const full = c.measureText(item.label).width + TAG_PAD * 2;
     const lines = full > width ? wrap(c, item.label, width - TAG_PAD * 2) : [item.label];
     const w = lines.length > 1 ? width : full;
-    const h = TAG_H + (lines.length - 1) * lineH;
+    const h = TAG_H + (lines.length - 1) * labelH;
     if (cx > x && cx + w > x + width) {
       cx = x;
-      cy += rowH + TAG_GAP;
+      cy += rowH + p.gapSub;
       rowH = TAG_H;
     }
     if (!ctx.dry) {
@@ -228,7 +240,7 @@ function tags(
       c.fillStyle = item.bad ? p.bad : p.text;
       c.textBaseline = 'middle';
       c.textAlign = 'left';
-      lines.forEach((line, k) => c.fillText(line, cx + TAG_PAD, cy + TAG_H / 2 + 1 + k * lineH));
+      lines.forEach((line, k) => c.fillText(line, cx + TAG_PAD, cy + TAG_H / 2 + 1 + k * labelH));
     }
     rowH = Math.max(rowH, h);
     cx += w + TAG_GAP;
@@ -236,7 +248,6 @@ function tags(
   return cy - y + rowH;
 }
 
-/** 段落標題。畫面上的 h4 前面有一顆小方塊，這裡照做。 */
 /**
  * 一段逐行的卡片內文。小字那幾行縮一級並轉灰，行距跟著縮。
  *
@@ -247,7 +258,7 @@ function body(ctx: Ctx, lines: readonly CardLine[], x: number, y: number, width:
   let dy = 0;
   for (const line of lines) {
     const size = line.dim ? 12 : 14;
-    const step = line.dim ? 20 : 26;
+    const step = lineH(size);
     // 斷行要在設好字體之後量，不然量的是上一段的字。
     c.font = font(p, size, 'sans');
     const rows = wrap(c, line.text, width);
@@ -264,18 +275,41 @@ function body(ctx: Ctx, lines: readonly CardLine[], x: number, y: number, width:
   return dy;
 }
 
+/**
+ * 大標：與畫面上的 `<Heading>` 同一個樣子（13px 粗體、字距 .2em、前面一顆 ■）。
+ * 回傳的高度含它到下一行的距離。
+ */
 function heading(ctx: Ctx, text: string, x: number, y: number): number {
   const { c, p } = ctx;
+  const h = lineH(13);
   if (!ctx.dry) {
     c.fillStyle = p.dim;
-    c.font = font(p, 9, 'mono');
     c.textAlign = 'left';
     c.textBaseline = 'middle';
-    c.fillText('■', x, y + 9);
+    c.font = font(p, 9, 'mono');
+    c.fillText('■', x, y + h / 2);
     c.font = font(p, 13, 'head', 700);
-    c.fillText(text, x + 14, y + 9);
+    c.letterSpacing = '2.6px';
+    c.fillText(text, x + 16, y + h / 2);
+    c.letterSpacing = '0px';
   }
-  return 20;
+  return h + p.gapHead;
+}
+
+/** 小標：與畫面上的 `<Subheading>` 同一個樣子（12px 粗體、字距 .08em）。 */
+function subheading(ctx: Ctx, text: string, x: number, y: number): number {
+  const { c, p } = ctx;
+  const h = lineH(12);
+  if (!ctx.dry) {
+    c.fillStyle = p.dim;
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    c.font = font(p, 12, 'head', 700);
+    c.letterSpacing = '0.96px';
+    c.fillText(text, x, y + h / 2);
+    c.letterSpacing = '0px';
+  }
+  return h + p.gapSub;
 }
 
 /** 一欄一欄量出寬度。表格的總寬決定整張圖的寬。 */
@@ -297,16 +331,7 @@ function table(ctx: Ctx, t: CardTable, x: number, y: number): number {
   const lefts = new Set(t.lefts);
   let cy = y;
 
-  if (t.caption !== null) {
-    if (!ctx.dry) {
-      c.fillStyle = p.dim;
-      c.font = font(p, 11, 'head', 700);
-      c.textAlign = 'left';
-      c.textBaseline = 'middle';
-      c.fillText(t.caption, x, cy + 7);
-    }
-    cy += 18;
-  }
+  if (t.caption !== null) cy += subheading(ctx, t.caption, x, cy);
 
   const cellX = (i: number): number => {
     let acc = x;
@@ -400,12 +425,12 @@ function layout(ctx: Ctx, card: CareerCard, width: number): number {
     c.lineTo(width - PAD, y + 0.5);
     c.stroke();
   }
-  y += GAP;
+  y += p.gapBlock;
 
   // ── 狀態
   if (card.traits.length > 0) {
     y += heading(ctx, '狀態', PAD, y);
-    y += tags(ctx, card.traits, PAD, y, inner) + GAP;
+    y += tags(ctx, card.traits, PAD, y, inner) + p.gapBlock;
   }
 
   // ── 引退之日
@@ -419,50 +444,48 @@ function layout(ctx: Ctx, card: CareerCard, width: number): number {
       c.textBaseline = 'middle';
       c.textAlign = 'left';
       lines.forEach((line, i) => {
-        c.fillText(line, PAD, y + i * 26 + 13);
+        c.fillText(line, PAD, y + i * lineH(14) + lineH(14) / 2);
       });
     }
-    y += lines.length * 26 + GAP;
+    y += lines.length * lineH(14) + p.gapBlock;
   }
 
   // ── 生涯評價。引退之日是那一天的敘事，這兩節是那一生的帳——順序照結算畫面。
   if (card.score.length > 0) {
     y += heading(ctx, '生涯評價', PAD, y);
-    y += body(ctx, card.score, PAD, y, inner) + GAP;
+    y += body(ctx, card.score, PAD, y, inner) + p.gapBlock;
   }
 
   // ── 生涯收入
   if (card.earnings.length > 0) {
     y += heading(ctx, '生涯收入', PAD, y);
-    y += body(ctx, card.earnings, PAD, y, inner) + GAP;
+    y += body(ctx, card.earnings, PAD, y, inner) + p.gapBlock;
   }
 
   // ── 成績表
+  // 同一個大標底下的第二張表是「上一組內文 → 下一個小標」；換大標是新的區塊。
   let lastTitle: string | null = null;
-  for (const t of card.tables) {
+  card.tables.forEach((t, i) => {
     if (t.title !== null && t.title !== lastTitle) {
+      if (i > 0) y += p.gapBlock;
       y += heading(ctx, t.title, PAD, y);
       lastTitle = t.title;
+    } else if (i > 0) {
+      y += p.gapHead;
     }
-    y += table(ctx, t, PAD, y) + 12;
-  }
-  if (card.tables.length > 0) y += GAP - 12;
+    y += table(ctx, t, PAD, y);
+  });
+  if (card.tables.length > 0) y += p.gapBlock;
 
   // ── 榮譽
   if (card.honors.length > 0) {
     y += heading(ctx, '榮譽', PAD, y);
-    for (const g of card.honors) {
-      if (!ctx.dry) {
-        c.fillStyle = p.dim;
-        c.font = font(p, 11, 'head', 700);
-        c.textAlign = 'left';
-        c.textBaseline = 'middle';
-        c.fillText(g.caption, PAD, y + 6);
-      }
-      y += 16;
-      y += tags(ctx, g.items.map((label) => ({ label, bad: false })), PAD, y, inner) + 10;
-    }
-    y += GAP - 10;
+    card.honors.forEach((g, i) => {
+      if (i > 0) y += p.gapHead;
+      y += subheading(ctx, g.caption, PAD, y);
+      y += tags(ctx, g.items.map((label) => ({ label, bad: false })), PAD, y, inner);
+    });
+    y += p.gapBlock;
   }
 
   // ── 落款。名字下面掛網址：圖會被傳到看不見這個遊戲的地方，那時它是唯一的

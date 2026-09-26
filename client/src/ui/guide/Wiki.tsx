@@ -16,6 +16,7 @@ import { wiki } from '../../data/index.ts';
 import { Parts } from './Changelog.tsx';
 import sections from './sections.module.css';
 import modal from '../common/modal.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /** 分組表的組名列：第一格以粗體開頭、其餘格子全空。 */
 function isGroupRow(row: readonly (readonly ChangelogPart[])[]): boolean {
@@ -25,7 +26,7 @@ function isGroupRow(row: readonly (readonly ChangelogPart[])[]): boolean {
 function Block({ b }: { b: WikiBlock }) {
   switch (b.kind) {
     case 'h3':
-      return <h4>{b.text}</h4>;
+      return <Subheading>{b.text}</Subheading>;
     case 'p':
       return (
         <p>
@@ -104,7 +105,7 @@ export function Wiki() {
       {wiki.chapters.map((c) => (
         <details key={c.title} className={sections.achgroup}>
           <summary>
-            <h3>{c.title}</h3>
+            <Heading as="h3" collapsible>{c.title}</Heading>
           </summary>
           {/* 章的內容整塊內縮，一眼看得出哪些字屬於這一章。 */}
           <div className={sections.wikiBody}>

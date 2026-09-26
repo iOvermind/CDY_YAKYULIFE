@@ -10,6 +10,7 @@ import { PageNav } from './PageNav.tsx';
 import { usePages } from './usePages.ts';
 import styles from './GameScreen.module.css';
 import controls from '../common/controls.module.css';
+import { Heading } from '../common/Heading.tsx';
 
 /**
  * alloc: 底下的控制項，不是能力。
@@ -65,7 +66,7 @@ export function GameScreen({
           )}
           {state && (
             <div id="panel-abilities" className={styles.panelAbilities}>
-              <h4>能力</h4>
+              <Heading>能力</Heading>
               <AbilityPanel
                 state={state}
                 allocatable={allocatable}

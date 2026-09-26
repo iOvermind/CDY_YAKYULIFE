@@ -7,6 +7,7 @@ import { TraitList } from '../player/TraitList.tsx';
 import { relationTags } from '../player/profile.ts';
 import { CareerTable } from '../stats/CareerTable.tsx';
 import styles from './EventLog.module.css';
+import { Heading } from '../common/Heading.tsx';
 
 /**
  * 事件流。**新內容出現時一律捲到底，不管玩家有沒有自己往上捲。**
@@ -154,7 +155,7 @@ function LogView({
             {block.cards.map((entry, j) =>
               entry.kind === 'card' ? (
                 <div className={`${styles.card} ${styles[entry.tone]}`} key={j}>
-                  {entry.title !== undefined && <h4>{entry.title}</h4>}
+                  {entry.title !== undefined && <Heading>{entry.title}</Heading>}
                   <p dangerouslySetInnerHTML={{ __html: entry.body }} />
                 </div>
               ) : entry.kind === 'finale' ? (

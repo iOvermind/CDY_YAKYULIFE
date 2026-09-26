@@ -3,7 +3,7 @@ import type { CareerSummary } from '../../engine/career.ts';
 import type { PlayerState } from '../../engine/game.ts';
 import { honorGroups } from './profile.ts';
 import tag from './tag.module.css';
-import table from '../stats/table.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /**
  * 榮譽榜。**只在生涯結束後出現，而且含養成期。**
@@ -29,10 +29,10 @@ export function HonorBoard({
 
   return (
     <div id="panel-honors">
-      <h4>榮譽</h4>
+      <Heading>榮譽</Heading>
       {groups.map((g) => (
         <div className={tag.tagGroup} key={g.caption}>
-          <div className={table.finCaption}>{g.caption}</div>
+          <Subheading>{g.caption}</Subheading>
           <div className={tag.tagRow}>
             {g.items.map((t) => (
               <span className={tag.tag} key={t}>

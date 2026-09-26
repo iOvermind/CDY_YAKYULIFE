@@ -1,0 +1,27 @@
+/* 大標與小標（INTERFACE.md §4.1）。**全介面只有這一份**——各處不再自己寫標題的字級
+   與間距，層級寫錯就是元件名寫錯。 */
+
+/* 大標：一個區塊的名字，前面帶 ■。 */
+.heading{font-family:var(--head);font-size:13px;font-weight:700;letter-spacing:.2em;color:var(--dim);
+  display:flex;align-items:baseline;gap:7px;margin:0 0 var(--gap-head)}
+.heading::before{content:'■';font-size:9px;line-height:1;flex:none}
+/* 區塊的第一行不留上間距（貼著容器的內距）；跟在別的東西後面才空一個區塊的距離。 */
+.heading:not(:first-child){margin-top:var(--gap-block)}
+/* 標題右邊的附註（成就櫃的 AP、更新紀錄的日期）靠右。 */
+.aside{margin-left:auto}
+
+/* 可收合的大標：■ 的位置放收合三角。一個位置只放一個符號，▸ 同時說了「這是標題」
+   與「點得開」。收合時底下沒有東西，下間距歸零。 */
+.collapsible::before{content:'▸';transition:transform .12s}
+:global(details[open]) > summary > .collapsible::before{transform:rotate(90deg)}
+:global(details:not([open])) > summary > .collapsible{margin-bottom:0}
+
+/* 小標：區塊裡的分組名。 */
+.subheading{display:block;font-family:var(--head);font-size:12px;font-weight:700;letter-spacing:.08em;
+  color:var(--dim);margin:0 0 var(--gap-sub)}
+/* 上一組內文結束到下一個小標：比組內寬、比區塊窄，讀得出這是同一區塊的下一組。 */
+.subheading:not(:first-child){margin-top:var(--gap-head)}
+
+/* 置中小標：兩側破折線。用在一排能力條的分界——靠左會跟能力名擠在同一條邊。 */
+.centered{text-align:center}
+.centered::before,.centered::after{content:'———';font-weight:400;margin:0 .4em}

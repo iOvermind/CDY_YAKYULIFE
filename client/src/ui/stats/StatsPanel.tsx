@@ -6,6 +6,7 @@ import { relationTags } from '../player/profile.ts';
 import { BATTING_COLUMNS, PITCHING_COLUMNS, type SharesByPart } from './columns.ts';
 import panel from './panel.module.css';
 import table from './table.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /**
  * 最近一季的成績與狀態。只在生涯進行中出現，而且**只有桌面看得到**。
@@ -70,7 +71,7 @@ function StatLines({
 }) {
   if (batting === null && pitching === null) {
     return (
-      <p className={panel.statPending} style={{ marginTop: 8 }}>
+      <p className={panel.statPending}>
         {label === null ? '還沒有成績。' : `${label}：還沒打過大賽。`}
       </p>
     );
@@ -80,11 +81,11 @@ function StatLines({
     <>
       {/* 間距一律交給 CSS：這個標題現在是面板的第一行（面板自己的標題拿掉了），
           帶著行內 margin 會在 padding 之上再多一截頭。 */}
-      {label !== null && <h4 className={panel.tlHead}>{label}</h4>}
+      {label !== null && <Heading>{label}</Heading>}
       {pitching !== null && (
         <div className={table.finScroll}>
           {/* 二刀流會同時出現兩張表，沒有小標就分不出哪張是哪張。 */}
-          <div className={table.finCaption}>投手</div>
+          <Subheading>投手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>
@@ -107,7 +108,7 @@ function StatLines({
       )}
       {batting !== null && (
         <div className={table.finScroll}>
-          <div className={table.finCaption}>野手</div>
+          <Subheading>野手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>

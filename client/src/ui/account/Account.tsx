@@ -26,6 +26,7 @@ import styles from './Account.module.css';
 import modal from '../common/modal.module.css';
 import controls from '../common/controls.module.css';
 import sectionStyles from '../guide/sections.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /** 開局畫面右上角。 */
 export function AccountBar({ account }: { account: Account }) {
@@ -165,7 +166,7 @@ function LoginPanel({ account, onClose }: { account: Account; onClose: () => voi
         }}
       >
         <div className={controls.field}>
-          <label htmlFor="acc-name">帳號</label>
+          <Subheading as="label" htmlFor="acc-name">帳號</Subheading>
           <input
             id="acc-name"
             autoComplete="username"
@@ -175,7 +176,7 @@ function LoginPanel({ account, onClose }: { account: Account; onClose: () => voi
           />
         </div>
         <div className={controls.field}>
-          <label htmlFor="acc-pw">密碼</label>
+          <Subheading as="label" htmlFor="acc-pw">密碼</Subheading>
           <input
             id="acc-pw"
             type="password"
@@ -289,14 +290,13 @@ function AchievementList({ me }: { me: Me }) {
       <div className={sectionStyles.twocol}>
         {sections.map((s) => (
           <div key={s.key} className={sectionStyles.achgroup}>
-            <h3>
+            <Heading as="h3" aside={<span className="sub">{s.points} AP</span>}>
               {s.title}
-              <span className="sub">{s.points} AP</span>
-            </h3>
+            </Heading>
             {s.groups.map((g) => (
               <div key={g.title ?? '-'} className={sectionStyles.achsub}>
                 {/* 小標只有在大標底下真的分得出兩堆時才出現（聯盟＝獎項＋累積）。 */}
-                {g.title !== null && <h4>{g.title}</h4>}
+                {g.title !== null && <Subheading>{g.title}</Subheading>}
                 {/* 小方塊而不是逐條列——櫃子是拿來一眼掃過的，不是拿來讀的。點數與
                     日期收進 tooltip，需要的人再問。 */}
                 <ul className={sectionStyles.achtiles}>
@@ -381,7 +381,7 @@ function TalentPanel({ account, me }: { account: Account; me: Me }) {
       <div className={sectionStyles.twocol}>
         {[...groups.entries()].map(([group, items]) => (
           <div key={group} className={sectionStyles.achgroup}>
-            <h3>{group}</h3>
+            <Heading as="h3">{group}</Heading>
             {items.map((t) => {
               const level = me.talents[t.id] ?? 0;
               const max = maxLevelOf(t.id);

@@ -6,6 +6,7 @@ import { abilityCost, carryGauge, growthCurve } from '../../engine/growth.ts';
 import { isSideVisible } from '../../engine/rating.ts';
 import { useElementWidth } from '../common/useElementWidth.ts';
 import styles from './AbilityPanel.module.css';
+import { Subheading } from '../common/Heading.tsx';
 
 export function AbilityPanel({
   state,
@@ -59,7 +60,7 @@ function AbilityBlock({
 }) {
   return (
     <>
-      <p className={styles.divider}>{title}</p>
+      <Subheading centered>{title}</Subheading>
       {keys.map((key) => (
         <AbilityRow
           key={key}

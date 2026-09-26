@@ -1,28 +1,18 @@
-.achgroup{margin-bottom:20px}
+/* 一個聯盟、一組天賦、一個版本、一章就是一個區塊（INTERFACE.md §4.1）。 */
+.achgroup+.achgroup{margin-top:var(--gap-block)}
 /* 更新紀錄的版本區塊是 <details>。摺疊三角自己畫——原生的 marker 在各家瀏覽器
    上大小與間距都不一樣，而這裡的大標是有字距的小字，差一點就歪得很明顯。 */
 .achgroup > summary{list-style:none;cursor:pointer}
 .achgroup > summary::-webkit-details-marker{display:none}
-.achgroup > summary h3::before{content:'▸';display:inline-block;margin-right:8px;
-  font-size:10px;color:var(--dim);opacity:.6;transition:transform .12s}
-.achgroup[open] > summary h3::before{transform:rotate(90deg)}
 @media (hover:hover){
   .achgroup > summary:hover h3{color:var(--text)}
 }
-/* h3 本身是 flex（日期靠右），放進 summary 之後要讓它撐滿那一行。 */
-.achgroup > summary h3{margin-bottom:0}
-.achgroup[open] > summary h3{margin-bottom:9px}
-.achgroup h3{font-family:var(--head);font-size:12px;letter-spacing:.24em;color:var(--dim);
-  margin:0 0 9px;display:flex;justify-content:space-between;align-items:baseline}
 .achgroup h3 :global(.sub){font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:0}
 .achgroup ul{list-style:none;margin:0;padding:0}
 /* 間隔掛在分組外層，不是掛在 ul 上：每個分組都自己包一層 div，ul 永遠是那層
    的最後一個小孩，掛在 ul 上的 margin 會被 :last-child 全部吃掉。分組之間跟
    大標底下同寬（9px），小標離自己的磚 6px——上面寬、下面窄才不會讀錯組。 */
-.achsub + .achsub{margin-top:9px}
-/* 小標比大標輕：聯盟才是玩家在找的那一層，獎項／累積只是它底下的隔板。 */
-.achgroup h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
-  opacity:.7;font-weight:400;line-height:1;margin:0 0 6px}
+.achsub + .achsub{margin-top:var(--gap-head)}
 /* 成就櫃是小方塊：一眼掃完一整面，點數與日期在 tooltip 裡。 */
 .achtiles{display:flex;flex-wrap:wrap;gap:6px}
 .achtiles li{border:1px solid var(--edge);border-radius:var(--r);background:var(--panel2);
@@ -50,7 +40,7 @@
 .changelist li b{color:var(--text)}
 .changelist code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
 /* 版本標題右邊的日期，與成就櫃大標右邊的 AP 同一個位置與寫法。 */
-.changelist + .achsub{margin-top:9px}
+.changelist + .achsub{margin-top:var(--gap-head)}
 /* 攻略。內文與更新紀錄同一個字級與行高；表格的字**要能換行**——事件卡那張的好壞
    結果是一整句話，不換行的話整張表橫著爆出去，手機上得左右來回捲才讀得完一列。
    真的塞不下（例如五欄的天賦表）才在表格自己的框裡橫捲，不撐開視窗。 */
@@ -59,14 +49,9 @@
 .wiki code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
 .wiki ul{list-style:none;margin:0 0 10px;padding:0}
 .wiki li{padding-left:11px;border-left:2px solid var(--edge);margin-bottom:6px}
-/* 章名靠左。摺疊標題借用成就櫃的 h3，那一條是左右撐開的（左邊標題、右邊 AP 或
-   日期）；攻略的章名右邊沒有東西，撐開的結果是整行字被推到最右邊。 */
-.wiki .achgroup h3{justify-content:flex-start}
 /* 章的內容內縮三個中文字（內文 12.5px × 3）。用固定寬度而不是 em：段落、表格、小標
    字級各不相同，em 會讓每一種東西縮得不一樣深。 */
 .wiki-body{padding-left:37.5px}
-.wiki h4{font-family:var(--head);font-size:11px;letter-spacing:.18em;color:var(--dim);
-  font-weight:400;margin:16px 0 8px}
 .wiki-table{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 12px}
 .wiki-table table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.6}
 .wiki-table th,.wiki-table td{border-bottom:1px solid var(--edge);padding:5px 6px;

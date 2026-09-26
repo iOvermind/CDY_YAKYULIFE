@@ -4,6 +4,7 @@ import { positionName, ROLE_NAMES } from '../../engine/season.ts';
 import { BATTING_COLUMNS, PITCHING_COLUMNS, type SharesByPart, type StatColumn } from './columns.ts';
 import { type CareerRow, careerRows, COMBINED_COLUMNS, combinedRows, INTL, type IntlKind, intlTotalRow, leagueTotals, topTotalRow, type TotalRow } from './rows.ts';
 import table from './table.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /**
  * 成績表的資料列。
@@ -71,10 +72,10 @@ function TotalsTable({
 
   return (
     <>
-      <h4 style={{ marginTop: 14 }}>{title}</h4>
+      <Heading>{title}</Heading>
       {batting.length > 0 && (
         <div className={table.finScroll}>
-          <div className={table.finCaption}>野手</div>
+          <Subheading>野手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>
@@ -99,7 +100,7 @@ function TotalsTable({
       )}
       {pitching.length > 0 && (
         <div className={table.finScroll}>
-          <div className={table.finCaption}>投手</div>
+          <Subheading>投手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>
@@ -171,10 +172,10 @@ function InternationalTable({ summary, kind }: { summary: CareerSummary; kind: I
 
   return (
     <>
-      <h4 style={{ marginTop: 14 }}>{spec.title}</h4>
+      <Heading>{spec.title}</Heading>
       {batting.length > 0 && (
         <div className={table.finScroll}>
-          <div className={table.finCaption}>野手</div>
+          <Subheading>野手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>
@@ -197,7 +198,7 @@ function InternationalTable({ summary, kind }: { summary: CareerSummary; kind: I
       )}
       {pitching.length > 0 && (
         <div className={table.finScroll}>
-          <div className={table.finCaption}>投手</div>
+          <Subheading>投手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>
@@ -240,7 +241,7 @@ function CombinedTable({ summary }: { summary: CareerSummary }) {
   if (rows.length === 0) return null;
   return (
     <>
-      <h4 style={{ marginTop: 14 }}>合併生涯紀錄</h4>
+      <Heading>合併生涯紀錄</Heading>
       <div className={table.finScroll}>
         <table className={table.fin}>
           <thead>
@@ -315,11 +316,11 @@ export function CareerTable({ summary }: { summary: CareerSummary }) {
 
   return (
     <div id="panel-career" className={table.panelCareer}>
-      <h4>生涯年表</h4>
+      <Heading>生涯年表</Heading>
       {batting.length > 0 && (
         <div className={table.finScroll}>
           {/* 兩張表的欄位差很多，沒有小標的話捲到一半會分不出在看哪一側。 */}
-          <div className={table.finCaption}>野手</div>
+          <Subheading>野手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>
@@ -347,7 +348,7 @@ export function CareerTable({ summary }: { summary: CareerSummary }) {
 
       {pitching.length > 0 && (
         <div className={table.finScroll}>
-          <div className={table.finCaption}>投手</div>
+          <Subheading>投手</Subheading>
           <table className={table.fin}>
             <thead>
               <tr>

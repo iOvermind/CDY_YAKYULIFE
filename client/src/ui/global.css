@@ -19,6 +19,11 @@ body{
   /* 「上限突破」的語意色，借 --good。每套主題的 --good 都必須跟 --accent 分得開，
      否則突破的能力條會跟一般的糊在一起（見 INTERFACE.md §2.2 的撞色規則）。 */
   --over:var(--good);
+  /* 文字層級之間的距離（INTERFACE.md §4.1）。跟色票一樣掛在 body 上，生涯成績圖在
+     canvas 上讀的是同一份。 */
+  --gap-head:10px;   /* 大標 → 小標（沒有小標就是大標 → 內文）；上一組內文 → 下一個小標 */
+  --gap-sub:6px;     /* 小標 → 內文；標籤換行時上下兩排 */
+  --gap-block:14px;  /* 上一個區塊的結尾 → 下一個大標 */
   /* 相容別名：舊的行內樣板仍在引用。新程式碼禁止使用，見 INTERFACE.md §2.3 */
   --chalk:var(--text);--amber:var(--accent);--blue:var(--info);--clay:var(--accent);
 }

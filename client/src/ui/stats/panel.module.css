@@ -1,16 +1,10 @@
-.panel-stats h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;
-  color:var(--dim);font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:6px}
-.panel-stats h4::before{content:'■';font-size:9px;line-height:1;flex:none}
 /* 只放最近一季與狀態；生涯結束後整塊消失，年表與榮譽改接在事件流末端。
    #col-right 是 overflow:hidden，不給這塊自己的捲軸就會被裁掉而不是捲動；
    上限壓在右欄的一半——特性一多它照樣長得起來，不設限會把事件流擠光。 */
 .panel-stats{padding:12px 14px;border-bottom:1px solid var(--edge);background:var(--panel);
   min-height:0;max-height:50%;overflow-y:auto;overscroll-behavior:contain}
-/* 區塊標題彼此之間空一段才不會黏成一塊；第一行貼著面板的 padding 就好。 */
-.panel-stats .tl-head{margin-top:12px}
-.panel-stats>.tl-head:first-child{margin-top:0}
 /* 數據表 */
-.stat-pending{font-size:11.5px;color:var(--dim);opacity:.7;margin-top:8px;line-height:1.5}
+.stat-pending{font-size:11.5px;color:var(--dim);opacity:.7;line-height:1.5}
 @media(max-width:920px){
   /* 成績表在生涯進行中不出現：每季結算的事件卡已經印過同一份數字（含 OPS+／
        ERA+），面板是講第二次，而它佔掉的正是手機最貴的那一屏。整塊一起收掉，

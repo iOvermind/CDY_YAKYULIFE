@@ -18,6 +18,7 @@ import { changelog } from '../../data/index.ts';
 import type { ChangelogPart, ChangelogVersion } from '../../data/index.ts';
 import sections from './sections.module.css';
 import modal from '../common/modal.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /** 行內語法。連結在轉檔時就已經變成純文字了，這裡只剩三種。 */
 export function Parts({ parts }: { parts: readonly ChangelogPart[] }) {
@@ -42,11 +43,10 @@ function Version({ v, open }: { v: ChangelogVersion; open: boolean }) {
     // （Chrome 會自動展開命中的區塊）都是免費的，自己做只會少掉最後那一項。
     <details className={sections.achgroup} open={open}>
       <summary>
-        <h3>
+        {/* 日期掛在版本標題上，不逐條標——CHANGELOG_RULES §3.2。 */}
+        <Heading as="h3" collapsible aside={v.date !== null ? <span className="sub">{v.date}</span> : undefined}>
           {v.version}
-          {/* 日期掛在版本標題上，不逐條標——CHANGELOG_RULES §3.2。 */}
-          {v.date !== null && <span className="sub">{v.date}</span>}
-        </h3>
+        </Heading>
       </summary>
       {/* 版本導言：這一版整體是什麼（CHANGELOG_RULES §3.1.1）。 */}
       {v.note.length > 0 && (
@@ -56,7 +56,7 @@ function Version({ v, open }: { v: ChangelogVersion; open: boolean }) {
       )}
       {v.categories.map((c) => (
         <div key={c.key} className={sections.achsub}>
-          <h4>{c.name}</h4>
+          <Subheading>{c.name}</Subheading>
           <ul className={sections.changelist}>
             {c.entries.map((entry, i) => (
               <li key={i}>

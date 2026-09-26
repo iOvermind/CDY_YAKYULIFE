@@ -25,6 +25,7 @@ import styles from './Ladder.module.css';
 import table from '../stats/table.module.css';
 import modal from '../common/modal.module.css';
 import controls from '../common/controls.module.css';
+import { Heading, Subheading } from '../common/Heading.tsx';
 
 /**
  * 聯盟選單上的名字。跨聯盟之外寫**頂級聯盟名**（中職／日職／大聯盟），不是體系名
@@ -78,7 +79,7 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
 
   return (
     <div className={table.ladderBoard}>
-      <div className={table.finCaption}>{column.name}</div>
+      <Subheading>{column.name}</Subheading>
       <table className={table.fin}>
         <tbody>
           {board.entries.map((e) => {
@@ -228,7 +229,7 @@ export function Ladder({ account }: { account: Account }) {
       if (list.length === 0) return null;
       return (
         <section key={side} className={styles.ladderSection}>
-          <h4>{title}</h4>
+          <Heading>{title}</Heading>
           <div className={styles.ladderGrid}>
             {list.map((b) => (
               <Board key={b.column} board={b} single={query.kind === 'best'} />

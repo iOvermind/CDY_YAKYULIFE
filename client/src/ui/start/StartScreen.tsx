@@ -13,6 +13,7 @@ import { HAND_LABEL } from '../player/profile.ts';
 import styles from './StartScreen.module.css';
 import controls from '../common/controls.module.css';
 import modal from '../common/modal.module.css';
+import { Subheading } from '../common/Heading.tsx';
 
 const THEMES = [
   { code: 'a', name: '科技藍' },
@@ -121,7 +122,7 @@ export function StartScreen({
         <p className={styles.tagline}>國中、高中六年養成 → 選秀・旅外 → 國際賽 → 衰退與引退。每一顆骰子都算數。</p>
 
         <div className={controls.field}>
-          <label htmlFor="in-name">球員姓名</label>
+          <Subheading as="label" htmlFor="in-name">球員姓名</Subheading>
           <input
             id="in-name"
             placeholder="例如：林家正"
@@ -138,7 +139,7 @@ export function StartScreen({
         </div>
 
         <div className={controls.field}>
-          <label>起始守位</label>
+          <Subheading as="label">起始守位</Subheading>
           {/* 三列：投捕與不定、內野、外野。每列都是四格的網格，不足四個就空著
               ——按鈕寬度因此與「打擊慣用手」那幾組完全一致，整個開局畫面看起來
               才是同一套元件。 */}
@@ -163,7 +164,7 @@ export function StartScreen({
         </div>
 
         <div className={controls.field}>
-          <label>投球慣用手</label>
+          <Subheading as="label">投球慣用手</Subheading>
           <div className={controls.seg}>
             {abilities.handedness.selectable.throws.map((h) => (
               <button
@@ -190,7 +191,7 @@ export function StartScreen({
         </div>
 
         <div className={controls.field}>
-          <label>打擊慣用手</label>
+          <Subheading as="label">打擊慣用手</Subheading>
           <div className={controls.seg}>
             {abilities.handedness.selectable.bats.map((h) => (
               <button
@@ -212,7 +213,7 @@ export function StartScreen({
         </div>
 
         <div className={controls.field}>
-          <label>佈景主題</label>
+          <Subheading as="label">佈景主題</Subheading>
           <div className={controls.seg}>
             {THEMES.map((t) => (
               <button

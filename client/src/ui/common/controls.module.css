@@ -13,8 +13,7 @@
 .row2{display:flex;gap:8px;margin-top:8px}
 .row2 .btn{flex:1;text-align:center;margin-top:0}
 .row2 .btn small{text-align:center}
-.field{margin-top:18px}
-.field label{display:block;font-size:12px;letter-spacing:.25em;color:var(--dim);font-weight:700;margin-bottom:8px}
+.field{margin-top:var(--gap-head)}
 .field input{width:100%;background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);color:var(--text);
   font-family:var(--sans);font-size:16px;padding:11px 14px;outline:none}
 .field input:focus{border-color:var(--accent)}

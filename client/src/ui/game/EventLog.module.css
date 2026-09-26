@@ -1,11 +1,10 @@
-.yr-block{display:flex;flex-direction:column;gap:10px}
+/* 年度分隔上下都是一個區塊的距離（INTERFACE.md §4.1）：上一張卡 → 分隔靠事件流的
+   gap，分隔 → 這一年的第一張卡靠這一層的 gap。卡片與卡片之間仍是 10px。 */
+.yr-block{display:flex;flex-direction:column;gap:var(--gap-block)}
 .yr-body{display:flex;flex-direction:column;gap:10px}
 .card{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px;
   animation:pop .25s ease;overflow-wrap:anywhere;overflow-x:auto}
 @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.card h4{font-family:var(--head);font-size:12px;letter-spacing:.2em;color:var(--dim);font-weight:700;margin-bottom:6px;
-  display:flex;align-items:center;gap:7px}
-.card h4::before{content:'■';font-size:9px;line-height:1;flex:none}
 .card.gold{border:1.5px solid var(--gold)}
 .card.gold h4{color:var(--gold);text-shadow:var(--glow)}
 .card.bad h4{color:var(--bad)}
@@ -15,7 +14,7 @@
 .card p+p{margin-top:4px}
 /* 結算卡在無內容時（沒有榮譽、沒有年表）自己收掉，不留一個空框。 */
 .card:empty{display:none}
-.yr-head{text-align:center;color:var(--dim);font-size:11px;letter-spacing:.3em;padding:8px 0 0;cursor:pointer;user-select:none}
+.yr-head{text-align:center;color:var(--dim);font-size:11px;letter-spacing:.3em;cursor:pointer;user-select:none}
 .yr-head:hover{color:var(--accent)}
 .yr-block .yr-head.has-body::after{content:' ▾'}
-.panel-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.panel-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:var(--gap-block);min-height:0}

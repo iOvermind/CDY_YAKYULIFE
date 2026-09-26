@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { shownTraits } from './profile.ts';
 import tag from './tag.module.css';
 import panel from '../stats/panel.module.css';
+import { Heading } from '../common/Heading.tsx';
 
 export function TraitList({
   traits: owned,
@@ -38,21 +39,20 @@ export function TraitList({
 
   return (
     <>
-      {/* 間距交給 CSS：在結算卡裡它是卡片的第一行，帶著 12px 會多出一截頭。 */}
-      {heading && <h4 className={panel.tlHead}>狀態</h4>}
+      {heading && <Heading>狀態</Heading>}
       {shown.length === 0 ? (
         // 記分板裡不留這一行：一開局什麼特性都沒有，一句「還沒有任何特性」會
         // 常駐在版面上好幾年，而它沒有任何資訊。結算卡裡才需要交代空的情況。
         heading ? (
-          <p className={panel.statPending} style={{ marginTop: 8 }}>
+          <p className={panel.statPending}>
             還沒有任何特性。
           </p>
         ) : null
       ) : (
         <>
           {/* 跟榮譽同一個 tag-row：以前是一段文字靠行高撐開，標籤一換行，第二行就
-              貼著第一行的下緣。flex 換行加 gap，上下與左右一樣寬。 */}
-          <div className={tag.tagRow} style={{ margin: '8px 0 0' }}>
+              貼著第一行的下緣。flex 換行加 gap；離標題多遠由標題決定。 */}
+          <div className={tag.tagRow}>
             {shown.map((t) => (
               // title 留著：桌面想一次掃過五六個特性時，懸停比逐個點快，內容與
               // 下面那行同源。點擊是給觸控用的第二條路——原生 title 在手機上

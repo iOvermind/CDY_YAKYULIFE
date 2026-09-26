@@ -9,7 +9,7 @@
 /* 標題底下那一行。**只掛在自己身上**：浮動視窗（成就、更新、天梯）也畫在開局畫面
    裡面，以前寫成 `#start .sub` 的時候，它們所有的 .sub 都被這一條蓋掉，原本各自
    設計的樣式（成就櫃的 AP、更新紀錄的日期）從來沒有出現過。 */
-.tagline{color:var(--dim);margin:10px 0 8px;font-size:13.5px;letter-spacing:.08em}
+.tagline{color:var(--dim);margin:10px 0 0;font-size:13.5px;letter-spacing:.08em}
 .poslist{display:grid;gap:8px}
 .seedline{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:22px}
 .seedline b{color:var(--accent)}

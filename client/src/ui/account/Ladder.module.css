@@ -4,8 +4,8 @@
 /* 天梯的四個選單：我的／所有玩家、聯盟、累計／單季、守位。寬的時候一排四個，窄的
    時候兩兩一排——四個選單在手機上擠成一排，每一個都只剩兩三個字寬。 */
 /* 綜合／野手／投手之間：上一段最後一列是紀錄，大標直接貼上去會像同一張表的下一列。 */
-.ladder-section+.ladder-section{margin-top:28px}
-.ladder-grid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:8px;min-width:0}
+.ladder-section+.ladder-section{margin-top:var(--gap-block)}
+.ladder-grid{display:grid;gap:var(--gap-head) 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));min-width:0}
 /* 舊規則結算的紀錄旁那個「舊」字。以前沒有自己的樣式，是開局畫面副標那條規則漏
    過來才有顏色與字級；那條規則收回去之後照原樣補在這裡。 */
 .stale{color:var(--dim);font-size:13.5px;letter-spacing:.08em}
