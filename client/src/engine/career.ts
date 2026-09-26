@@ -283,8 +283,18 @@ export interface CareerSummary {
   readonly amateurTitlePoints: number;
   /** 國際賽貢獻的總評價分。與生涯里程碑同一個桶，不進任何單一聯盟。 */
   readonly internationalScore: number;
-  /** 職業期的國際賽逐屆紀錄。養成期的國際賽併在該年的養成列裡，不進這一份。 */
+  /** 職業期的國際賽逐屆紀錄。養成期的另外一份（`youthInternationalSeasons`）。 */
   readonly internationalSeasons: readonly InternationalRecord[];
+  /**
+   * 養成期的國際賽逐屆紀錄。**不併進當年的養成列**——與職業同一個規則：國際賽
+   * 只出現在國際賽那兩張表，同一份成績不出現兩次。養成期沒有賽會 MVP，`mvp` 恆為 false。
+   */
+  readonly youthInternationalSeasons: readonly InternationalRecord[];
+  /** 養成期國際賽的通算。 */
+  readonly youthInternationalTotal: {
+    readonly batting: BattingLine | null;
+    readonly pitching: PitchingLine | null;
+  };
   /**
    * 國際賽的通算。**與聯盟通算分開**：國際賽不屬於任何聯盟，混進去會污染階梯
    * 成就與各聯盟的評價分（見 `internationalScore`）。
@@ -610,6 +620,7 @@ export function summarizeCareer(
   internationalSeasons: readonly InternationalRecord[] = [],
   /** 特性帶來的評價分倍率（〈重案組之虎〉×1.05）。各聯盟與總評價分都乘。 */
   scoreMultiplier = 1,
+  youthInternationalSeasons: readonly InternationalRecord[] = [],
 ): CareerSummary {
   // ---- 頂級聯盟：各算一份
   const byTop = new Map<string, SeasonRecord[]>();
@@ -728,6 +739,8 @@ export function summarizeCareer(
     internationalScore,
     internationalSeasons,
     internationalTotal: totalInternational(internationalSeasons),
+    youthInternationalSeasons,
+    youthInternationalTotal: totalInternational(youthInternationalSeasons),
     representative,
     bestTier: representative?.tier ?? cfg.tier_thresholds.values.length,
   };

@@ -2856,3 +2856,29 @@ describe('養成期的守備分', () => {
     expect(fielderSeen).toBe(true);
   });
 });
+
+/** 養成期國際賽單獨成表，不併進當年的養成列（2026-09-26）。 */
+describe('養成國際賽', () => {
+  it('逐屆記錄，而且年表的養成列不含國際賽成績', () => {
+    let seen = false;
+    for (let i = 0; i < 40 && !seen; i++) {
+      const game = new Game({ ...setup, seed: `youth-intl-${i}` }).start();
+      let guard = 0;
+      while (game.flow.prompt !== null && guard++ < 20000) game.choose(defaultPick(game, EFFECTIVE)!);
+      const s = game.summary;
+      if (s === null || s.youthInternationalSeasons.length === 0) continue;
+      seen = true;
+      for (const r of s.youthInternationalSeasons) expect(r.mvp).toBe(false);
+      const games = s.youthInternationalSeasons.reduce((n, r) => n + (r.batting?.games ?? 0), 0);
+      expect(s.youthInternationalTotal.batting?.games ?? 0).toBe(games);
+      // 養成期各階段的累計 = 年表的養成列 + 養成國際賽：國際賽只在其中一邊。
+      const stageGames = (['JHS', 'HS', 'U'] as const).reduce(
+        (n, k) => n + (game.state?.statsByStage[k]?.batting?.games ?? 0),
+        0,
+      );
+      const rowGames = s.amateurSeasons.reduce((n, r) => n + (r.batting?.games ?? 0), 0);
+      expect(rowGames + games).toBe(stageGames);
+    }
+    expect(seen).toBe(true);
+  }, 60_000);
+});

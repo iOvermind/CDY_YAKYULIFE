@@ -757,6 +757,8 @@ export class Game {
    * 沒有別的地方留得住。養成期的國際賽併在該年的養成列裡，不進這一份。
    */
   #intlSeasons: InternationalRecord[] = [];
+  /** 養成期的國際賽逐屆紀錄，與職業那一份分開（見 CareerSummary.youthInternationalSeasons）。 */
+  #youthIntlSeasons: InternationalRecord[] = [];
   /** 今年最好的大賽名次。校園告白的成功率看它——打進四強的王牌與坐板凳的人不一樣。 */
   get #bestRankThisYear(): string | null {
     const ranks = this.#lastCupSeason?.honors ?? [];
@@ -1435,20 +1437,20 @@ export class Game {
           `（${result.games} 場・+${result.points} 點）。`,
       );
 
-      // 國際賽的出賽同樣計入成績。
+      // 國際賽的出賽計入這個階段的累計（累積成就看它），但**不併進當年的養成列**，
+      // 也不進「最近一季」：與職業同一個規則，國際賽只出現在國際賽那兩張表。
       const line = playAmateurStats(this.world, this.#stage, this.#ability, result.games);
-      this.#seasonBatting = addBatting(this.#seasonBatting, line.batting);
-      this.#seasonPitching = addPitching(this.#seasonPitching, line.pitching);
       this.#accumulate(line.batting, line.pitching);
-      // 國際賽併進當年那一列，不另立一列——同一年只該有一行。
-      const current = this.#amateurSeasons.at(-1);
-      if (current !== undefined && current.year === this.#year) {
-        this.#amateurSeasons[this.#amateurSeasons.length - 1] = {
-          ...current,
-          batting: addBatting(current.batting, line.batting),
-          pitching: addPitching(current.pitching, line.pitching),
-        };
-      }
+      this.#youthIntlSeasons.push({
+        year: this.#year,
+        age: this.#age,
+        tournament: result.tournament,
+        rank: result.rank,
+        mvp: false,
+        batting: line.batting,
+        pitching: line.pitching,
+        ...this.#eventFielding(this.#ability, this.#fieldPosition, amateurCfg.cups[this.#stage].par, line.batting),
+      });
     }
   }
 
@@ -5728,6 +5730,7 @@ export class Game {
       this.#intlScore,
       this.#intlSeasons,
       this.#traits.has(hallOfFame.franchise_bonus.trait) ? hallOfFame.franchise_bonus.multiplier : 1,
+      this.#youthIntlSeasons,
     );
     this.#summary = summary;
 

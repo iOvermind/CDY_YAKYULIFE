@@ -29,7 +29,7 @@ import {
   type PitchingLine,
 } from './engine/amateurStats.ts';
 import type { AwardRecord } from './engine/awards.ts';
-import { eventLedger, warOf, type CareerSummary, type SeasonRecord, type WarByPart } from './engine/career.ts';
+import { eventLedger, seasonPoints, warOf, type CareerSummary, type SeasonRecord, type WarByPart } from './engine/career.ts';
 import {
   Game,
   NO_PROGRESS,
@@ -1496,6 +1496,8 @@ interface CareerRow {
   /** 這一季的三本帳。養成期沒有這份資料，一律 null。 */
   readonly shares: SharesByPart | null;
   readonly base: Baseline;
+  /** 這一季的份額分（含難度，見 seasonPoints）。只有職業有；養成期是 null。 */
+  readonly points: number | null;
 }
 
 /**
@@ -1629,8 +1631,39 @@ function TotalsTable({
  * 只收職業期。養成期的國際賽併在該年的養成列裡——那幾屆與謝國城盃同一個季節，
  * 是學生賽程的一部分。
  */
-function InternationalTable({ summary }: { summary: CareerSummary }) {
-  const rows = summary.internationalSeasons;
+/**
+ * 國際賽的兩種：養成期與職業期。**兩張表分開**，逐屆一列、最後一列是總和；
+ * 同一份成績不併進年表（與職業同一個規則）。基準線各用自己那一段的：職業用
+ * 賽會的 par（成績就是拿它生成的），養成期用養成的基準線。
+ */
+type IntlKind = 'youth' | 'pro';
+
+const INTL: Record<IntlKind, {
+  readonly title: string;
+  readonly rows: (s: CareerSummary) => CareerSummary['internationalSeasons'];
+  readonly total: (s: CareerSummary) => CareerSummary['internationalTotal'];
+  readonly base: () => Baseline;
+  readonly ledger: (r: EventRecord) => SharesByPart;
+}> = {
+  youth: {
+    title: '養成國際賽',
+    rows: (s) => s.youthInternationalSeasons,
+    total: (s) => s.youthInternationalTotal,
+    base: () => amateurBaseline(),
+    ledger: (r) => amateurLedger(r),
+  },
+  pro: {
+    title: '職業國際賽',
+    rows: (s) => s.internationalSeasons,
+    total: (s) => s.internationalTotal,
+    base: () => baselineAt(tournamentPar()),
+    ledger: (r) => intlLedger(r),
+  },
+};
+
+function InternationalTable({ summary, kind }: { summary: CareerSummary; kind: IntlKind }) {
+  const spec = INTL[kind];
+  const rows = spec.rows(summary);
   if (rows.length === 0) return null;
   const batting = rows.filter((r) => r.batting !== null);
   const pitching = rows.filter((r) => r.pitching !== null);
@@ -1639,7 +1672,8 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
   // 基準線用**賽會自己的 par**，不是他母聯盟的。成績本來就是拿那個 par 生成的
   // （見 game.ts 的 #accumulateNationalStats），量它也該用同一把。差別只落在吃
   // par 的那一格（故意四壞／恐懼值），量不大，但沒有理由留著一把對不上的尺。
-  const base = baselineAt(tournamentPar());
+  const base = spec.base();
+  const intlLedgerOf = spec.ledger;
   const head = (
     <>
       <th title="年度">年</th>
@@ -1662,7 +1696,7 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
 
   return (
     <>
-      <h4 style={{ marginTop: 14 }}>國際賽</h4>
+      <h4 style={{ marginTop: 14 }}>{spec.title}</h4>
       {batting.length > 0 && (
         <div className="fin-scroll">
           <div className="fin-caption">野手</div>
@@ -1676,9 +1710,9 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
             </thead>
             <tbody>
               {batting.map((r) => (
-                <tr key={`intl-b-${r.year}-${r.tournament}`}>
+                <tr key={`intl-${kind}-b-${r.year}-${r.tournament}`}>
                   {lead(r)}
-                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} shares={intlLedger(r)} />
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} shares={intlLedgerOf(r)} />
                   <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
                 </tr>
               ))}
@@ -1698,9 +1732,9 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
             </thead>
             <tbody>
               {pitching.map((r) => (
-                <tr key={`intl-p-${r.year}-${r.tournament}`}>
+                <tr key={`intl-${kind}-p-${r.year}-${r.tournament}`}>
                   {lead(r)}
-                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} shares={intlLedger(r)} />
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} shares={intlLedgerOf(r)} />
                 </tr>
               ))}
             </tbody>
@@ -1710,8 +1744,8 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
       {/* 國際賽通算。與頂級聯盟通算同一個角色，但**永遠是自己一張**——國際賽不
           屬於任何聯盟，加進聯盟那張表會讓通算多出幾場不存在的聯盟出賽。 */}
       <TotalsTable
-        title="國際賽通算"
-        rows={[intlTotalRow(summary)]}
+        title={`${spec.title}通算`}
+        rows={[intlTotalRow(summary, kind)]}
         leadHead="賽事"
         countHead="屆"
         countTitle="出賽屆數"
@@ -1721,20 +1755,146 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
 }
 
 /** 國際賽通算的那一列。屆數算的是出賽的賽會數，不是年數——同一年可能有兩屆。 */
-function intlTotalRow(summary: CareerSummary): TotalRow {
+function intlTotalRow(summary: CareerSummary, kind: IntlKind): TotalRow {
+  const spec = INTL[kind];
+  const rows = spec.rows(summary);
+  const total = spec.total(summary);
   return {
-    label: '國際賽',
-    seasons: summary.internationalSeasons.length,
-    batting: summary.internationalTotal.batting,
-    pitching: summary.internationalTotal.pitching,
-    defenseRuns: summary.internationalSeasons.reduce((n, r) => n + r.defenseRuns, 0),
+    label: spec.title,
+    seasons: rows.length,
+    batting: total.batting,
+    pitching: total.pitching,
+    defenseRuns: rows.reduce((n, r) => n + r.defenseRuns, 0),
     // 國際賽的份額不進評價分，但照樣逐屆現算、逐屆加總——與職業通算同一個做法。
-    shares: sumLedgers(summary.internationalSeasons.map((r) => intlLedger(r))),
-    // 國際賽沒有自己的聯盟可挑，成績本來就是拿他當時所在的層級換算出來的，
-    // 因此借代表聯盟那把尺——與上面逐屆那兩張表同一個基準。
-    base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
+    shares: sumLedgers(rows.map((r) => spec.ledger(r))),
+    // 率類欄位（OPS+、ERA+）的基準線：養成期用養成的；職業期沒有自己的聯盟可挑，
+    // 借代表聯盟那把尺。
+    base: kind === 'youth' ? amateurBaseline() : proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
   };
 }
+/**
+ * 合併表的一列：投打守三本帳合起來看。
+ *
+ * 份額分與評價分分開兩欄：逐年只算得出份額那一段（含難度），榮譽、里程碑與年資
+ * 扣分是聯盟層級才加的，所以只有聯盟通算有評價分。養成期與國際賽兩欄都沒有。
+ */
+interface CombinedRow {
+  readonly key: string;
+  /** 前三欄：年、齡、球隊；通算列只寫第三格（列名）。 */
+  readonly lead: readonly [string, string, string];
+  readonly ledger: SharesByPart | null;
+  readonly points: number | null;
+  readonly score: number | null;
+}
+
+const COMBINED_COLUMNS: readonly { key: string; title: string; value: (r: CombinedRow) => string }[] = (() => {
+  const total = (l: SharesByPart) => sumShares(l.batting, l.pitching, l.fielding);
+  const war = (r: CombinedRow, pick: (w: WarByPart) => number) =>
+    r.ledger?.war === undefined ? NA : pick(r.ledger.war).toFixed(1);
+  const num = (v: number | null) => (v === null ? NA : v.toFixed(1));
+  return [
+    { key: 'WS', title: '勝利份額：打擊、投球、守備合計', value: (r) => (r.ledger === null ? NA : total(r.ledger).win.toFixed(1)) },
+    { key: 'LS', title: '敗戰份額：打擊、投球、守備合計', value: (r) => (r.ledger === null ? NA : total(r.ledger).loss.toFixed(1)) },
+    {
+      key: 'W%',
+      title: '勝率：合計的勝利份額佔責任額的比例，.500 為聯盟平均',
+      value: (r) => {
+        if (r.ledger === null) return NA;
+        const t = total(r.ledger);
+        return t.win + t.loss === 0 ? NA : fmtAvg(winPct(t));
+      },
+    },
+    { key: '打擊WAR', title: '打擊的 WAR', value: (r) => war(r, (w) => w.batting) },
+    { key: '守備WAR', title: '守備的 WAR', value: (r) => war(r, (w) => w.fielding) },
+    { key: '投球WAR', title: '投球的 WAR', value: (r) => war(r, (w) => w.pitching) },
+    { key: 'WAR', title: '合計 WAR：比替代水準的球員多贏幾場。聯盟內的數字；跨聯盟的通算是直接加總', value: (r) => war(r, (w) => w.batting + w.fielding + w.pitching) },
+    { key: '份額分', title: '份額換算的評價分（含難度係數）。逐年只有這一段', value: (r) => num(r.points) },
+    { key: '評價分', title: '份額分加上榮譽與里程碑、扣掉年資未滿。只有聯盟通算有', value: (r) => num(r.score) },
+  ];
+})();
+
+/** 合併表的全部列：年表（養成＋職業），接各聯盟、頂級聯盟、兩種國際賽的通算。 */
+function combinedRows(summary: CareerSummary): readonly CombinedRow[] {
+  const out: CombinedRow[] = [];
+  let lastYear: number | null = null;
+  for (const r of careerRows(summary)) {
+    // 季中轉隊的那一年兩列，年與齡只寫第一列（與年表同一個規則）。
+    const cont = r.year === lastYear;
+    lastYear = r.year;
+    out.push({
+      key: `c-${r.key}`,
+      lead: [cont ? '' : String(r.year), cont ? '' : String(r.age), r.note === null ? r.team : `${r.team}・${r.note}`],
+      ledger: r.shares,
+      points: r.points,
+      score: null,
+    });
+  }
+  summary.leagues.forEach((l, i) => {
+    const row = leagueTotals(summary)[i]!;
+    out.push({ key: `c-l-${l.org}`, lead: ['', '', `${l.orgName}通算`], ledger: row.shares, points: l.sharePoints, score: l.score });
+  });
+  if (summary.leagues.length > 1) {
+    const top = topTotalRow(summary);
+    out.push({
+      key: 'c-top',
+      lead: ['', '', '頂級聯盟通算'],
+      ledger: top.shares,
+      points: summary.leagues.reduce((n, l) => n + l.sharePoints, 0),
+      score: summary.leagues.reduce((n, l) => n + l.score, 0),
+    });
+  }
+  for (const kind of ['youth', 'pro'] as const) {
+    if (INTL[kind].rows(summary).length === 0) continue;
+    const row = intlTotalRow(summary, kind);
+    out.push({ key: `c-intl-${kind}`, lead: ['', '', `${INTL[kind].title}通算`], ledger: row.shares, points: null, score: null });
+  }
+  return out;
+}
+
+/**
+ * 合併生涯紀錄：投打守三本帳合起來的一張表，每個人都有。
+ *
+ * 投手表與野手表的單位不同，分開放（見 `hall_of_fame.json` 的 `two_way`）；但勝利份額
+ * 與 WAR 是投打通用的，二刀流要跟單一領域的球員比，看的就是這一張。
+ */
+function CombinedTable({ summary }: { summary: CareerSummary }) {
+  const rows = combinedRows(summary);
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <h4 style={{ marginTop: 14 }}>合併生涯紀錄</h4>
+      <div className="fin-scroll">
+        <table className="fin">
+          <thead>
+            <tr>
+              <th title="年度">年</th>
+              <th title="年齡">齡</th>
+              <th style={{ textAlign: 'left' }}>球隊</th>
+              {COMBINED_COLUMNS.map((c) => (
+                <th key={c.key} title={c.title}>
+                  {c.key}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <td>{r.lead[0]}</td>
+                <td>{r.lead[1]}</td>
+                <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.lead[2]}</td>
+                {COMBINED_COLUMNS.map((c) => (
+                  <td key={c.key}>{c.value(r)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 /**
  * 生涯年表。
  *
@@ -1838,7 +1998,9 @@ function CareerTable({ summary }: { summary: CareerSummary }) {
       {summary.leagues.length > 1 && (
         <TotalsTable title="頂級聯盟通算" rows={[topTotalRow(summary)]} />
       )}
-      <InternationalTable summary={summary} />
+      <InternationalTable summary={summary} kind="youth" />
+      <InternationalTable summary={summary} kind="pro" />
+      <CombinedTable summary={summary} />
     </div>
   );
 }
@@ -1870,7 +2032,6 @@ export function careerCardOf(game: Game): CareerCard | null {
   const batting = rows.filter((r) => r.batting !== null);
   const pitching = rows.filter((r) => r.pitching !== null);
   const totals = leagueTotals(summary);
-  const intlBase = baselineAt(tournamentPar());
 
   // 季中轉隊的那一年會有兩列。年與齡只寫在第一列——同一年重覆印一次年份，讀起來
   // 像兩個球季，而球隊那一欄已經說清楚這是同一年的後半段了（與畫面上同一個規則）。
@@ -1958,59 +2119,79 @@ export function careerCardOf(game: Game): CareerCard | null {
     if (t !== null) tables.push(t);
   }
 
-  for (const side of ['batting', 'pitching'] as const) {
-    const only = summary.internationalSeasons.filter((r) => r[side] !== null);
-    if (only.length === 0) continue;
-    tables.push({
-      title: '國際賽',
-      caption: side === 'batting' ? '野手' : '投手',
-      head: [
-        '年',
-        '齡',
-        '賽事',
-        '名次',
-        ...(side === 'batting' ? [...BATTING_COLUMNS.map((c) => c.key), 'DEF'] : PITCHING_COLUMNS.map((c) => c.key)),
-      ],
-      lefts: [2, 3],
-      rows: only.map((r) => ({
-        tint: null,
-        cells: [
-          String(r.year),
-          String(r.age),
-          r.tournament,
-          `${r.rank}${r.mvp ? '・MVP' : ''}`,
-          ...(side === 'batting'
-            ? [
-                ...cells(BATTING_COLUMNS, r.batting!, intlBase, intlLedger(r)),
-                r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
-              ]
-            : cells(PITCHING_COLUMNS, r.pitching!, intlBase, intlLedger(r))),
+  // 國際賽兩種各一組：養成在前、職業在後，與畫面同一個順序。
+  for (const kind of ['youth', 'pro'] as const) {
+    const spec = INTL[kind];
+    const intlRows = spec.rows(summary);
+    const base = spec.base();
+    for (const side of ['batting', 'pitching'] as const) {
+      const only = intlRows.filter((r) => r[side] !== null);
+      if (only.length === 0) continue;
+      tables.push({
+        title: spec.title,
+        caption: side === 'batting' ? '野手' : '投手',
+        head: [
+          '年',
+          '齡',
+          '賽事',
+          '名次',
+          ...(side === 'batting' ? [...BATTING_COLUMNS.map((c) => c.key), 'DEF'] : PITCHING_COLUMNS.map((c) => c.key)),
         ],
-      })),
-    });
+        lefts: [2, 3],
+        rows: only.map((r) => ({
+          tint: null,
+          cells: [
+            String(r.year),
+            String(r.age),
+            r.tournament,
+            `${r.rank}${r.mvp ? '・MVP' : ''}`,
+            ...(side === 'batting'
+              ? [
+                  ...cells(BATTING_COLUMNS, r.batting!, base, spec.ledger(r)),
+                  r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
+                ]
+              : cells(PITCHING_COLUMNS, r.pitching!, base, spec.ledger(r))),
+          ],
+        })),
+      });
+    }
+
+    if (intlRows.length > 0) {
+      const row = intlTotalRow(summary, kind);
+      for (const side of ['batting', 'pitching'] as const) {
+        if (row[side] === null) continue;
+        tables.push({
+          title: `${spec.title}通算`,
+          caption: side === 'batting' ? '野手' : '投手',
+          head:
+            side === 'batting'
+              ? ['賽事', '屆', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
+              : ['賽事', '屆', ...PITCHING_COLUMNS.map((c) => c.key)],
+          lefts: [0],
+          rows: [
+            {
+              tint: null,
+              cells:
+                side === 'batting'
+                  ? [row.label, String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base, row.shares), row.defenseRuns > 0 ? `+${row.defenseRuns}` : String(row.defenseRuns)]
+                  : [row.label, String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base, row.shares)],
+            },
+          ],
+        });
+      }
+    }
   }
 
-  if (summary.internationalSeasons.length > 0) {
-    const row = intlTotalRow(summary);
-    for (const side of ['batting', 'pitching'] as const) {
-      if (row[side] === null) continue;
+  // 合併生涯紀錄：投打守合起來的一張，與畫面同一份列與欄。
+  {
+    const rows = combinedRows(summary);
+    if (rows.length > 0) {
       tables.push({
-        title: '國際賽通算',
-        caption: side === 'batting' ? '野手' : '投手',
-        head:
-          side === 'batting'
-            ? ['賽事', '屆', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
-            : ['賽事', '屆', ...PITCHING_COLUMNS.map((c) => c.key)],
-        lefts: [0],
-        rows: [
-          {
-            tint: null,
-            cells:
-              side === 'batting'
-                ? [row.label, String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base, row.shares), row.defenseRuns > 0 ? `+${row.defenseRuns}` : String(row.defenseRuns)]
-                : [row.label, String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base, row.shares)],
-          },
-        ],
+        title: '合併生涯紀錄',
+        caption: null,
+        head: ['年', '齡', '球隊', ...COMBINED_COLUMNS.map((c) => c.key)],
+        lefts: [2],
+        rows: rows.map((r) => ({ tint: null, cells: [...r.lead, ...COMBINED_COLUMNS.map((c) => c.value(r))] })),
       });
     }
   }
@@ -2122,6 +2303,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     // 養成期不記份額——那一段不進評價分，也沒有守備與球隊戰績可以算。份額與 WAR
     // 從成績現算，替代水準是 par − 3（見 amateurLedger）。
     shares: amateurLedger(a),
+    points: null,
     base: amateurBaseline(),
   }));
 
@@ -2144,6 +2326,7 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     defenseRuns: s.defenseRuns,
     shares: { ...s.shares, war: warOf(s) },
     base: proBaseline(s.level),
+    points: seasonPoints(s),
   }));
 
   return [...amateurRows, ...proRows].sort((a, b) => a.year - b.year);
