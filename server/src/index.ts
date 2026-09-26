@@ -23,6 +23,7 @@ import {
   login,
   meOf,
   register,
+  setAppearance,
   setTalent,
   startCareer,
 } from './routes.ts';
@@ -148,6 +149,11 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     const kind = url.searchParams.get('kind') === 'best' ? 'best' : 'total';
     const self = url.searchParams.get('self') === '1';
     send(res, 200, await ladder(await currentUser(req), { org, position, kind }, self));
+    return;
+  }
+  if (path === API.appearance && method === 'PUT') {
+    const user = await requireUser(req);
+    send(res, 200, await setAppearance(user, await readBody(req)));
     return;
   }
   if (path.startsWith('/api/talents/')) {

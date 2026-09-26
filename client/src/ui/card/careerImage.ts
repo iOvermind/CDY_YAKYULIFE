@@ -546,7 +546,45 @@ export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElem
   c.fillStyle = p.bg;
   c.fillRect(0, 0, width, height);
   layout({ c, p, dry: false }, card, width);
+  rotateHue(c, canvas.width, canvas.height, pageHue());
   return canvas;
+}
+
+/** 畫面目前轉了幾度色相（見 `ui/common/appearance.ts`）。沒轉就是 0。 */
+function pageHue(): number {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--hue').trim();
+  const deg = Number.parseFloat(raw);
+  return Number.isFinite(deg) ? deg : 0;
+}
+
+/**
+ * 整張圖轉色相，**與畫面上的 CSS `hue-rotate()` 同一個矩陣**（Filter Effects 規格的
+ * hueRotate），圖才會跟玩家眼前的顏色一樣。canvas 的 `filter` 屬性在 Safari 上不
+ * 一定有，所以逐像素自己乘，每個瀏覽器結果一致。
+ */
+export function hueMatrix(deg: number): readonly number[] {
+  const r = (deg * Math.PI) / 180;
+  const cos = Math.cos(r);
+  const sin = Math.sin(r);
+  return [
+    0.213 + cos * 0.787 - sin * 0.213, 0.715 - cos * 0.715 - sin * 0.715, 0.072 - cos * 0.072 + sin * 0.928,
+    0.213 - cos * 0.213 + sin * 0.143, 0.715 + cos * 0.285 + sin * 0.14, 0.072 - cos * 0.072 - sin * 0.283,
+    0.213 - cos * 0.213 - sin * 0.787, 0.715 - cos * 0.715 + sin * 0.715, 0.072 + cos * 0.928 + sin * 0.072,
+  ];
+}
+
+function rotateHue(c: CanvasRenderingContext2D, w: number, h: number, deg: number): void {
+  if (deg % 360 === 0) return;
+  const m = hueMatrix(deg);
+  const img = c.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
+    d[i] = m[0]! * r + m[1]! * g + m[2]! * b;
+    d[i + 1] = m[3]! * r + m[4]! * g + m[5]! * b;
+    d[i + 2] = m[6]! * r + m[7]! * g + m[8]! * b;
+  }
+  c.putImageData(img, 0, 0);
 }
 
 /**

@@ -28,6 +28,7 @@ import type {
   LadderResponse,
   Me,
 } from '../../client/src/api/contract.ts';
+import { isAppearance } from '../../client/src/api/contract.ts';
 import { hashPassword, newCareerId, verifyPassword } from './auth.ts';
 import {
   achievementsOf,
@@ -38,6 +39,8 @@ import {
   findUser,
   pool,
   talentsOf,
+  appearanceOf,
+  saveAppearance,
   type UserRow,
 } from './db.ts';
 
@@ -62,13 +65,25 @@ export async function meOf(user: UserRow): Promise<Me> {
     return r === undefined ? a : { ...a, rarity: r };
   });
   const { ap, earned } = await balanceOf(user.id, spentOn(levels));
+  // 存進去之前驗過；讀出來再驗一次，是因為那一欄也可能被手動改過——壞掉的設定
+  // 當成沒設定，客戶端會把裝置上的那份寫回來。
+  const stored = await appearanceOf(user.id);
   return {
     account: user.account,
     ap,
     apEarned: earned,
     achievements,
     talents: levels,
+    appearance: isAppearance(stored) ? stored : null,
   };
+}
+
+/** 把外觀（主題與每一套的色相）存到帳號上。整份覆寫，重送安全。 */
+export async function setAppearance(user: UserRow, appearance: unknown): Promise<Me> {
+  if (!isAppearance(appearance)) throw new HttpError(400, '外觀設定的格式不對。');
+  // 只存認得的欄位：客戶端多送的東西不進資料庫。
+  await saveAppearance(user.id, { theme: appearance.theme, hues: appearance.hues });
+  return meOf(user);
 }
 
 export async function register(account: string, password: string): Promise<UserRow> {

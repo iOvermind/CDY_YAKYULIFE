@@ -140,3 +140,7 @@ UPDATE achievements SET achievement = regexp_replace(achievement, '^(hall:|trait
 -- 生涯分級改成每個聯盟一座、歸在特性底下（2026-09-25）：`tier:<org>:<n>`。舊的整段
 -- 生涯一格（`tier:<n>`）刪掉——兩個帳號各一格 10 點，扣掉之後餘額不會變負。
 DELETE FROM achievements WHERE achievement ~ '^tier:[0-9]+$';
+
+-- 外觀（2026-09-27）：佈景主題與每一套各自的色相格數，整份存成 JSONB。**NULL 是還沒
+-- 設定過**——客戶端登入時看到 NULL，就把那台裝置上的設定寫上來。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS appearance JSONB;

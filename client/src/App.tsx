@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { httpProgress } from './api/http.ts';
 import { Game } from './engine/game.ts';
 import { useAccount } from './ui/account/useAccount.ts';
+import { useAppearance } from './ui/common/appearance.ts';
 import { GameScreen } from './ui/game/GameScreen.tsx';
 import { StartScreen } from './ui/start/StartScreen.tsx';
 
@@ -18,19 +19,15 @@ import { StartScreen } from './ui/start/StartScreen.tsx';
  * 版型比照原版。介面規格見 INTERFACE.md。
  */
 export default function App() {
-  const [theme, setTheme] = useState('a');
   const [game, setGame] = useState<Game | null>(null);
   // Game 是可變物件，React 不會察覺內部變化，因此用一個計數器手動觸發重繪。
   const [, bump] = useState(0);
   const account = useAccount(httpProgress);
+  const { appearance, pick } = useAppearance(account);
   /** 這一局在伺服器上的登記編號。未登入時是 null，那一局不入帳。 */
   const careerId = useRef<string | null>(null);
   /** 已經送出結算的局，避免重繪時重送。 */
   const reported = useRef<Game | null>(null);
-
-  useEffect(() => {
-    document.body.dataset['theme'] = theme;
-  }, [theme]);
 
   /**
    * 引退時把重播日誌送回伺服器。
@@ -59,8 +56,8 @@ export default function App() {
   if (game === null) {
     return (
       <StartScreen
-        theme={theme}
-        onTheme={setTheme}
+        theme={appearance.theme}
+        onTheme={pick}
         account={account}
         onStart={(g, ticket) => {
           careerId.current = ticket;

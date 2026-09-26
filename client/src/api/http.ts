@@ -72,4 +72,6 @@ export const httpProgress: ProgressStore = {
   finishCareer: (careerId, body) => post<CareerResult>(API.career(careerId), body),
   setTalent: (id, level) =>
     call<Me>(API.talent(id), { method: 'PUT', body: JSON.stringify({ level }) }),
+  setAppearance: (appearance) =>
+    call<Me>(API.appearance, { method: 'PUT', body: JSON.stringify(appearance) }),
 };

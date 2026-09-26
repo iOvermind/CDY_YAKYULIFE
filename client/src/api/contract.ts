@@ -32,6 +32,35 @@ export interface UnlockedAchievement {
 }
 
 /** 目前登入的玩家。未登入時整個物件是 null。 */
+/** 四套佈景主題的代碼（見 INTERFACE.md §2.1）。 */
+export const THEME_CODES = ['a', 'b', 'c', 'd'] as const;
+export type ThemeCode = (typeof THEME_CODES)[number];
+
+/** 色相一圈分幾格。每點一次已選的主題轉一格（360° ÷ 6 = 60°），轉滿回到原色。 */
+export const HUE_STEPS = 6;
+
+/**
+ * 畫面的外觀：用哪一套主題，以及**每一套各自**轉到第幾格色相（0 是原色）。
+ *
+ * 四套分開記：科技藍轉到第 2 格、切去報紙版面再切回來，還是第 2 格。
+ */
+export interface Appearance {
+  readonly theme: ThemeCode;
+  readonly hues: Readonly<Record<ThemeCode, number>>;
+}
+
+/** 這個值是不是一份合法的外觀設定。伺服器收件與客戶端讀本機存檔共用。 */
+export function isAppearance(v: unknown): v is Appearance {
+  if (typeof v !== 'object' || v === null) return false;
+  const { theme, hues } = v as { theme?: unknown; hues?: unknown };
+  if (!THEME_CODES.some((t) => t === theme)) return false;
+  if (typeof hues !== 'object' || hues === null) return false;
+  return THEME_CODES.every((t) => {
+    const h = (hues as Record<string, unknown>)[t];
+    return typeof h === 'number' && Number.isInteger(h) && h >= 0 && h < HUE_STEPS;
+  });
+}
+
 export interface Me {
   readonly account: string;
   /** 可花用的 AP 餘額。 */
@@ -42,6 +71,8 @@ export interface Me {
   readonly achievements: readonly UnlockedAchievement[];
   /** 目前買下的天賦與層級。 */
   readonly talents: TalentLevels;
+  /** 存在帳號上的外觀。**`null` 是還沒設定過**——登入時就把這台裝置的寫上去。 */
+  readonly appearance: Appearance | null;
 }
 
 /** 開局登記的回應。 */
@@ -154,6 +185,7 @@ export const API = {
   careers: '/api/careers',
   career: (id: string) => `/api/careers/${id}`,
   talent: (id: string) => `/api/talents/${id}`,
+  appearance: '/api/me/appearance',
   /**
    * 天梯。聯盟與守位給 `*` 就是跨聯盟、跨守位；`self=1` 是個人天梯，否則是全伺服器。
    */
@@ -186,6 +218,8 @@ export interface ProgressStore {
    * 伺服器算，客戶端只負責問。
    */
   setTalent(id: string, level: number): Promise<Me>;
+  /** 把外觀存到帳號上。整份覆寫，重送安全。 */
+  setAppearance(appearance: Appearance): Promise<Me>;
 }
 
 /** API 回傳的錯誤。訊息是給玩家看的，因此後端要用人話寫。 */

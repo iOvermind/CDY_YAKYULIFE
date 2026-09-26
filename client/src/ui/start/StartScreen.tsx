@@ -14,13 +14,14 @@ import styles from './StartScreen.module.css';
 import controls from '../common/controls.module.css';
 import modal from '../common/modal.module.css';
 import { Subheading } from '../common/Heading.tsx';
+import type { ThemeCode } from '../../api/contract.ts';
 
-const THEMES = [
+const THEMES: readonly { readonly code: ThemeCode; readonly name: string }[] = [
   { code: 'a', name: '科技藍' },
   { code: 'b', name: '電子看板' },
   { code: 'c', name: '報紙版面' },
   { code: 'd', name: '現代儀表板' },
-] as const;
+];
 
 export function StartScreen({
   theme,
@@ -28,8 +29,9 @@ export function StartScreen({
   onStart,
   account,
 }: {
-  theme: string;
-  onTheme: (t: string) => void;
+  theme: ThemeCode;
+  /** 點了主題鈕。點已選著的那一套是轉一格色相（見 `pickTheme`）。 */
+  onTheme: (t: ThemeCode) => void;
   onStart: (g: Game, careerId: string | null) => void;
   account: Account;
 }) {
@@ -220,6 +222,7 @@ export function StartScreen({
                 key={t.code}
                 type="button"
                 className={t.code === theme ? controls.on : undefined}
+                title={t.code === theme ? '再點一次換色相（六次回到原色）' : undefined}
                 onClick={() => onTheme(t.code)}
               >
                 {t.name}

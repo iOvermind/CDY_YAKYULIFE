@@ -80,6 +80,16 @@ export async function createUser(account: string, hash: string): Promise<UserRow
   return rows[0]!;
 }
 
+/** 帳號上的外觀設定，原樣回傳（驗證交給呼叫的人）。沒設過是 null。 */
+export async function appearanceOf(userId: string): Promise<unknown> {
+  const { rows } = await pool.query<{ appearance: unknown }>('SELECT appearance FROM users WHERE id = $1', [userId]);
+  return rows[0]?.appearance ?? null;
+}
+
+export async function saveAppearance(userId: string, appearance: unknown): Promise<void> {
+  await pool.query('UPDATE users SET appearance = $2 WHERE id = $1', [userId, JSON.stringify(appearance)]);
+}
+
 export async function talentsOf(userId: string): Promise<Record<string, number>> {
   const { rows } = await pool.query<{ talent: string; level: number }>(
     'SELECT talent, level FROM talents WHERE user_id = $1',

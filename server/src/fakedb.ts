@@ -57,7 +57,7 @@ interface StatRow {
 }
 
 export class FakeDb implements Queryable {
-  users: { id: string; account: string; password_hash: string }[] = [];
+  users: { id: string; account: string; password_hash: string; appearance?: unknown }[] = [];
   achievements: AchievementRow[] = [];
   talents: { user_id: string; talent: string; level: number }[] = [];
   careers: CareerRow[] = [];
@@ -110,6 +110,14 @@ export class FakeDb implements Queryable {
       };
       this.users.push(row);
       return [row];
+    }
+    if (s.startsWith('SELECT appearance FROM users WHERE id')) {
+      return this.users.filter((u) => u.id === String(v[0])).map((u) => ({ appearance: u.appearance ?? null }));
+    }
+    if (s.startsWith('UPDATE users SET appearance')) {
+      const user = this.users.find((u) => u.id === String(v[0]));
+      if (user !== undefined) user.appearance = JSON.parse(String(v[1]));
+      return [];
     }
     if (s.startsWith('SELECT talent, level FROM talents')) {
       return this.talents.filter((t) => t.user_id === String(v[0]));

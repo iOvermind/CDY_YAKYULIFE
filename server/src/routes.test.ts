@@ -20,6 +20,7 @@ import {
   ladder,
   login,
   meOf,
+  setAppearance,
   setTalent,
   register,
   startCareer,
@@ -167,6 +168,36 @@ describe('登入', () => {
   it('大小寫不同也登得進去', async () => {
     await register('Overmind', 'hunter2');
     assert.equal((await login('OVERMIND', 'hunter2')).account, 'Overmind');
+  });
+});
+
+describe('外觀（主題與色相）', () => {
+  const pick = { theme: 'c', hues: { a: 0, b: 2, c: 5, d: 0 } } as const;
+
+  it('沒設過就是 null——登入時客戶端靠這個決定要不要把裝置上的設定寫上來', async () => {
+    const user = await register('Overmind', 'hunter2');
+    assert.equal((await meOf(user)).appearance, null);
+  });
+
+  it('存下去之後 me 帶得回來', async () => {
+    const user = await register('Overmind', 'hunter2');
+    const after = await setAppearance(user, pick);
+    assert.deepEqual(after.appearance, pick);
+    assert.deepEqual((await meOf(user)).appearance, pick);
+  });
+
+  it('不認得的主題、超出一圈的色相一律拒收', async () => {
+    const user = await register('Overmind', 'hunter2');
+    for (const bad of [
+      { theme: 'z', hues: { a: 0, b: 0, c: 0, d: 0 } },
+      { theme: 'a', hues: { a: 6, b: 0, c: 0, d: 0 } },
+      { theme: 'a', hues: { a: 1.5, b: 0, c: 0, d: 0 } },
+      { theme: 'a', hues: { a: 0, b: 0, c: 0 } },
+      null,
+    ]) {
+      await assert.rejects(() => setAppearance(user, bad), (e: HttpError) => e.status === 400);
+    }
+    assert.equal((await meOf(user)).appearance, null);
   });
 });
 
