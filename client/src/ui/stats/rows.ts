@@ -34,6 +34,14 @@ export interface TotalRow {
  * 就是「大聯盟」——照剪會剩下一個空格，年表上變成「洋基・」。層級名等於前綴時
  * 那個名字本身就是要顯示的東西。
  */
+/**
+ * 成績表裡的聯盟名：簡稱（中職、大聯盟…）。欄寬有限，是「畫面上一律寫正名」的唯一
+ * 例外（見 CONTEXT.md 的頂級聯盟）。沒有簡稱的退回正名。
+ */
+function leagueShort(org: string, orgName: string): string {
+  return leagues.league_short_names[org] ?? orgName;
+}
+
 function shortLevelName(levelName: string, org: string): string {
   const prefix = leagues.top_league_names[org] ?? leagues.org_names[org] ?? '';
   if (prefix === '' || !levelName.startsWith(prefix)) return levelName;
@@ -173,7 +181,7 @@ export function combinedRows(summary: CareerSummary): readonly CombinedRow[] {
   }
   summary.leagues.forEach((l, i) => {
     const row = leagueTotals(summary)[i]!;
-    out.push({ key: `c-l-${l.org}`, lead: ['', '', `${l.orgName}通算`], ledger: row.shares, points: l.sharePoints, score: l.score });
+    out.push({ key: `c-l-${l.org}`, lead: ['', '', `${leagueShort(l.org, l.orgName)}通算`], ledger: row.shares, points: l.sharePoints, score: l.score });
   });
   if (summary.leagues.length > 1) {
     const top = topTotalRow(summary);
@@ -254,7 +262,7 @@ export function careerRows(summary: CareerSummary): readonly CareerRow[] {
 /** 各頂級聯盟各一列。二軍不列——那不是這張表在回答的問題。 */
 export function leagueTotals(summary: CareerSummary): readonly TotalRow[] {
   return summary.leagues.map((l) => ({
-    label: l.orgName,
+    label: leagueShort(l.org, l.orgName),
     seasons: l.seasons,
     batting: l.batting,
     pitching: l.pitching,

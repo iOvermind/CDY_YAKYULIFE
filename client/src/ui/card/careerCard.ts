@@ -176,16 +176,17 @@ export function careerCardOf(game: Game): CareerCard | null {
           caption: side === 'batting' ? '野手' : '投手',
           head:
             side === 'batting'
-              ? ['賽事', '屆', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
-              : ['賽事', '屆', ...PITCHING_COLUMNS.map((c) => c.key)],
-          lefts: [0],
+              ? ['屆', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
+              : ['屆', ...PITCHING_COLUMNS.map((c) => c.key)],
+          // 沒有「賽事」欄：只有一列，那一列就是標題寫的賽事（與畫面同一個規則）。
+          lefts: [],
           rows: [
             {
               tint: null,
               cells:
                 side === 'batting'
-                  ? [row.label, String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base, row.shares), row.defenseRuns > 0 ? `+${row.defenseRuns}` : String(row.defenseRuns)]
-                  : [row.label, String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base, row.shares)],
+                  ? [String(row.seasons), ...cells(BATTING_COLUMNS, row.batting!, row.base, row.shares), row.defenseRuns > 0 ? `+${row.defenseRuns}` : String(row.defenseRuns)]
+                  : [String(row.seasons), ...cells(PITCHING_COLUMNS, row.pitching!, row.base, row.shares)],
             },
           ],
         });

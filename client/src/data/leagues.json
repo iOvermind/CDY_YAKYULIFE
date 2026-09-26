@@ -131,6 +131,15 @@
   },
   "_top_league_names_note": "下面那張表的鍵是**體系代碼**（org），值是那個體系最高一層的名字——獎項、名人堂、里程碑的前綴，以及成就櫃的聯盟分區，全部拿 org 去查它。表本身不放註解鍵，因為它會被整個 Object.keys 拿去當聯盟清單。",
   "_org_code_note": "**體系代碼一律等於該體系頂級聯盟的代碼**（CPBL / NPB / KBO / LMB / ABL / MLB），層級代碼才帶軍別後綴（CPBL1、NPB2）。美職曾經例外——體系代碼寫成 `MiLB`、頂級層級叫 `MLB`——結果每一份以 org 為鍵的設定表（teams、hall_of_fame 的 halls 與 check_order、traits 的 rainbow、awards 的 aliases、flavor 的 retire_scenes、這裡的 top_league_names）作者都自然地寫成 `MLB`，六張表全部查不到而靜默 fallback：美國名人堂永遠進不去、七彩球衣永遠不會亮、賽揚獎顯示成預設名、大聯盟的引退場景一次都沒播過，而且沒有任何一處報錯。**不要再讓任何體系的 org 代碼與它的頂級聯盟代碼不同。** 護欄測試現在盯著每一張 org-keyed 表。",
+  "_league_short_names_note": "成績表（生涯年表、各聯盟通算、合併生涯紀錄，含生涯成績圖上的同一批表）欄寬有限，聯盟寫簡稱；其他畫面一律寫 top_league_names 的正名（見 CONTEXT.md 的頂級聯盟）。",
+  "league_short_names": {
+    "CPBL": "中職",
+    "NPB": "日職",
+    "KBO": "韓職",
+    "LMB": "墨聯",
+    "ABL": "澳職",
+    "MLB": "大聯盟"
+  },
   "top_league_names": {
     "CPBL": "中華職棒",
     "NPB": "日本職棒",

@@ -60,8 +60,11 @@ function TotalsTable({
 }: {
   title: string;
   rows: readonly TotalRow[];
-  /** 第一欄的欄名。國際賽那張是「賽事」，不是聯盟。 */
-  leadHead?: string;
+  /**
+   * 第一欄的欄名。`null` 是整欄不要：國際賽通算只有一列，而那一列就是標題寫的
+   * 那個賽事，再寫一次只是佔寬。
+   */
+  leadHead?: string | null;
   /** 第二欄的欄名與說明。國際賽算的是屆數。 */
   countHead?: string;
   countTitle?: string;
@@ -79,7 +82,7 @@ function TotalsTable({
           <table className={table.fin}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>{leadHead}</th>
+                {leadHead !== null && <th style={{ textAlign: 'left' }}>{leadHead}</th>}
                 <th title={countTitle}>{countHead}</th>
                 <StatHeadCells columns={BATTING_COLUMNS} />
                 <th title="守備分">DEF</th>
@@ -88,7 +91,7 @@ function TotalsTable({
             <tbody>
               {batting.map((r) => (
                 <tr key={r.label}>
-                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
+                  {leadHead !== null && <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>}
                   <td>{r.seasons}</td>
                   <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={r.base} shares={r.shares} />
                   <td>{r.defenseRuns > 0 ? `+${r.defenseRuns}` : r.defenseRuns}</td>
@@ -104,7 +107,7 @@ function TotalsTable({
           <table className={table.fin}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>{leadHead}</th>
+                {leadHead !== null && <th style={{ textAlign: 'left' }}>{leadHead}</th>}
                 <th title={countTitle}>{countHead}</th>
                 <StatHeadCells columns={PITCHING_COLUMNS} />
               </tr>
@@ -112,7 +115,7 @@ function TotalsTable({
             <tbody>
               {pitching.map((r) => (
                 <tr key={r.label}>
-                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>
+                  {leadHead !== null && <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{r.label}</td>}
                   <td>{r.seasons}</td>
                   <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={r.base} shares={r.shares} />
                 </tr>
@@ -222,7 +225,7 @@ function InternationalTable({ summary, kind }: { summary: CareerSummary; kind: I
       <TotalsTable
         title={`${spec.title}通算`}
         rows={[intlTotalRow(summary, kind)]}
-        leadHead="賽事"
+        leadHead={null}
         countHead="屆"
         countTitle="出賽屆數"
       />

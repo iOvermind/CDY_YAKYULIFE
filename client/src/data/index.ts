@@ -1264,6 +1264,8 @@ export interface LeaguesData {
   /** 各體系由低到高的升遷路徑。 */
   readonly paths: Readonly<Record<string, readonly string[]>>;
   readonly top_league_names: Readonly<Record<string, string>>;
+  /** 成績表用的聯盟簡稱（中職、大聯盟…）。其他畫面寫 top_league_names 的正名。 */
+  readonly league_short_names: Readonly<Record<string, string>>;
   readonly org_names: Readonly<Record<string, string>>;
   readonly minor_label: string;
 }
