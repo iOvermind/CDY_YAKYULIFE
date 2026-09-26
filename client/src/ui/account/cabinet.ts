@@ -10,13 +10,13 @@
  * 計分、AP 與天梯階段仍然在 `engine/achievements.ts`——那邊是判斷，這邊是版面。
  */
 
-import { ladderOf } from './engine/achievements.ts';
+import { ladderOf } from '../../engine/achievements.ts';
 import {
   achievements as cfg,
   leagues,
   teams as teamsData,
   traits as traitsData,
-} from './data/index.ts';
+} from '../../data/index.ts';
 
 /**
  * 成就櫃裡的一格。

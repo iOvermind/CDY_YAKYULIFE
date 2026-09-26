@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { achievements as cfg } from './data/index.ts';
+import { achievements as cfg } from '../../data/index.ts';
 import { cabinetSections } from './cabinet.ts';
 
 describe('成就櫃', () => {

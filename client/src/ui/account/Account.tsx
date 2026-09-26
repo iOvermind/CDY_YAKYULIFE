@@ -13,15 +13,15 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Changelog } from './Changelog.tsx';
-import { Wiki } from './Wiki.tsx';
-import { useDragScroll } from './dragScroll.ts';
+import { Changelog } from '../guide/Changelog.tsx';
+import { Wiki } from '../guide/Wiki.tsx';
+import { useDragScroll } from '../common/dragScroll.ts';
 import { Ladder } from './Ladder.tsx';
 import { type Account } from './useAccount.ts';
-import { ApiError, type Me } from './api/contract.ts';
-import { talents as talentData } from './data/index.ts';
+import { ApiError, type Me } from '../../api/contract.ts';
+import { talents as talentData } from '../../data/index.ts';
 import { cabinetSections, cabinetTiles } from './cabinet.ts';
-import { maxLevelOf } from './engine/overlay.ts';
+import { maxLevelOf } from '../../engine/overlay.ts';
 
 /** 開局畫面右上角。 */
 export function AccountBar({ account }: { account: Account }) {

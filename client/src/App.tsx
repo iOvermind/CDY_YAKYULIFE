@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import './app.css';
-import { saveCareerCard, type CardLine, type CardRow, type CardTable, type CareerCard } from './careerImage.ts';
-import { AccountBar, Modal } from './Account.tsx';
-import { useAccount, type Account } from './useAccount.ts';
+import { saveCareerCard, type CardLine, type CardRow, type CardTable, type CareerCard } from './ui/card/careerImage.ts';
+import { AccountBar, Modal } from './ui/account/Account.tsx';
+import { useAccount, type Account } from './ui/account/useAccount.ts';
 import { httpProgress } from './api/http.ts';
 import { ApiError, type CareerTicket, type Me } from './api/contract.ts';
 import { withTimeout } from './api/gate.ts';

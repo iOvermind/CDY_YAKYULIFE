@@ -13,14 +13,14 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useDragScroll } from './dragScroll.ts';
-import type { LadderBoard, LadderQuery, LadderResponse } from './api/contract.ts';
+import { useDragScroll } from '../common/dragScroll.ts';
+import type { LadderBoard, LadderQuery, LadderResponse } from '../../api/contract.ts';
 import type { Account } from './useAccount.ts';
-import { ladder as ladderCfg, leagues, positions as positionsCfg } from './data/index.ts';
-import { ALL } from './engine/ladder.ts';
-import { displayName } from './engine/playerName.ts';
-import { fmtMoney } from './engine/salary.ts';
-import { ENGINE_VERSION } from './engine/version.ts';
+import { ladder as ladderCfg, leagues, positions as positionsCfg } from '../../data/index.ts';
+import { ALL } from '../../engine/ladder.ts';
+import { displayName } from '../../engine/playerName.ts';
+import { fmtMoney } from '../../engine/salary.ts';
+import { ENGINE_VERSION } from '../../engine/version.ts';
 
 /**
  * 聯盟選單上的名字。跨聯盟之外寫**頂級聯盟名**（中職／日職／大聯盟），不是體系名

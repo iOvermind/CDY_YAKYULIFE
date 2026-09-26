@@ -14,8 +14,8 @@
  * 讓下次進來的畫面看起來像壞掉。
  */
 
-import { changelog } from './data/index.ts';
-import type { ChangelogPart, ChangelogVersion } from './data/index.ts';
+import { changelog } from '../../data/index.ts';
+import type { ChangelogPart, ChangelogVersion } from '../../data/index.ts';
 
 /** 行內語法。連結在轉檔時就已經變成純文字了，這裡只剩三種。 */
 export function Parts({ parts }: { parts: readonly ChangelogPart[] }) {

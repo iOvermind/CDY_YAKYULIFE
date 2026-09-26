@@ -10,8 +10,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { isOffline, type Me, type ProgressStore } from './api/contract.ts';
-import { GATE_TIMEOUT_MS } from './api/gate.ts';
+import { isOffline, type Me, type ProgressStore } from '../../api/contract.ts';
+import { GATE_TIMEOUT_MS } from '../../api/gate.ts';
 
 /** 帳號的連線狀態。 */
 export type Progress =

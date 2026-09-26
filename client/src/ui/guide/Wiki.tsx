@@ -11,8 +11,8 @@
  */
 
 import { Fragment } from 'react';
-import type { ChangelogPart, WikiBlock } from './data/index.ts';
-import { wiki } from './data/index.ts';
+import type { ChangelogPart, WikiBlock } from '../../data/index.ts';
+import { wiki } from '../../data/index.ts';
 import { Parts } from './Changelog.tsx';
 
 /** 分組表的組名列：第一格以粗體開頭、其餘格子全空。 */
