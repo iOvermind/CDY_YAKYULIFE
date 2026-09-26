@@ -15,5 +15,9 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "../client/src/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "../client/src/**/*.ts"],
+  // 介面（React、DOM）不在伺服器的型別範圍裡：伺服器只准 import 引擎入口、規則資料與
+  // API 契約（ADR 0049），這裡的 lib 也沒有 DOM。萬一伺服器真的 import 了介面的檔案，
+  // tsc 照樣會順著 import 檢查到它並報錯——那正是該看到的訊號。
+  "exclude": ["../client/src/ui/**"]
 }
