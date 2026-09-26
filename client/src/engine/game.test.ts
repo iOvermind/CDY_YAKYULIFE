@@ -2694,6 +2694,29 @@ describe('特性的取得條件', () => {
     expect(checked).toBeGreaterThan(0);
   });
 
+  it('投手的失分不少於敗投：輸一場至少要丟一分', () => {
+    // 勝敗先算、失分後算，兩者以前沒有互相約束；國際賽一屆只投幾場，出過 3 先發
+    // 1 勝 2 敗卻只失 1 分的成績（2026-09-27）。
+    let checked = 0;
+    for (let i = 0; i < 40; i++) {
+      const game = playCareer(`runs-losses-${i}`, 'P');
+      const s = game.summary;
+      if (s === null) continue;
+      const lines = [
+        ...s.seasons.map((x) => ({ at: `${x.year} ${x.level}`, p: x.pitching })),
+        ...s.internationalSeasons.map((x) => ({ at: `${x.year} ${x.tournament}`, p: x.pitching })),
+        ...s.amateurSeasons.map((x) => ({ at: `${x.year} ${x.school}`, p: x.pitching })),
+        ...s.youthInternationalSeasons.map((x) => ({ at: `${x.year} ${x.tournament}`, p: x.pitching })),
+      ];
+      for (const { at, p } of lines) {
+        if (p === null) continue;
+        checked++;
+        expect(p.runs, `runs-losses-${i} ${at}：${p.losses} 敗、失 ${p.runs} 分`).toBeGreaterThanOrEqual(p.losses);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('WAR 的單位是勝場：生涯的 WS ÷ WAR 不會低於 3', () => {
     // 一場勝利是 3 份勝利份額，WAR 又扣掉了替代水準，所以 WS ÷ WAR 一定大於 3——
     // 現實的長青球星大約 4 到 7（魯斯 756 WS／182.5 WAR ≈ 4.1、Pete Rose ≈ 6.9）。

@@ -1321,7 +1321,10 @@ export function proPitchingLine(
     hits,
     double,
     triple,
-    runs,
+    // **輸一場至少丟一分**：勝敗在失分之後才算、而且只看 ERA+ 與球隊，兩者以前沒有
+    // 互相約束——國際賽一屆只投幾場，出過 1 敗 0 失分（2026-09-27）。補上的差額算
+    // 非自責分：自責分與防禦率不動，勝利份額（只看防禦率）也不動，重播不受影響。
+    runs: Math.max(runs, losses),
     er,
     bb,
     hbp,

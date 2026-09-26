@@ -141,23 +141,17 @@ describe('成績的切分', () => {
   });
 
   it('投球也是——出局數是整數的原子單位', () => {
+    // **欄位從成績本身取，不手列。** 以前手列的清單漏了 double／triple／hbp，
+    // 切出來的兩段就沒有觸身球，生涯通算的 FIP 加成 NaN——測試照著同一份漏掉的
+    // 清單檢查，所以一直是綠的（2026-09-27）。
+    const keys = Object.keys(pitching).filter(
+      (k) => k !== 'era' && typeof pitching[k as keyof typeof pitching] === 'number',
+    ) as (keyof typeof pitching)[];
+    expect(keys).toEqual(expect.arrayContaining(['hbp', 'double', 'triple']));
     for (const r of ratios) {
       const [a, b] = splitPitching(pitching, r);
-      for (const key of [
-        'games',
-        'starts',
-        'wins',
-        'losses',
-        'saves',
-        'holds',
-        'outs',
-        'hits',
-        'runs',
-        'er',
-        'bb',
-        'so',
-      ] as const) {
-        expect(a[key] + b[key]).toBe(pitching[key]);
+      for (const key of keys) {
+        expect((a[key] as number) + (b[key] as number), `${key} @ ${r}`).toBe(pitching[key]);
       }
       expect(a.role).toBe(pitching.role);
       expect(b.role).toBe(pitching.role);

@@ -542,9 +542,12 @@ export async function renderCareerCard(card: CareerCard): Promise<HTMLCanvasElem
   canvas.height = Math.round(height * scale);
   const c = canvas.getContext('2d');
   if (c === null) throw new Error('這個瀏覽器沒有 2D 畫布');
-  c.scale(scale, scale);
+  // **底色用畫布的實際像素鋪，在縮放之前。** 倍率降到 2.25 這種值時 `width × scale`
+  // 不是整數，四捨五入多出來的那一欄只會被縮放後的底色蓋到一部分——右邊與底邊各
+  // 留一條半透明的線，看起來像截到畫面外（2026-09-27）。
   c.fillStyle = p.bg;
-  c.fillRect(0, 0, width, height);
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  c.scale(scale, scale);
   layout({ c, p, dry: false }, card, width);
   rotateHue(c, canvas.width, canvas.height, pageHue());
   return canvas;

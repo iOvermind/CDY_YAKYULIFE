@@ -130,22 +130,12 @@ export function splitPitching(
     const first = Math.round(v * ratio);
     return [first, v - first];
   };
-  // 累計欄位一次列完，用鍵去切——十四個位置參數的寫法，加一個欄位就得數位置。
-  const COUNTS = [
-    'games',
-    'starts',
-    'wins',
-    'losses',
-    'saves',
-    'holds',
-    'outs',
-    'hits',
-    'hr',
-    'runs',
-    'er',
-    'bb',
-    'so',
-  ] as const;
+  // 累計欄位**從成績本身取**，除了防禦率（導出的）與定位（不是數字）全部切。以前手
+  // 列一份清單，漏了 double／triple／hbp，切出來的兩段沒有觸身球，生涯通算的 FIP
+  // 就加成 NaN（2026-09-27）。
+  const COUNTS = (Object.keys(line) as (keyof ProPitchingLine)[]).filter(
+    (k): k is Exclude<keyof ProPitchingLine, 'role' | 'era'> => k !== 'era' && typeof line[k] === 'number',
+  );
 
   const first: Record<string, number> = {};
   const second: Record<string, number> = {};
