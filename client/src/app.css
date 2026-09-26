@@ -1,9 +1,10 @@
 /* 主題 token：每個 body[data-theme] 一組，預設為 a（科技藍）。
    規格見 INTERFACE.md §2。
 
-   本檔自 index_legacy.html 的 <style> 抽出，除主題 a 之外逐字保留。
-   主題 a 由原本的「深綠記分板」改為新架構的視覺識別「科技藍」；
-   b／c／d 三個主題維持原樣。原始的深綠配色仍完整保存在 index_legacy.html。 */
+   本檔自 index_legacy.html 的 <style> 抽出。主題 a 由原本的「深綠記分板」改為
+   新架構的視覺識別「科技藍」；b／c／d 三個主題維持原樣。舊版專用、新介面已經
+   沒有元素用得到的規則（三欄版型、生涯時間軸、原生 confirm 的替代對話框…）已刪除，
+   原始的樣式與深綠配色仍完整保存在 index_legacy.html。 */
 body{
   --bg:#070d16;--panel:#0e1826;--panel2:#16243a;--edge:#24384f;--text:#dce6f2;--dim:#8298b4;
   --accent:#38bdf8;--good:#3ddc97;--bad:#f2616b;--info:#818cf8;--gold:#f5c451;--r:10px;
@@ -40,10 +41,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15
    body background-image would tile once per viewport and show a seam on scroll */
 body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--bgfx);pointer-events:none}
 a{color:var(--info)}
-/* ---------- 版型骨架:手機單欄(預設) / 桌面三欄(>920px) ---------- */
-#app{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
-#mid{flex:1;display:flex;flex-direction:column;min-width:0}
-#tl-side{display:none;background:var(--panel);border-right:1px solid var(--edge)}
 /* ---------- 記分板 ---------- */
 #board{position:sticky;top:0;z-index:20;background:var(--panel);
   border-bottom:2px solid var(--edge);padding:10px 14px 8px;box-shadow:0 6px 18px var(--shadow);
@@ -66,29 +63,6 @@ a{color:var(--info)}
    the font to fit (FitValue); nowrap is what makes scrollWidth report the
    overflow it measures, and hidden keeps a pathological value inside the box. */
 .bd-cell b.fit-value{white-space:nowrap;overflow:hidden}
-/* salary cell: bare number in the value row, unit carried by the label,
-   full amount in an out-of-flow tip. nowrap on both rows because the label's
-   CJK gives the line-breaker opportunities the bare digits do not. */
-#bd-sal,#bd-sal-lbl{white-space:nowrap}
-#bd-sal-cell{cursor:pointer;outline:none}
-.bd-tip{position:absolute;top:calc(100% + 6px);right:0;z-index:3;white-space:nowrap;
-  font-style:normal;font-family:var(--mono);font-size:12px;font-weight:400;letter-spacing:0;
-  color:var(--text);background:var(--panel2);border:1px solid var(--edge);
-  border-radius:min(var(--r),6px);padding:4px 8px;box-shadow:0 4px 12px var(--shadow);
-  opacity:0;pointer-events:none;transition:opacity .15s}
-/* gate hover so a touch tap does not latch :hover and leave the tip stuck open */
-@media (hover:hover){ #bd-sal-cell:hover .bd-tip{opacity:1} }
-#bd-sal-cell.show .bd-tip,#bd-sal-cell:focus-visible .bd-tip{opacity:1}
-/* crossing 萬 -> 億 makes the figure look smaller (9,999 becomes 1.0), so pulse the label
-   once to surface the unit change. Colour only, no motion, and fill-mode stays none so the
-   label reverts on its own when the animation ends. --glow is none in the light themes,
-   which is why the colour carries the effect rather than the shadow. */
-@keyframes bd-unitflip{
-  0%{color:var(--dim)}
-  15%{color:var(--accent);text-shadow:var(--glow)}
-  60%{color:var(--accent);text-shadow:var(--glow)}
-  100%{color:var(--dim);text-shadow:none}}
-#bd-sal-lbl.unitflip{animation:bd-unitflip 1.6s ease-out 1}
 /* 年薪／生涯收入。與 SEED 那排同一個量級的附註帶，不是方格——錢是背景資訊，
    不該搶走綜合與可分配點的視覺重量。 */
 #bd-money{text-align:center;margin-top:7px;font-family:var(--disp);font-size:12px;
@@ -113,38 +87,6 @@ a{color:var(--info)}
 .lamp{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--dim);letter-spacing:.12em}
 .lamp i{width:9px;height:9px;border-radius:50%;background:var(--panel2);border:1px solid var(--edge);display:inline-block}
 .lamp.on{color:var(--text);font-weight:700} .lamp.on i{background:var(--accent);box-shadow:var(--glow);border-color:var(--accent)}
-/* ---------- 生涯時間軸:手機橫向膠囊列 ---------- */
-#tl-strip{display:flex;gap:8px;overflow-x:auto;margin-top:10px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
-#tl-strip:empty{display:none}
-.tl-chip{font-family:var(--mono);font-size:11px;color:var(--dim);border:1px solid var(--edge);border-radius:999px;
-  padding:3px 10px;white-space:nowrap;flex:none;cursor:pointer}
-.tl-chip.now{color:var(--accent);border-color:var(--accent);font-weight:700}
-/* ---------- 生涯時間軸:桌面側欄 ---------- */
-#tl-in{display:flex;flex-direction:column;gap:18px;padding:22px 16px 22px 22px}
-.tl-brand{display:flex;align-items:center;gap:10px}
-.tl-brand .stitch{flex:none}
-.tl-brand b{font-family:var(--head);font-weight:900;font-size:16px;letter-spacing:.06em;display:block;line-height:1.3}
-.tl-brand span.sub{font-size:10px;color:var(--dim);letter-spacing:.2em;display:block}
-/* no flex-grow: the list hugs its content so the spine line grows with the career;
-   long careers scroll inside the list so the brand header and SEED footer stay fixed */
-#tl-list{flex:0 1 auto;min-height:40px;overflow-y:auto}
-/* the spine lives on the inner wrapper so it spans the full scrollable content */
-#tl-wrap{position:relative;padding-left:16px}
-#tl-wrap::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--edge)}
-.tlg{margin-bottom:16px}
-.tlg-h{font-family:var(--head);font-size:10px;letter-spacing:.3em;color:var(--dim);font-weight:700;margin-bottom:9px;padding-left:8px}
-.tl-item{display:flex;align-items:center;gap:10px;margin-bottom:9px;cursor:pointer}
-.tl-item .dot{width:10px;height:10px;border-radius:50%;background:var(--panel2);border:2px solid var(--edge);flex:none;margin-left:-13px}
-.tl-item.now .dot{width:16px;height:16px;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 12px var(--accent);margin-left:-16px}
-.tl-item .t{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.45}
-.tl-item.now .t{color:var(--accent);font-weight:700;font-size:13px}
-.tl-item .t b{color:var(--accent);font-weight:700}
-.tl-item.gone{cursor:default;opacity:.55}
-.tl-seed{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:auto} /* keeps the SEED footer at the column bottom now that the list no longer grows */
-.tl-seed b{color:var(--accent)}
-.tl-ver{display:block;font-size:10px;opacity:.7;letter-spacing:.05em;margin-top:2px}
-/* ---------- 主紀錄 ---------- */
-#log{flex:1;padding:14px 14px 20px;display:flex;flex-direction:column;gap:10px}
 .yr-block{display:flex;flex-direction:column;gap:10px}
 .yr-body{display:flex;flex-direction:column;gap:10px}
 .card{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px;
@@ -179,31 +121,16 @@ a{color:var(--info)}
 .tag-note{font-size:11px;line-height:1.8;color:var(--dim);margin:4px 0 0;min-height:1.8em}
 .tag-note.hint{opacity:.6}
 .up{color:var(--good);font-weight:700}.dn{color:var(--bad);font-weight:700}.hl{color:var(--accent);font-weight:700}
-.statline{font-family:var(--mono);font-size:12.5px;color:var(--text);background:var(--panel2);border:1px dashed var(--edge);
-  border-radius:min(var(--r),6px);padding:6px 10px;margin-top:6px;line-height:1.7}
-table.fin,table.st{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;margin-top:6px}
-table.fin th,table.fin td,table.st th,table.st td{border-bottom:1px solid var(--edge);padding:4px 4px;text-align:right;white-space:nowrap}
-table.fin th,table.st th{color:var(--dim);font-weight:500;letter-spacing:.05em}
-table.fin td:first-child,table.fin th:first-child,table.st td:first-child,table.st th:first-child{text-align:left}
+table.fin{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;margin-top:6px}
+table.fin th,table.fin td{border-bottom:1px solid var(--edge);padding:4px 4px;text-align:right;white-space:nowrap}
+table.fin th{color:var(--dim);font-weight:500;letter-spacing:.05em}
+table.fin td:first-child,table.fin th:first-child{text-align:left}
 .divider{text-align:center;color:var(--dim);font-size:11px;letter-spacing:.4em;padding:6px 0 0}
 .divider::before,.divider::after{content:'———'}
 .yr-head{text-align:center;color:var(--dim);font-size:11px;letter-spacing:.3em;padding:8px 0 0;cursor:pointer;user-select:none}
 .yr-head:hover{color:var(--accent)}
-.yr-block.collapsed .yr-body{display:none}
-.yr-block.collapsed .yr-head::after{content:' ▸'}
 .yr-block:not(.collapsed) .yr-head.has-body::after{content:' ▾'}
 /* ---------- 操作區 ---------- */
-#act-side{position:sticky;bottom:0;z-index:20;background:var(--panel);border-top:2px solid var(--edge);
-  box-shadow:0 -8px 24px var(--shadow);max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
-/* point-allocation UI: expand to show every ability row; tiny screens still scroll */
-#act-side.alloc{max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px)}
-#act-in{display:flex;flex-direction:column}
-#act-toggle{display:none;margin:8px auto 0;background:none;border:1px solid var(--edge);color:var(--dim);
-  font-size:11px;font-family:var(--sans);padding:3px 14px;border-radius:999px;cursor:pointer;flex:none}
-#act-toggle:hover{color:var(--accent);border-color:var(--accent)}
-#act{padding:10px 14px calc(12px + env(safe-area-inset-bottom))}
-#act .title{font-family:var(--head);font-size:12px;letter-spacing:.2em;color:var(--dim);margin-bottom:8px;font-weight:700}
-#act.collapsed{display:none!important}
 .btn{display:block;width:100%;background:var(--panel2);border:1px solid var(--edge);color:var(--text);
   font-family:var(--sans);font-size:15px;font-weight:700;border-radius:var(--r);padding:11px 14px;margin-top:8px;
   cursor:pointer;text-align:center;transition:.15s}
@@ -252,10 +179,7 @@ body[data-theme='c'] .die.active{border-color:var(--accent);box-shadow:2.5px 2.5
 body[data-theme='d'] .die{background:#ffffff;background-image:none;color:var(--text);border-color:var(--edge);
   --stitch:rgba(192,57,43,.45);box-shadow:0 2px 6px rgba(26,32,28,.18),inset 0 -2px 0 rgba(0,0,0,.05)}
 body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 40%,transparent),inset 0 -2px 0 rgba(0,0,0,.05)}
-@keyframes diceroll{0%{transform:translateY(-5px) rotate(-7deg)}50%{transform:translateY(2px) rotate(5deg)}100%{transform:none}}
-.die.rolling{animation:diceroll .14s linear infinite}
-@keyframes sixflash{0%,100%{box-shadow:none}45%{box-shadow:0 0 16px var(--bad),0 0 4px var(--bad)}}
-.die.flash6{animation:sixflash .6s ease}
+
 .pool{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:700;text-shadow:var(--glow);margin-bottom:10px}
 .abrow{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--edge);
   border-radius:var(--r);padding:8px 10px;margin-top:6px;cursor:pointer;user-select:none}
@@ -305,7 +229,6 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
    選擇器掛在 .btn 上而不是 #act 底下：動作區的實際 id 是 panel-act。 */
 .btn:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(1)}
 .btn:disabled:hover{border-color:var(--edge);background:var(--panel)}
-#fld-ui{display:none} /* desktop-width only; shown via the media query below */
 .seedline{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:22px}
 .seedline b{color:var(--accent)}
 #seed-show{width:120px;background:var(--panel);color:var(--accent);border:1px solid var(--edge);
@@ -465,34 +388,7 @@ body[data-theme='d'] .die.active{border-color:var(--accent);box-shadow:0 3px 10p
 .talent-levels li span:nth-child(2){flex:1 1 auto}
 .talent-levels li .sub{font-family:var(--mono);font-size:11px;flex:0 0 auto}
 
-.stitch{width:64px;height:64px;border-radius:50%;background:#ece7d6;position:relative;
-  box-shadow:inset -6px -8px 0 rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.15)}
-.stitch::before,.stitch::after{content:'';position:absolute;top:8px;bottom:8px;width:18px;
-  border:3px dashed #b3402f;border-top:none;border-bottom:none}
-.stitch::before{left:8px;border-right:none;border-radius:50% 0 0 50%}
-.stitch::after{right:8px;border-left:none;border-radius:0 50% 50% 0}
-.stitch.small{width:28px;height:28px;box-shadow:inset -3px -4px 0 rgba(0,0,0,.1)}
-.stitch.small::before,.stitch.small::after{top:4px;bottom:4px;width:8px;border-width:2px}
-/* theme b: 8-bit pixel baseball logo */
-body[data-theme='b'] .stitch{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23232c36' d='M6 0h4v1h-4zM4 1h2v1h-2zM10 1h2v1h-2zM3 2h1v1h-1zM12 2h1v1h-1zM2 3h1v1h-1zM13 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM3 13h1v1h-1zM12 13h1v1h-1zM4 14h2v1h-2zM10 14h2v1h-2zM6 15h4v1h-4z'/%3E%3Cpath fill='%23d8dde2' d='M6 1h4v1h-4zM4 2h8v1h-8zM3 3h1v1h-1zM5 3h6v1h-6zM12 3h1v1h-1zM2 4h1v1h-1zM4 4h8v1h-8zM13 4h1v1h-1zM2 5h1v1h-1zM4 5h8v1h-8zM13 5h1v1h-1zM1 6h1v1h-1zM3 6h10v1h-10zM14 6h1v1h-1zM1 7h1v1h-1zM3 7h10v1h-10zM14 7h1v1h-1zM1 8h1v1h-1zM3 8h10v1h-10zM14 8h1v1h-1zM1 9h1v1h-1zM3 9h10v1h-10zM14 9h1v1h-1zM2 10h1v1h-1zM4 10h8v1h-8zM13 10h1v1h-1zM2 11h1v1h-1zM4 11h8v1h-8zM13 11h1v1h-1zM3 12h1v1h-1zM5 12h6v1h-6zM12 12h1v1h-1zM4 13h8v1h-8zM6 14h4v1h-4z'/%3E%3Cpath fill='%23e2695c' d='M4 3h1v1h-1zM11 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM3 5h1v1h-1zM12 5h1v1h-1zM2 6h1v1h-1zM13 6h1v1h-1zM2 7h1v1h-1zM13 7h1v1h-1zM2 8h1v1h-1zM13 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM3 10h1v1h-1zM12 10h1v1h-1zM3 11h1v1h-1zM12 11h1v1h-1zM4 12h1v1h-1zM11 12h1v1h-1z'/%3E%3C/svg%3E") center/contain no-repeat;border:none;border-radius:0;box-shadow:none}
-body[data-theme='b'] .stitch::before,body[data-theme='b'] .stitch::after{content:none}
-#btn-menu{background:var(--panel2);border:1px solid var(--edge);color:var(--text);border-radius:min(var(--r),8px);
- font-family:var(--sans);font-size:14px;font-weight:700;line-height:1;padding:9px 15px;margin-left:8px;
- cursor:pointer;flex:none;white-space:nowrap}
-#btn-menu:hover{color:var(--accent);border-color:var(--accent)}
-/* ---------- 主題化對話框(取代原生 confirm) ---------- */
-#modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:22px}
-#modal.show{display:flex}
-#modal-box{background:var(--panel);border:1.5px solid var(--edge);border-radius:var(--r);padding:18px 18px 14px;
-  max-width:340px;width:100%;box-shadow:0 18px 50px var(--shadow);animation:pop .2s ease}
-#modal-box h3{font-family:var(--head);font-size:13px;letter-spacing:.25em;color:var(--dim);font-weight:700;margin-bottom:4px}
-#modal-box p{font-size:14px;margin:6px 0 4px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-/* ==========================================================================
-   新架構的版型：左欄身分與能力、右欄數據與事件。
-   與上方 legacy 的三欄版型（#app / #tl-side / #act-side）並存但不共用——
-   那一套是為舊版的元素配置寫的，這裡的欄位切分不同。
-   ========================================================================== */
 
 #game{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
 
@@ -628,31 +524,12 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
   .pagedots i.on{background:var(--accent);box-shadow:var(--glow)}
 }
 
-/* ---------- 桌面三欄(>920px) ---------- */
+/* ---------- 桌面(>920px) ---------- */
 @media(min-width:921px){
-  /* body.mobile-ui opts out of the desktop layout (user toggle in the menu) */
-  /* right column widens on large screens so 7 dice (max roll) fit at full size */
-  body:not(.mobile-ui) #app{display:grid;grid-template-columns:250px minmax(0,1fr) clamp(340px,31vw,400px);align-items:stretch;
-    max-width:1360px;margin:0 auto;border-left:1px solid var(--edge);border-right:1px solid var(--edge)}
-  body:not(.mobile-ui) #tl-side{display:block}
-  body:not(.mobile-ui) #tl-in{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden}
-  body:not(.mobile-ui) #tl-strip{display:none}
   body:not(.mobile-ui) #board{padding:14px 26px 12px;padding-top:calc(14px + env(safe-area-inset-top,0px))}
   body:not(.mobile-ui) .bd-cell b{font-size:19px}
-  body:not(.mobile-ui) #log{padding:18px 26px 26px}
-  /* the right column is a viewport-pinned full-height flex column (like the left
-     timeline column): traits stay at the top, actions stick to the bottom so the
-     gaze stays on the lower band (newest log + dice + choices), and neither
-     scrolls away with the body */
-  body:not(.mobile-ui) #act-side{position:static;max-height:none;overflow:visible;border-top:none;border-left:1px solid var(--edge);box-shadow:none}
-  body:not(.mobile-ui) #trait-side{display:block;padding:14px 14px 10px;max-height:42vh;overflow-y:auto;flex:0 3 auto;min-height:0}
-  body:not(.mobile-ui) #act-in{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden;padding:12px 6px 16px}
-  body:not(.mobile-ui) #act-toggle{display:none!important}
-  body:not(.mobile-ui) #act.collapsed{display:block!important}
-  body:not(.mobile-ui) #act{padding:8px 14px 16px;margin-top:auto;overflow-y:auto;min-height:0}
+
   body:not(.mobile-ui) #start .wrap{padding-top:28px}
-  body.mobile-ui #app{max-width:560px;margin:0 auto}
-  #fld-ui{display:block} /* unguarded: visible in both layouts so it can switch back */
 }
 
 /* 天梯：一項數值一塊，塊與塊之間自動排版。
@@ -677,16 +554,6 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
 /* 綜合／野手／投手之間：上一段最後一列是紀錄，大標直接貼上去會像同一張表的下一列。 */
 .ladder-section+.ladder-section{margin-top:28px}
 .ladder-grid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:8px;min-width:0}
-/* 野手一側、投手一側，左右並排。**這是語意分欄，不是平衡分欄**：野手 18 塊榜、
-   投手 13 塊，兩側高度本來就不齊，硬要等高就得把投手的榜混進野手那一側。換到的
-   是「不必滑過整個野手才看得到投手」。每側內部仍是上面那條 auto-fill，1200px 的
-   視窗下各自再排成兩欄。 */
-/* **兩側都要 min-width:0。** 格線項目預設是 min-width:auto，撐不下就往外長，而
-   榜上的名字欄是 nowrap（球員名・帳號不能折）——名字一長就把一側推寬、擠進另一
-   側的字上面。夾住之後由每一塊榜自己橫向捲。 */
-.ladder-sides{display:grid;gap:18px;grid-template-columns:1fr 1fr;align-items:start}
-.ladder-sides>section{min-width:0}
-.ladder-sides h4{margin-top:0}
 .ladder-board{min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .ladder-board .fin{margin-top:4px;min-width:max-content}
 .ladder-board .fin td{padding:3px 4px}
@@ -699,5 +566,4 @@ table.fin tr.hurt-minor td{background:color-mix(in srgb,var(--bad) 7%,transparen
 @media (max-width:920px){
   .twocol{column-count:1}
   .changelist{column-count:1}
-  .ladder-sides{grid-template-columns:1fr}
 }
