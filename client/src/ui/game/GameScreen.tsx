@@ -142,7 +142,7 @@ export function GameScreen({
           </div>
         </div>
       </div>
-      {state !== null && <PageNav page={pages.page} go={pages.go} />}
+      {state !== null && <PageNav page={pages.page} moving={pages.moving} />}
     </>
   );
 }

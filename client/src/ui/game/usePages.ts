@@ -28,7 +28,9 @@ export function usePages(needsAbility: boolean, started: boolean) {
   const touching = useRef(false);
   /** 排隊中的自動切頁：目標頁、已經等了多久。 */
   const pending = useRef<{ to: number; waited: number } | null>(null);
-  const timers = useRef<{ flush?: number; settle?: number }>({});
+  const timers = useRef<{ flush?: number; settle?: number; fade?: number }>({});
+  /** 正在橫向捲動（手指拖曳或自動切頁都算）。頁點只在這時候出現。 */
+  const [moving, setMoving] = useState(false);
 
   /** 立刻滑到第 i 頁。 */
   const go = (i: number) => {
@@ -114,6 +116,7 @@ export function usePages(needsAbility: boolean, started: boolean) {
       window.removeEventListener('pointercancel', up, true);
       window.clearTimeout(timers.current.flush);
       window.clearTimeout(timers.current.settle);
+      window.clearTimeout(timers.current.fade);
     };
   }, []);
 
@@ -185,6 +188,11 @@ export function usePages(needsAbility: boolean, started: boolean) {
     const i = Math.round(el.scrollLeft / el.clientWidth);
     at.current = i;
     setPage((p) => (p === i ? p : i));
+    // 頁點：捲動中亮著，停下來 DOTS_LINGER 之後才收。自動切頁也會走到這裡——
+    // 畫面自己換了頁，玩家要看得出換到哪一頁。
+    setMoving(true);
+    window.clearTimeout(timers.current.fade);
+    timers.current.fade = window.setTimeout(() => setMoving(false), DOTS_LINGER);
   };
 
   // 轉螢幕之後把當前頁重新對齊。頁寬等於視窗寬，寬度一變舊的 scrollLeft 就落在
@@ -200,7 +208,7 @@ export function usePages(needsAbility: boolean, started: boolean) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  return { ref, page, go, onAction, onScroll };
+  return { ref, page, moving, go, onAction, onScroll };
 }
 
 /** 滑去能力頁之前先停這麼久，讓玩家讀完剛跳出來的卡片。 */
@@ -213,3 +221,6 @@ const HOLD_WAIT_MAX = 1200;
 
 /** 滑完之後多久檢查一次有沒有卡在兩頁中間。 */
 const SETTLE_DELAY = 400;
+
+/** 捲動停下來之後，頁點再亮多久才淡出。 */
+const DOTS_LINGER = 800;
