@@ -89,32 +89,36 @@ export function careerCardOf(game: Game): CareerCard | null {
     });
   }
 
+  // `lead` 是第一欄（聯盟）。頂級聯盟通算只有一列，那一列就是標題，不寫（與畫面同一個規則）。
   const totalTable = (
     title: string,
     picked: readonly TotalRow[],
     side: 'batting' | 'pitching',
+    lead = true,
   ): CardTable | null => {
     const only = picked.filter((r) => r[side] !== null);
     if (only.length === 0) return null;
+    const leadHead = lead ? ['聯盟'] : [];
     return {
       title,
       caption: side === 'batting' ? '野手' : '投手',
       head:
         side === 'batting'
-          ? ['聯盟', '季', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
-          : ['聯盟', '季', ...PITCHING_COLUMNS.map((c) => c.key)],
-      lefts: [0],
+          ? [...leadHead, '季', ...BATTING_COLUMNS.map((c) => c.key), 'DEF']
+          : [...leadHead, '季', ...PITCHING_COLUMNS.map((c) => c.key)],
+      lefts: lead ? [0] : [],
       rows: only.map((r) => ({
         tint: null,
-        cells:
-          side === 'batting'
+        cells: [
+          ...(lead ? [r.label] : []),
+          ...(side === 'batting'
             ? [
-                r.label,
                 String(r.seasons),
                 ...cells(BATTING_COLUMNS, r.batting!, r.base, r.shares),
                 r.defenseRuns > 0 ? `+${r.defenseRuns}` : String(r.defenseRuns),
               ]
-            : [r.label, String(r.seasons), ...cells(PITCHING_COLUMNS, r.pitching!, r.base, r.shares)],
+            : [String(r.seasons), ...cells(PITCHING_COLUMNS, r.pitching!, r.base, r.shares)]),
+        ],
       })),
     };
   };
@@ -124,7 +128,7 @@ export function careerCardOf(game: Game): CareerCard | null {
     totalTable('各聯盟通算', totals, 'batting'),
     totalTable('各聯盟通算', totals, 'pitching'),
     ...(top.length > 0
-      ? [totalTable('頂級聯盟通算', top, 'batting'), totalTable('頂級聯盟通算', top, 'pitching')]
+      ? [totalTable('頂級聯盟通算', top, 'batting', false), totalTable('頂級聯盟通算', top, 'pitching', false)]
       : []),
   ]) {
     if (t !== null) tables.push(t);

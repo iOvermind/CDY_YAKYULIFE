@@ -61,8 +61,8 @@ function TotalsTable({
   title: string;
   rows: readonly TotalRow[];
   /**
-   * 第一欄的欄名。`null` 是整欄不要：國際賽通算只有一列，而那一列就是標題寫的
-   * 那個賽事，再寫一次只是佔寬。
+   * 第一欄的欄名。`null` 是整欄不要：國際賽通算與頂級聯盟通算都只有一列，而那一列
+   * 就是標題寫的那個東西，再寫一次只是佔寬。
    */
   leadHead?: string | null;
   /** 第二欄的欄名與說明。國際賽算的是屆數。 */
@@ -379,7 +379,7 @@ export function CareerTable({ summary }: { summary: CareerSummary }) {
 
       <TotalsTable title="各聯盟通算" rows={leagueTotals(summary)} />
       {summary.leagues.length > 1 && (
-        <TotalsTable title="頂級聯盟通算" rows={[topTotalRow(summary)]} />
+        <TotalsTable title="頂級聯盟通算" rows={[topTotalRow(summary)]} leadHead={null} />
       )}
       <InternationalTable summary={summary} kind="youth" />
       <InternationalTable summary={summary} kind="pro" />
