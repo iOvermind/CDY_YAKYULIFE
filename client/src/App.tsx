@@ -29,7 +29,7 @@ import {
   type PitchingLine,
 } from './engine/amateurStats.ts';
 import type { AwardRecord } from './engine/awards.ts';
-import { warOf, type CareerSummary, type SeasonRecord, type WarByPart } from './engine/career.ts';
+import { lineWar, warOf, type CareerSummary, type SeasonRecord, type WarByPart } from './engine/career.ts';
 import {
   Game,
   NO_PROGRESS,
@@ -40,12 +40,14 @@ import { fmtAvg } from './engine/format.ts';
 import { abilityCost, carryGauge, growthCurve } from './engine/growth.ts';
 import {
   amateurBaseline,
+  amateurBaselineAt,
   battingShares,
   eraPlus,
   opsPlus,
   pitchingShares,
   baselineAt,
   proBaseline,
+  replacementWinPctOf,
   sumShares,
   winPct,
   type Baseline,
@@ -1051,9 +1053,11 @@ function StatsPanel({ state }: { state: PlayerState }) {
         pitching={state.seasonPitching}
         base={state.pro === null ? amateurBaseline() : proBaseline(state.pro.level)}
         shares={
-          state.seasonShares === null
-            ? null
-            : { ...state.seasonShares, ...(state.seasonWar === null ? {} : { war: state.seasonWar }) }
+          state.pro === null
+            ? amateurLedger(state.seasonBatting, state.seasonPitching)
+            : state.seasonShares === null
+              ? null
+              : { ...state.seasonShares, ...(state.seasonWar === null ? {} : { war: state.seasonWar }) }
         }
         defenseRuns={state.pro === null ? null : state.seasonDefenseRuns}
       />
@@ -1320,9 +1324,41 @@ interface StatColumn<T> {
 /** 三本帳。守備那一本沒有自己的表，它跟著野手走。 */
 /**
  * 一列成績的三本帳，外加那一列的 WAR。WAR 要逐季用當年的 k 換算，不能從合計的
- * 份額回推，因此由產生這一列的地方算好帶進來；養成期與國際賽沒有替代水準，不帶。
+ * 份額回推，因此由產生這一列的地方算好帶進來。
  */
 type SharesByPart = SeasonRecord['shares'] & { readonly war?: WarByPart };
+// 養成期與國際賽沒有結算帳，由 `ledgerOf` 從成績現算——替代水準是那一段的 par − 3。
+
+/**
+ * 沒有結算帳的一段成績（養成期、國際賽）的三本帳：份額從成績現算，WAR 的替代
+ * 水準是比那一段的 par 低 `war_replacement.d` 點的球員（見 amateur.json）。
+ */
+function ledgerOf(batting: BattingLine | null, pitching: PitchingLine | null, base: Baseline, replacement: Baseline): SharesByPart {
+  const none = { win: 0, loss: 0 };
+  return {
+    batting: batting === null ? none : battingShares(batting, base),
+    pitching: pitching === null ? none : pitchingShares(pitching, base),
+    fielding: none,
+    war: lineWar(batting, pitching, base, replacementWinPctOf(base, replacement)),
+  };
+}
+
+const amateurLedger = (batting: BattingLine | null, pitching: PitchingLine | null): SharesByPart =>
+  ledgerOf(batting, pitching, amateurBaseline(), amateurBaselineAt(amateur.war_replacement.d));
+
+const intlLedger = (batting: BattingLine | null, pitching: PitchingLine | null): SharesByPart =>
+  ledgerOf(batting, pitching, baselineAt(tournamentPar()), baselineAt(tournamentPar(), amateur.war_replacement.d));
+
+/** 幾列帳加總：份額與 WAR 都逐列加。 */
+function sumLedgers(list: readonly SharesByPart[]): SharesByPart {
+  const war = (part: keyof WarByPart) => list.reduce((n, l) => n + (l.war?.[part] ?? 0), 0);
+  return {
+    batting: sumShares(...list.map((l) => l.batting)),
+    pitching: sumShares(...list.map((l) => l.pitching)),
+    fielding: sumShares(...list.map((l) => l.fielding)),
+    war: { batting: war('batting'), pitching: war('pitching'), fielding: war('fielding') },
+  };
+}
 
 /** WAR 一位小數；沒有就是「-」。 */
 const fmtWar = (war: number | undefined): string => (war === undefined ? NA : war.toFixed(1));
@@ -1652,7 +1688,7 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
               {batting.map((r) => (
                 <tr key={`intl-b-${r.year}-${r.tournament}`}>
                   {lead(r)}
-                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} shares={null} />
+                  <StatCells columns={BATTING_COLUMNS} line={r.batting!} base={base} shares={intlLedger(r.batting, null)} />
                 </tr>
               ))}
             </tbody>
@@ -1673,7 +1709,7 @@ function InternationalTable({ summary }: { summary: CareerSummary }) {
               {pitching.map((r) => (
                 <tr key={`intl-p-${r.year}-${r.tournament}`}>
                   {lead(r)}
-                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} shares={null} />
+                  <StatCells columns={PITCHING_COLUMNS} line={r.pitching!} base={base} shares={intlLedger(null, r.pitching)} />
                 </tr>
               ))}
             </tbody>
@@ -1701,8 +1737,8 @@ function intlTotalRow(summary: CareerSummary): TotalRow {
     batting: summary.internationalTotal.batting,
     pitching: summary.internationalTotal.pitching,
     defenseRuns: 0,
-    // 國際賽的份額不進評價分，年表上那幾欄退回單側自算。
-    shares: null,
+    // 國際賽的份額不進評價分，但照樣逐屆現算、逐屆加總——與職業通算同一個做法。
+    shares: sumLedgers(summary.internationalSeasons.map((r) => intlLedger(r.batting, r.pitching))),
     // 國際賽沒有自己的聯盟可挑，成績本來就是拿他當時所在的層級換算出來的，
     // 因此借代表聯盟那把尺——與上面逐屆那兩張表同一個基準。
     base: proBaseline(summary.leagues[0]?.topLevel ?? 'CPBL1'),
@@ -1953,8 +1989,8 @@ export function careerCardOf(game: Game): CareerCard | null {
           r.tournament,
           `${r.rank}${r.mvp ? '・MVP' : ''}`,
           ...(side === 'batting'
-            ? cells(BATTING_COLUMNS, r.batting!, intlBase, null)
-            : cells(PITCHING_COLUMNS, r.pitching!, intlBase, null)),
+            ? cells(BATTING_COLUMNS, r.batting!, intlBase, intlLedger(r.batting, null))
+            : cells(PITCHING_COLUMNS, r.pitching!, intlBase, intlLedger(null, r.pitching))),
         ],
       })),
     });
@@ -2089,8 +2125,9 @@ function careerRows(summary: CareerSummary): readonly CareerRow[] {
     pitching: a.pitching,
     injured: null,
     defenseRuns: 0,
-    // 養成期不記份額——那一段不進評價分，也沒有守備與球隊戰績可以算。
-    shares: null,
+    // 養成期不記份額——那一段不進評價分，也沒有守備與球隊戰績可以算。份額與 WAR
+    // 從成績現算，替代水準是 par − 3（見 amateurLedger）。
+    shares: amateurLedger(a.batting, a.pitching),
     base: amateurBaseline(),
   }));
 

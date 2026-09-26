@@ -21,7 +21,7 @@ import { addBatting, addPitching, statTotal, type BattingLine, type PitchingLine
 import { ladderTop, rungName } from './achievements.ts';
 import type { PitcherRole } from './season.ts';
 import type { AwardRecord } from './awards.ts';
-import { sumShares, type Shares } from './metrics.ts';
+import { battingShares, pitchingShares, sumShares, type Baseline, type Shares } from './metrics.ts';
 
 /**
  * 一段效力的紀錄。
@@ -325,6 +325,24 @@ export function warOf(record: SeasonRecord): WarByPart {
     batting: part(record.shares.batting, record.lossPenalty.batting),
     pitching: part(record.shares.pitching, record.lossPenalty.pitching),
     fielding: part(record.shares.fielding, record.lossPenalty.fielding),
+  };
+}
+
+/**
+ * 沒有結算帳的一段成績（養成期、國際賽）的 WAR：從成績與基準線現算份額，替代
+ * 勝率 `p0` 由呼叫端給（見 `replacementWinPctOf`）。沒有守備份額，守備那一段是 0。
+ */
+export function lineWar(
+  batting: BattingLine | null,
+  pitching: PitchingLine | null,
+  base: Baseline,
+  p0: number,
+): WarByPart {
+  const above = (s: { win: number; loss: number }) => s.win - p0 * (s.win + s.loss);
+  return {
+    batting: batting === null ? 0 : above(battingShares(batting, base)),
+    pitching: pitching === null ? 0 : above(pitchingShares(pitching, base)),
+    fielding: 0,
   };
 }
 

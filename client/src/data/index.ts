@@ -943,6 +943,8 @@ export interface AmateurData {
     };
     readonly reject_offer: { readonly reject_from_round: number; readonly max_age: number };
   };
+  /** 養成期與國際賽的替代水準：比 par 低幾點。 */
+  readonly war_replacement: { readonly d: number };
   readonly amateur_stats: {
     readonly batting: {
       readonly pa_per_game: number;

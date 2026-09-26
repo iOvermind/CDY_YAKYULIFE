@@ -3,6 +3,9 @@ import { season as cfg } from '../data/index.ts';
 import type { BattingLine, PitchingLine } from './amateurStats.ts';
 import { advanceStandards, initStandards, leagueStandardOf } from './league.ts';
 import {
+  amateurBaselineAt,
+  baselineAt,
+  replacementWinPctOf,
   amateurBaseline,
   battingResponsibility,
   battingShares,
@@ -405,5 +408,17 @@ describe('球隊戰績的耦合', () => {
         teamWinRate,
       });
     expect(field(0.65).win).toBeGreaterThan(field(0.35).win);
+  });
+});
+
+/** 養成期與國際賽沒有 min，替代水準抓 par − 3（2026-09-26）。 */
+describe('養成期與國際賽的替代水準', () => {
+  it('d = 0 就是養成期的聯盟平均', () => {
+    expect(amateurBaselineAt(0)).toEqual(amateurBaseline());
+  });
+
+  it('比平均低三點的人勝率低於 .500', () => {
+    expect(replacementWinPctOf(amateurBaseline(), amateurBaselineAt(-3))).toBeLessThan(0.5);
+    expect(replacementWinPctOf(baselineAt(50), baselineAt(50, -3))).toBeLessThan(0.5);
   });
 });

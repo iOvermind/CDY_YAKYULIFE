@@ -149,17 +149,44 @@ export function proPaAt(d: number, leagueGames: number): number {
 
 /** 養成期的平均水準。門檻與職業不同，因此基準線也不同。 */
 export function amateurBaseline(): Baseline {
-  const b = amateur.amateur_stats.batting;
+  return amateurBaselineAt(0);
+}
+
+/**
+ * 養成期能力比該階段 par 高 `d` 點的球員，打出來的率。
+ *
+ * 與 `amateurStats.ts` 的 `rateOf` 同一條式子：有掛能力的率挪 `d × per_point`，
+ * 沒掛能力的（例如二壘打佔安打的比例）不動；防禦率吃的是球威與 par 的差，也挪 d。
+ * d = 0 就是聯盟平均。
+ */
+export function amateurBaselineAt(d: number): Baseline {
+  const s = amateur.amateur_stats;
+  const b = s.batting;
+  const at = (spec: { base: number; per_point: number; min: number; max: number; ability?: string }) =>
+    Math.max(spec.min, Math.min(spec.max, spec.base + (spec.ability === undefined ? 0 : d) * spec.per_point));
   const pa = 600;
-  const bb = pa * b.walk_rate.base;
+  const bb = pa * at(b.walk_rate);
   const ab = pa - bb;
-  const hits = ab * b.hit_rate.base;
-  const hr = hits * b.hr_rate.base;
+  const hits = ab * at(b.hit_rate);
+  const hr = hits * at(b.hr_rate);
   const rest = hits - hr;
-  const double = rest * b.double_rate.base;
-  const triple = rest * b.triple_rate.base;
+  const double = rest * at(b.double_rate);
+  const triple = rest * at(b.triple_rate);
+  const e = s.pitching.era;
+  const era = Math.max(e.min, Math.min(e.max, e.base + d * e.per_point));
   // 業餘沒有敬遠機制（`amateur.json` 裡沒有 intentional_walk），IBB 恆為 0。
-  return build(pa, ab, bb, 0, hits, double, triple, hr, amateur.amateur_stats.pitching.era.base, '');
+  return build(pa, ab, bb, 0, hits, double, triple, hr, era, '');
+}
+
+/**
+ * 替代水準的勝率，從兩條基準線直接算：替代水準那條對上聯盟平均那條。
+ *
+ * 只看打者那一條，投打共用——與職業的 `lossPenalty` 同一個理由。養成期與國際賽
+ * 沒有 min，替代水準是 `amateur.json` 的 `war_replacement`。
+ */
+export function replacementWinPctOf(base: Baseline, replacement: Baseline): number {
+  if (base.runsCreatedPerPa === 0) return 0.5;
+  return pythagoreanWinPct(replacement.runsCreatedPerPa / base.runsCreatedPerPa);
 }
 
 function build(
