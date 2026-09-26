@@ -69,6 +69,9 @@ function fmt(value: number, side: LadderBoard['side'], key: string): string {
   return column.digits === 3 && value < 1 ? text.slice(1) : text;
 }
 
+/** 名次 → 名字、名字（或「舊」）→ 季數的距離。兩處同一個值，看起來才是同一種間隔。 */
+const GAP = '0.5em';
+
 /**
  * 一塊榜。`single` 是單季最佳：一列就是一季，「1 季」那一欄每列都一樣，
  * 不必寫（issue #38）。
@@ -88,17 +91,19 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
               <tr key={`${e.rank}-${e.account}-${e.at}`}>
                 {/*
                   前三名的名次與名字用強調色＋粗體，一眼看得出誰站在頒獎台上。名次欄
-                  只留兩位數的寬、右邊不留白——名次跟名字之間每多一格，十幾塊榜並排
-                  就多十幾格。
+                  縮到內容寬、名次靠右，右邊不留白——名次跟名字之間只有 GAP，每多一格，
+                  十幾塊榜並排就多十幾格。
                 */}
-                <td style={{ width: '2ch', paddingRight: 0 }}>{e.rank <= 3 ? <b className="hl">{e.rank}</b> : e.rank}</td>
+                <td style={{ width: 0, textAlign: 'right', paddingRight: 0 }}>
+                  {e.rank <= 3 ? <b className="hl">{e.rank}</b> : e.rank}
+                </td>
                 {/*
                   **只留球員名。** 帳號接在後面時每一列都撐出表格的寬度，而一排有
                   十幾塊榜，那一截寬度乘十幾倍就是整頁橫著爆出去。要分辨是誰的話
                   滑鼠停在名字上看得到——那是不佔版面的地方。
                 */}
                 <td
-                  style={{ textAlign: 'left', whiteSpace: 'nowrap' }}
+                  style={{ textAlign: 'left', whiteSpace: 'nowrap', width: 0, paddingLeft: GAP, paddingRight: 0 }}
                   title={shown === e.name ? e.account : `${e.name}｜${e.account}`}
                 >
                   {e.rank <= 3 ? <b className="hl">{shown}</b> : shown}
@@ -113,12 +118,20 @@ function Board({ board, single }: { board: LadderBoard; single: boolean }) {
                     </span>
                   )}
                 </td>
+                {/*
+                  季數欄縮到剛好包住文字（width 0：欄寬不會小於內容，所以就是內容寬；
+                  不用百分比——百分比欄會反過來把整張表撐到它佔得到那個比例）。「舊」
+                  到季數與名次到名字是同一個 GAP。以前固定 4em 寬、文字靠右，多出來
+                  的那一截全堆在「舊」後面。
+                */}
                 {!single && (
-                  <td style={{ width: '4em' }} title="這個組合內的球季數">
+                  <td style={{ width: 0, paddingLeft: GAP }} title="這個組合內的球季數">
                     {e.seasons} 季
                   </td>
                 )}
-                <td style={{ textAlign: 'right', width: '6em' }}>
+                {/* 表格撐滿格子時多出來的寬度全給這一欄（名字與季數都縮到內容寬）：
+                    數值靠右，空白落在季數與數值之間，不會堆在名字或「舊」後面。 */}
+                <td style={{ textAlign: 'right' }}>
                   <b className="hl">{fmt(e.value, board.side, board.column)}</b>
                 </td>
               </tr>
